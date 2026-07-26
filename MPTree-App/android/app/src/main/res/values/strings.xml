@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MPTree</string>
+    <string name="title_activity_main">MPTree</string>
+    <string name="package_name">com.caelan.mplayer</string>
+    <string name="custom_url_scheme">com.caelan.mplayer</string>
+</resources>

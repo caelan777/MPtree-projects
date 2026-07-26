@@ -1,0 +1,23 @@
+/* ── MPTree global reset ─────────────────────────────────────────────────────
+   Replaces the stock Vite template stylesheet. The template's
+   `#root { border-inline: 1px solid ... }` was the faint gray line running
+   down each edge of the screen; this reset keeps the canvas clean. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  border: none;
+}
