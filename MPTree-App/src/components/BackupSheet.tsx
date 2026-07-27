@@ -131,7 +131,7 @@ function ExportInfoSheet({
   return (
     <SheetOverlay onClose={onClose} T={T}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-        <div style={{ color: T.violet }}><BackupIcon /></div>
+        <div style={{ color: T.text }}><BackupIcon /></div>
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>Create backup</div>
       </div>
 
@@ -149,7 +149,7 @@ function ExportInfoSheet({
         <input
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="MPlayer1_Backup_..."
+          placeholder="MPTree_Backup_..."
           style={{
             width: "100%", background: T.dim, border: `1px solid ${T.border}`,
             borderRadius: 12, padding: "13px 14px", color: T.text,
@@ -176,7 +176,7 @@ function ExportInfoSheet({
       <button
         onClick={() => onStart(name.trim() || defaultName)}
         style={{
-          display: "block", width: "100%", background: T.violet, color: "#fff",
+          display: "block", width: "100%", background: T.accent, color: T.playBtnFg,
           border: "none", borderRadius: 14, padding: "16px", fontSize: 16,
           fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
         }}
@@ -225,7 +225,7 @@ function ExportProgressSheet({
           marginBottom: 12, overflow: "hidden",
         }}>
           <div style={{
-            height: "100%", borderRadius: 4, background: T.violet,
+            height: "100%", borderRadius: 4, background: T.accent,
             width: `${pct}%`, transition: "width 0.3s ease",
           }} />
         </div>
@@ -265,7 +265,7 @@ function ExportSuccessSheet({
   return (
     <SheetOverlay T={T}>
       <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
-        <div style={{ color: "#22c55e", marginBottom: 10 }}><CheckCircleIcon /></div>
+        <div style={{ color: T.text, marginBottom: 10 }}><CheckCircleIcon /></div>
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text, marginBottom: 6 }}>
           Backup saved!
         </div>
@@ -284,11 +284,11 @@ function ExportSuccessSheet({
         {!!failedCount && (
           <div style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "#f59e0b18", border: "1px solid #f59e0b44",
+            background: T.dim, border: `1px solid ${T.border}`,
             borderRadius: 10, padding: "10px 14px", marginBottom: 24,
             textAlign: "left",
           }}>
-            <span style={{ color: "#f59e0b", flexShrink: 0 }}>⚠</span>
+            <span style={{ color: T.textSub, flexShrink: 0 }}>⚠</span>
             <span style={{ fontSize: 13, color: T.text, flex: 1 }}>
               {failedCount} file{failedCount !== 1 ? "s" : ""} could not be copied
             </span>
@@ -314,7 +314,7 @@ function ExportSuccessSheet({
           onClick={onShare}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            width: "100%", background: T.violet, color: "#fff",
+            width: "100%", background: T.accent, color: T.playBtnFg,
             border: "none", borderRadius: 14, padding: "15px", fontSize: 15,
             fontWeight: "700", cursor: "pointer", marginBottom: 10, fontFamily: "inherit",
             boxSizing: "border-box",
@@ -392,7 +392,7 @@ function ImportInfoSheet({
   return (
     <SheetOverlay onClose={onClose} T={T}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-        <div style={{ color: T.violet }}><RestoreIcon /></div>
+        <div style={{ color: T.text }}><RestoreIcon /></div>
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>Restore backup</div>
       </div>
 
@@ -409,9 +409,9 @@ function ImportInfoSheet({
         padding: "12px 14px", marginBottom: 24, fontFamily: "monospace", fontSize: 12,
         color: T.muted, lineHeight: 1.8,
       }}>
-        <div style={{ color: T.text, fontWeight: "600", marginBottom: 4 }}>📁 MPlayer1_Backup_...</div>
+        <div style={{ color: T.text, fontWeight: "600", marginBottom: 4 }}>📁 MPTree_Backup_...</div>
         <div style={{ paddingLeft: 16 }}>
-          <span style={{ color: T.violet }}>📄 mplayer_backup_....json</span>
+          <span style={{ color: T.text }}>📄 mptree_backup_....json</span>
           <span style={{ color: T.muted }}> ← select this</span>
         </div>
         <div style={{ paddingLeft: 16 }}>📁 music/</div>
@@ -422,7 +422,7 @@ function ImportInfoSheet({
       <button
         onClick={onProceed}
         style={{
-          display: "block", width: "100%", background: T.violet, color: "#fff",
+          display: "block", width: "100%", background: T.accent, color: T.playBtnFg,
           border: "none", borderRadius: 14, padding: "16px", fontSize: 16,
           fontWeight: "700", cursor: "pointer", marginBottom: 10, fontFamily: "inherit",
         }}
@@ -454,7 +454,7 @@ function SharingSheet({ T }: { T: T }) {
           <svg width="44" height="44" viewBox="0 0 44 44" style={{ animation: "spin 1s linear infinite" }}>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
             <circle cx="22" cy="22" r="18" fill="none" stroke={T.border} strokeWidth="3"/>
-            <path d="M22 4 a18 18 0 0 1 18 18" fill="none" stroke={T.violet} strokeWidth="3" strokeLinecap="round"/>
+            <path d="M22 4 a18 18 0 0 1 18 18" fill="none" stroke={T.text} strokeWidth="3" strokeLinecap="round"/>
           </svg>
         </div>
         <div style={{ fontSize: 16, fontWeight: "600", color: T.text, marginBottom: 6 }}>
@@ -479,7 +479,7 @@ function ImportProgressSheet({ phase, T }: { phase: string; T: T }) {
           <svg width="44" height="44" viewBox="0 0 44 44" style={{ animation: "spin 1s linear infinite" }}>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
             <circle cx="22" cy="22" r="18" fill="none" stroke={T.border} strokeWidth="3"/>
-            <path d="M22 4 a18 18 0 0 1 18 18" fill="none" stroke={T.violet} strokeWidth="3" strokeLinecap="round"/>
+            <path d="M22 4 a18 18 0 0 1 18 18" fill="none" stroke={T.text} strokeWidth="3" strokeLinecap="round"/>
           </svg>
         </div>
         <div style={{ fontSize: 16, fontWeight: "600", color: T.text, marginBottom: 6 }}>
@@ -504,7 +504,7 @@ function ImportSuccessSheet({
   return (
     <SheetOverlay T={T}>
       <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
-        <div style={{ color: "#22c55e", marginBottom: 10 }}><CheckCircleIcon /></div>
+        <div style={{ color: T.text, marginBottom: 10 }}><CheckCircleIcon /></div>
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text, marginBottom: 8 }}>
           Backup restored!
         </div>
@@ -513,19 +513,19 @@ function ImportSuccessSheet({
           marginBottom: 28,
         }}>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 24, fontWeight: "800", color: T.violet }}>{playlistCount}</div>
+            <div style={{ fontSize: 24, fontWeight: "800", color: T.text }}>{playlistCount}</div>
             <div style={{ fontSize: 12, color: T.muted }}>playlist{playlistCount !== 1 ? "s" : ""}</div>
           </div>
           <div style={{ width: 1, background: T.border }} />
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 24, fontWeight: "800", color: T.violet }}>{songCount}</div>
+            <div style={{ fontSize: 24, fontWeight: "800", color: T.text }}>{songCount}</div>
             <div style={{ fontSize: 12, color: T.muted }}>song{songCount !== 1 ? "s" : ""}</div>
           </div>
         </div>
         <button
           onClick={onDone}
           style={{
-            display: "block", width: "100%", background: T.violet, color: "#fff",
+            display: "block", width: "100%", background: T.accent, color: T.playBtnFg,
             border: "none", borderRadius: 14, padding: "15px", fontSize: 15,
             fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
           }}

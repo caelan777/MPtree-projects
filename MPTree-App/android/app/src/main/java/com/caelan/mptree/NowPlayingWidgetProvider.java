@@ -1,4 +1,4 @@
-package com.caelan.mplayer;
+package com.caelan.mptree;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;

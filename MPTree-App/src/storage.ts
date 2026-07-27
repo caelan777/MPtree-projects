@@ -193,13 +193,13 @@ export interface BackupData {
   liked:        string[];
   // Music file backup fields (v1 extension — present when includeMusic=true)
   includeMusic?: boolean;
-  musicDir?:     string; // e.g. "Download/MPlayer1_Backup_1234567890"
+  musicDir?:     string; // e.g. "Download/MPTree_Backup_1234567890"
 }
 
 // ── Export result ─────────────────────────────────────────────────────────────
 
 export interface ExportResult {
-  /** Human-readable relative path, e.g. "MPlayer1_Backup_1234567890" */
+  /** Human-readable relative path, e.g. "MPTree_Backup_1234567890" */
   folderName: string;
   /** file:// URI of the JSON file for sharing */
   jsonUri: string;
@@ -277,7 +277,7 @@ export async function exportBackup(
 
   // Write JSON first so partial backups are recoverable.
   const ts = data.exportedAt;
-  const jsonFilename = `mplayer_backup_${ts}.json`;
+  const jsonFilename = `mptree_backup_${ts}.json`;
   data.includeMusic = true;
   data.musicDir     = backupFolder;
 

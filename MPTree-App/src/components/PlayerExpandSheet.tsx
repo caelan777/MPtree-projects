@@ -294,7 +294,7 @@ export function PlayerExpandSheet({
               </div>
               {song.isCut && (
                 <span style={{
-                  fontSize: 10, background: T.violet + "33", color: T.violet,
+                  fontSize: 10, background: T.dim, color: T.textSub,
                   borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 4,
                 }}>CUT</span>
               )}
@@ -321,7 +321,7 @@ export function PlayerExpandSheet({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
             <button
               onClick={onToggleShuffle}
-              title={playMode === "shuffle" ? "Shuffle on — tap to turn off" : "Shuffle off — tap to turn on"}
+              title={playMode === "shuffle" ? "Shuffle on, tap to turn off" : "Shuffle off, tap to turn on"}
               style={{ background: "transparent", border: "none", color: playMode === "shuffle" ? T.violet : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
             >
               <IC.Shuffle />
@@ -341,9 +341,9 @@ export function PlayerExpandSheet({
               onClick={cycleSpeed}
               title="Playback speed"
               style={{
-                background: playbackSpeed !== 1 ? T.violet + "22" : "transparent",
-                border: `1px solid ${playbackSpeed !== 1 ? T.violet : T.border}`,
-                color: playbackSpeed !== 1 ? T.violet : T.muted,
+                background: playbackSpeed !== 1 ? T.dim : "transparent",
+                border: `1px solid ${playbackSpeed !== 1 ? T.accent : T.border}`,
+                color: playbackSpeed !== 1 ? T.text : T.muted,
                 cursor: "pointer", padding: "5px 8px", borderRadius: 8,
                 fontSize: 12, fontWeight: "700", minWidth: 44, fontFamily: "inherit",
               }}
@@ -399,8 +399,8 @@ export function PlayerExpandSheet({
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "8px 10px",
                       borderRadius: 10,
-                      background: isOver ? T.violet + "30" : T.violet + "18",
-                      border: `1px solid ${isOver ? T.violet + "99" : T.violet + "44"}`,
+                      background: isOver ? T.dim : T.card,
+                      border: `1px solid ${isOver ? T.accent : T.border}`,
                       opacity: isDragging ? 0.4 : 1,
                       transform: isOver ? "scale(1.02)" : "scale(1)",
                       transition: "opacity 0.12s, transform 0.12s, border-color 0.12s",
@@ -410,7 +410,7 @@ export function PlayerExpandSheet({
                     {/* drag handle — only this triggers the drag */}
                     <div
                       onTouchStart={onTouchStartDrag(i)}
-                      style={{ color: T.violet + "99", display: "flex", flexShrink: 0, cursor: "grab", padding: "4px 2px" }}
+                      style={{ color: T.muted, display: "flex", flexShrink: 0, cursor: "grab", padding: "4px 2px" }}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <line x1="3" y1="7" x2="21" y2="7"/>
@@ -420,7 +420,7 @@ export function PlayerExpandSheet({
                     </div>
                     <AlbumArt title={name} size={36} active={false} customPhoto={photo} T={T} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: "600", color: T.violet, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {name}
                       </div>
                       <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -428,8 +428,8 @@ export function PlayerExpandSheet({
                       </div>
                     </div>
                     <span style={{
-                      fontSize: 9, fontWeight: "700", color: T.violet,
-                      background: T.violet + "22", borderRadius: 4, padding: "2px 6px",
+                      fontSize: 9, fontWeight: "700", color: T.textSub,
+                      background: T.dim, borderRadius: 4, padding: "2px 6px",
                       whiteSpace: "nowrap", flexShrink: 0, letterSpacing: "0.04em",
                     }}>
                       NEXT

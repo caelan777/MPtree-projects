@@ -56,45 +56,42 @@ interface Props {
 }
 
 // ─── Smart playlist card styling ───────────────────────────────────────────────
-// Fixed brand colors per smart playlist — these never change with the theme
-// (DARK/LIGHT), per design spec. Mapped by id (not name) so a renamed
-// SmartPlaylist still gets the right gradient/icon.
+// Mapped by id (not name) so a renamed SmartPlaylist still gets the right icon.
 
 type SmartCardStyle = {
-  from: string;
-  to:   string;
   icon: (size: number) => React.ReactNode;
 };
 
+// These four cards used to be coloured gradients (rose, violet, orange, sky).
+// Per the brand system in Branding/README.md, MPTree is black and white and
+// colour is reserved for functional state, so the cards are now plain surfaces
+// and the ICON is what tells them apart. Every icon paints with currentColor
+// so it follows the theme.
 const SMART_CARD_STYLES: Record<SmartPlaylistId, SmartCardStyle> = {
   favorites: {
-    from: "#e8445a", to: "#c0392b",
     icon: (size) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="#fff">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 21s-7.46-4.51-9.5-9.04C1.18 8.4 2.6 4.5 6.5 4.5c2.02 0 3.36 1.06 3.7 2.13.34-1.07 1.68-2.13 3.7-2.13 3.9 0 5.32 3.9 4 7.46C19.46 16.49 12 21 12 21z"/>
       </svg>
     ),
   },
   recentlyPlayed: {
-    from: "#7C3AED", to: "#4F46E5",
     icon: (size) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>
       </svg>
     ),
   },
   mostPlayed: {
-    from: "#f97316", to: "#dc2626",
     icon: (size) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/>
       </svg>
     ),
   },
   lastAdded: {
-    from: "#0EA5E9", to: "#0891b2",
     icon: (size) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
       </svg>
@@ -102,13 +99,12 @@ const SMART_CARD_STYLES: Record<SmartPlaylistId, SmartCardStyle> = {
   },
 };
 
-// Defensive fallback — only reached if a SmartPlaylist with an unrecognized
+// Defensive fallback, only reached if a SmartPlaylist with an unrecognized
 // id ever shows up (shouldn't happen given SmartPlaylistId, but keeps this
 // component from rendering a blank/broken card if that ever changes).
 const FALLBACK_SMART_STYLE: SmartCardStyle = {
-  from: "#6b7280", to: "#374151",
   icon: (size) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
     </svg>
   ),
@@ -248,7 +244,7 @@ export const PlaylistsView: React.FC<Props> = ({
           padding: "10px 16px", gap: 10, cursor: "pointer",
           background: isSelected ? t.violet + "18" : isCurrent ? t.card : "transparent",
           transition: "background 0.15s",
-          borderLeft: isCurrent && !isSelected ? `3px solid ${t.violet}` : "3px solid transparent",
+          borderLeft: isCurrent && !isSelected ? `3px solid ${t.accent}` : "3px solid transparent",
         }}
       >
         {selectMode && inPlaylist && (
@@ -265,7 +261,7 @@ export const PlaylistsView: React.FC<Props> = ({
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
-            {song.isCut && <span style={{ fontSize: 10, background: t.violet + "33", color: t.violet, borderRadius: 4, padding: "1px 5px", fontWeight: 700, flexShrink: 0 }}>CUT</span>}
+            {song.isCut && <span style={{ fontSize: 10, background: t.dim, color: t.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: 700, flexShrink: 0 }}>CUT</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", marginTop: 2, gap: 6 }}>
             {/* Track number — hidden for now (kept for future use):
@@ -452,13 +448,13 @@ export const PlaylistsView: React.FC<Props> = ({
       onClick={onClick}
       style={{
         width: size, height: size, borderRadius: size >= 80 ? 16 : 12, flexShrink: 0,
-        background: photo ? `center/cover no-repeat url(${photo})` : t.violet + "20",
+        background: photo ? `center/cover no-repeat url(${photo})` : t.dim,
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: onClick ? "pointer" : "default", overflow: "hidden",
       }}
     >
       {!photo && (
-        <svg width={iconSize ?? 22} height={iconSize ?? 22} viewBox="0 0 24 24" fill="none" stroke={t.violet} strokeWidth="2">
+        <svg width={iconSize ?? 22} height={iconSize ?? 22} viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2">
           <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
         </svg>
       )}
@@ -660,20 +656,22 @@ export const PlaylistsView: React.FC<Props> = ({
                     onClick={() => { setActiveSmartId(sp.id); setView("smartDetail"); }}
                     style={{
                       position: "relative", height: 160, borderRadius: 16, padding: 16,
-                      background: `linear-gradient(135deg, ${cardStyle.from}, ${cardStyle.to})`,
+                      background: t.card, border: `1px solid ${t.border}`,
+                      color: t.text,
                       display: "flex", flexDirection: "column", justifyContent: "space-between",
                       cursor: "pointer", overflow: "hidden",
                     }}
                   >
-                    {/* Decorative background icon */}
-                    <div style={{ position: "absolute", top: 14, right: 14, opacity: 0.2, lineHeight: 0 }}>
+                    {/* The icon is what distinguishes each card now that they
+                        no longer carry a colour. */}
+                    <div style={{ position: "absolute", top: 14, right: 14, opacity: 0.16, lineHeight: 0 }}>
                       {cardStyle.icon(64)}
                     </div>
 
-                    <div style={{ position: "relative", fontSize: 16, fontWeight: 700, color: "#fff", paddingRight: 46, lineHeight: 1.25 }}>
+                    <div style={{ position: "relative", fontSize: 16, fontWeight: 700, color: t.text, paddingRight: 46, lineHeight: 1.25 }}>
                       {sp.name}
                     </div>
-                    <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>
+                    <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: t.muted }}>
                       {count} {count === 1 ? "song" : "songs"}
                     </div>
                   </div>
@@ -764,7 +762,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={pickCoverPhoto}
-                    style={{ fontSize: 12, color: t.violet, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600 }}
+                    style={{ fontSize: 12, color: t.text, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}
                   >
                     {activePlaylist.coverPhoto ? "Change photo" : "Add photo"}
                   </button>
@@ -801,14 +799,14 @@ export const PlaylistsView: React.FC<Props> = ({
                 disabled={playlistSongs.length === 0}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: t.violet + "22", border: `1px solid ${t.violet}44`,
+                  background: t.surface, border: `1px solid ${t.border}`,
                   borderRadius: 10, padding: 11,
-                  color: t.violet, fontSize: 14, fontWeight: 700,
+                  color: t.text, fontSize: 14, fontWeight: 700,
                   cursor: playlistSongs.length ? "pointer" : "default",
                   opacity: playlistSongs.length ? 1 : 0.4,
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.violet} strokeWidth="2" strokeLinecap="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
                 </svg>
                 Shuffle
@@ -864,14 +862,14 @@ export const PlaylistsView: React.FC<Props> = ({
                 disabled={smartPlaylistSongs.length === 0}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: t.violet + "22", border: `1px solid ${t.violet}44`,
+                  background: t.surface, border: `1px solid ${t.border}`,
                   borderRadius: 10, padding: 11,
-                  color: t.violet, fontSize: 14, fontWeight: 700,
+                  color: t.text, fontSize: 14, fontWeight: 700,
                   cursor: smartPlaylistSongs.length ? "pointer" : "default",
                   opacity: smartPlaylistSongs.length ? 1 : 0.4,
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.violet} strokeWidth="2" strokeLinecap="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
                 </svg>
                 Shuffle

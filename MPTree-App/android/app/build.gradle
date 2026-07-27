@@ -1,14 +1,27 @@
 apply plugin: 'com.android.application'
 
+// Release signing. Secrets live in android/keystore.properties, which is
+// gitignored and must never be committed. When that file is absent (a fresh
+// clone, or CI without secrets) the release build simply falls back to unsigned
+// output rather than failing, so the project still builds for anyone.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
 android {
-    namespace = "com.caelan.mplayer"
+    namespace = "com.caelan.mptree"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.caelan.mplayer"
+        applicationId "com.caelan.mptree"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // Keep versionName in step with package.json. versionCode must increase
+        // by at least 1 for every release you hand out, or Android will refuse
+        // to install the update over an existing copy.
         versionCode 1
-        versionName "1.0"
+        versionName "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +29,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

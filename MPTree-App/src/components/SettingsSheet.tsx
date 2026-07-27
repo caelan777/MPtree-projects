@@ -137,7 +137,7 @@ export function SettingsSheet({
               {theme === "dark" ? <IC.Moon /> : <IC.Sun />}
               <span>{theme === "dark" ? "Dark mode" : "Light mode"}</span>
             </div>
-            <div style={{ width: 46, height: 26, borderRadius: 13, background: theme === "light" ? T.violet : T.border, position: "relative", transition: "background 0.25s" }}>
+            <div style={{ width: 46, height: 26, borderRadius: 13, background: theme === "light" ? T.accent : T.border, position: "relative", transition: "background 0.25s" }}>
               <div style={{ position: "absolute", top: 3, left: theme === "light" ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
             </div>
           </button>
@@ -185,8 +185,8 @@ export function SettingsSheet({
             style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
               width: "100%", marginTop: 8,
-              background: sleepEndOfTrack ? T.violet + "22" : T.dim,
-              border: `1px solid ${sleepEndOfTrack ? T.violet : "transparent"}`,
+              background: sleepEndOfTrack ? T.dim : T.dim,
+              border: `1px solid ${sleepEndOfTrack ? T.accent : "transparent"}`,
               borderRadius: 12, padding: "14px 16px",
               cursor: hasCurrentSong ? "pointer" : "default",
               opacity: hasCurrentSong ? 1 : 0.5,
@@ -194,13 +194,13 @@ export function SettingsSheet({
             }}
           >
             <span>Stop at end of track</span>
-            {sleepEndOfTrack && IC.Check(T.violet)}
+            {sleepEndOfTrack && IC.Check(T.text)}
           </button>
 
           {sleepActive && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, padding: "12px 16px", background: T.violet + "14", borderRadius: 12, border: `1px solid ${T.violet}55` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, padding: "12px 16px", background: T.dim, borderRadius: 12, border: `1px solid ${T.border}` }}>
               <span style={{ fontSize: 14, color: T.text }}>
-                Pausing in <strong style={{ color: T.violet }}>{remainingLabel}</strong>
+                Pausing in <strong style={{ color: T.text }}>{remainingLabel}</strong>
               </span>
               <button
                 onClick={() => onSetSleepTimer(null)}

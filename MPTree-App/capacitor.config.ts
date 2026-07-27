@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.caelan.mplayer",
+  appId: "com.caelan.mptree",
   appName: "MPTree",
   webDir: "dist",
   // Routes fetch()/XHR through native Android networking instead of the

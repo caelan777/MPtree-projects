@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background>
-        <inset android:drawable="@mipmap/ic_launcher_background" android:inset="16.7%" />
-    </background>
-    <foreground>
-        <inset android:drawable="@mipmap/ic_launcher_foreground" android:inset="16.7%" />
-    </foreground>
+    <!--
+        The background layer must be full bleed. Insetting it leaves transparent
+        corners once the launcher applies its mask. The foreground already carries
+        its own padding (the mark sits at 40% of the canvas, inside the 66% safe
+        zone), so it does not need an inset either.
+    -->
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>

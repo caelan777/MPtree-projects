@@ -1,4 +1,4 @@
-package com.caelan.mplayer;
+package com.caelan.mptree;
 
 import android.content.ComponentName;
 import android.content.Context;

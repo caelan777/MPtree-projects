@@ -101,15 +101,15 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
           {/* Visual waveform bar */}
           <div style={{ position: "relative", height: 44, marginBottom: 8, marginTop: 8 }}>
             <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 6, borderRadius: 3, background: T.dim, transform: "translateY(-50%)" }} />
-            <div style={{ position: "absolute", top: "50%", left: `${(startMs / total) * 100}%`, width: `${((endMs - startMs) / total) * 100}%`, height: 6, borderRadius: 3, background: T.violet + "66", transform: "translateY(-50%)" }} />
-            <div style={{ position: "absolute", top: "50%", left: `${(previewMs / total) * 100}%`, transform: "translate(-50%,-50%)", width: 3, height: 20, borderRadius: 2, background: T.violet, transition: "left 0.1s linear" }} />
-            <div style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", left: `${(startMs / total) * 100}%`, width: 18, height: 18, borderRadius: "50%", background: "#fff", border: `2px solid ${T.violet}`, boxShadow: "0 2px 8px rgba(0,0,0,0.3)", zIndex: 2 }} />
-            <div style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", left: `${(endMs / total) * 100}%`, width: 18, height: 18, borderRadius: "50%", background: "#fff", border: `2px solid ${T.violet}`, boxShadow: "0 2px 8px rgba(0,0,0,0.3)", zIndex: 2 }} />
+            <div style={{ position: "absolute", top: "50%", left: `${(startMs / total) * 100}%`, width: `${((endMs - startMs) / total) * 100}%`, height: 6, borderRadius: 3, background: T.accent + "66", transform: "translateY(-50%)" }} />
+            <div style={{ position: "absolute", top: "50%", left: `${(previewMs / total) * 100}%`, transform: "translate(-50%,-50%)", width: 3, height: 20, borderRadius: 2, background: T.accent, transition: "left 0.1s linear" }} />
+            <div style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", left: `${(startMs / total) * 100}%`, width: 18, height: 18, borderRadius: "50%", background: "#fff", border: `2px solid ${T.accent}`, boxShadow: "0 2px 8px rgba(0,0,0,0.3)", zIndex: 2 }} />
+            <div style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", left: `${(endMs / total) * 100}%`, width: 18, height: 18, borderRadius: "50%", background: "#fff", border: `2px solid ${T.accent}`, boxShadow: "0 2px 8px rgba(0,0,0,0.3)", zIndex: 2 }} />
           </div>
 
           <input type="range" min={0} max={total} value={previewMs} step={500}
             onChange={async e => { await seekPreviewTo(Number(e.target.value)); }}
-            style={{ width: "100%", accentColor: T.violet, marginBottom: 4 }} />
+            style={{ width: "100%", accentColor: T.accent, marginBottom: 4 }} />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.muted, marginBottom: 12 }}>
             <span>{fmt(previewMs)}</span>
             <span>{fmt(total)}</span>
@@ -122,7 +122,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
               ⏮ Start
             </button>
             <button onClick={handlePreviewToggle} disabled={!isLoaded}
-              style={{ width: 48, height: 48, borderRadius: "50%", background: T.violet, border: "none", color: "#fff",
+              style={{ width: 48, height: 48, borderRadius: "50%", background: T.accent, border: "none", color: T.playBtnFg,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: isLoaded ? "pointer" : "default", opacity: isLoaded ? 1 : 0.45,
                 boxShadow: "0 4px 16px rgba(124,58,237,0.4)" }}>
@@ -140,7 +140,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
               const v = Number(e.target.value);
               if (v < endMs - 5000) { setStartMs(v); await seekPreviewTo(v); }
             }}
-            style={{ width: "100%", accentColor: T.violet }} />
+            style={{ width: "100%", accentColor: T.accent }} />
 
           <div style={{ ...sh.lbl, marginTop: 14 }}>End — {fmt(endMs)}</div>
           <input type="range" min={0} max={total} value={endMs} step={1000}
@@ -148,10 +148,10 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
               const v = Number(e.target.value);
               if (v > startMs + 5000) { setEndMs(v); await seekPreviewTo(Math.max(0, v - 5000)); }
             }}
-            style={{ width: "100%", accentColor: T.violet }} />
+            style={{ width: "100%", accentColor: T.accent }} />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginTop: 4, marginBottom: 14 }}>
             <span>Duration: {fmt(endMs - startMs)}</span>
-            <span style={{ color: T.violet, fontWeight: "600" }}>{fmt(startMs)} → {fmt(endMs)}</span>
+            <span style={{ color: T.accent, fontWeight: "600" }}>{fmt(startMs)} → {fmt(endMs)}</span>
           </div>
 
           <div style={sh.lbl}>Save as</div>

@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { T } from "../themes";
-import logoDark from "../assets/logo.png";
-import logoLight from "../assets/logolight.png";
+import { Logo } from "./Logo";
 
 // ─── ONBOARDING OVERLAY ──────────────────────────────────────────────────────
 // First-launch guide with REAL on-screen indicators: each step spotlights the
@@ -12,7 +11,6 @@ import logoLight from "../assets/logolight.png";
 
 interface Props {
   onDone: () => void;
-  theme: "dark" | "light";
   T: T;
 }
 
@@ -49,7 +47,7 @@ const STEPS: Step[] = [
   {
     target: '[data-tour="playlists"]',
     title: "Your playlists",
-    body: "Tap here (or swipe the screen left) for your playlists — plus Favorites, Recently Played and Most Played, built automatically.",
+    body: "Tap here (or swipe the screen left) for your playlists, plus Favorites, Recently Played and Most Played, built automatically.",
   },
   {
     target: '[data-tour="plus"]',
@@ -65,11 +63,14 @@ const STEPS: Step[] = [
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-export function OnboardingOverlay({ onDone, theme, T }: Props) {
+export function OnboardingOverlay({ onDone, T }: Props) {
   const [step, setStep] = useState(0); // 0 = welcome, 1..STEPS.length = tips
   const [rect, setRect] = useState<Rect | null>(null);
 
-  const violet = T.violet;
+  // The spotlight ring sits on a scrim that is dark in BOTH themes, so it is
+  // always white rather than T.accent (which would be black in light mode and
+  // vanish against the scrim).
+  const spotlight = "#FFFFFF";
   const isWelcome = step === 0;
   const tipIndex = step - 1;
   const current = isWelcome ? null : STEPS[tipIndex];
@@ -83,22 +84,47 @@ export function OnboardingOverlay({ onDone, theme, T }: Props) {
       if (!el) { setRect(null); return; }
       const vhNow = window.innerHeight || 800;
 
-      // Spotlight the row the user is actually looking at. Works no matter how
-      // far the list is scrolled, because we pick the first row that's fully
-      // on screen right now rather than assuming the list is at the top.
-      // We start below the floating header card so we never highlight a row
-      // that's tucked underneath it (which looked broken and left the tip card
-      // stranded up in the header).
+      // Spotlight a song near the MIDDLE of the screen, not the first one that
+      // happens to be visible. Picking the first visible row put the highlight
+      // directly under the header and pushed the tip card off the bottom.
+      //
+      // The band is tried from strict to loose. A single strict band failed on
+      // a real device (floating header + mini player + virtualised list left no
+      // row fully inside it), which silently dropped back to a plain centered
+      // card with no highlight at all. Degrading through wider bands means a
+      // song gets highlighted whenever any row is on screen.
       if (current.pickRow) {
         const headerEl = document.querySelector('[data-tour="search"]');
         const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom + 8 : 120;
-        const rows = Array.from(el.querySelectorAll("[data-song-row]"));
-        const visible = rows.find(rw => {
-          const rr = rw.getBoundingClientRect();
-          return rr.height > 0 && rr.top >= headerBottom && rr.bottom <= vhNow - 120;
-        });
-        if (visible) el = visible;
-        else { setRect(null); return; } // no clean row → centered fallback card
+        const middle = vhNow / 2;
+
+        const rows = Array.from(el.querySelectorAll("[data-song-row]"))
+          .map(row => ({ row, rr: row.getBoundingClientRect() }))
+          .filter(({ rr }) => rr.height > 0);
+
+        // 1: fully visible with room beneath for the tip card.
+        // 2: fully visible anywhere below the header.
+        // 3: merely overlapping the area below the header.
+        const bands = [
+          ({ rr }: { rr: DOMRect }) => rr.top >= headerBottom && rr.bottom <= vhNow - 210,
+          ({ rr }: { rr: DOMRect }) => rr.top >= headerBottom && rr.bottom <= vhNow - 20,
+          ({ rr }: { rr: DOMRect }) => rr.bottom > headerBottom && rr.top < vhNow - 20,
+        ];
+
+        let best: Element | null = null;
+        for (const inBand of bands) {
+          let bestDistance = Infinity;
+          for (const candidate of rows) {
+            if (!inBand(candidate)) continue;
+            const { rr } = candidate;
+            const distance = Math.abs((rr.top + rr.bottom) / 2 - middle);
+            if (distance < bestDistance) { bestDistance = distance; best = candidate.row; }
+          }
+          if (best) break;
+        }
+
+        if (best) el = best;
+        else { setRect(null); return; } // no rows on screen at all → centered card
       }
 
       const r = el.getBoundingClientRect();
@@ -151,6 +177,15 @@ export function OnboardingOverlay({ onDone, theme, T }: Props) {
     else                                 cardTop = below;
   }
   cardTop = Math.max(EDGE, Math.min(cardTop, vh - cardH - EDGE));
+
+  // The clamp above keeps the card on screen, but on a short screen it can drag
+  // the card back over the very row being highlighted, hiding it. If that
+  // happened and there is room above the spotlight, flip the card up there.
+  if (rect) {
+    const coversSpotlight = cardTop < rect.top + rect.height && cardTop + cardH > rect.top;
+    const aboveTop = rect.top - GAP - cardH;
+    if (coversSpotlight && aboveTop >= EDGE) cardTop = aboveTop;
+  }
   const cardStyle: React.CSSProperties = { position: "fixed", left: 16, right: 16, top: cardTop };
 
   return (
@@ -164,7 +199,7 @@ export function OnboardingOverlay({ onDone, theme, T }: Props) {
           top: rect.top, left: rect.left, width: rect.width, height: rect.height,
           borderRadius: 14,
           boxShadow: "0 0 0 9999px rgba(0,0,0,0.8)",
-          border: `2px solid ${violet}`,
+          border: `2px solid ${spotlight}`,
           pointerEvents: "none",
           transition: "all 0.28s ease",
         }} />
@@ -182,15 +217,13 @@ export function OnboardingOverlay({ onDone, theme, T }: Props) {
             borderRadius: 22, width: "100%", maxWidth: 350,
             padding: "32px 26px 22px", textAlign: "center",
           }}>
-            <img
-              src={theme === "dark" ? logoDark : logoLight}
-              alt="MPTree"
-              style={{ width: 84, height: 84, objectFit: "contain", margin: "0 auto 18px", display: "block" }}
-            />
+            <div style={{ margin: "0 auto 18px", width: 84 }}>
+              <Logo size={84} color={T.text} />
+            </div>
             <div style={{ fontSize: 23, fontWeight: 800, color: T.text }}>Welcome to MPTree</div>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>by Caelan Verkuijl</div>
             <div style={{ fontSize: 15, color: T.textSub, marginTop: 16, lineHeight: 1.55 }}>
-              Your music. Zero ads.<br />Let me show you around — it takes 20 seconds.
+              Your music. Zero ads.<br />Let me show you around. It takes 20 seconds.
             </div>
             <button
               onClick={() => setStep(1)}
@@ -233,7 +266,7 @@ export function OnboardingOverlay({ onDone, theme, T }: Props) {
                 {STEPS.map((_, i) => (
                   <div key={i} style={{
                     width: i === tipIndex ? 16 : 6, height: 6, borderRadius: 3,
-                    background: i === tipIndex ? violet : T.border,
+                    background: i === tipIndex ? T.text : T.border,
                     transition: "all 0.2s",
                   }} />
                 ))}

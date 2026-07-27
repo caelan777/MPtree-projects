@@ -6,8 +6,8 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { Preferences } from "@capacitor/preferences";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import logo from "./assets/logo.png";
-import logoLight from "./assets/logolight.png";
+import { StatusBar, Style } from "@capacitor/status-bar";
+import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
@@ -193,7 +193,7 @@ export default function App() {
   useEffect(() => {
     const el = headerCardRef.current;
     if (!el) return;
-    const update = () => setTopInset(Math.round(el.getBoundingClientRect().height) + 14);
+    const update = () => setTopInset(Math.round(el.getBoundingClientRect().bottom) + 14);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -334,6 +334,16 @@ export default function App() {
   useEffect(() => { eqBandLevelsRef.current = eqBandLevels; }, [eqBandLevels]);
   useEffect(() => { themeRef.current        = theme;        }, [theme]);
   useEffect(() => { downloadUrlRef.current  = downloadUrl;  }, [downloadUrl]);
+
+  // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
+  // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
+  // off overlay and colour the bar to match the theme. No-ops on web.
+  useEffect(() => {
+    const dark = theme === "dark";
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: dark ? "#000000" : "#FFFFFF" }).catch(() => {});
+  }, [theme]);
 
   const TH = theme === "dark" ? DARK : LIGHT;
 
@@ -584,7 +594,7 @@ export default function App() {
         setPlaying(false);
         setSleepUntil(null);
         sleepUntilRef.current = null;
-        showToast("Sleep timer — playback paused");
+        showToast("Sleep timer: playback paused");
       }
     };
     const iv = setInterval(check, 1000);
@@ -764,7 +774,7 @@ export default function App() {
       currentTimeRef.current = next.isCut ? (next.cutFrom ?? 0) : 0;
       setPlaying(false);
       loadedRef.current = true;
-      showToast("Sleep timer — playback paused");
+      showToast("Sleep timer: playback paused");
       return;
     }
 
@@ -975,7 +985,7 @@ export default function App() {
         setQueue(orderedQ);
         AudioPlayer.setQueue({ tracks: orderedQ.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
       }
-      showToast("Shuffle off — continuing in order"); return;
+      showToast("Shuffle off, continuing in order"); return;
     }
     if (!currentSong) return;
     const rest = buildShuffleQ(displayList.filter(s => s.id !== currentSong.id));
@@ -1195,7 +1205,7 @@ export default function App() {
     try {
       const { zipUri } = await zipBackupFolder(folderName);
       await Share.share({
-        title: "MPlayer1 backup",
+        title: "MPTree backup",
         files: [zipUri],
         dialogTitle: "Share backup",
       });
@@ -1238,7 +1248,7 @@ export default function App() {
     }).catch(() => null);
 
     if (!json) {
-      setBackupSheet({ kind: "importError", message: "File not recognized — could not read the file." });
+      setBackupSheet({ kind: "importError", message: "File not recognized. Could not read the file." });
       return;
     }
 
@@ -1246,13 +1256,13 @@ export default function App() {
     try {
       data = parseBackup(json);
     } catch {
-      setBackupSheet({ kind: "importError", message: "File not recognized — this doesn't look like an MPlayer1 backup." });
+      setBackupSheet({ kind: "importError", message: "File not recognized. This doesn't look like an MPTree backup." });
       return;
     }
 
     // Check version compatibility
     if (data.version > 1) {
-      setBackupSheet({ kind: "importError", message: "Backup is from a newer version of MPlayer1. Please update the app." });
+      setBackupSheet({ kind: "importError", message: "Backup is from a newer version of MPTree. Please update the app." });
       return;
     }
 
@@ -1324,7 +1334,7 @@ export default function App() {
       if (msg.includes("permission") || msg.includes("Permission")) {
         setBackupSheet({ kind: "importError", message: "Storage permission needed. Please grant file access and try again." });
       } else {
-        setBackupSheet({ kind: "importError", message: "Restore failed — the backup may be incomplete or corrupted." });
+        setBackupSheet({ kind: "importError", message: "Restore failed. The backup may be incomplete or corrupted." });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1559,6 +1569,15 @@ export default function App() {
   };
 
   const saveCutTrack = async (song: Song, startMs: number, endMs: number, newName: string) => {
+    // Integer milliseconds only, and a sane range. This is defensive: the
+    // native side expects ints, and a zero-or-negative span used to surface as
+    // a cryptic "Invalid cut range". Catch it here with a clear message instead.
+    const start = Math.max(0, Math.round(startMs));
+    const end   = Math.round(endMs);
+    if (end - start < 1000) {
+      showError("Cut must be at least 1 second long.");
+      return;
+    }
     setCutSong(null);
     // Try to export a REAL trimmed audio file to the device (Music/MPTree) and
     // add it to the library as a normal song. If the source codec can't be
@@ -1566,7 +1585,7 @@ export default function App() {
     // plays the original file between the two markers).
     showToast(`Saving "${newName}"…`);
     try {
-      const res = await MusicScanner.cutTrack({ path: song.uri, startMs, endMs, name: newName });
+      const res = await MusicScanner.cutTrack({ path: song.uri, startMs: start, endMs: end, name: newName });
       // A real file now exists on the device. Add it as a normal (non-cut) song.
       const realSong: Song = {
         uri: res.uri,
@@ -1689,7 +1708,7 @@ export default function App() {
   const allSelectedLiked = selectedSongs.length > 0 && selectedSongs.every(s => isLiked(s));
 
   // Default backup name (date-based)
-  const defaultBackupName = `MPlayer1_Backup_${makeDateTag()}`;
+  const defaultBackupName = `MPTree_Backup_${makeDateTag()}`;
 
   // Measure the scroll viewport height for virtualization. Re-measures on
   // window resize / orientation change. cheap and runs rarely.
@@ -1784,11 +1803,14 @@ export default function App() {
         {/* Everything up top lives in one rounded card that floats ABOVE the
             list — the songs scroll underneath it. Its height is measured via
             ResizeObserver into `topInset`, which pads the scroll content so
-            the first rows start below the card. */}
+            the first rows start below the card. The card's top offset adds
+            env(safe-area-inset-top) so it sits below the status bar instead
+            of underneath it — the WebView renders edge-to-edge, so without
+            this the status bar icons overlap the Songs/Playlists toggle. */}
         <div
           ref={headerCardRef}
           style={{
-            position: "absolute", top: 2, left: 12, right: 12, zIndex: 60,
+            position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, right: 12, zIndex: 60,
             background: TH.playerBg, border: `1px solid ${TH.border}`,
             borderRadius: 22, boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
             padding: "8px 14px 12px",
@@ -1796,7 +1818,7 @@ export default function App() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
-            <img src={theme === "dark" ? logo : logoLight} alt="MPlayer" style={{ width: 56, height: 56 }} />
+            <Logo size={56} color={TH.text} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 2, background: TH.surface, borderRadius: 20, padding: 3, border: `1px solid ${TH.border}` }}>
@@ -1981,7 +2003,7 @@ export default function App() {
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ fontSize: 15, fontWeight: "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-                                {song.isCut && <span style={{ fontSize: 10, background: TH.violet + "33", color: TH.violet, borderRadius: 4, padding: "1px 5px", fontWeight: "700", flexShrink: 0 }}>CUT</span>}
+                                {song.isCut && <span style={{ fontSize: 10, background: TH.dim, color: TH.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: "700", flexShrink: 0 }}>CUT</span>}
                               </div>
                               <div style={{ display: "flex", alignItems: "center", marginTop: 2, gap: 6 }}>
                                 {/* Track number — hidden for now (kept for future use):
@@ -2284,7 +2306,7 @@ export default function App() {
         )}
 
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
-        {!isInitializing && libraryReady && showOnboarding && <OnboardingOverlay onDone={finishOnboarding} theme={theme} T={TH} />}
+        {!isInitializing && libraryReady && showOnboarding && <OnboardingOverlay onDone={finishOnboarding} T={TH} />}
 
         {/* ═══ LOADING SCREEN ══════════════════════════════════════════════
             Overlays everything above while initialize() is still running,
@@ -2295,7 +2317,7 @@ export default function App() {
         {permissionDenied && !isInitializing && (
           <div style={{ position: "fixed", inset: 0, zIndex: 850, background: TH.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 28px", textAlign: "center" }}>
             <div style={{ width: 72, height: 72, borderRadius: 20, background: TH.surface, border: `1px solid ${TH.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={TH.violet} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={TH.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             </div>
             <div style={{ fontSize: 21, fontWeight: 800, color: TH.text, marginBottom: 10 }}>Music access needed</div>
             <div style={{ fontSize: 15, color: TH.textSub, lineHeight: 1.55, maxWidth: 320, marginBottom: 28 }}>

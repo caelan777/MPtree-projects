@@ -50,7 +50,7 @@ export function Toast({
         <button
           onClick={() => { action.onClick(); onDoneRef.current(); }}
           style={{
-            background: T.violet, border: "none", color: "#fff", borderRadius: 16,
+            background: T.accent, border: "none", color: T.playBtnFg, borderRadius: 16,
             padding: "6px 16px", fontSize: 13, fontWeight: "700", cursor: "pointer",
             fontFamily: "inherit", flexShrink: 0,
           }}>

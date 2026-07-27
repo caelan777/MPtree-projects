@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Theme } from "../types";
 import { DARK, LIGHT } from "../themes";
-import logo from "../assets/logo.png";
-import logoLight from "../assets/logolight.png";
+import { Logo } from "./Logo";
 
 // ─── LoadingScreen ───────────────────────────────────────────────────────────
 // Full-screen overlay shown while App.tsx's initialize() is still loading.
@@ -10,9 +9,10 @@ import logoLight from "../assets/logolight.png";
 // so there is never a flash of an empty/incomplete song list. Once
 // `visible` flips to false it fades out and then unmounts itself.
 //
-// Visual concept: the logo sits at the center of a slowly spinning vinyl
-// groove, wrapped in a breathing violet aurora, with a live equalizer
-// underneath — the app's whole identity (black, violet, music) in one frame.
+// Visual concept: the mark alone on the app's ground, breathing slowly, with
+// three quiet dots standing in for progress. Strictly monochrome, per the
+// brand system in Branding/README.md: black and white carry the identity, and
+// colour is reserved for functional state.
 
 interface LoadingScreenProps {
   /** Current app theme, so the loading screen matches light/dark mode. */
@@ -80,7 +80,6 @@ export function LoadingScreen({
   if (!mounted) return null;
 
   const TH = theme === "dark" ? DARK : LIGHT;
-  const logoSrc = theme === "dark" ? logo : logoLight;
 
   return (
     <div
@@ -99,24 +98,21 @@ export function LoadingScreen({
         @media (prefers-reduced-motion: reduce) { .mpl-anim { animation: none !important; } }
       `}</style>
 
-      {/* Logo, breathing very slowly. */}
-      <img
-        className="mpl-anim"
-        src={logoSrc}
-        alt="MPTree"
-        style={{ width: 104, height: 104, objectFit: "contain", animation: "mplBreathe 3.2s ease-in-out infinite" }}
-      />
+      {/* Mark, breathing very slowly. */}
+      <div className="mpl-anim" style={{ animation: "mplBreathe 3.2s ease-in-out infinite" }}>
+        <Logo size={104} color={TH.text} />
+      </div>
 
-      {/* Wordmark */}
+      {/* Wordmark. Monochrome: the mark carries the identity, not a colour. */}
       <div style={{ marginTop: 22, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: TH.text }}>
-        MP<span style={{ color: TH.violet }}>Tree</span>
+        MPTree
       </div>
 
       {/* Three quiet dots standing in for progress. */}
       <div style={{ display: "flex", gap: 7, marginTop: 26 }} aria-label={label}>
         {[0, 1, 2].map(i => (
           <div key={i} className="mpl-anim" style={{
-            width: 6, height: 6, borderRadius: "50%", background: TH.violet,
+            width: 6, height: 6, borderRadius: "50%", background: TH.text,
             animation: `mplDot 1.4s ease-in-out ${i * 0.18}s infinite`,
           }} />
         ))}

@@ -1,4 +1,4 @@
-package com.caelan.mplayer;
+package com.caelan.mptree;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -36,11 +36,11 @@ import androidx.media.app.NotificationCompat.MediaStyle;
 public class MusicPlayerService extends Service {
 
     public static final String CHANNEL_ID      = "mptree_playback";
-    public static final String ACTION_PLAY     = "com.caelan.mplayer.PLAY";
-    public static final String ACTION_PAUSE    = "com.caelan.mplayer.PAUSE";
-    public static final String ACTION_NEXT     = "com.caelan.mplayer.NEXT";
-    public static final String ACTION_PREV     = "com.caelan.mplayer.PREV";
-    public static final String ACTION_STOP     = "com.caelan.mplayer.STOP";
+    public static final String ACTION_PLAY     = "com.caelan.mptree.PLAY";
+    public static final String ACTION_PAUSE    = "com.caelan.mptree.PAUSE";
+    public static final String ACTION_NEXT     = "com.caelan.mptree.NEXT";
+    public static final String ACTION_PREV     = "com.caelan.mptree.PREV";
+    public static final String ACTION_STOP     = "com.caelan.mptree.STOP";
 
     private static final int NOTIFICATION_ID   = 1;
 

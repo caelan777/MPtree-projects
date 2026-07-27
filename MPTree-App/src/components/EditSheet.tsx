@@ -63,7 +63,7 @@ export function EditSheet({ name: initName, artist: initArtist, currentPhoto, on
               <img src={previewPhoto} alt="Cover" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
               <span style={{ flex: 1, fontSize: 14, color: T.text }}>Cover photo set</span>
               <label style={{ cursor: "pointer" }}>
-                <span style={{ fontSize: 13, color: T.violet, fontWeight: "600" }}>Change</span>
+                <span style={{ fontSize: 13, color: T.text, fontWeight: "600", textDecoration: "underline" }}>Change</span>
                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                   const f = e.target.files?.[0];
                   if (!f) return;

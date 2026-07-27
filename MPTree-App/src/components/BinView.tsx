@@ -97,7 +97,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: "600", color: isCurrent ? T.violet : T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 15, fontWeight: "600", color: isCurrent ? T.accent : T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {dispName(song)}
                   </div>
                   <div style={{ fontSize: 13, color: T.muted, opacity: 0.7, marginTop: 2 }}>

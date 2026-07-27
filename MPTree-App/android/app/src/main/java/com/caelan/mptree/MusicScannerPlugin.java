@@ -1,4 +1,4 @@
-package com.caelan.mplayer;
+package com.caelan.mptree;
 
 import android.Manifest;
 import android.app.Activity;
@@ -340,8 +340,12 @@ public class MusicScannerPlugin extends Plugin {
     @PluginMethod
     public void cutTrack(PluginCall call) {
         final String sourcePath = normalizePath(call.getString("path"));
-        final long startMs = call.getLong("startMs", 0L);
-        final long endMs   = call.getLong("endMs", 0L);
+        // Read as int, not long: Capacitor's getLong returns the default for
+        // plain JS integers, which made every cut arrive as [0, 0] and trip the
+        // "Invalid cut range" guard below. Milliseconds fit in an int easily
+        // (max ~24 days), and this matches how seekTo etc. read ms elsewhere.
+        final long startMs = call.getInt("startMs", 0);
+        final long endMs   = call.getInt("endMs", 0);
         final String outName = call.getString("name", "Cut");
 
         if (sourcePath == null) { call.reject("path is required"); return; }
@@ -369,51 +373,67 @@ public class MusicScannerPlugin extends Plugin {
         // Sanitize the output filename (no path separators / illegal chars).
         String safe = outName.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
         if (safe.isEmpty()) safe = "Cut";
-        final String fileName = safe + ".m4a";
 
-        // Build the extractor on the source.
+        // Pick a lossless strategy based on the source codec.
+        String mime = detectAudioMime(sourcePath);
+        if (mime == null) throw new Exception("No audio track found");
+
+        if (mime.contains("mp4a") || mime.contains("aac")) {
+            File tmp = cutAacToM4a(sourcePath, startMs, endMs);
+            JSObject out = publishToMusic(tmp, safe + ".m4a", outName, endMs - startMs, "audio/mp4");
+            try { tmp.delete(); } catch (Exception ignored) {}
+            return out;
+        } else if (mime.contains("mpeg") || mime.contains("mp3")) {
+            File tmp = cutMp3(sourcePath, startMs, endMs);
+            JSObject out = publishToMusic(tmp, safe + ".mp3", outName, endMs - startMs, "audio/mpeg");
+            try { tmp.delete(); } catch (Exception ignored) {}
+            return out;
+        }
+
+        // FLAC / OGG / WAV / etc.: no cheap lossless file cut here, so tell JS to
+        // keep the in-app metadata-only cut instead of failing outright.
+        throw new UnsupportedOperationException(
+                "This audio format can't be exported to a file yet. Kept as an in-app cut instead.");
+    }
+
+    /** MIME of the first audio track, or null if there is none. */
+    private String detectAudioMime(String sourcePath) throws Exception {
+        MediaExtractor extractor = new MediaExtractor();
+        try {
+            extractor.setDataSource(sourcePath);
+            for (int i = 0; i < extractor.getTrackCount(); i++) {
+                String mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME);
+                if (mime != null && mime.startsWith("audio/")) return mime;
+            }
+            return null;
+        } finally {
+            extractor.release();
+        }
+    }
+
+    /** Lossless AAC/M4A cut: copy the compressed samples in [startMs,endMs] into a new .m4a. */
+    private File cutAacToM4a(String sourcePath, long startMs, long endMs) throws Exception {
         MediaExtractor extractor = new MediaExtractor();
         extractor.setDataSource(sourcePath);
 
-        // Find the (first) audio track.
         int audioTrackIndex = -1;
         MediaFormat audioFormat = null;
         for (int i = 0; i < extractor.getTrackCount(); i++) {
             MediaFormat fmt = extractor.getTrackFormat(i);
             String mime = fmt.getString(MediaFormat.KEY_MIME);
-            if (mime != null && mime.startsWith("audio/")) {
-                audioTrackIndex = i;
-                audioFormat = fmt;
-                break;
-            }
+            if (mime != null && mime.startsWith("audio/")) { audioTrackIndex = i; audioFormat = fmt; break; }
         }
-        if (audioTrackIndex < 0) {
-            extractor.release();
-            throw new Exception("No audio track found");
-        }
-
-        String mime = audioFormat.getString(MediaFormat.KEY_MIME);
-        // MediaMuxer MP4 output supports AAC. Raw MP3 frames can't be muxed into
-        // MP4 on all API levels — signal unsupported so JS keeps metadata-cut.
-        if (mime == null || !mime.contains("mp4a") && !mime.contains("aac")) {
-            extractor.release();
-            throw new UnsupportedOperationException(
-                    "This audio format can't be exported losslessly (only AAC/M4A). Kept as an in-app cut instead.");
-        }
-
+        if (audioTrackIndex < 0) { extractor.release(); throw new Exception("No audio track found"); }
         extractor.selectTrack(audioTrackIndex);
 
-        // Prepare a temp output file in the app cache first, then publish it to
-        // MediaStore (Music/MPTree). Muxing straight to a MediaStore FD is
-        // finicky across API levels; temp-then-copy is the reliable path.
+        // Temp file first, then publish to MediaStore — muxing straight to a
+        // MediaStore FD is finicky across API levels.
         File tmp = File.createTempFile("mptree_cut", ".m4a", getContext().getCacheDir());
-
         MediaMuxer muxer = new MediaMuxer(tmp.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
         int outTrack = muxer.addTrack(audioFormat);
         muxer.start();
 
         int maxChunk = 256 * 1024;
-        // Prefer the source format's max input size when it's available.
         if (audioFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
             int declared = audioFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE);
             if (declared > 0) maxChunk = declared;
@@ -421,54 +441,121 @@ public class MusicScannerPlugin extends Plugin {
         ByteBuffer buffer = ByteBuffer.allocate(maxChunk);
         android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
 
-        long startUs = startMs * 1000L;
-        long endUs   = endMs * 1000L;
-
+        long startUs = startMs * 1000L, endUs = endMs * 1000L;
         extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
 
         long firstSampleUs = -1;
         while (true) {
             long sampleTime = extractor.getSampleTime();
-            if (sampleTime < 0) break;          // end of stream
-            if (sampleTime > endUs) break;      // past the requested end
-
+            if (sampleTime < 0) break;
+            if (sampleTime > endUs) break;
             int size = extractor.readSampleData(buffer, 0);
             if (size < 0) break;
-
             if (sampleTime >= startUs) {
                 if (firstSampleUs < 0) firstSampleUs = sampleTime;
                 info.offset = 0;
                 info.size = size;
-                // Re-base timestamps so the clip starts at 0.
-                info.presentationTimeUs = sampleTime - firstSampleUs;
+                info.presentationTimeUs = sampleTime - firstSampleUs; // re-base to 0
                 info.flags = (extractor.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0
                         ? android.media.MediaCodec.BUFFER_FLAG_KEY_FRAME : 0;
                 muxer.writeSampleData(outTrack, buffer, info);
             }
             extractor.advance();
         }
-
         try { muxer.stop(); } catch (Exception ignored) {}
         muxer.release();
         extractor.release();
+        return tmp;
+    }
 
-        // Publish the temp file into MediaStore under Music/MPTree.
-        JSObject out = publishToMusic(tmp, fileName, outName, endMs - startMs);
-        // Best-effort cleanup of the temp file (publish copied its bytes).
-        try { tmp.delete(); } catch (Exception ignored) {}
-        return out;
+    /**
+     * Lossless MP3 cut. MP3 is a stream of self-contained frames, so we copy the
+     * whole frames whose playback time falls in [startMs,endMs] byte-for-byte into
+     * a new .mp3 — no re-encode, no quality loss. Cuts land on frame boundaries
+     * (~26ms), which is inaudible here. Throws if the stream can't be parsed, so
+     * the caller falls back to the in-app metadata cut.
+     */
+    private File cutMp3(String sourcePath, long startMs, long endMs) throws Exception {
+        File src = new File(sourcePath);
+        long len = src.length();
+        if (len <= 0 || len > 200L * 1024 * 1024) throw new Exception("MP3 too large or empty");
+        byte[] data = new byte[(int) len];
+        try (java.io.FileInputStream is = new java.io.FileInputStream(src)) {
+            int off = 0, n;
+            while (off < data.length && (n = is.read(data, off, data.length - off)) > 0) off += n;
+        }
+
+        int pos = 0;
+        // Skip an ID3v2 tag if present (size is stored as a 28-bit synchsafe int).
+        if (data.length > 10 && data[0] == 'I' && data[1] == 'D' && data[2] == '3') {
+            int size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14)
+                     | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F);
+            pos = 10 + size;
+            if ((data[5] & 0x10) != 0) pos += 10; // footer present
+            if (pos < 0 || pos > data.length) pos = 0;
+        }
+
+        double tMs = 0;
+        int startByte = -1, endByte = data.length;
+        int i = pos;
+        while (i + 4 <= data.length) {
+            // Frame sync = 11 set bits (0xFF, top 3 bits of next byte).
+            if ((data[i] & 0xFF) != 0xFF || (data[i + 1] & 0xE0) != 0xE0) { i++; continue; }
+            int[] frame = parseMp3Frame(data, i); // {frameLenBytes, durationUs}
+            if (frame == null || frame[0] < 4 || i + frame[0] > data.length) { i++; continue; }
+            if (startByte < 0 && tMs >= startMs) startByte = i;
+            if (tMs >= endMs) { endByte = i; break; }
+            tMs += frame[1] / 1000.0;
+            i += frame[0];
+        }
+        if (startByte < 0) startByte = pos;
+        if (endByte <= startByte) throw new Exception("Empty MP3 cut range");
+
+        File tmp = File.createTempFile("mptree_cut", ".mp3", getContext().getCacheDir());
+        try (java.io.FileOutputStream os = new java.io.FileOutputStream(tmp)) {
+            os.write(data, startByte, endByte - startByte);
+        }
+        return tmp;
+    }
+
+    /** Parse one MPEG-audio Layer III frame header. Returns {frameLenBytes, durationUs} or null. */
+    private int[] parseMp3Frame(byte[] d, int i) {
+        int b1 = d[i + 1] & 0xFF, b2 = d[i + 2] & 0xFF;
+        int versionBits = (b1 >> 3) & 0x3; // 3=MPEG1, 2=MPEG2, 0=MPEG2.5, 1=reserved
+        int layerBits   = (b1 >> 1) & 0x3; // 1=Layer III
+        if (versionBits == 1 || layerBits != 1) return null;
+        int bitrateIdx = (b2 >> 4) & 0xF;
+        int srIdx      = (b2 >> 2) & 0x3;
+        int padding    = (b2 >> 1) & 0x1;
+        if (bitrateIdx == 0 || bitrateIdx == 15 || srIdx == 3) return null;
+
+        boolean v1 = versionBits == 3;
+        int[] brV1 = {0,32,40,48,56,64,80,96,112,128,160,192,224,256,320};
+        int[] brV2 = {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160};
+        int bitrate = (v1 ? brV1[bitrateIdx] : brV2[bitrateIdx]) * 1000;
+
+        int[] srV1  = {44100,48000,32000};
+        int[] srV2  = {22050,24000,16000};
+        int[] srV25 = {11025,12000,8000};
+        int sampleRate = versionBits == 3 ? srV1[srIdx] : versionBits == 2 ? srV2[srIdx] : srV25[srIdx];
+
+        int samplesPerFrame = v1 ? 1152 : 576;
+        int frameLen = v1 ? 144 * bitrate / sampleRate + padding
+                          : 72 * bitrate / sampleRate + padding;
+        int durationUs = (int) (samplesPerFrame * 1_000_000L / sampleRate);
+        return new int[]{ frameLen, durationUs };
     }
 
     /** Copies `tmp` into the shared Music/MPTree collection via MediaStore and
      *  returns { uri, path, title, duration }. Uses the modern IS_PENDING flow
      *  on API 29+, and a direct file write + scan on older devices. */
-    private JSObject publishToMusic(File tmp, String fileName, String title, long durationMs) throws Exception {
+    private JSObject publishToMusic(File tmp, String fileName, String title, long durationMs, String mimeType) throws Exception {
         ContentResolver resolver = getContext().getContentResolver();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ContentValues values = new ContentValues();
             values.put(MediaStore.Audio.Media.DISPLAY_NAME, fileName);
-            values.put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4");
+            values.put(MediaStore.Audio.Media.MIME_TYPE, mimeType);
             values.put(MediaStore.Audio.Media.TITLE, title);
             values.put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/MPTree");
             values.put(MediaStore.Audio.Media.IS_MUSIC, 1);

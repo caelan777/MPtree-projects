@@ -226,7 +226,7 @@ export function EQSheet({
                     const level = localLevels[i] ?? 0;
                     const pct   = (maxMb - minMb) > 0 ? (level - minMb) / (maxMb - minMb) : 0.5;
                     const barH  = Math.round(pct * 60) + 10;
-                    const barColor = level === 0 ? T.border : level > 0 ? accent : violet + "99";
+                    const barColor = level === 0 ? T.border : accent;
                     return (
                       <div key={hz} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                         <div style={{ width: "100%", height: barH, borderRadius: 3, background: barColor, transition: "height 0.08s ease, background 0.15s", alignSelf: "flex-end" }} />

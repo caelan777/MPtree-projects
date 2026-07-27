@@ -47,7 +47,7 @@ export function ExpandedSongRow({
           </div>
           {song.isCut && (
             <span style={{
-              fontSize: 10, background: T.violet + "33", color: T.violet,
+              fontSize: 10, background: T.dim, color: T.textSub,
               borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 4,
             }}>CUT</span>
           )}
