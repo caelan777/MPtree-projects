@@ -1,0 +1,243 @@
+<!doctype html>
+<!-- Pinned to the dark ground on purpose. Dark is MPTree's home, and the vinyl
+     hero only reads there. See the note at the top of assets/site.css. -->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MPTree, an offline music player</title>
+<meta name="description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
+<meta name="theme-color" content="#000000">
+
+<!-- Swap PLACEHOLDER_DOMAIN for the real domain once it is registered. -->
+<link rel="canonical" href="https://PLACEHOLDER_DOMAIN/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="MPTree, an offline music player">
+<meta property="og:description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
+<meta property="og:url" content="https://PLACEHOLDER_DOMAIN/">
+<!-- No og:image yet, so this stays a plain summary card. -->
+<meta name="twitter:card" content="summary">
+
+<link rel="icon" type="image/svg+xml" href="assets/icon/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
+
+<link rel="stylesheet" href="assets/tokens.css?v=3">
+<link rel="stylesheet" href="assets/site.css?v=3">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <a class="brand" href="/" aria-label="MPTree home">
+      <img src="assets/img/mptree-mark-white.svg" alt="" width="26" height="26" class="mark">
+      <span>MPTree</span>
+    </a>
+    <nav class="bar-nav">
+      <a href="#features">Features</a>
+      <a href="#feedback">Feedback</a>
+      <a class="btn btn-sm" href="https://github.com/caelan777/MPtree-projects/releases/latest">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ── Hero. The record is the background, the text sits over it, and it
+       spins on its spindle as you scroll. Driven by assets/site.js. ────── -->
+  <section class="hero">
+
+    <div class="hero-disc" aria-hidden="true">
+      <div class="disc">
+        <img src="assets/img/vinyl.webp?v=3" alt="" width="1000" height="1000">
+      </div>
+      <div class="disc-label">
+        <img src="assets/img/mptree-mark-black.svg" alt="" width="26" height="26">
+      </div>
+    </div>
+
+    <div class="wrap hero-copy">
+      <h1>Your music.<br>On your device.</h1>
+      <p class="lede">
+        MPTree plays the songs already on your phone. No account. No internet needed.
+        Nothing leaves your device.
+      </p>
+      <div class="cta">
+        <a class="btn btn-lg" href="https://github.com/caelan777/MPtree-projects/releases/latest">
+          Download for Android
+        </a>
+        <span class="btn btn-lg btn-soon" aria-disabled="true">
+          Windows
+          <span class="soon">Coming soon</span>
+        </span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Features ─────────────────────────────────────────────────────── -->
+  <section id="features" class="section wrap">
+    <h2>What it does</h2>
+
+    <ul class="grid">
+      <li>
+        <h3>Works offline</h3>
+        <p>Plays the files on your phone. No connection needed, ever.</p>
+      </li>
+      <li>
+        <h3>Automatic playlists</h3>
+        <p>Favourites, Recently Played, Most Played and Last Added keep themselves up to date.</p>
+      </li>
+      <li>
+        <h3>Equaliser and crossfade</h3>
+        <p>Adjust the sound, fade between tracks, change playback speed.</p>
+      </li>
+      <li>
+        <h3>Cut tracks</h3>
+        <p>Trim a song and save it as a new file. The original stays as it is.</p>
+      </li>
+      <li>
+        <h3>Add music from the web</h3>
+        <p>A built in browser for getting new files onto your phone.</p>
+      </li>
+      <li>
+        <h3>Backups</h3>
+        <p>Save your playlists, artwork and music to one file, and restore it later.</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ── Interface. Rebuilt in HTML and CSS from the app's own tokens and
+       the real AlbumArt colour formula, so it cannot go out of date. ───── -->
+  <section class="section wrap">
+    <h2>How it looks</h2>
+    <p class="section-lede">Black and white, with colour only where it means something.</p>
+
+    <div class="phone-row">
+      <div class="phone">
+        <div class="phone-screen">
+
+          <div class="ui-card-head">
+            <div class="ui-top">
+              <img src="assets/img/mptree-mark-white.svg" alt="" width="34" height="34" class="mark">
+              <div class="ui-tabs"><span class="on">Songs</span><span>Playlists</span></div>
+              <span class="ui-gear"></span>
+            </div>
+            <div class="ui-searchrow">
+              <div class="ui-search"><span class="ui-mag"></span>Search songs or artists...</div>
+              <span class="ui-plus"></span>
+            </div>
+            <div class="ui-meta"><span>765 songs</span><span class="ui-chip">Newest First</span></div>
+          </div>
+
+          <ol class="ui-list">
+            <li><i style="--h:103">N</i><b>Nightjar</b><em>Unknown Artist</em><u>3:12</u></li>
+            <li><i style="--h:21">H</i><b>Held</b><em>Unknown Artist</em><u>4:05</u></li>
+            <li><i style="--h:47">L</i><b>Loom</b><em>Unknown Artist</em><u>5:41</u></li>
+            <li><i style="--h:246">S</i><b>Signal</b><em>Unknown Artist</em><u>3:58</u></li>
+            <li><i style="--h:145">D</i><b>Drift</b><em>Unknown Artist</em><u>6:20</u></li>
+          </ol>
+
+          <span class="ui-fab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+              <line x1="4" y1="4" x2="9" y2="9"/>
+            </svg>
+          </span>
+
+          <div class="ui-player">
+            <span class="ui-handle"></span>
+            <div class="ui-prog">
+              <span class="t">0:13</span>
+              <span class="track"><span class="dot"></span></span>
+              <span class="t">3:21</span>
+            </div>
+            <div class="ui-now">
+              <i style="--h:88">ZL</i>
+              <div class="ui-now-t"><b>Zara Larsson</b><em>Unknown Artist</em></div>
+              <div class="ui-ctl">
+                <span class="sh">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+                    <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+                    <line x1="4" y1="4" x2="9" y2="9"/>
+                  </svg>
+                </span>
+                <span class="pv"></span>
+                <span class="pl"></span>
+                <span class="nx"></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Privacy ──────────────────────────────────────────────────────── -->
+  <section class="section wrap">
+    <div class="claim">
+      <h2>Nothing is uploaded</h2>
+      <p class="section-lede">
+        There is no account, no tracking and no server. Your music and what you listen to
+        stay on your phone.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Feedback ─────────────────────────────────────────────────────── -->
+  <section id="feedback" class="section wrap">
+    <h2>Help improve MPTree</h2>
+    <p class="section-lede">
+      Found a bug, or want something added? Write it below and press send. It opens your
+      email app with the message ready to go.
+    </p>
+
+    <form class="fb" id="fb">
+      <label class="fb-label" for="fb-text">Your feedback</label>
+      <textarea id="fb-text" name="message" rows="6"
+        placeholder="What is working, what is not, what you would like to see."></textarea>
+      <div class="fb-row">
+        <button class="btn btn-lg" type="submit">Send feedback</button>
+        <span class="fb-note" id="fb-note"></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- ── Download ─────────────────────────────────────────────────────── -->
+  <section class="section wrap">
+    <div class="get">
+      <h2>Get MPTree</h2>
+      <p>Android 7.0 or newer.</p>
+      <div class="cta cta-center">
+        <a class="btn btn-lg" href="https://github.com/caelan777/MPtree-projects/releases/latest">
+          Download for Android
+        </a>
+        <span class="btn btn-lg btn-soon" aria-disabled="true">
+          Windows
+          <span class="soon">Coming soon</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="brand">
+      <img src="assets/img/mptree-mark-white.svg" alt="" width="20" height="20" class="mark">
+      <span>MPTree</span>
+    </div>
+    <p>An offline music player. Built by Caelan Verkuijl.</p>
+    <p class="fine">Music you add through the built in browser is your own responsibility.</p>
+  </div>
+</footer>
+
+<script src="assets/site.js?v=3" defer></script>
+</body>
+</html>
