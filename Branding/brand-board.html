@@ -1,0 +1,374 @@
+<title>MPTree Brand System</title>
+<style>
+  :root{
+    --bg:#FFFFFF; --surface:#F5F5F5; --card:#EFEFEF;
+    --rule:#D8D8D8; --rule-soft:#E8E8E8;
+    --text:#111111; --sub:#666666; --muted:#888888;
+    --accent:#000000; --on-accent:#FFFFFF;
+    --invert:0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#000000; --surface:#111111; --card:#141414;
+      --rule:#2A2A2A; --rule-soft:#1C1C1C;
+      --text:#FFFFFF; --sub:#777777; --muted:#777777;
+      --accent:#FFFFFF; --on-accent:#000000;
+      --invert:1;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#FFFFFF; --surface:#F5F5F5; --card:#EFEFEF;
+    --rule:#D8D8D8; --rule-soft:#E8E8E8;
+    --text:#111111; --sub:#666666; --muted:#888888;
+    --accent:#000000; --on-accent:#FFFFFF; --invert:0;
+  }
+  :root[data-theme="dark"]{
+    --bg:#000000; --surface:#111111; --card:#141414;
+    --rule:#2A2A2A; --rule-soft:#1C1C1C;
+    --text:#FFFFFF; --sub:#777777; --muted:#777777;
+    --accent:#FFFFFF; --on-accent:#000000; --invert:1;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0}
+  .doc{
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans); font-size:15px; line-height:1.55;
+    letter-spacing:-0.006em; -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .w{max-width:1080px; margin:0 auto; padding:0 32px}
+  @media (max-width:640px){ .w{padding:0 20px} }
+
+  .lbl{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.16em;
+    text-transform:uppercase; color:var(--muted); font-weight:600;
+  }
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  /* .glyph is a span, so it must be blockified for width/height to apply
+     outside of a flex context. */
+  .glyph{display:block}
+
+  /* Masthead */
+  .mast{display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding:40px 0 20px}
+  .id{display:flex; align-items:center; gap:16px}
+  .id .glyph{width:54px; height:54px; color:var(--text); flex-shrink:0}
+  .id .glyph svg{width:100%; height:100%; display:block}
+  .id h1{margin:0; font-size:34px; font-weight:800; letter-spacing:-0.045em; line-height:1}
+  .meta{text-align:right; line-height:1.9}
+  .meta div{font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:0.08em}
+  .tgl{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+    background:none; color:var(--text); border:1px solid var(--rule);
+    padding:6px 11px; cursor:pointer; font-weight:600; margin-top:6px;
+  }
+  .tgl:hover{background:var(--surface)}
+  .tgl:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  hr{border:0; border-top:1px solid var(--rule); margin:0}
+
+  /* Statement */
+  .stmt{padding:52px 0 56px; display:grid; grid-template-columns:minmax(0,7fr) minmax(0,5fr); gap:48px; align-items:start}
+  @media (max-width:760px){ .stmt{grid-template-columns:1fr; gap:24px; padding:36px 0 40px} }
+  .stmt h2{
+    margin:0; font-size:clamp(34px,5.6vw,58px); font-weight:800;
+    letter-spacing:-0.045em; line-height:1.02; text-wrap:balance;
+  }
+  .stmt p{margin:0; color:var(--sub); max-width:46ch}
+  .stmt p + p{margin-top:14px}
+
+  /* Datasheet rows */
+  .row{display:grid; grid-template-columns:130px minmax(0,1fr); gap:36px; padding:38px 0; border-top:1px solid var(--rule)}
+  @media (max-width:760px){ .row{grid-template-columns:1fr; gap:16px; padding:28px 0} }
+  .row > .rail{padding-top:3px}
+  .row h3{margin:0 0 14px; font-size:20px; font-weight:700; letter-spacing:-0.02em}
+  .row p{margin:0 0 14px; color:var(--sub); max-width:62ch}
+  .row p:last-child{margin-bottom:0}
+  .row b{color:var(--text); font-weight:700}
+
+  /* Mark */
+  .markrow{display:flex; gap:34px; align-items:center; flex-wrap:wrap}
+  .markbox{
+    width:190px; height:190px; flex-shrink:0; position:relative;
+    border:1px solid var(--rule); background:var(--surface);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .markbox .glyph{width:104px; height:104px; color:var(--text)}
+  .markbox .glyph svg{width:100%; height:100%; display:block}
+  .markbox .clear{position:absolute; inset:22px; border:1px dashed var(--rule)}
+  .specimen{display:flex; align-items:flex-end; gap:26px; flex-wrap:wrap}
+  .spec{display:flex; flex-direction:column; align-items:center; gap:9px; color:var(--text)}
+  .spec svg{display:block}
+  .spec span{font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:0.06em}
+
+  /* Grounds */
+  .grounds{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rule); border:1px solid var(--rule)}
+  @media (max-width:560px){ .grounds{grid-template-columns:1fr} }
+  .gnd{padding:26px 24px 24px}
+  .gnd.dark{background:#000; color:#fff}
+  .gnd.light{background:#fff; color:#111}
+  .gnd .glyph{width:34px; height:34px; margin-bottom:16px}
+  .gnd .glyph svg{width:100%; height:100%; display:block}
+  .gnd .t{font-size:16px; font-weight:700; letter-spacing:-0.02em}
+  .gnd .s{font-size:13px; margin-top:3px; opacity:.55}
+  .gnd .btn{
+    display:inline-block; margin-top:18px; padding:9px 18px; border-radius:10px;
+    font-size:13px; font-weight:700; letter-spacing:-0.01em;
+  }
+  .gnd.dark .btn{background:#fff; color:#000}
+  .gnd.light .btn{background:#000; color:#fff}
+  .gnd .cap{font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; margin-top:20px; opacity:.4}
+
+  /* Neutral ramp */
+  .wedge{display:flex; border:1px solid var(--rule); overflow:hidden}
+  .wedge div{flex:1; height:76px}
+  .wedgekeys{display:flex; margin-top:9px}
+  .wedgekeys span{flex:1; font-family:var(--mono); font-size:9.5px; color:var(--muted); letter-spacing:0.02em}
+  @media (max-width:640px){ .wedgekeys span{font-size:8px} }
+
+  /* State chips */
+  .states{display:flex; gap:12px; flex-wrap:wrap; margin-top:4px}
+  .st{display:flex; align-items:center; gap:9px; border:1px solid var(--rule); padding:9px 14px 9px 11px}
+  .st i{width:11px; height:11px; border-radius:50%; display:block}
+  .st .n{font-size:13px; font-weight:700}
+  .st .m{font-size:12px; color:var(--muted)}
+
+  /* Type */
+  .tspec{border:1px solid var(--rule); padding:26px 24px; background:var(--surface)}
+  .tspec .big{font-size:clamp(40px,7vw,68px); font-weight:800; letter-spacing:-0.045em; line-height:1; margin:0}
+  .tspec .mid{font-size:20px; font-weight:600; letter-spacing:-0.02em; margin:16px 0 0}
+  .tspec .bod{font-size:15px; color:var(--sub); margin:12px 0 0; max-width:58ch}
+  .tspec .num{font-family:var(--mono); font-size:13px; color:var(--muted); margin:14px 0 0; letter-spacing:0.04em}
+  /* Set colour explicitly: tables do not inherit it in quirks mode. */
+  table{width:100%; border-collapse:collapse; margin-top:20px; font-size:13px; color:var(--text)}
+  th,td{text-align:left; padding:9px 10px 9px 0; border-bottom:1px solid var(--rule-soft)}
+  th{font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  td.v{font-family:var(--mono); color:var(--muted); font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:0}
+
+  /* Shape */
+  .shapes{display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap}
+  .sh{text-align:center}
+  .sh div{width:78px; height:58px; background:var(--surface); border:1px solid var(--rule)}
+  .sh span{display:block; font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:8px; letter-spacing:0.06em}
+
+  /* Voice */
+  .voice{display:grid; grid-template-columns:1fr 1fr; gap:0 36px}
+  @media (max-width:640px){ .voice{grid-template-columns:1fr} }
+  .voice > div{padding:15px 0; border-bottom:1px solid var(--rule-soft)}
+  .voice .h{font-size:14px; font-weight:700; letter-spacing:-0.01em}
+  .voice .d{font-size:13.5px; color:var(--sub); margin-top:3px}
+
+  .note{border-left:2px solid var(--text); padding:4px 0 4px 16px; margin-top:18px; font-size:13.5px; color:var(--sub)}
+  .note b{color:var(--text)}
+
+  footer{padding:34px 0 64px; border-top:1px solid var(--rule); color:var(--muted); font-size:12.5px}
+  footer code{font-family:var(--mono); color:var(--sub)}
+  footer p{margin:0 0 7px; max-width:70ch}
+</style>
+
+<div class="doc">
+  <div class="w">
+
+    <div class="mast">
+      <div class="id">
+        <span class="glyph"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg></span>
+        <h1>MPTree</h1>
+      </div>
+      <div class="meta">
+        <div>BRAND SYSTEM</div>
+        <div>V0.1.0 / 2026-07-26</div>
+        <button class="tgl" id="tgl" type="button">Invert</button>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="stmt">
+      <h2>Black and white. One mark. A lot of space.</h2>
+      <div>
+        <p>MPTree plays the music already on your device. Nothing streams, nothing uploads,
+          nothing phones home. The identity is built to feel the same way: quiet, exact,
+          and free of anything that is only there to decorate.</p>
+        <p>There is no brand colour. The accent is simply whichever of black or white is
+          not currently the background, and that inversion is the entire system.</p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Mark</span></div>
+      <div>
+        <h3>An MP3 drawn in one line</h3>
+        <p>An M and P form flowing into a rounded 3, set in a single thin stroke with
+          rounded caps. It carries the whole identity, so it is never modified: no gradient,
+          no tint, no glow, no outline, no shadow, no rotation.</p>
+        <div class="markrow">
+          <div class="markbox">
+            <span class="clear"></span>
+            <span class="glyph"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg></span>
+          </div>
+          <div>
+            <p style="margin-bottom:18px">Clear space on all sides is one quarter of the
+              mark's width (dashed). It has to stay legible small, so it is tested down to
+              favicon size rather than only admired large:</p>
+            <div class="specimen"><span class="spec"><svg width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg><span>16px</span></span><span class="spec"><svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg><span>24px</span></span><span class="spec"><svg width="32" height="32" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg><span>32px</span></span><span class="spec"><svg width="48" height="48" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg><span>48px</span></span><span class="spec"><svg width="64" height="64" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg><span>64px</span></span><span class="spec"><svg width="96" height="96" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg><span>96px</span></span></div>
+          </div>
+        </div>
+        <div class="note"><b>One master, everything generated.</b> The artwork lives once, in
+          <code class="mono">source/mptree-mark.svg</code>, painted with
+          <code class="mono">currentColor</code>. Every icon and favicon in this folder is
+          produced from it by <code class="mono">build-assets.mjs</code>, so Android, desktop
+          and the website cannot drift apart.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Grounds</span></div>
+      <div>
+        <h3>The accent inverts with the background</h3>
+        <p>Dark is home, light is a first class citizen, and neither is an afterthought of
+          the other. On black the primary action is white with black type. On white it is
+          black with white type. Same rule, mirrored.</p>
+        <div class="grounds">
+          <div class="gnd dark">
+            <span class="glyph"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg></span>
+            <div class="t">Nightjar</div>
+            <div class="s">Kiasmos</div>
+            <span class="btn">Play</span>
+            <div class="cap">Ground #000000</div>
+          </div>
+          <div class="gnd light">
+            <span class="glyph"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"> <path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/> </svg></span>
+            <div class="t">Nightjar</div>
+            <div class="s">Kiasmos</div>
+            <span class="btn">Play</span>
+            <div class="cap">Ground #FFFFFF</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Neutrals</span></div>
+      <div>
+        <h3>Nine steps, no hue</h3>
+        <p>Every surface in the product is a step on this ramp. True neutrals, not warmed or
+          cooled, because the artwork on screen supplies all the colour a music player needs.</p>
+        <div class="wedge">
+          <div style="background:#000000"></div>
+          <div style="background:#0C0C0C"></div>
+          <div style="background:#141414"></div>
+          <div style="background:#252525"></div>
+          <div style="background:#2A2A2A"></div>
+          <div style="background:#777777"></div>
+          <div style="background:#D8D8D8"></div>
+          <div style="background:#F5F5F5"></div>
+          <div style="background:#FFFFFF"></div>
+        </div>
+        <div class="wedgekeys">
+          <span>000000</span><span>0C0C0C</span><span>141414</span><span>252525</span>
+          <span>2A2A2A</span><span>777777</span><span>D8D8D8</span><span>F5F5F5</span><span>FFFFFF</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Signals</span></div>
+      <div>
+        <h3>Three colours, each meaning one thing</h3>
+        <p>These are the only colours in MPTree, and they are <b>not</b> brand colours. Each
+          is a functional signal with a single fixed meaning. They never appear in marketing,
+          nothing else may borrow them, and a fourth is not to be invented: prefer weight,
+          position or an icon instead.</p>
+        <div class="states">
+          <span class="st"><i style="background:#E8445A"></i><span class="n">Rose</span><span class="m">liked</span></span>
+          <span class="st"><i style="background:#0EA5E9"></i><span class="n">Sky</span><span class="m">repeat on</span></span>
+          <span class="st"><i style="background:#7C3AED"></i><span class="n">Violet</span><span class="m">shuffle on, or selected</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Type</span></div>
+      <div>
+        <h3>The platform's own faces</h3>
+        <p>System sans for reading, system mono for labels and values. Nothing is downloaded,
+          so text renders on the first frame, which matters more in an offline player than a
+          signature typeface would.</p>
+        <div class="tspec">
+          <p class="big">MPTree</p>
+          <p class="mid">Display, heavy, tracking minus 0.045em</p>
+          <p class="bod">Body sits at a comfortable measure with room to breathe. The tone is
+            plain and confident, naming things the way a listener would rather than the way
+            the code does.</p>
+          <p class="num">03:47&nbsp;&nbsp;01:52&nbsp;&nbsp;04:10&nbsp;&nbsp;tabular figures</p>
+        </div>
+        <table>
+          <tr><th>Role</th><th>Size</th><th>Weight</th><th>Tracking</th></tr>
+          <tr><td>Display</td><td class="v">64</td><td class="v">800</td><td class="v">-0.04em</td></tr>
+          <tr><td>Title</td><td class="v">24</td><td class="v">700</td><td class="v">-0.02em</td></tr>
+          <tr><td>Heading</td><td class="v">20</td><td class="v">700</td><td class="v">-0.02em</td></tr>
+          <tr><td>Body</td><td class="v">15</td><td class="v">400</td><td class="v">-0.006em</td></tr>
+          <tr><td>Small</td><td class="v">13</td><td class="v">400</td><td class="v">-0.006em</td></tr>
+          <tr><td>Label, mono</td><td class="v">11</td><td class="v">600</td><td class="v">0.16em</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Shape</span></div>
+      <div>
+        <h3>Three radii, hairlines instead of shadows</h3>
+        <p>Depth comes from the ground getting darker, not from drop shadows. Borders are a
+          single hairline. Motion is short and eased, 150ms for a control, 250ms for a
+          surface, 400ms for a sheet. Nothing bounces, and reduced motion is always honoured.</p>
+        <div class="shapes">
+          <div class="sh"><div style="border-radius:10px"></div><span>10 CONTROL</span></div>
+          <div class="sh"><div style="border-radius:16px"></div><span>16 CARD</span></div>
+          <div class="sh"><div style="border-radius:22px"></div><span>22 SHEET</span></div>
+          <div class="sh"><div style="border-radius:999px"></div><span>PILL</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rail"><span class="lbl">Voice</span></div>
+      <div>
+        <h3>It gets out of the way</h3>
+        <div class="voice">
+          <div><div class="h">Private by default</div><div class="d">"On your device. Nothing uploaded." Say it plainly, it is the point.</div></div>
+          <div><div class="h">Say what happens</div><div class="d">A control names its action, and the result confirms it.</div></div>
+          <div><div class="h">Quiet, not cold</div><div class="d">Warm and human, never chatty. Short sentences, no hype.</div></div>
+          <div><div class="h">Precise over clever</div><div class="d">If a label needs a tooltip, rewrite the label.</div></div>
+        </div>
+        <div class="note">Write <b>MPTree</b>, one word, capital M, P and T. Never MPtree,
+          MP Tree or MPlayer.</div>
+      </div>
+    </div>
+
+    <footer>
+      <p><b style="color:var(--text)">Working draft, phase 3 of the roadmap.</b> This refines
+        the existing identity rather than replacing it. The Android app is deliberately
+        unchanged for now and stays the reference implementation.</p>
+      <p>Master artwork <code>Branding/source/mptree-mark.svg</code>. Regenerate every export
+        with <code>node Branding/build-assets.mjs</code>. Tokens in
+        <code>Branding/tokens/</code>. Full guide in <code>Branding/README.md</code>.</p>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+  (function(){
+    var root = document.documentElement, btn = document.getElementById('tgl');
+    function now(){
+      return root.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }
+    btn.addEventListener('click', function(){
+      root.setAttribute('data-theme', now() === 'dark' ? 'light' : 'dark');
+    });
+  })();
+</script>

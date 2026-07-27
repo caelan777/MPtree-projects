@@ -1,0 +1,131 @@
+/* MPTree design tokens, v0.1.0
+ *
+ * MPTree is monochrome. Black and white carry the identity.
+ * The three state colours are functional UI signals, never decoration.
+ *
+ * Copy this file into a surface that needs it (website, desktop prototype).
+ * We are deliberately not publishing it as a shared package yet.
+ * Values mirror MPTree-App/src/themes.ts so the app stays the reference.
+ */
+
+:root {
+  /* Core */
+  --mp-black: #000000;
+  --mp-white: #FFFFFF;
+
+  /* Type */
+  --mp-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mp-font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+
+  --mp-text-display: 64px;
+  --mp-text-title: 24px;
+  --mp-text-heading: 20px;
+  --mp-text-body: 15px;
+  --mp-text-small: 13px;
+  --mp-text-caption: 12px;
+  --mp-text-label: 11px;
+
+  --mp-weight-regular: 400;
+  --mp-weight-medium: 600;
+  --mp-weight-bold: 700;
+  --mp-weight-heavy: 800;
+
+  --mp-track-display: -0.04em;
+  --mp-track-title: -0.02em;
+  --mp-track-body: -0.006em;
+  --mp-track-label: 0.16em;
+
+  --mp-leading-tight: 1.05;
+  --mp-leading-snug: 1.3;
+  --mp-leading-normal: 1.55;
+
+  /* Shape */
+  --mp-radius-sm: 10px;
+  --mp-radius-md: 16px;
+  --mp-radius-lg: 22px;
+  --mp-radius-pill: 999px;
+
+  /* Space */
+  --mp-space-xs: 4px;
+  --mp-space-sm: 8px;
+  --mp-space-md: 12px;
+  --mp-space-lg: 16px;
+  --mp-space-xl: 24px;
+  --mp-space-2xl: 32px;
+  --mp-space-3xl: 48px;
+
+  /* Motion */
+  --mp-motion-fast: 150ms;
+  --mp-motion-base: 250ms;
+  --mp-motion-slow: 400ms;
+  --mp-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* State, functional only */
+  --mp-state-like: #E8445A;
+  --mp-state-repeat: #0EA5E9;
+  --mp-state-shuffle: #7C3AED;
+}
+
+/* Dark is MPTree's home ground, so it is the default. */
+:root,
+:root[data-theme="dark"] {
+  --mp-bg: #000000;
+  --mp-surface: #111111;
+  --mp-card: #141414;
+  --mp-player: #0C0C0C;
+  --mp-sheet: #141414;
+  --mp-input: #252525;
+  --mp-dim: #252525;
+  --mp-border: #2A2A2A;
+  --mp-text: #FFFFFF;
+  --mp-text-sub: #777777;
+  --mp-muted: #777777;
+  --mp-accent: #FFFFFF;
+  --mp-on-accent: #000000;
+  --mp-overlay: rgba(0, 0, 0, 0.78);
+}
+
+:root[data-theme="light"] {
+  --mp-bg: #FFFFFF;
+  --mp-surface: #F5F5F5;
+  --mp-card: #EFEFEF;
+  --mp-player: #F9F9F9;
+  --mp-sheet: #FFFFFF;
+  --mp-input: #E8E8E8;
+  --mp-dim: #E0E0E0;
+  --mp-border: #D8D8D8;
+  --mp-text: #111111;
+  --mp-text-sub: #666666;
+  --mp-muted: #888888;
+  --mp-accent: #000000;
+  --mp-on-accent: #FFFFFF;
+  --mp-overlay: rgba(0, 0, 0, 0.5);
+}
+
+/* Follow the operating system when no theme has been chosen explicitly. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --mp-bg: #FFFFFF;
+    --mp-surface: #F5F5F5;
+    --mp-card: #EFEFEF;
+    --mp-player: #F9F9F9;
+    --mp-sheet: #FFFFFF;
+    --mp-input: #E8E8E8;
+    --mp-dim: #E0E0E0;
+    --mp-border: #D8D8D8;
+    --mp-text: #111111;
+    --mp-text-sub: #666666;
+    --mp-muted: #888888;
+    --mp-accent: #000000;
+    --mp-on-accent: #FFFFFF;
+    --mp-overlay: rgba(0, 0, 0, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mp-motion-fast: 0ms;
+    --mp-motion-base: 0ms;
+    --mp-motion-slow: 0ms;
+  }
+}
