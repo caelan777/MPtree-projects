@@ -136,21 +136,31 @@ never touches the web host.
 - Not done: register a domain, replace the `PLACEHOLDER` values, connect Cloudflare Pages,
   attach an APK to a GitHub release. No social share image yet.
 
-**Exit:** public site on a custom domain; a visitor can find → download → install the app.
+**Exit:** ✅ **MPTree is publicly launched (2026-07-27).** The site is live at
+`https://mptree-projects.pages.dev`, and a visitor can find, download and install the app.
+The only remaining Phase 4 item is attaching a custom domain (see 4c).
 
-### Phase 4b. First public release prep · size: M · not started
+### Phase 4b. First public release prep · size: M · done
 
-Going live is what triggers the naming decision deferred in phase 1, plus a few things
-that have no workaround.
+Going live triggered the naming decision deferred in phase 1, plus a few things with no
+workaround. All done on 2026-07-27:
 
-- **Naming unification is now due.** App id `com.caelan.mplayer`, `package.json` name
-  `mplayer`, and the `MPlayer1` backup strings. Changing the app id makes an installed
-  MPTree a separate app on device, so it has to happen before anyone installs, not after.
-- **A real version number.** `package.json` is still `0.0.0`.
-- **A signed release APK.** Distributing outside the Play Store still needs a signing
-  keystore. Losing that keystore means never being able to ship an update to existing
-  installs, so it has to be backed up somewhere safe.
-- Replace the nine `PLACEHOLDER` values in `Website/`, push, connect Cloudflare Pages.
+- ✅ **Naming unified.** App id is `com.caelan.mptree`, package name `mptree`, version
+  `0.1.0`, consistent across the Java package, Capacitor config and Android strings.
+- ✅ **A signed release APK.** Keystore created and backed up, signing wired through a
+  gitignored `keystore.properties`, verified V2-signed. Fingerprints recorded in
+  `docs/release.md`.
+- ✅ **Published.** GitHub release `v0.1.0-beta` with the APK, repo made public so assets
+  download anonymously, verified end to end (200, correct size, attachment).
+- ✅ **Deployed.** Cloudflare Pages from the `Website/` directory, auto-deploying on push.
+- ✅ Download buttons stream the APK directly via `/releases/latest/download/MPTree.apk`
+  (see the stable-asset requirement in `docs/release.md`).
+
+### Phase 4c. Custom domain · not started
+
+- Buy a domain, add it under Cloudflare Pages → Custom domains, point DNS as instructed.
+- Then replace the three `PLACEHOLDER_DOMAIN` values in `Website/index.html` (canonical +
+  og:url) and redeploy. No rebuild, no other changes.
 
 > ⚠️ The built-in MP3 downloader (`mp3-juices.nu`) has copyright/policy implications.
 > Fine for a personal sideloaded app; be deliberate about how prominently the public site
