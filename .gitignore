@@ -1,0 +1,25 @@
+# Workspace level ignores.
+
+# ── Signing secrets. Never commit these. ──────────────────────────────────
+# A leaked keystore lets anyone publish an update that Android will accept as
+# genuine MPTree. A lost keystore means you can never update existing installs.
+*.jks
+*.keystore
+keystore.properties
+key.properties
+*.p12
+*.pem
+
+# ── Local tooling ─────────────────────────────────────────────────────────
+local.properties
+.idea/
+.gradle/
+.DS_Store
+Thumbs.db
+
+# ── Build output ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+*.apk
+*.aab
