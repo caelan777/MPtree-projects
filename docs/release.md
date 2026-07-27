@@ -65,9 +65,15 @@ Current: `versionName "0.1.0"`, `versionCode 1`.
 
 ## Publishing
 
-Attach the APK to a GitHub release. The website's download buttons point at
-`/releases/latest`, so they resolve on their own once a release exists and never need
-editing again.
+Attach the APK to a GitHub release. **Every release must include an asset named exactly
+`MPTree.apk`.** The website's download buttons point at
+`/releases/latest/download/MPTree.apk`, which streams that file straight down (GitHub sends
+it as an attachment) instead of opening the releases page. If a release is missing an asset
+by that exact name, every Download button on the site 404s.
+
+Upload two copies: a versioned one for people browsing the releases page
+(`MPTree-v0.1.0-beta.apk`) and the stable `MPTree.apk` the website links to. They are the
+same file. Keeping the stable name means the site link never has to change across releases.
 
 ## Note on the app id change
 
