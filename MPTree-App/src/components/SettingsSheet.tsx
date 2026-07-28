@@ -35,6 +35,8 @@ type SettingsSheetProps = {
   onExport: () => void;
   /** Opens the pre-import info sheet */
   onImportOpen: () => void;
+  /** Opens the support/tip page in the browser. */
+  onSupport: () => void;
   // ── Sleep timer ──
   /** Absolute epoch-ms deadline for a fixed-clock sleep timer, or null. */
   sleepUntil: number | null;
@@ -50,7 +52,7 @@ type SettingsSheetProps = {
 export function SettingsSheet({
   url, theme, binCount,
   onSave, onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
-  onExport, onImportOpen,
+  onExport, onImportOpen, onSupport,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   onClose, T,
 }: SettingsSheetProps) {
@@ -260,7 +262,26 @@ export function SettingsSheet({
         <div style={{ padding: "20px 20px 0" }}>
           <button onClick={() => { onSave(val.trim()); onClose(); }} style={sh.saveBtn}>Save</button>
         </div>
-        <div style={{ padding: "14px 20px 0", color: T.muted, fontSize: 12 }}>MPTree v2.9</div>
+
+        <div style={{ padding: "20px 20px 0" }}>
+          <div style={sh.lbl}>Support</div>
+          <button onClick={onSupport} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text, fontFamily: "inherit" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+                <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+                <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+              </svg>
+              <span>Buy me a coffee</span>
+            </div>
+            <IC.ChevronR />
+          </button>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
+            MPTree is free. If it is useful to you, you can chip in.
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 20px 0", color: T.muted, fontSize: 12 }}>MPTree 0.1.0</div>
 
         </div>
       </div>

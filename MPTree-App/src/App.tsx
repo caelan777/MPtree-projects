@@ -163,7 +163,7 @@ export default function App() {
   const [search,         setSearch]        = useState("");
   const [filter,         setFilter]        = useState<FilterId>("newest");
   const [filterOpen,     setFilterOpen]    = useState(false);
-  const [downloadUrl,    setDownloadUrl]   = useState("https://mp3-juices.nu/");
+  const [downloadUrl,    setDownloadUrl]   = useState("");
   const [plusOpen,       setPlusOpen]      = useState(false);
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
@@ -312,7 +312,7 @@ export default function App() {
 
   // ── Theme / download URL refs ─────────────────────────────────────────────
   const themeRef       = useRef<Theme>("dark");
-  const downloadUrlRef = useRef("https://mp3-juices.nu/");
+  const downloadUrlRef = useRef("");
 
   // ── Player swipe-up ref ───────────────────────────────────────────────────
   const playerSwipeStartY = useRef<number | null>(null);
@@ -2204,6 +2204,7 @@ export default function App() {
             onShowTutorial={() => { setSettingsOpen(false); setShowOnboarding(true); }}
             onExport={handleExportOpen}
             onImportOpen={handleImportOpen}
+            onSupport={() => { Browser.open({ url: "https://paypal.me/MPTreeApp" }).catch(() => {}); }}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}

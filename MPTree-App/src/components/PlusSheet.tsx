@@ -22,11 +22,16 @@ export function PlusSheet({ url, binCount, onSave, onViewBin, onClose, T }: Plus
       <div style={{ ...sh.sheet, paddingBottom: 32 }}>
         <div style={sh.handle} />
         <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Download</span>
+          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Add music</span>
           <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
         </div>
         <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>URL (opened when you tap +)</div>
+          <p style={{ margin: "0 0 4px", fontSize: 14, color: T.textSub, lineHeight: 1.6 }}>
+            Set a web page you use to download music. Tapping <b style={{ color: T.text }}>+</b> opens
+            it in your browser. Files you save to your phone appear here after you pull down to
+            refresh. MPTree hosts no music, what you download is up to you.
+          </p>
+          <div style={{ ...sh.lbl, marginTop: 16 }}>Download page</div>
           <input
             value={val} onChange={e => setVal(e.target.value)}
             placeholder="https://…" style={sh.inp}
