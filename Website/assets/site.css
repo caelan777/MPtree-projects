@@ -55,6 +55,14 @@ a { color: inherit; text-decoration: none; }
 .btn-sm { padding: 8px 14px; font-size: var(--mp-text-small); }
 .btn-lg { padding: 15px 24px; font-size: 16px; }
 
+/* Secondary button: outlined, so it never competes with the solid Download button. */
+.btn-ghost {
+  background: transparent;
+  color: var(--mp-text);
+  border-color: var(--mp-border);
+}
+.btn-ghost:hover { opacity: 1; border-color: var(--mp-text-sub); }
+
 /* Windows, not shipping yet. Reads as a real button but is inert. */
 .btn-soon {
   background: transparent;
@@ -133,8 +141,8 @@ a { color: inherit; text-decoration: none; }
   position: absolute;
   z-index: 0;
   top: 50%;
-  right: -12%;
-  width: min(760px, 82vw);
+  right: -10%;
+  width: min(960px, 96vw);
   aspect-ratio: 1;
   transform: translateY(-50%);
   display: grid;
@@ -432,6 +440,11 @@ a { color: inherit; text-decoration: none; }
 }
 .steps b { display: block; font-size: 14px; font-weight: var(--mp-weight-bold); letter-spacing: -0.01em; }
 .steps li p { margin: 4px 0 0; max-width: none; font-size: 13px; color: var(--mp-text-sub); line-height: 1.55; }
+
+/* ── Support ──────────────────────────────────────────────────────────── */
+.support { max-width: 560px; }
+.support h2 { margin: 0 0 12px; }
+.support p { margin: 0 0 24px; color: var(--mp-text-sub); font-size: var(--mp-text-body); line-height: 1.65; }
 
 /* ── Footer ───────────────────────────────────────────────────────────── */
 .foot { border-top: 1px solid var(--mp-border); padding: 38px 0 60px; }

@@ -21,7 +21,7 @@ Three placeholders must be replaced. Search the folder for `PLACEHOLDER`:
 
 | Placeholder | Where | Replace with |
 | --- | --- | --- |
-| `PLACEHOLDER_DOMAIN` | `index.html` canonical and og:url | the real domain once registered |
+| `https://mp-tree.net` | `index.html` canonical and og:url | the real domain once registered |
 | `PLACEHOLDER_USER` | `index.html` download links | your GitHub username |
 | `PLACEHOLDER_REPO` | `index.html` download links | the repository name |
 
@@ -45,7 +45,7 @@ npx serve Website
 4. Deploy. Every push to `main` republishes.
 
 Attach a custom domain later under the project's Custom domains tab. Nothing in the page
-needs rebuilding, only the two `PLACEHOLDER_DOMAIN` references.
+needs rebuilding, only the two `https://mp-tree.net` references.
 
 ## Notes
 
