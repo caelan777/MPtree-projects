@@ -13,3 +13,6 @@
 
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
+
+/download.html
+  Cache-Control: public, max-age=0, must-revalidate
