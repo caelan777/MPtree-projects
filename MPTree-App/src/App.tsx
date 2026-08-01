@@ -1640,7 +1640,9 @@ export default function App() {
 
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean) => {
     if (!playlistSongs.length) return;
-    setPage("songs");
+    // Stay on the Playlists tab. The queue is set to the playlist's songs below,
+    // so playback and skip stay inside the playlist; there is no reason to yank
+    // the user back to the Songs tab.
     if (shuffle) {
       const q = shuffleArray(playlistSongs);
       setPlayMode("shuffle");
@@ -1818,7 +1820,7 @@ export default function App() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
-            <Logo size={56} color={TH.text} />
+            <Logo size={48} color={TH.text} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 2, background: TH.surface, borderRadius: 20, padding: 3, border: `1px solid ${TH.border}` }}>
