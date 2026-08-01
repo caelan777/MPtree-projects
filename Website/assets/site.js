@@ -30,10 +30,10 @@
   }
 
   /* ── Screenshot theme toggle ──────────────────────────────────────────
-   * Swaps which pair of real screenshots is shown. Deliberately inverted
-   * by request: the "Dark" pill position shows the light-theme captures.
-   * #shots-row starts with no mode-* class in the HTML; add the default
-   * here so the toggle and the visible images can never disagree.
+   * Swaps which pair of real screenshots is shown: "Dark" shows the
+   * dark-theme captures, "Light" the light ones. #shots-row starts with no
+   * mode-* class in the HTML; the default is applied here so the toggle and
+   * the visible images can never disagree.
    */
   var shotsRow = document.getElementById("shots-row");
   var shotsToggle = document.getElementById("shots-toggle");

@@ -248,8 +248,7 @@ a { color: inherit; text-decoration: none; }
   box-shadow: var(--mp-shadow, 0 20px 60px rgba(0, 0, 0, 0.35));
 }
 .shot { width: 100%; height: auto; display: none; }
-/* Toggle in its default ("Dark") position shows the light-theme captures,
-   and vice versa -- intentionally inverted, by request. */
+/* Dark shows the dark-theme captures, Light shows the light ones. */
 #shots-row.mode-dark .shot-for-dark { display: block; }
 #shots-row.mode-light .shot-for-light { display: block; }
 
@@ -429,6 +428,12 @@ a { color: inherit; text-decoration: none; }
 .social:hover { color: var(--mp-text); }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
+/* On big screens the disc's -10% bleed (a percentage of the hero width) hides
+   a visible chunk of the record against the hero's clipped right edge. From
+   here up, pull it fully inside so the whole disc shows with a small margin. */
+@media (min-width: 1400px) {
+  .hero-disc { right: 2%; width: min(880px, 60vw); }
+}
 @media (max-width: 900px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
 }
