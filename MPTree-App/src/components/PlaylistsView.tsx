@@ -163,6 +163,15 @@ export const PlaylistsView: React.FC<Props> = ({
   const pressStartX = useRef(0);
   const pressStartY = useRef(0);
   const longPressed = useRef(false);
+  // The scrollable body + the currently-playing row, so we can (a) cancel a
+  // pending long-press the instant the list scrolls — touching a momentum
+  // scroll to stop it used to register as a long-press and open select/edit —
+  // and (b) scroll the playing song into view.
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const currentRowRef = useRef<HTMLDivElement>(null);
+  const cancelPress = useCallback(() => {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+  }, []);
 
   // ── Multi-select (playlist detail only) ─────────────────────────────────────
   // Long-pressing a row enters select mode; tapping rows toggles them; a bottom
@@ -179,6 +188,18 @@ export const PlaylistsView: React.FC<Props> = ({
   }, []);
   // Leaving the detail view (or App switching to Songs) cancels selection.
   useEffect(() => { if (view === "list") exitSelect(); }, [view, exitSelect]);
+
+  // Scroll the currently-playing song into view when it changes (or when a
+  // detail view opens on the song that is already playing). Small delay so the
+  // row has mounted first.
+  useEffect(() => {
+    if (view !== "detail" && view !== "smartDetail") return;
+    if (!currentSongId) return;
+    const t = setTimeout(() => {
+      currentRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [currentSongId, view]);
   useEffect(() => { if (resetToListSignal) exitSelect(); }, [resetToListSignal, exitSelect]);
   // While selecting, the horizontal page swipe must stay disabled.
   useEffect(() => { if (selectMode) onDetailChange?.(true); }, [selectMode, onDetailChange]);
@@ -230,6 +251,7 @@ export const PlaylistsView: React.FC<Props> = ({
 
     return (
       <div
+        ref={isCurrent ? currentRowRef : undefined}
         onClick={handleClick}
         onTouchStart={e => startPress(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchMove={e => movePress(e.touches[0].clientX, e.touches[0].clientY)}
@@ -614,7 +636,11 @@ export const PlaylistsView: React.FC<Props> = ({
       )}
 
       {/* ── Scrollable content ──────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}>
+      <div
+        ref={scrollBodyRef}
+        onScroll={cancelPress}
+        style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+      >
 
         {/* ════ PLAYLIST LIST ════════════════════════════════════════════ */}
         {view === "list" && (
