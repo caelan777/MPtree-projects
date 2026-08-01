@@ -29,6 +29,34 @@
     apply();
   }
 
+  /* ── Screenshot theme toggle ──────────────────────────────────────────
+   * Swaps which pair of real screenshots is shown. Deliberately inverted
+   * by request: the "Dark" pill position shows the light-theme captures.
+   * #shots-row starts with no mode-* class in the HTML; add the default
+   * here so the toggle and the visible images can never disagree.
+   */
+  var shotsRow = document.getElementById("shots-row");
+  var shotsToggle = document.getElementById("shots-toggle");
+  var shotsLabel = document.getElementById("shots-toggle-label");
+
+  if (shotsRow && shotsToggle && shotsLabel) {
+    var shotsIsDark = true; // default pill position: "Dark"
+
+    function applyShotsMode() {
+      shotsRow.classList.toggle("mode-dark", shotsIsDark);
+      shotsRow.classList.toggle("mode-light", !shotsIsDark);
+      shotsToggle.setAttribute("aria-pressed", String(!shotsIsDark));
+      shotsLabel.textContent = shotsIsDark ? "Dark" : "Light";
+    }
+
+    shotsToggle.addEventListener("click", function () {
+      shotsIsDark = !shotsIsDark;
+      applyShotsMode();
+    });
+
+    applyShotsMode();
+  }
+
   /* ── Feedback opens the reader's email app ───────────────────────────
    * The site is static, so there is nowhere to POST. Building a mailto keeps
    * it working with no backend and no third party.
