@@ -103,6 +103,14 @@ a { color: inherit; text-decoration: none; }
   min-height: 78vh;
   padding: 96px 0 104px;
   overflow: hidden;
+  /* The disc's "right: -10%" offset is a percentage of this box, while the
+     text column next to it stays capped at .wrap's 1080px. Without a limit
+     here, the gap between them grows and the disc gets cropped more and
+     more as the viewport widens (checked: already losing ~180px of the
+     disc at 1920px). Capping the hero itself keeps that stable on very
+     wide / ultrawide screens instead of stretching indefinitely. */
+  max-width: 1680px;
+  margin: 0 auto;
 }
 .hero-copy { position: relative; z-index: 1; width: 100%; }
 /* Kicker: tells a first-time visitor what MPTree is before they read anything else. */
@@ -535,8 +543,14 @@ a { color: inherit; text-decoration: none; }
 /* ── Footer ───────────────────────────────────────────────────────────── */
 .foot { border-top: 1px solid var(--mp-border); padding: 38px 0 60px; }
 .foot-in { display: flex; flex-direction: column; gap: 10px; }
+.foot-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .foot p { margin: 0; font-size: var(--mp-text-small); color: var(--mp-muted); max-width: 62ch; }
 .foot .fine { font-size: var(--mp-text-caption); opacity: 0.75; }
+.social {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--mp-muted); font-size: var(--mp-text-small); font-weight: var(--mp-weight-medium);
+}
+.social:hover { color: var(--mp-text); }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -556,6 +570,10 @@ a { color: inherit; text-decoration: none; }
   .section { padding: 56px 24px; }
   .bar-nav { gap: 14px; }
   .bar-nav a:not(.btn) { display: none; }
+  /* download.html's nav has no Download button to fall back on (the whole
+     page IS the download), so its links must not disappear on mobile like
+     the homepage's do. Without this the top-right nav was dead on a phone. */
+  .bar-nav-dl a { display: inline; font-size: 12px; }
 }
 @media (max-width: 560px) {
   .grid { grid-template-columns: 1fr; }
