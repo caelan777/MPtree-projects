@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { T } from "../themes";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
@@ -31,7 +31,8 @@ type PlayerExpandSheetProps = {
   getCustomPhoto?: (s: Song) => string | undefined;
   onTogglePlay: () => void;
   onSkip: (dir: -1 | 1) => void;
-  onToggleShuffle: () => void;
+  /** Cycles the play mode: off → shuffle → repeat → off. */
+  onCycleMode: () => void;
   onSeek: (ms: number) => void;
   onSeekStart: () => void;
   onSeekEnd: (ms: number) => void;
@@ -53,11 +54,11 @@ type PlayerExpandSheetProps = {
 };
 
 export function PlayerExpandSheet({
-  song, dispName, dispArtist, backdropPhoto,
+  song, dispName, dispArtist, customPhoto, backdropPhoto,
   isPlaying, currentTime, duration, playMode, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
   upNextQueue, playNextQueue = [], getDispName, getDispArtist, getCustomPhoto,
-  onTogglePlay, onSkip, onToggleShuffle,
+  onTogglePlay, onSkip, onCycleMode,
   onSeek, onSeekStart, onSeekEnd,
   onEdit, onCut, onToggleLike, onRemove, onShare,
   onPlayNextReorder, onSkipCurrentUpNext, onClose,
@@ -79,6 +80,50 @@ export function PlayerExpandSheet({
     onPlaybackSpeedChange(next);
   };
   const speedLabel = `${playbackSpeed}×`;
+
+  // ── Scrub by dragging on the disc ─────────────────────────────────────────
+  // A horizontal drag across the record moves through the track: dragging the
+  // full width of the disc covers the whole song. Feeds the same onSeek/onSeekEnd
+  // the timeline uses, so the slider follows live and the commit happens on release.
+  const discRef        = useRef<HTMLDivElement>(null);
+  const scrubStartX    = useRef<number | null>(null);
+  const scrubStartTime = useRef(0);
+  const [scrubbing, setScrubbing] = useState(false);
+
+  const scrubTimeAt = (clientX: number) => {
+    const w = discRef.current?.offsetWidth || 1;
+    const dx = clientX - (scrubStartX.current ?? clientX);
+    const t = scrubStartTime.current + (dx / w) * (duration || 0);
+    return Math.max(0, Math.min(duration || 0, t));
+  };
+  const scrubStart = (clientX: number) => {
+    scrubStartX.current = clientX;
+    scrubStartTime.current = currentTime;
+    setScrubbing(true);
+    onSeekStart();
+  };
+  const scrubMove = (clientX: number) => {
+    if (scrubStartX.current === null) return;
+    onSeek(scrubTimeAt(clientX));
+  };
+  const scrubEnd = (clientX: number) => {
+    if (scrubStartX.current === null) return;
+    const t = scrubTimeAt(clientX);
+    scrubStartX.current = null;
+    setScrubbing(false);
+    onSeekEnd(t);
+  };
+
+  // Desktop: track the mouse outside the disc while a scrub is in progress.
+  useEffect(() => {
+    if (!scrubbing) return;
+    const mv = (e: MouseEvent) => scrubMove(e.clientX);
+    const up = (e: MouseEvent) => scrubEnd(e.clientX);
+    window.addEventListener("mousemove", mv);
+    window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrubbing]);
 
   // ── touch-based drag-and-drop for pinned queue ────────────────────────────
   // We track which index is being dragged and which slot we're hovering over.
@@ -288,7 +333,23 @@ export function PlayerExpandSheet({
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 16, marginTop: 6 }}>
-            <SpinningDisc size={216} spinning={isPlaying} />
+            <div
+              ref={discRef}
+              onTouchStart={e => scrubStart(e.touches[0].clientX)}
+              onTouchMove={e => { e.preventDefault(); scrubMove(e.touches[0].clientX); }}
+              onTouchEnd={e => scrubEnd((e.changedTouches[0] || e.touches[0])?.clientX ?? 0)}
+              onTouchCancel={e => scrubEnd((e.changedTouches[0] || e.touches[0])?.clientX ?? 0)}
+              onMouseDown={e => scrubStart(e.clientX)}
+              title="Drag to scrub"
+              style={{ touchAction: "none", cursor: scrubbing ? "grabbing" : "ew-resize", borderRadius: "50%", lineHeight: 0 }}
+            >
+              <SpinningDisc
+                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
+                spinning={isPlaying && !scrubbing}
+                title={dispName}
+                customPhoto={customPhoto}
+              />
+            </div>
             <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                 {dispName}
@@ -321,13 +382,13 @@ export function PlayerExpandSheet({
           {/* Transport */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
             <button
-              onClick={onToggleShuffle}
-              title={playMode === "shuffle" ? "Shuffle on, tap to turn off" : "Shuffle off, tap to turn on"}
-              style={{ background: "transparent", border: "none", color: playMode === "shuffle" ? T.violet : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
+              onClick={onCycleMode}
+              title={playMode === "shuffle" ? "Shuffle on, tap for repeat" : playMode === "repeat" ? "Repeat on, tap to turn off" : "Tap to shuffle, again to repeat"}
+              style={{ background: "transparent", border: "none", color: playMode === "shuffle" ? T.violet : playMode === "repeat" ? T.repeat : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
             >
-              <IC.Shuffle />
-              {playMode === "shuffle" && (
-                <span style={{ position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: T.violet }} />
+              {playMode === "repeat" ? <IC.Repeat /> : <IC.Shuffle />}
+              {playMode !== "off" && (
+                <span style={{ position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: playMode === "shuffle" ? T.violet : T.repeat }} />
               )}
             </button>
             <button onClick={() => onSkip(-1)} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipB /></button>

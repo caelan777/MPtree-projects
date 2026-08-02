@@ -983,6 +983,22 @@ export default function App() {
     showToast("Shuffle on");
   };
 
+  // Expanded-player mode button: cycles off → shuffle → repeat → off.
+  const cyclePlayerMode = () => {
+    hapticImpact("light");
+    if (playMode === "off") {
+      if (!currentSong) return;
+      const rest = buildShuffleQ(displayList.filter(s => s.id !== currentSong.id));
+      const q = [currentSong, ...rest]; setPlayMode("shuffle"); setQueue(q);
+      AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
+      showToast("Shuffle on");
+    } else if (playMode === "shuffle") {
+      setPlayMode("repeat"); showToast("Repeat on");
+    } else {
+      setPlayMode("off"); showToast("Repeat off");
+    }
+  };
+
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
   // Vertical drags open the full player LIVE — the sheet follows the finger,
   // exactly like the horizontal Songs↔Playlists page swipe but vertical.
@@ -2245,7 +2261,7 @@ export default function App() {
               getCustomPhoto={s => getMeta(s).customPhoto}
               onTogglePlay={togglePlay}
               onSkip={skip}
-              onToggleShuffle={toggleShuffleFromPlayer}
+              onCycleMode={cyclePlayerMode}
               onSeek={ms => setCurrentTime(ms)}
               onSeekStart={() => setDragging(true)}
               onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
