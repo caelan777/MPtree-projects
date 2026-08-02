@@ -137,7 +137,8 @@ Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
   show media controls while the app is in the background or the screen is off. This is the
   standard, allowed use for a media player. If prompted, select the **Media playback** use
   case.
-- INTERNET: used only by the optional in-app browser when the user chooses to open it.
+- INTERNET: used only to open outward links the user taps (such as the support page) in
+  the system browser. No streaming, no background network use, no data sent to any server.
 
 ---
 

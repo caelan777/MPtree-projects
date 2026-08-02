@@ -566,6 +566,9 @@ a { color: inherit; text-decoration: none; }
   color: var(--mp-muted); font-size: var(--mp-text-small); font-weight: var(--mp-weight-medium);
 }
 .social:hover { color: var(--mp-text); }
+.socials { display: inline-flex; align-items: center; gap: 16px; }
+.socials a { display: inline-flex; color: var(--mp-muted); transition: color var(--mp-motion-fast) var(--mp-ease); }
+.socials a:hover { color: var(--mp-text); }
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
 /* On big screens the disc's -10% bleed (a percentage of the hero width) hides
