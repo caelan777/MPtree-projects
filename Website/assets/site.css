@@ -540,12 +540,27 @@ a { color: inherit; text-decoration: none; }
 .why { max-width: 660px; }
 .why p { margin: 14px 0 0; color: var(--mp-text-sub); font-size: var(--mp-text-body); line-height: 1.7; }
 
+/* ── Legal pages (privacy) ────────────────────────────────────────────── */
+.legal { padding-bottom: 20px; }
+.prose { max-width: 660px; }
+.prose-date { margin: 0 0 8px; font-size: var(--mp-text-small); color: var(--mp-muted); }
+.prose h2 {
+  margin: 34px 0 0; font-size: var(--mp-text-heading); font-weight: var(--mp-weight-bold);
+  letter-spacing: var(--mp-track-title);
+}
+.prose p { margin: 12px 0 0; color: var(--mp-text-sub); font-size: var(--mp-text-body); line-height: 1.7; }
+.prose b { color: var(--mp-text); font-weight: var(--mp-weight-medium); }
+.prose a { color: var(--mp-text); text-decoration: underline; }
+.prose a:hover { opacity: 0.75; }
+
 /* ── Footer ───────────────────────────────────────────────────────────── */
 .foot { border-top: 1px solid var(--mp-border); padding: 38px 0 60px; }
 .foot-in { display: flex; flex-direction: column; gap: 10px; }
 .foot-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .foot p { margin: 0; font-size: var(--mp-text-small); color: var(--mp-muted); max-width: 62ch; }
 .foot .fine { font-size: var(--mp-text-caption); opacity: 0.75; }
+.foot .fine a { color: var(--mp-muted); text-decoration: underline; }
+.foot .fine a:hover { color: var(--mp-text); }
 .social {
   display: inline-flex; align-items: center; gap: 8px;
   color: var(--mp-muted); font-size: var(--mp-text-small); font-weight: var(--mp-weight-medium);
