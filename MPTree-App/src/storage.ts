@@ -34,7 +34,6 @@ export interface Session {
   eqEnabled?:      boolean;
   eqBandLevels?:   number[];
   theme?:          Theme;
-  downloadUrl?:    string;
   playNextQueue?:  string[];
 }
 

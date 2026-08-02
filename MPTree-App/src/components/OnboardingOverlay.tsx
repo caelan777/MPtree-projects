@@ -50,11 +50,6 @@ const STEPS: Step[] = [
     body: "Tap here (or swipe the screen left) for your playlists, plus Favorites, Recently Played and Most Played, built automatically.",
   },
   {
-    target: '[data-tour="plus"]',
-    title: "Add music",
-    body: "Opens your download page. Hold it for quick access to the bin.",
-  },
-  {
     target: '[data-tour="settings"]',
     title: "Make it yours",
     body: "Equalizer with presets, crossfade, sleep timer, backups, themes, and the bin all live here. Enjoy the music!",

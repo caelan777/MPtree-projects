@@ -21,7 +21,6 @@ import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet } from "./components/SettingsSheet";
-import { PlusSheet } from "./components/PlusSheet";
 import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
@@ -163,8 +162,6 @@ export default function App() {
   const [search,         setSearch]        = useState("");
   const [filter,         setFilter]        = useState<FilterId>("newest");
   const [filterOpen,     setFilterOpen]    = useState(false);
-  const [downloadUrl,    setDownloadUrl]   = useState("");
-  const [plusOpen,       setPlusOpen]      = useState(false);
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
@@ -302,7 +299,6 @@ export default function App() {
   const pressStartX  = useRef(0);
   const pressStartY  = useRef<number>(0);
   const shufflePressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const plusPressTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Audio effects refs ────────────────────────────────────────────────────
   const crossfadeMsRef  = useRef(0);
@@ -310,9 +306,8 @@ export default function App() {
   const eqEnabledRef    = useRef(false);
   const eqBandLevelsRef = useRef<number[]>([]);
 
-  // ── Theme / download URL refs ─────────────────────────────────────────────
+  // ── Theme ref ─────────────────────────────────────────────────────────────
   const themeRef       = useRef<Theme>("dark");
-  const downloadUrlRef = useRef("");
 
   // ── Player swipe-up ref ───────────────────────────────────────────────────
   const playerSwipeStartY = useRef<number | null>(null);
@@ -333,7 +328,6 @@ export default function App() {
   useEffect(() => { eqEnabledRef.current    = eqEnabled;    }, [eqEnabled]);
   useEffect(() => { eqBandLevelsRef.current = eqBandLevels; }, [eqBandLevels]);
   useEffect(() => { themeRef.current        = theme;        }, [theme]);
-  useEffect(() => { downloadUrlRef.current  = downloadUrl;  }, [downloadUrl]);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
@@ -384,7 +378,6 @@ export default function App() {
         eqEnabled:    eqEnabledRef.current,
         eqBandLevels: eqBandLevelsRef.current,
         theme:        themeRef.current,
-        downloadUrl:  downloadUrlRef.current,
         playNextQueue: playNextQueueRef.current,
       });
     }, 0);
@@ -507,10 +500,6 @@ export default function App() {
           setTheme(session.theme);
           themeRef.current = session.theme;
         }
-        if (session.downloadUrl != null) {
-          setDownloadUrl(session.downloadUrl);
-          downloadUrlRef.current = session.downloadUrl;
-        }
         if (Array.isArray(session.playNextQueue) && session.playNextQueue.length) {
           setPlayNextQueue(session.playNextQueue);
           playNextQueueRef.current = session.playNextQueue;
@@ -561,7 +550,7 @@ export default function App() {
     if (!sessionReadyRef.current) return;
     flushSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, playMode, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme, downloadUrl]);
+  }, [filter, playMode, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
 
   useEffect(() => { if (!sessionReadyRef.current) return; saveMeta(meta); }, [meta]);
 
@@ -993,14 +982,6 @@ export default function App() {
     AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
     showToast("Shuffle on");
   };
-
-  // ── + button ──────────────────────────────────────────────────────────────
-  const onPlusTap = async () => {
-    if (!downloadUrl) { setPlusOpen(true); return; }
-    try { await Browser.open({ url: downloadUrl }); } catch { window.open(downloadUrl, "_blank"); }
-  };
-  const onPlusPressStart = () => { plusPressTimer.current = setTimeout(() => setPlusOpen(true), 500); };
-  const onPlusPressEnd   = () => { if (plusPressTimer.current) clearTimeout(plusPressTimer.current); };
 
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
   // Vertical drags open the full player LIVE — the sheet follows the finger,
@@ -1875,14 +1856,6 @@ export default function App() {
                     </button>
                   )}
                 </div>
-                <button
-                  data-tour="plus"
-                  onClick={onPlusTap}
-                  onTouchStart={onPlusPressStart} onTouchEnd={onPlusPressEnd} onTouchCancel={onPlusPressEnd}
-                  onMouseDown={onPlusPressStart} onMouseUp={onPlusPressEnd} onMouseLeave={onPlusPressEnd}
-                  style={{ width: 40, height: 40, borderRadius: 10, background: TH.accent, border: "none", color: TH.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                  <IC.Plus />
-                </button>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <span style={{ fontSize: 12, color: TH.muted }}>{displayList.length} songs</span>
@@ -2194,12 +2167,9 @@ export default function App() {
         {removeSong && <ConfirmSheet title="Remove song" body={`"${dispName(removeSong)}" will be moved to the bin. You can restore it from Settings.`} confirmLabel="Move to Bin" onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={`Remove ${selected.size} songs`} body={`${selected.size} songs will be moved to the bin. You can restore them from Settings.`} confirmLabel={`Move ${selected.size} to Bin`} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
-        {plusOpen && <PlusSheet url={downloadUrl} binCount={removedSongs.length} onSave={setDownloadUrl} onViewBin={() => { setPlusOpen(false); setBinOpen(true); }} onClose={() => setPlusOpen(false)} T={TH} />}
-
         {settingsOpen && (
           <SettingsSheet
-            url={downloadUrl} theme={theme} binCount={removedSongs.length}
-            onSave={setDownloadUrl}
+            theme={theme} binCount={removedSongs.length}
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
             onViewBin={() => { setSettingsOpen(false); setBinOpen(true); }}
             onOpenAudioEffects={openEQSheet}

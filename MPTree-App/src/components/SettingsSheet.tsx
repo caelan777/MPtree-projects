@@ -22,10 +22,8 @@ const UploadIcon = () => (
 );
 
 type SettingsSheetProps = {
-  url: string;
   theme: Theme;
   binCount: number;
-  onSave: (u: string) => void;
   onToggleTheme: () => void;
   onViewBin: () => void;
   onOpenAudioEffects: () => void;
@@ -50,13 +48,12 @@ type SettingsSheetProps = {
 };
 
 export function SettingsSheet({
-  url, theme, binCount,
-  onSave, onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
+  theme, binCount,
+  onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen, onSupport,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   onClose, T,
 }: SettingsSheetProps) {
-  const [val, setVal] = useState(url);
   const sh = makeSH(T);
 
   // Live remaining-time label for an active fixed-clock timer.
@@ -249,18 +246,6 @@ export function SettingsSheet({
               <IC.ChevronR />
             </button>
           </div>
-        </div>
-
-        <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Download URL</div>
-          <div style={{ fontSize: 12, color: T.muted, marginBottom: 8, lineHeight: 1.5 }}>
-            Opened when you tap +. Leave blank to disable.
-          </div>
-          <input value={val} onChange={e => setVal(e.target.value)} placeholder="https://…" style={sh.inp} autoCapitalize="none" autoCorrect="off" />
-        </div>
-
-        <div style={{ padding: "20px 20px 0" }}>
-          <button onClick={() => { onSave(val.trim()); onClose(); }} style={sh.saveBtn}>Save</button>
         </div>
 
         <div style={{ padding: "20px 20px 0" }}>
