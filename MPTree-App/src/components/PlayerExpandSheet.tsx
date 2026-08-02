@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import type { T } from "../themes";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
+import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
 
 // ─── PLAYER EXPAND SHEET ─────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ type PlayerExpandSheetProps = {
 };
 
 export function PlayerExpandSheet({
-  song, dispName, dispArtist, customPhoto, backdropPhoto,
+  song, dispName, dispArtist, backdropPhoto,
   isPlaying, currentTime, duration, playMode, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
   upNextQueue, playNextQueue = [], getDispName, getDispArtist, getCustomPhoto,
@@ -286,19 +287,19 @@ export function PlayerExpandSheet({
           border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
           flexShrink: 0,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-            <AlbumArt title={dispName} size={88} active customPhoto={customPhoto} T={T} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 16, marginTop: 6 }}>
+            <SpinningDisc size={216} spinning={isPlaying} />
+            <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                 {dispName}
               </div>
               {song.isCut && (
                 <span style={{
                   fontSize: 10, background: T.dim, color: T.textSub,
-                  borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 4,
+                  borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
                 }}>CUT</span>
               )}
-              <div style={{ fontSize: 14, color: T.textSub, marginTop: 5, wordBreak: "break-word" }}>
+              <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
                 {dispArtist || "Unknown Artist"}
               </div>
             </div>
