@@ -3,7 +3,8 @@
 Everything below is drafted to drop straight into the Google Play Console. Character
 limits are noted where Google enforces them. No em or en dashes anywhere, on purpose.
 
-Privacy policy URL to use in the console: **https://mp-tree.net/privacy.html**
+Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
+(the `.html` version 308-redirects to this clean URL, so use the clean one)
 
 ---
 
@@ -112,7 +113,7 @@ Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
 
 ## App content declarations (Play Console → App content)
 
-- Privacy policy: **https://mp-tree.net/privacy.html**
+- Privacy policy: **https://mp-tree.net/privacy**
 - Ads: **No, this app does not contain ads.**
 - App access: all functionality is available without special access. No login is required,
   so no test credentials are needed. (If a reviewer asks how to reach every feature, note
