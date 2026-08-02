@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import type { T } from "../themes";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
@@ -80,50 +80,6 @@ export function PlayerExpandSheet({
     onPlaybackSpeedChange(next);
   };
   const speedLabel = `${playbackSpeed}×`;
-
-  // ── Scrub by dragging on the disc ─────────────────────────────────────────
-  // A horizontal drag across the record moves through the track: dragging the
-  // full width of the disc covers the whole song. Feeds the same onSeek/onSeekEnd
-  // the timeline uses, so the slider follows live and the commit happens on release.
-  const discRef        = useRef<HTMLDivElement>(null);
-  const scrubStartX    = useRef<number | null>(null);
-  const scrubStartTime = useRef(0);
-  const [scrubbing, setScrubbing] = useState(false);
-
-  const scrubTimeAt = (clientX: number) => {
-    const w = discRef.current?.offsetWidth || 1;
-    const dx = clientX - (scrubStartX.current ?? clientX);
-    const t = scrubStartTime.current + (dx / w) * (duration || 0);
-    return Math.max(0, Math.min(duration || 0, t));
-  };
-  const scrubStart = (clientX: number) => {
-    scrubStartX.current = clientX;
-    scrubStartTime.current = currentTime;
-    setScrubbing(true);
-    onSeekStart();
-  };
-  const scrubMove = (clientX: number) => {
-    if (scrubStartX.current === null) return;
-    onSeek(scrubTimeAt(clientX));
-  };
-  const scrubEnd = (clientX: number) => {
-    if (scrubStartX.current === null) return;
-    const t = scrubTimeAt(clientX);
-    scrubStartX.current = null;
-    setScrubbing(false);
-    onSeekEnd(t);
-  };
-
-  // Desktop: track the mouse outside the disc while a scrub is in progress.
-  useEffect(() => {
-    if (!scrubbing) return;
-    const mv = (e: MouseEvent) => scrubMove(e.clientX);
-    const up = (e: MouseEvent) => scrubEnd(e.clientX);
-    window.addEventListener("mousemove", mv);
-    window.addEventListener("mouseup", up);
-    return () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrubbing]);
 
   // ── touch-based drag-and-drop for pinned queue ────────────────────────────
   // We track which index is being dragged and which slot we're hovering over.
@@ -333,23 +289,12 @@ export function PlayerExpandSheet({
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 16, marginTop: 6 }}>
-            <div
-              ref={discRef}
-              onTouchStart={e => scrubStart(e.touches[0].clientX)}
-              onTouchMove={e => { e.preventDefault(); scrubMove(e.touches[0].clientX); }}
-              onTouchEnd={e => scrubEnd((e.changedTouches[0] || e.touches[0])?.clientX ?? 0)}
-              onTouchCancel={e => scrubEnd((e.changedTouches[0] || e.touches[0])?.clientX ?? 0)}
-              onMouseDown={e => scrubStart(e.clientX)}
-              title="Drag to scrub"
-              style={{ touchAction: "none", cursor: scrubbing ? "grabbing" : "ew-resize", borderRadius: "50%", lineHeight: 0 }}
-            >
-              <SpinningDisc
-                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
-                spinning={isPlaying && !scrubbing}
-                title={dispName}
-                customPhoto={customPhoto}
-              />
-            </div>
+            <SpinningDisc
+              size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
+              spinning={isPlaying}
+              title={dispName}
+              customPhoto={customPhoto}
+            />
             <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                 {dispName}

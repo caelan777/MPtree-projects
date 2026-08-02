@@ -2,10 +2,9 @@ import { Logo } from "./Logo";
 
 // ─── SPINNING DISC ───────────────────────────────────────────────────────────
 // The record for the expanded player: the real vinyl.webp turning on its
-// spindle, with a fixed centre label. The label carries the black MPTree mark,
-// or the track's own photo when it has one. Only the record turns (the brand
-// forbids rotating the mark), and only while audio is playing. Honours
-// prefers-reduced-motion.
+// spindle, with a fixed centre label (the track's photo when it has one, else
+// the black MPTree mark). Only the record turns (the brand forbids rotating the
+// mark), and only while audio is playing. Honours prefers-reduced-motion.
 
 type SpinningDiscProps = {
   size: number;
