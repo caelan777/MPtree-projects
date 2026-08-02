@@ -159,7 +159,7 @@ workaround. All done on 2026-07-27:
 ### Phase 4c. Custom domain · not started
 
 - Buy a domain, add it under Cloudflare Pages → Custom domains, point DNS as instructed.
-- Then replace the three `PLACEHOLDER_DOMAIN` values in `Website/index.html` (canonical +
+- Then replace the three `https://mp-tree.net` values in `Website/index.html` (canonical +
   og:url) and redeploy. No rebuild, no other changes.
 
 > ⚠️ The built-in MP3 downloader (`mp3-juices.nu`) has copyright/policy implications.
