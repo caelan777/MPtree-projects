@@ -20,7 +20,7 @@ android {
         // Keep versionName in step with package.json. versionCode must increase
         // by at least 1 for every release you hand out, or Android will refuse
         // to install the update over an existing copy.
-        versionCode 3
+        versionCode 4
         versionName "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
