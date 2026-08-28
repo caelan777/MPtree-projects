@@ -470,31 +470,32 @@ a { color: inherit; text-decoration: none; }
 .dl-direct { font-size: var(--mp-text-small); color: var(--mp-muted); text-decoration: underline; }
 .dl-direct:hover { color: var(--mp-text); }
 
-/* Ad slot: a deliberately plain placeholder. Replace .adslot contents with a
-   real ad unit if ever wired up (see README). */
+/* Support banner: the download page's own "ad slot", pointed at MPTree's
+   Support link instead of a third-party network. See the comment above
+   .adwrap's markup in download.html for why. */
 .adwrap { max-width: 640px; margin: 44px auto 0; }
 .adslot {
-  border: 1px dashed var(--mp-line, var(--mp-border));
+  border: 1px solid var(--mp-border);
   border-radius: var(--mp-radius-md);
   background: var(--mp-surface);
-  min-height: 140px;
+  min-height: 100px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
   position: relative;
+  text-decoration: none;
+  padding: 22px 20px 18px;
+  transition: border-color var(--mp-motion-fast) var(--mp-ease), background var(--mp-motion-fast) var(--mp-ease);
 }
+.adslot:hover { border-color: var(--mp-text); background: var(--mp-card); }
 .ad-label {
   position: absolute; top: 10px; left: 12px;
   font-family: var(--mp-font-mono); font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--mp-muted);
 }
-.ad-body { color: var(--mp-muted); font-size: var(--mp-text-small); }
-.ad-note {
-  margin: 14px auto 0; max-width: 52ch; text-align: center;
-  font-size: var(--mp-text-small); color: var(--mp-muted); line-height: 1.6;
-}
+.ad-body { color: var(--mp-text); font-size: var(--mp-text-body); text-align: center; }
 
 /* Flush section (download page uses .wrap on <main>, so sections don't re-wrap) */
 .section-flush { padding: 64px 0 0; border-top: 1px solid var(--mp-border); margin-top: 56px; }
