@@ -29,7 +29,11 @@ type SongMenuSheetProps = {
   onCut: () => void;
   onToggleLike: () => void;
   onShare: () => void;
+  /** Sends the song to the bin. */
   onRemove: () => void;
+  /** Only supplied when the menu was opened from inside a real playlist:
+   *  pulls the song out of that playlist without touching the library. */
+  onRemoveFromPlaylist?: () => void;
   onClose: () => void;
   T: T;
 };
@@ -37,7 +41,7 @@ type SongMenuSheetProps = {
 export function SongMenuSheet({
   song, dispName, dispArtist, customPhoto, isLiked, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
-  onEdit, onCut, onToggleLike, onShare, onRemove, onClose, T,
+  onEdit, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
   const [pane, setPane] = useState<"actions" | "playlists">("actions");
@@ -107,7 +111,15 @@ export function SongMenuSheet({
             {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? "Unlike" : "Like", onToggleLike)}
             {row("share", <IC.Share />, "Share", onShare)}
             <div style={{ height: 1, background: T.border, margin: "6px 20px" }} />
-            {row("remove", <IC.Trash />, "Remove", onRemove, { danger: true })}
+            {onRemoveFromPlaylist && row("unpin", (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                <line x1="3" y1="3" x2="21" y2="21"/>
+              </svg>
+            ), "Remove from playlist", onRemoveFromPlaylist)}
+            {/* Labelled explicitly when both removals are on offer, so it is
+                obvious which one touches the library itself. */}
+            {row("remove", <IC.Trash />, onRemoveFromPlaylist ? "Remove from library" : "Remove", onRemove, { danger: true })}
           </div>
         ) : (
           <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch" }}>

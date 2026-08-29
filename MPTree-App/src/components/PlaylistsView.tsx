@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
 import { isMissingArtist } from "../utils";
 import { AlbumArt } from "./AlbumArt";
-import { ExpandedSongRow } from "./ExpandedSongRow";
+import { SongMenuSheet } from "./SongMenuSheet";
+import { IC } from "./Icons";
 import type { T } from "../themes";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -242,18 +243,15 @@ export const PlaylistsView: React.FC<Props> = ({
       pressStartX.current = x;
       pressStartY.current = y;
       longPressed.current = false;
+      // Long-press starts multi-select, matching the Songs page. Per-song
+      // actions live on the "⋮" button now. Smart playlists are read-only, so
+      // there is nothing to select there and the press does nothing.
+      if (!inPlaylist) return;
       pressTimer.current = setTimeout(() => {
         longPressed.current = true;
         onHaptic?.();
-        // In a real playlist, long-press starts multi-select and picks this
-        // row. In a smart (read-only) playlist there's nothing to remove, so
-        // long-press keeps opening the action menu instead.
-        if (inPlaylist) {
-          setSelectMode(true);
-          setSelectedIds(prev => new Set(prev).add(song.id));
-        } else {
-          setMenuSong({ song, inPlaylist });
-        }
+        setSelectMode(true);
+        setSelectedIds(prev => new Set(prev).add(song.id));
       }, 500);
     };
     // Any movement — X included — kills the timer, so horizontal page swipes
@@ -320,6 +318,17 @@ export const PlaylistsView: React.FC<Props> = ({
         </div>
         {isLiked(song) && !inPlaylist && (
           <svg width="16" height="16" viewBox="0 0 24 24" fill={t.heart} style={{ flexShrink: 0 }}><path d="M12 21s-7.46-4.51-9.5-9.04C1.18 8.4 2.6 4.5 6.5 4.5c2.02 0 3.36 1.06 3.7 2.13.34-1.07 1.68-2.13 3.7-2.13 3.9 0 5.32 3.9 4 7.46C19.46 16.49 12 21 12 21z"/></svg>
+        )}
+        {!selectMode && (
+          <button
+            onClick={e => { e.stopPropagation(); setMenuSong({ song, inPlaylist }); }}
+            onTouchStart={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+            aria-label={`More options for ${dispName(song)}`}
+            style={{ background: "transparent", border: "none", cursor: "pointer", padding: "6px 2px 6px 6px", display: "flex", flexShrink: 0, color: t.muted }}
+          >
+            <IC.Dots />
+          </button>
         )}
       </div>
     );
@@ -415,6 +424,25 @@ export const PlaylistsView: React.FC<Props> = ({
     if (activeId === id) { setView("list"); setActiveId(null); }
     setConfirmDeleteId(null);
   }, [playlists, activeId, onPlaylistsChange]);
+
+  /** "Add to playlist" from a row's ⋮ menu. Silently ignores duplicates. */
+  const addSongToPlaylist = useCallback((playlistId: string, songId: string) => {
+    onPlaylistsChange(playlists.map(p =>
+      p.id === playlistId && !p.songIds.includes(songId)
+        ? { ...p, songIds: [...p.songIds, songId] }
+        : p
+    ));
+  }, [playlists, onPlaylistsChange]);
+
+  /** "New playlist" from a row's ⋮ menu — starts with just this song. */
+  const createPlaylistWithSong = useCallback((name: string, songId: string) => {
+    onPlaylistsChange([...playlists, {
+      id:        Date.now().toString(),
+      name,
+      songIds:   [songId],
+      createdAt: Date.now(),
+    }]);
+  }, [playlists, onPlaylistsChange]);
 
   const removeFromPlaylist = useCallback((songId: string) => {
     if (!activePlaylist) return;
@@ -1032,45 +1060,33 @@ export const PlaylistsView: React.FC<Props> = ({
         document.body
       )}
 
-      {/* ── Long-press action menu ────────────────────────────────────────
-          Still the ExpandedSongRow card. The Songs page moved to a "⋮" button
-          and SongMenuSheet; this page kept long-press because a playlist row
-          also needs "remove from playlist", which that sheet does not carry.
-          Portalled to body + centered so it always sits above the floating
-          mini-player. */}
+      {/* ── Per-song action menu ──────────────────────────────────────────
+          The same sheet the Songs page uses, plus "Remove from playlist" when
+          the row belongs to a real (editable) playlist. Portalled to body so
+          it always sits above the floating mini-player. */}
       {menuSong && createPortal(
-        <div
-          onClick={() => setMenuSong(null)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px", zIndex: 340 }}
-        >
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 460 }}>
-            <ExpandedSongRow
-              song={menuSong.song}
-              dispName={dispName(menuSong.song)}
-              dispArtist={dispArtist(menuSong.song)}
-              customPhoto={meta[menuSong.song.id]?.customPhoto}
-              idx={0}
-              isActive={currentSongId === menuSong.song.id}
-              isLiked={isLiked(menuSong.song)}
-              onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song]); }}
-              onEdit={() => { onEditSong(menuSong.song); setMenuSong(null); }}
-              onCut={() => { onCutSong(menuSong.song); setMenuSong(null); }}
-              onToggleLike={() => { onToggleLike(menuSong.song); setMenuSong(null); }}
-              onShare={() => { onShareSong(menuSong.song); setMenuSong(null); }}
-              onPlayNext={() => { onPlayNext(menuSong.song); setMenuSong(null); }}
-              onRemove={() => {
-                // In a real playlist "Remove" pulls it from that playlist;
-                // in a smart playlist it sends the song to the bin (same as
-                // the Songs page).
-                if (menuSong.inPlaylist) removeFromPlaylist(menuSong.song.id);
-                else onRemoveSong(menuSong.song);
-                setMenuSong(null);
-              }}
-              onClose={() => setMenuSong(null)}
-              T={t}
-            />
-          </div>
-        </div>,
+        <SongMenuSheet
+          song={menuSong.song}
+          dispName={dispName(menuSong.song)}
+          dispArtist={dispArtist(menuSong.song)}
+          customPhoto={meta[menuSong.song.id]?.customPhoto}
+          isLiked={isLiked(menuSong.song)}
+          playlists={playlists}
+          onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song]); }}
+          onPlayNext={() => { onPlayNext(menuSong.song); setMenuSong(null); }}
+          onAddToPlaylist={id => { addSongToPlaylist(id, menuSong.song.id); setMenuSong(null); }}
+          onCreatePlaylistWithSong={name => { createPlaylistWithSong(name, menuSong.song.id); setMenuSong(null); }}
+          onEdit={() => { onEditSong(menuSong.song); setMenuSong(null); }}
+          onCut={() => { onCutSong(menuSong.song); setMenuSong(null); }}
+          onToggleLike={() => { onToggleLike(menuSong.song); setMenuSong(null); }}
+          onShare={() => { onShareSong(menuSong.song); setMenuSong(null); }}
+          onRemove={() => { onRemoveSong(menuSong.song); setMenuSong(null); }}
+          onRemoveFromPlaylist={menuSong.inPlaylist
+            ? () => { removeFromPlaylist(menuSong.song.id); setMenuSong(null); }
+            : undefined}
+          onClose={() => setMenuSong(null)}
+          T={t}
+        />,
         document.body
       )}
 
