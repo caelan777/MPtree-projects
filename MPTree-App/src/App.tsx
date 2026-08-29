@@ -187,30 +187,61 @@ export default function App() {
   // Height of the floating header card (+ its top offset and a gap), measured
   // live so the list content always starts just below it — even when the card
   // grows/shrinks (search row hidden on the playlists page, select mode, etc.)
-  const headerCardRef = useRef<HTMLDivElement | null>(null);
-  const [topInset, setTopInset] = useState(176);
+  // The card's own height is animated between "collapsed" and "expanded", so it
+  // cannot be measured directly. `headerInnerRef` wraps the real content and
+  // keeps its natural height at all times, which is what the expanded card
+  // animates to. `headerCardRef` is still observed for `topInset`: a height
+  // transition is a real layout change, so ResizeObserver fires every frame and
+  // the list's top padding glides along with the card.
+  const headerCardRef  = useRef<HTMLDivElement | null>(null);
+  const headerInnerRef = useRef<HTMLDivElement | null>(null);
+  const [topInset, setTopInset]     = useState(176);
+  const [expandedH, setExpandedH]   = useState(150);
   useEffect(() => {
-    const el = headerCardRef.current;
-    if (!el) return;
-    const update = () => setTopInset(Math.round(el.getBoundingClientRect().bottom) + 14);
+    const card  = headerCardRef.current;
+    const inner = headerInnerRef.current;
+    if (!card || !inner) return;
+    const update = () => {
+      setTopInset(Math.round(card.getBoundingClientRect().bottom) + 14);
+      setExpandedH(Math.round(inner.getBoundingClientRect().height));
+    };
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(el);
+    ro.observe(card);
+    ro.observe(inner);
     window.addEventListener("resize", update);
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
 
   // ── Collapsing chrome ─────────────────────────────────────────────────────
-  // Scrolling down the Songs list folds the header card (tabs, search, sort)
+  // Scrolling DOWN the Songs list folds the header card (tabs, search, sort)
   // and the mini-player away, leaving just the round MPTree logo top-left, so
   // the list gets the whole screen. Scrolling back to the very top restores
-  // them, and tapping the logo toggles manually.
+  // them, tapping the logo toggles manually, and holding it turns the automatic
+  // part off entirely.
   //
   // A manual toggle wins over the scroll rule until you reach the top again —
   // otherwise tapping the logo to peek at the controls would be undone by the
   // very next scroll event. `null` means "no override, follow the scroll".
   const [chromeOpen, setChromeOpen] = useState(true);
   const chromeManualRef = useRef<boolean | null>(null);
+  // Collapsing must be caused by the user dragging the list downward. Comparing
+  // against the previous offset keeps incidental scroll events — the ones that
+  // fire when the mini-player appears or the list re-renders after shuffle or a
+  // track change — from folding the chrome away while sitting at the top.
+  const lastScrollTopRef = useRef(0);
+  // Animate the fold by default; suppressed for the scroll-to-top button, which
+  // should just be there when you arrive.
+  const [chromeAnimate, setChromeAnimate] = useState(true);
+  // When off, only the logo toggles the chrome; scrolling leaves it alone.
+  const [autoCollapse, setAutoCollapse] = useState(true);
+  const autoCollapseRef = useRef(true);
+  useEffect(() => { autoCollapseRef.current = autoCollapse; }, [autoCollapse]);
+  useEffect(() => {
+    Preferences.get({ key: "mptree_auto_collapse" })
+      .then(({ value }) => { if (value === "0") { setAutoCollapse(false); autoCollapseRef.current = false; } })
+      .catch(() => {});
+  }, []);
   const CHROME_COLLAPSE_AT = 80;
 
   // ── Initial load / loading screen ─────────────────────────────────────────
@@ -1838,9 +1869,38 @@ export default function App() {
   const chromeCollapsed = page === "songs" && !selectMode && !chromeOpen;
   const toggleChrome = () => {
     hapticImpact("light");
+    setChromeAnimate(true);
     const next = !chromeOpen;
     chromeManualRef.current = next;
     setChromeOpen(next);
+  };
+
+  // Logo: tap toggles the chrome, hold switches automatic collapsing on/off so
+  // the header can be pinned open (or shut) regardless of scrolling.
+  const logoPressTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoLongPressed  = useRef(false);
+  const onLogoPressStart = () => {
+    logoLongPressed.current = false;
+    logoPressTimer.current = setTimeout(() => {
+      logoLongPressed.current = true;
+      hapticImpact("medium");
+      const next = !autoCollapseRef.current;
+      autoCollapseRef.current = next;
+      setAutoCollapse(next);
+      // Re-enabling hands control back to the scroll position, so forget any
+      // override the user set while it was off.
+      if (next) chromeManualRef.current = null;
+      Preferences.set({ key: "mptree_auto_collapse", value: next ? "1" : "0" }).catch(() => {});
+      showToast(next ? "Auto-collapse on" : "Auto-collapse off, use the logo");
+    }, 500);
+  };
+  const onLogoPressEnd = () => {
+    if (logoPressTimer.current) { clearTimeout(logoPressTimer.current); logoPressTimer.current = null; }
+  };
+  const onLogoClick = () => {
+    // Swallow the click that follows a long-press, or holding would also toggle.
+    if (logoLongPressed.current) { logoLongPressed.current = false; return; }
+    toggleChrome();
   };
 
   const playerH    = currentSong && !selectMode && !chromeCollapsed ? 158 : 0;
@@ -1969,28 +2029,39 @@ export default function App() {
             position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, zIndex: 60,
             background: TH.playerBg, border: `1px solid ${TH.border}`,
             boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
-            // Collapsed, the card shrinks to a round logo button. `right` is
-            // dropped entirely so the width comes from the fixed size instead
-            // of stretching to the far edge.
-            ...(chromeCollapsed
-              ? { width: 54, height: 54, borderRadius: "50%", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }
-              : { right: 12, borderRadius: 22, padding: "8px 14px 12px" }),
+            boxSizing: "border-box", overflow: "hidden",
+            // Animating requires real numbers on both ends, so the expanded
+            // height is measured from the inner wrapper rather than left auto.
+            // +2 covers the card's own top and bottom border.
+            width:  chromeCollapsed ? 54 : "calc(100% - 24px)",
+            height: chromeCollapsed ? 54 : expandedH + 2,
+            borderRadius: chromeCollapsed ? "50%" : 22,
+            transition: chromeAnimate
+              ? "width 0.34s cubic-bezier(0.22, 1, 0.36, 1), height 0.34s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.34s cubic-bezier(0.22, 1, 0.36, 1)"
+              : "none",
           }}
         >
-          {chromeCollapsed ? (
-            <button
-              onClick={toggleChrome}
-              aria-label="Show search and player"
-              style={{ width: "100%", height: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: TH.text }}
-            >
-              <Logo size={32} color={TH.text} />
-            </button>
-          ) : (
-          <>
+          {/* Full header. Kept mounted and at its natural width while collapsed
+              (just clipped) so it never reflows — a reflow would corrupt the
+              measured height the card animates to. */}
+          <div
+            ref={headerInnerRef}
+            style={{
+              boxSizing: "border-box", width: "calc(100vw - 26px)", padding: "8px 14px 12px",
+              opacity: chromeCollapsed ? 0 : 1,
+              pointerEvents: chromeCollapsed ? "none" : "auto",
+              // Short: the two logos (this one at 48px, the collapsed one at
+              // 30px) briefly overlap during the cross-fade, and a slow fade
+              // makes that read as a ghosted double image.
+              transition: chromeAnimate ? "opacity 0.15s ease" : "none",
+            }}
+          >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
             <button
-              onClick={toggleChrome}
+              onClick={onLogoClick}
+              onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
+              onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label="Collapse header"
               style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
             >
@@ -2073,8 +2144,33 @@ export default function App() {
               </div>
             </div>
           )}
-          </>
-          )}
+          </div>
+
+          {/* Collapsed state: the round logo, cross-fading with the header it
+              shrank into. Always mounted so both ends of the fold animate. */}
+          <div
+            style={{
+              position: "absolute", inset: 0, display: "flex", alignItems: "center",
+              // Pinned left rather than centred: while the card is still wide,
+              // "centre" is far from where the header's own logo sits, so the
+              // mark would visibly sweep inward as the card shrinks. Held here
+              // it simply stays put and the card closes around it.
+              justifyContent: "flex-start", paddingLeft: 11,
+              opacity: chromeCollapsed ? 1 : 0,
+              pointerEvents: chromeCollapsed ? "auto" : "none",
+              transition: chromeAnimate ? "opacity 0.15s ease" : "none",
+            }}
+          >
+            <button
+              onClick={onLogoClick}
+              onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
+              onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
+              aria-label="Show search and player"
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
+            >
+              <Logo size={30} color={TH.text} />
+            </button>
+          </div>
         </div>
 
         {/* ═══ SWIPEABLE PAGE AREA ═════════════════════════════════════════ */}
@@ -2090,16 +2186,25 @@ export default function App() {
               data-tour="songs"
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
               onScroll={() => {
-                const top = scrollRef.current?.scrollTop ?? 0;
+                const top  = scrollRef.current?.scrollTop ?? 0;
+                const prev = lastScrollTopRef.current;
+                lastScrollTopRef.current = top;
                 setListScrollTop(top);
+                // With automatic collapsing off, scrolling never touches the
+                // chrome at all — not even to restore it at the top.
+                if (!autoCollapseRef.current) return;
                 // Back at the very top: always show the chrome, and drop any
                 // manual override so scrolling drives it again.
                 if (top <= 4) {
                   chromeManualRef.current = null;
                   setChromeOpen(true);
-                } else if (chromeManualRef.current === null) {
-                  setChromeOpen(top < CHROME_COLLAPSE_AT);
+                  return;
                 }
+                if (chromeManualRef.current !== null) return;
+                // Only a genuine downward drag folds it away. Scrolling back up
+                // leaves the chrome hidden until you actually reach the top,
+                // which is what keeps the list from flickering mid-scroll.
+                if (top > prev + 2 && top > CHROME_COLLAPSE_AT) setChromeOpen(false);
               }}
             >
               <div style={{ height: refreshing ? 46 : `${pullDist}px`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", transition: refreshing ? "height 0.2s ease" : "none" }}>
@@ -2195,7 +2300,16 @@ export default function App() {
               style={{ position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90 }}
             >
               <button
-                onClick={() => { scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                onClick={() => {
+                  // Jumping to the top should simply arrive with the chrome
+                  // already there — folding it back open over a third of a
+                  // second while the list races past reads as a glitch.
+                  setChromeAnimate(false);
+                  chromeManualRef.current = null;
+                  setChromeOpen(true);
+                  scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                  window.setTimeout(() => setChromeAnimate(true), 600);
+                }}
                 aria-label="Scroll to top"
                 style={{ width: 46, height: 46, borderRadius: "50%", background: TH.surface, border: `1px solid ${TH.border}`, color: TH.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.4)" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
