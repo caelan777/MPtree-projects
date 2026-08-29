@@ -224,6 +224,9 @@ export default function App() {
   // otherwise tapping the logo to peek at the controls would be undone by the
   // very next scroll event. `null` means "no override, follow the scroll".
   const [chromeOpen, setChromeOpen] = useState(true);
+  // Options panel opened by holding the logo. Declared here with the rest of
+  // the chrome state so the Back handler, defined further down, can see it.
+  const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
   const chromeManualRef = useRef<boolean | null>(null);
   // Collapsing must be caused by the user dragging the list downward. Comparing
   // against the previous offset keeps incidental scroll events — the ones that
@@ -243,6 +246,17 @@ export default function App() {
       .catch(() => {});
   }, []);
   const CHROME_COLLAPSE_AT = 80;
+  // Scrolls the app performs itself (jumping to the playing track, the
+  // scroll-to-top button) must not be mistaken for the user dragging the list.
+  // Smooth scrolling has no completion event, so the flag is simply held for
+  // comfortably longer than the animation lasts.
+  const programmaticScrollRef   = useRef(false);
+  const programmaticScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const beginProgrammaticScroll = useCallback(() => {
+    programmaticScrollRef.current = true;
+    if (programmaticScrollTimer.current) clearTimeout(programmaticScrollTimer.current);
+    programmaticScrollTimer.current = setTimeout(() => { programmaticScrollRef.current = false; }, 800);
+  }, []);
 
   // ── Initial load / loading screen ─────────────────────────────────────────
   const [isInitializing, setIsInitializing] = useState(true);
@@ -711,9 +725,19 @@ export default function App() {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
+  // Bring the playing track into view whenever it changes. This is the app
+  // scrolling, not the user, so it is flagged for the duration: without that
+  // the header would fold away every time you hit shuffle or skip, because the
+  // resulting jump looks exactly like a downward drag.
   useEffect(() => {
     if (!currentSong) return;
+    // Armed here, up front, rather than only next to the scroll call: the list
+    // can settle and emit scroll events before this effect's timer fires, and
+    // any of those arriving unguarded would fold the header away.
+    beginProgrammaticScroll();
     const t = setTimeout(() => {
+      // Re-armed so the window covers the smooth scroll that starts now.
+      beginProgrammaticScroll();
       const el = songRowRefs.current.get(currentSong.id);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -731,6 +755,7 @@ export default function App() {
       cont.scrollTo({ top: target, behavior: "smooth" });
     }, 120);
     return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
 
   // ── Position polling + cut track boundary ─────────────────────────────────
@@ -878,6 +903,11 @@ export default function App() {
 
   // ── Playback ──────────────────────────────────────────────────────────────
   const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
+    // Starting a track makes the app scroll to it. Flag that here, in the click
+    // handler itself, rather than relying on the effect that performs the
+    // scroll: effects run after paint and can be delayed, and a scroll event
+    // arriving in that gap would read as the user dragging the list down.
+    beginProgrammaticScroll();
     try {
       setQueue(q); setCurrent(s); setCurrentTime(0); setDuration(0); setPlaying(true); loadedRef.current = true;
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
@@ -1835,6 +1865,7 @@ export default function App() {
       }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
       if (filterOpen)          { setFilterOpen(false); return; }
+      if (chromeMenuOpen)      { setChromeMenuOpen(false); return; }
       if (menuSong)            { setMenuSong(null); return; }
       if (selectMode)          { exitSelectMode(); return; }
       if (page === "playlists") {
@@ -1875,8 +1906,18 @@ export default function App() {
     setChromeOpen(next);
   };
 
-  // Logo: tap toggles the chrome, hold switches automatic collapsing on/off so
-  // the header can be pinned open (or shut) regardless of scrolling.
+  // Logo: tap toggles the chrome, hold opens a little panel with a switch for
+  // automatic collapsing — flipping a setting blind on a long-press gives no
+  // hint that the setting exists or which way it now sits.
+  const setAutoCollapseEnabled = (next: boolean) => {
+    autoCollapseRef.current = next;
+    setAutoCollapse(next);
+    // Re-enabling hands control back to the scroll position, so forget any
+    // override the user set while it was off.
+    if (next) chromeManualRef.current = null;
+    Preferences.set({ key: "mptree_auto_collapse", value: next ? "1" : "0" }).catch(() => {});
+  };
+
   const logoPressTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoLongPressed  = useRef(false);
   const onLogoPressStart = () => {
@@ -1884,14 +1925,7 @@ export default function App() {
     logoPressTimer.current = setTimeout(() => {
       logoLongPressed.current = true;
       hapticImpact("medium");
-      const next = !autoCollapseRef.current;
-      autoCollapseRef.current = next;
-      setAutoCollapse(next);
-      // Re-enabling hands control back to the scroll position, so forget any
-      // override the user set while it was off.
-      if (next) chromeManualRef.current = null;
-      Preferences.set({ key: "mptree_auto_collapse", value: next ? "1" : "0" }).catch(() => {});
-      showToast(next ? "Auto-collapse on" : "Auto-collapse off, use the logo");
+      setChromeMenuOpen(true);
     }, 500);
   };
   const onLogoPressEnd = () => {
@@ -2173,6 +2207,39 @@ export default function App() {
           </div>
         </div>
 
+        {/* ── Header options, from holding the logo ───────────────────────── */}
+        {chromeMenuOpen && (
+          <>
+            <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setChromeMenuOpen(false)} />
+            <div
+              style={{
+                position: "absolute", top: topInset, left: 12, zIndex: 200,
+                background: TH.sheetBg, border: `1px solid ${TH.border}`, borderRadius: 16,
+                boxShadow: "0 12px 40px rgba(0,0,0,0.45)", padding: "6px 6px 10px", width: 268,
+              }}
+            >
+              <button
+                onClick={() => { hapticImpact("light"); setAutoCollapseEnabled(!autoCollapse); }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                  width: "100%", background: "transparent", border: "none", cursor: "pointer",
+                  padding: "12px 12px 10px", color: TH.text, fontFamily: "inherit", fontSize: 15, textAlign: "left",
+                }}
+              >
+                <span>Auto-collapse</span>
+                <span style={{ width: 46, height: 26, borderRadius: 13, background: autoCollapse ? TH.accent : TH.border, position: "relative", transition: "background 0.25s", flexShrink: 0 }}>
+                  <span style={{ position: "absolute", top: 3, left: autoCollapse ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
+                </span>
+              </button>
+              <div style={{ padding: "0 12px", fontSize: 12, color: TH.muted, lineHeight: 1.5 }}>
+                {autoCollapse
+                  ? "The header and player fold away as you scroll down."
+                  : "They only fold when you tap the logo."}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* ═══ SWIPEABLE PAGE AREA ═════════════════════════════════════════ */}
         <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
 
@@ -2182,7 +2249,13 @@ export default function App() {
             {/* ═══ SONG LIST ═══════════════════════════════════════════════ */}
             <main
               ref={scrollRef}
-              style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", paddingTop: topInset, paddingBottom: bottomH + 64 + 12 }}
+              style={{
+                flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y",
+                paddingTop: topInset, paddingBottom: bottomH + 64 + 12,
+                // Only the bottom is transitioned: paddingTop already glides,
+                // driven per-frame by the ResizeObserver on the folding header.
+                transition: chromeAnimate ? "padding-bottom 0.34s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
+              }}
               data-tour="songs"
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
               onScroll={() => {
@@ -2190,6 +2263,9 @@ export default function App() {
                 const prev = lastScrollTopRef.current;
                 lastScrollTopRef.current = top;
                 setListScrollTop(top);
+                // A scroll the app started (jumping to the playing track after
+                // shuffle or skip) is not the user asking for more list room.
+                if (programmaticScrollRef.current) return;
                 // With automatic collapsing off, scrolling never touches the
                 // chrome at all — not even to restore it at the top.
                 if (!autoCollapseRef.current) return;
@@ -2307,6 +2383,7 @@ export default function App() {
                   setChromeAnimate(false);
                   chromeManualRef.current = null;
                   setChromeOpen(true);
+                  beginProgrammaticScroll();
                   scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
                   window.setTimeout(() => setChromeAnimate(true), 600);
                 }}
@@ -2383,7 +2460,7 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selectMode && !chromeCollapsed && (() => {
+        {currentSong && !selectMode && (() => {
           const sliderMin = currentSong.isCut ? (currentSong.cutFrom ?? 0) : 0;
           const sliderMax = currentSong.isCut ? (currentSong.cutTo ?? duration) : (duration || 100);
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
@@ -2392,7 +2469,19 @@ export default function App() {
             : TH.playerBg;
           return (
             <div
-              style={{ position: "fixed", bottom: 18, left: 12, right: 12, background: miniPlayerBg, border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px", zIndex: 100, transition: "background 0.4s ease", boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden" }}
+              style={{
+                position: "fixed", bottom: 18, left: 12, right: 12, background: miniPlayerBg,
+                border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
+                zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
+                // Kept mounted while collapsed and slid off the bottom instead,
+                // so it glides back up with the header rather than popping in.
+                transform: chromeCollapsed ? "translateY(calc(100% + 26px))" : "translateY(0)",
+                opacity: chromeCollapsed ? 0 : 1,
+                pointerEvents: chromeCollapsed ? "none" : "auto",
+                transition: chromeAnimate
+                  ? "transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease, background 0.4s ease"
+                  : "background 0.4s ease",
+              }}
               onTouchStart={e => onPlayerSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
               onTouchMove={e => onPlayerSwipeMove(e.touches[0].clientX, e.touches[0].clientY)}
               onTouchEnd={e => onPlayerSwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
