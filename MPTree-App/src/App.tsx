@@ -16,7 +16,7 @@ import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
-import { ExpandedSongRow } from "./components/ExpandedSongRow";
+import { SongMenuSheet } from "./components/SongMenuSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
@@ -165,7 +165,9 @@ export default function App() {
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
-  const [activeMenu,     setActiveMenu]    = useState<string | null>(null);
+  // The song whose "⋮" action sheet is open (null = closed). This replaced
+  // `activeMenu`, which expanded the row inline on long-press.
+  const [menuSong,       setMenuSong]      = useState<Song | null>(null);
   const [editSong,       setEditSong]      = useState<Song | null>(null);
   const [removeSong,     setRemoveSong]    = useState<Song | null>(null);
   const [cutSong,        setCutSong]       = useState<Song | null>(null);
@@ -197,6 +199,19 @@ export default function App() {
     window.addEventListener("resize", update);
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
+
+  // ── Collapsing chrome ─────────────────────────────────────────────────────
+  // Scrolling down the Songs list folds the header card (tabs, search, sort)
+  // and the mini-player away, leaving just the round MPTree logo top-left, so
+  // the list gets the whole screen. Scrolling back to the very top restores
+  // them, and tapping the logo toggles manually.
+  //
+  // A manual toggle wins over the scroll rule until you reach the top again —
+  // otherwise tapping the logo to peek at the controls would be undone by the
+  // very next scroll event. `null` means "no override, follow the scroll".
+  const [chromeOpen, setChromeOpen] = useState(true);
+  const chromeManualRef = useRef<boolean | null>(null);
+  const CHROME_COLLAPSE_AT = 80;
 
   // ── Initial load / loading screen ─────────────────────────────────────────
   const [isInitializing, setIsInitializing] = useState(true);
@@ -280,6 +295,9 @@ export default function App() {
   // ── Playlists ─────────────────────────────────────────────────────────────
   const [playlists,     setPlaylists]     = useState<Playlist[]>([]);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // Bumped by the Back handler to ask PlaylistsView to pop one level of its own
+  // nested navigation (detail → list, add-songs → detail, close a menu, …).
+  const [playlistBackSignal, setPlaylistBackSignal] = useState(0);
 
   const scrollRef    = useRef<HTMLDivElement>(null);
   const songRowRefs  = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -294,7 +312,6 @@ export default function App() {
   const isPlayingRef = useRef(false);
   const metaRef      = useRef<Record<string, SongMeta>>({});
   const removedRef   = useRef<Song[]>([]);
-  const activeMenuRef = useRef<string | null>(null);
   const pressTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartX  = useRef(0);
   const pressStartY  = useRef<number>(0);
@@ -323,7 +340,6 @@ export default function App() {
   useEffect(() => { metaRef.current = meta; }, [meta]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { crossfadeMsRef.current  = crossfadeMs;  }, [crossfadeMs]);
-  useEffect(() => { activeMenuRef.current   = activeMenu;   }, [activeMenu]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
   useEffect(() => { eqEnabledRef.current    = eqEnabled;    }, [eqEnabled]);
   useEffect(() => { eqBandLevelsRef.current = eqBandLevels; }, [eqBandLevels]);
@@ -520,11 +536,10 @@ export default function App() {
     };
     initialize();
     const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
-      // Close any open long-press menu across an app background/foreground
-      // transition. Fixes being stuck in the menu after accidentally leaving
-      // and returning to the app — you're no longer scrolled to that song, so
-      // the row's own close button might not even be visible.
-      if (activeMenuRef.current) setActiveMenu(null);
+      // Dismiss the per-song action sheet across a background/foreground
+      // transition, so returning to the app never lands on a stale menu for a
+      // song you have since scrolled away from.
+      setMenuSong(null);
       if (isActive) {
         scanMusic().then(fs => resyncFromNative(fs).then(ok => {
           if (!ok) Promise.all([AudioPlayer.getCurrentPosition(), AudioPlayer.getDuration()])
@@ -872,52 +887,63 @@ export default function App() {
   };
 
   // ── skip ──────────────────────────────────────────────────────────────────
+  // The queue is the single source of play order in EVERY mode. It used to be
+  // consulted only in shuffle mode, with sequential mode walking displayList
+  // instead — which is why a Play-Next pin was ignored unless shuffle was on.
+  // handlePlayNext now splices the pinned track into the queue directly, so
+  // both modes just step through the queue and pins are honoured either way.
   const skip = async (dir: -1 | 1) => {
     if (!currentSong) return;
-    if (playMode === "shuffle") {
-      if (!queue.length) return;
-      const idx = queue.findIndex(s => s.id === currentSong.id);
-
-      if (dir === 1) {
-        const nextQueue = playNextQueueRef.current;
-        if (nextQueue.length > 0) {
-          const nextId = nextQueue[0];
-          const pinnedSong = queue.find(s => s.id === nextId);
-          if (pinnedSong) {
-            const newPinned = nextQueue.slice(1);
-            setPlayNextQueue(newPinned);
-            playNextQueueRef.current = newPinned;
-            const newQ = [...queue];
-            const pinnedIdx = newQ.findIndex(s => s.id === nextId);
-            if (pinnedIdx !== -1) newQ.splice(pinnedIdx, 1);
-            const adjustedIdx = pinnedIdx < idx ? idx - 1 : idx;
-            newQ.splice(adjustedIdx + 1, 0, pinnedSong);
-            setQueue(newQ);
-            playSong(pinnedSong, newQ);
-            return;
-          }
-        }
-      }
-
-      const nxt = queue[idx + dir];
-      if (nxt) playSong(nxt, queue);
-    } else {
-      const idx = displayList.findIndex(s => s.id === currentSong.id);
-      const nxt = displayList[idx + dir];
-      if (nxt) { setQueue(displayList); playSong(nxt, displayList); }
-    }
+    const q = queue.length ? queue : displayList;
+    const idx = q.findIndex(s => s.id === currentSong.id);
+    if (idx === -1) return;
+    const nxt = q[idx + dir];
+    if (!nxt) return;
+    if (q !== queue) setQueue(q);
+    playSong(nxt, q);
   };
 
   // ── Play Next ─────────────────────────────────────────────────────────────
+  // Recording the id in playNextQueue only feeds the "Up Next" list; it does
+  // NOT change what plays. The native service advances on its own from the
+  // queue it was handed, so the pinned track has to be physically moved into
+  // the queue (here and natively) or it never actually plays next.
   const handlePlayNext = useCallback((song: Song) => {
-    setPlayNextQueue(prev => {
-      if (prev.includes(song.id)) return prev;
-      return [...prev, song.id];
-    });
-    showToast(`"${dispName(song)}" added to Play Next`);
-    setActiveMenu(null);
+    setMenuSong(null);
+    const cur = curRef.current;
+
+    // Nothing playing: there is no "next" to sit after, so just start it.
+    if (!cur) {
+      const q = [song];
+      setQueue(q);
+      playSong(song, q);
+      return;
+    }
+    if (song.id === cur.id) { showToast("Already playing"); return; }
+
+    const base = queueRef.current.length ? queueRef.current : displayListRef.current;
+    // Drop any existing copy first so re-pinning moves it instead of duplicating.
+    const without = base.filter(s => s.id !== song.id);
+    const curIdx = without.findIndex(s => s.id === cur.id);
+    if (curIdx === -1) return;
+
+    // Land after the current track AND after any pins already queued behind it,
+    // so repeated Play Next taps keep their tap order.
+    const pinned = playNextQueueRef.current;
+    let insertAt = curIdx + 1;
+    while (insertAt < without.length && pinned.includes(without[insertAt].id)) insertAt++;
+
+    const newQ = [...without.slice(0, insertAt), song, ...without.slice(insertAt)];
+    setQueue(newQ);
+    AudioPlayer.setQueue({
+      tracks: newQ.map(toNativeTrack),
+      currentIndex: newQ.findIndex(s => s.id === cur.id),
+    }).catch(() => {});
+
+    setPlayNextQueue(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
+    showToast(`"${dispName(song)}" plays next`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta]);
+  }, [meta, toNativeTrack]);
 
   const handleSkipCurrentUpNext = useCallback(() => {
     const q = queueRef.current;
@@ -1005,6 +1031,11 @@ export default function App() {
   // On release past ~25% it springs open; below that it settles back down.
   const [expandDrag, setExpandDrag]     = useState<number | null>(null); // 0..1 while dragging
   const [expandSettling, setExpandSettling] = useState(false);           // animating back down
+  // Horizontal swipe feedback for the mini-player's track text: it follows the
+  // finger, then the incoming track slides in from the side you swiped toward,
+  // so skipping reads as moving through a strip of songs rather than a blink.
+  const [titleDragX, setTitleDragX] = useState(0);
+  const [titleDir,   setTitleDir]   = useState<1 | -1>(1);
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
   const playerAxisRef   = useRef<"h" | "v" | null>(null); // gesture axis lock
 
@@ -1029,6 +1060,8 @@ export default function App() {
       const vh = window.innerHeight || 800;
       setExpandDrag(Math.min(1, dy / (vh * 0.45)));
     }
+    // Damped so the text trails the finger instead of racing it.
+    if (playerAxisRef.current === "h") setTitleDragX(dx * 0.45);
   };
   const onPlayerSwipeEnd = (clientX: number, clientY: number) => {
     if (playerSwipeStartY.current === null || playerSwipeStartX.current === null) return;
@@ -1039,11 +1072,17 @@ export default function App() {
     const axis = playerAxisRef.current;
     playerAxisRef.current = null;
 
-    if (axis === "h" && Math.abs(deltaX) > 55) {
-      hapticImpact("light");
-      skip(deltaX < 0 ? 1 : -1);
-      setExpandDrag(null);
-      return;
+    if (axis === "h") {
+      setTitleDragX(0);
+      if (Math.abs(deltaX) > 55) {
+        hapticImpact("light");
+        // Swiping left (negative dx) advances, so the next track should enter
+        // from the right; swiping right does the mirror.
+        setTitleDir(deltaX < 0 ? 1 : -1);
+        skip(deltaX < 0 ? 1 : -1);
+        setExpandDrag(null);
+        return;
+      }
     }
     if (expandDrag !== null) {
       if (expandDrag > 0.25 || deltaY > 160) {
@@ -1418,7 +1457,7 @@ export default function App() {
   } = usePageSwipe({
     page,
     setPage,
-    activeMenu,
+    activeMenu: menuSong?.id ?? null,
     selectMode,
     filterOpen,
     // Inside a playlist detail, a horizontal swipe must not teleport back to
@@ -1447,25 +1486,30 @@ export default function App() {
       setSelected(prev => { const next = new Set(prev); if (next.has(song.id)) next.delete(song.id); else next.add(song.id); return next; });
       return;
     }
-    if (activeMenu && activeMenu !== song.id) {
-      setSelectMode(true);
-      setSelected(new Set([activeMenu, song.id]));
-      setActiveMenu(null);
-      return;
-    }
     // Single tap plays immediately. Liking is done via the heart button only
     // (double-tap-to-like was removed — it forced a 250ms delay on every play
     // and made tapping a song feel laggy).
-    setActiveMenu(null); setQueue(displayList); playSong(song, displayList);
+    // Honour shuffle. This used to always queue displayList in order, so with
+    // shuffle already on (typically restored from the previous session) tapping
+    // a song silently played the library sequentially from that point.
+    if (playMode === "shuffle") {
+      const q = [song, ...buildShuffleQ(displayList.filter(s => s.id !== song.id))];
+      setQueue(q); playSong(song, q);
+      return;
+    }
+    setQueue(displayList); playSong(song, displayList);
   };
 
   const onPressStart = (id: string, clientX: number, clientY: number) => {
     pressStartX.current = clientX;
     pressStartY.current = clientY;
+    // Long-press now starts multi-select, the standard Android gesture. The
+    // per-song actions moved to the "⋮" button, so this no longer has to
+    // double as a hidden menu trigger.
     pressTimer.current = setTimeout(() => {
       hapticImpact("medium");
-      setActiveMenu(prev => prev === id ? null : id);
-      if (selectMode) setSelected(prev => { const next = new Set(prev); next.add(id); return next; });
+      setSelectMode(true);
+      setSelected(prev => { const next = new Set(prev); next.add(id); return next; });
     }, 500);
   };
   // Cancels on movement along EITHER axis: horizontal page swipes travel in X,
@@ -1484,7 +1528,7 @@ export default function App() {
       const existing = prev[s.id] || {};
       return { ...prev, [s.id]: { ...existing, ...(u.customName !== undefined ? { customName: u.customName } : {}), ...(u.customArtist !== undefined ? { customArtist: u.customArtist } : {}), ...(u.customPhoto !== undefined ? { customPhoto: u.customPhoto ?? undefined } : {}) } };
     });
-    setEditSong(null); setActiveMenu(null);
+    setEditSong(null); setMenuSong(null);
     if (editFromPlayer) { setEditFromPlayer(false); setPlayerExpanded(true); }
   };
 
@@ -1498,7 +1542,7 @@ export default function App() {
       if (playMode === "shuffle") { const idx = queue.findIndex(x => x.id === s.id); const rq = queue.filter(x => x.id !== s.id); setQueue(rq); const nxt = rq[idx] ?? rq[0]; if (nxt) playSong(nxt, rq); else { setCurrent(null); setPlaying(false); } }
       else { const rl = displayList.filter(x => x.id !== s.id); const idx = displayList.findIndex(x => x.id === s.id); const nxt = rl[idx] ?? rl[idx - 1]; if (nxt) { setQueue(rl); playSong(nxt, rl); } else { setCurrent(null); setPlaying(false); } }
     }
-    setRemoveSong(null); setActiveMenu(null); setPlayerExpanded(false);
+    setRemoveSong(null); setMenuSong(null); setPlayerExpanded(false);
     showToast("Moved to bin", { label: "Undo", onClick: () => restoreSongs([s]) });
     scanMusic(updated);
   };
@@ -1562,7 +1606,7 @@ export default function App() {
         else { await AudioPlayer.play({ path: song.uri }); await AudioPlayer.pause(); const d = await AudioPlayer.getDuration(); dur = d.duration; }
       } catch { /* ignore */ }
     }
-    setCutDuration(dur); setCutSong(song); setActiveMenu(null);
+    setCutDuration(dur); setCutSong(song); setMenuSong(null);
   };
 
   const saveCutTrack = async (song: Song, startMs: number, endMs: number, newName: string) => {
@@ -1635,6 +1679,41 @@ export default function App() {
     savePlaylists(updated);
   }, []);
 
+  /** Append a song to an existing playlist, from the "⋮" menu. */
+  const handleAddToPlaylist = useCallback((playlistId: string, song: Song) => {
+    setPlaylists(prev => {
+      const updated = prev.map(pl =>
+        pl.id === playlistId && !pl.songIds.includes(song.id)
+          ? { ...pl, songIds: [...pl.songIds, song.id] }
+          : pl,
+      );
+      savePlaylists(updated);
+      const target = updated.find(pl => pl.id === playlistId);
+      if (target) showToast(`Added to "${target.name}"`);
+      return updated;
+    });
+    setMenuSong(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Create a brand-new playlist that starts with this one song. */
+  const handleCreatePlaylistWithSong = useCallback((name: string, song: Song) => {
+    const playlist: Playlist = {
+      id: Date.now().toString(),
+      name,
+      songIds: [song.id],
+      createdAt: Date.now(),
+    };
+    setPlaylists(prev => {
+      const updated = [...prev, playlist];
+      savePlaylists(updated);
+      return updated;
+    });
+    showToast(`Created "${name}"`);
+    setMenuSong(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean) => {
     if (!playlistSongs.length) return;
     // Stay on the Playlists tab. The queue is set to the playlist's songs below,
@@ -1690,6 +1769,63 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, likedKey, lastPlayedKey, playCountKey]);
 
+  // ── Android hardware / gesture Back ───────────────────────────────────────
+  // Without a handler, Back closes the whole app from anywhere, even with a
+  // sheet open. This walks ONE layer of UI at a time, topmost first, and only
+  // exits from the root Songs list. The handler lives in a ref that is
+  // refreshed every render, so the native listener is registered exactly once
+  // but always sees current state.
+  const backHandlerRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    backHandlerRef.current = () => {
+      // Topmost layers first. Each branch returns after handling one level.
+      if (backupSheet.kind !== "closed") {
+        // Never interrupt an in-flight backup/restore; those sheets drive a
+        // long native job and dismissing mid-way would orphan it. Every other
+        // state is either a prompt or a finished result, so Back dismisses it.
+        const busy = backupSheet.kind === "exportProgress"
+          || backupSheet.kind === "importProgress"
+          || backupSheet.kind === "sharing";
+        if (!busy) setBackupSheet({ kind: "closed" });
+        return;
+      }
+      if (showOnboarding)      { finishOnboarding(); return; }
+      if (eqOpen)              { setEqOpen(false); return; }
+      if (binOpen)             { setBinOpen(false); return; }
+      if (settingsOpen)        { setSettingsOpen(false); return; }
+      if (cutSong)             { setCutSong(null); return; }
+      if (removeSong)          { setRemoveSong(null); return; }
+      if (removeMultiConfirm)  { setRemoveMultiConfirm(false); return; }
+      if (editSong) {
+        setEditSong(null);
+        // Editing can be entered from the expanded player; go back to it.
+        if (editFromPlayer) { setEditFromPlayer(false); setPlayerExpanded(true); }
+        return;
+      }
+      if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
+      if (filterOpen)          { setFilterOpen(false); return; }
+      if (menuSong)            { setMenuSong(null); return; }
+      if (selectMode)          { exitSelectMode(); return; }
+      if (page === "playlists") {
+        // PlaylistsView owns its own nested navigation, so hand Back to it and
+        // let it pop one level. It reports back through onDetailChange when it
+        // has nothing left to pop, at which point we leave the tab.
+        if (playlistDetailOpen) { setPlaylistBackSignal(n => n + 1); return; }
+        setPage("songs");
+        return;
+      }
+      // Root of the app: let Android close it.
+      CapApp.exitApp().catch(() => {});
+    };
+  });
+  useEffect(() => {
+    let sub: { remove(): void } | null = null;
+    CapApp.addListener("backButton", () => backHandlerRef.current())
+      .then(l => { sub = l; })
+      .catch(() => {});
+    return () => { sub?.remove(); };
+  }, []);
+
   // ── Layout ────────────────────────────────────────────────────────────────
   // Mini-player height: 20px handle padding + slider row + controls + 26px
   // bottom padding. Keep in sync with the bottom-player padding — the shuffle
@@ -1697,7 +1833,17 @@ export default function App() {
   // Distance from the bottom of the screen to the TOP edge of the floating
   // mini-player card: 18px bottom offset + ~140px card height. Anything that
   // sits "just above the player" offsets from this, so the gaps stay exact.
-  const playerH    = currentSong && !selectMode ? 158 : 0;
+  // Collapsing is a Songs-list affordance only: the Playlists tab keeps its
+  // header, and multi-select needs its bar and header visible.
+  const chromeCollapsed = page === "songs" && !selectMode && !chromeOpen;
+  const toggleChrome = () => {
+    hapticImpact("light");
+    const next = !chromeOpen;
+    chromeManualRef.current = next;
+    setChromeOpen(next);
+  };
+
+  const playerH    = currentSong && !selectMode && !chromeCollapsed ? 158 : 0;
   const selectBarH = selectMode ? 100 : 0;
   const bottomH    = playerH + selectBarH;
   const modeBg     = playMode === "shuffle" ? TH.violet : playMode === "repeat" ? TH.repeat : TH.dim;
@@ -1744,7 +1890,10 @@ export default function App() {
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
   const pullOffset = refreshing ? 46 : pullDist;
-  const virtualize = !activeMenu && displayList.length > VIRT_THRESHOLD;
+  // Virtualization assumes a uniform ROW_H. That used to be broken by the
+  // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
+  // the menu is a sheet now, so every row is the same height at all times.
+  const virtualize = displayList.length > VIRT_THRESHOLD;
   const vpH = listViewportH || 640;
 
   let virtStart = 0;
@@ -1792,6 +1941,14 @@ export default function App() {
         .fabw { transition: opacity 0.2s ease, transform 0.2s ease; }
         .fabw-show { opacity: 1; transform: scale(1); pointer-events: auto; }
         .fabw-hide { opacity: 0; transform: scale(0.85); pointer-events: none; }
+        /* Mini-player track text: the incoming song slides in from whichever
+           side the swipe came from. "backwards", not "both", so the finished
+           animation hands the transform back to the drag-follow inline style. */
+        @keyframes mpTitleFromR { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes mpTitleFromL { from { transform: translateX(-30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .mp-title-r { animation: mpTitleFromR 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .mp-title-l { animation: mpTitleFromL 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
@@ -1809,15 +1966,36 @@ export default function App() {
         <div
           ref={headerCardRef}
           style={{
-            position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, right: 12, zIndex: 60,
+            position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, zIndex: 60,
             background: TH.playerBg, border: `1px solid ${TH.border}`,
-            borderRadius: 22, boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
-            padding: "8px 14px 12px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+            // Collapsed, the card shrinks to a round logo button. `right` is
+            // dropped entirely so the width comes from the fixed size instead
+            // of stretching to the far edge.
+            ...(chromeCollapsed
+              ? { width: 54, height: 54, borderRadius: "50%", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }
+              : { right: 12, borderRadius: 22, padding: "8px 14px 12px" }),
           }}
         >
+          {chromeCollapsed ? (
+            <button
+              onClick={toggleChrome}
+              aria-label="Show search and player"
+              style={{ width: "100%", height: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: TH.text }}
+            >
+              <Logo size={32} color={TH.text} />
+            </button>
+          ) : (
+          <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
-            <Logo size={48} color={TH.text} />
+            <button
+              onClick={toggleChrome}
+              aria-label="Collapse header"
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
+            >
+              <Logo size={48} color={TH.text} />
+            </button>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 2, background: TH.surface, borderRadius: 20, padding: 3, border: `1px solid ${TH.border}` }}>
@@ -1895,6 +2073,8 @@ export default function App() {
               </div>
             </div>
           )}
+          </>
+          )}
         </div>
 
         {/* ═══ SWIPEABLE PAGE AREA ═════════════════════════════════════════ */}
@@ -1912,23 +2092,13 @@ export default function App() {
               onScroll={() => {
                 const top = scrollRef.current?.scrollTop ?? 0;
                 setListScrollTop(top);
-                // Close the long-press menu ONLY when its row has scrolled
-                // entirely out of view — small scrolls (peeking at neighbors)
-                // keep it open. Off-screen it's unreachable, so it closes to
-                // avoid the "stuck in the menu" trap.
-                if (activeMenuRef.current) {
-                  const el = songRowRefs.current.get(activeMenuRef.current);
-                  const cont = scrollRef.current;
-                  if (el && cont) {
-                    const er = el.getBoundingClientRect();
-                    const cr = cont.getBoundingClientRect();
-                    const fullyAbove = er.bottom <= cr.top;
-                    const fullyBelow = er.top >= cr.bottom;
-                    if (fullyAbove || fullyBelow) setActiveMenu(null);
-                  } else {
-                    // Row unmounted entirely (e.g. list changed) — close.
-                    setActiveMenu(null);
-                  }
+                // Back at the very top: always show the chrome, and drop any
+                // manual override so scrolling drives it again.
+                if (top <= 4) {
+                  chromeManualRef.current = null;
+                  setChromeOpen(true);
+                } else if (chromeManualRef.current === null) {
+                  setChromeOpen(top < CHROME_COLLAPSE_AT);
                 }
               }}
             >
@@ -1945,31 +2115,16 @@ export default function App() {
               ) : (
                 <>
                   {virtTopPad > 0 && <div style={{ height: virtTopPad }} aria-hidden="true" />}
-                  {visibleSongs.map((song, i) => {
-                    const idx        = virtualize ? virtStart + i : i;
+                  {visibleSongs.map((song) => {
                     const isActive   = currentSong?.id === song.id;
                     const liked      = isLiked(song);
-                    const showMenu   = activeMenu === song.id;
                     const isSelected = selected.has(song.id);
                     const m          = getMeta(song);
                     const name       = dispName(song);
                     const artist     = dispArtist(song);
                     return (
                       <div key={song.id} ref={el => { if (el) songRowRefs.current.set(song.id, el); else songRowRefs.current.delete(song.id); }}>
-                        {showMenu ? (
-                          <ExpandedSongRow
-                            song={song} dispName={name} dispArtist={artist} customPhoto={m.customPhoto}
-                            isActive={isActive} idx={idx} isLiked={liked}
-                            onPlay={() => { setActiveMenu(null); setQueue(displayList); playSong(song, displayList); }}
-                            onEdit={() => { setActiveMenu(null); setEditSong(song); }}
-                            onCut={() => openCutSheet(song)}
-                            onRemove={() => { setActiveMenu(null); setRemoveSong(song); }}
-                            onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
-                            onShare={() => shareSong(song)}
-                            onPlayNext={() => handlePlayNext(song)}
-                            onClose={() => setActiveMenu(null)}
-                            T={TH} />
-                        ) : (
+                        {(
                           <div
                             data-song-row=""
                             onTouchStart={e => onPressStart(song.id, e.touches[0].clientX, e.touches[0].clientY)}
@@ -1985,7 +2140,7 @@ export default function App() {
                               transition: "background 0.15s",
                               borderLeft: isSelected ? `3px solid ${TH.violet}` : "3px solid transparent",
                             }}>
-                            {(selectMode || (activeMenu && activeMenu !== song.id)) && (
+                            {selectMode && (
                               <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${isSelected ? TH.violet : TH.border}`, background: isSelected ? TH.violet : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
                                 {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                               </div>
@@ -2007,6 +2162,17 @@ export default function App() {
                             {!selectMode && liked && (
                               <button onClick={e => { e.stopPropagation(); hapticImpact("light"); setMeta(prev => ({ ...prev, [song.id]: { ...(prev[song.id] || {}), liked: false } })); showToast("Removed from favorites"); }} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6, display: "flex", flexShrink: 0 }}>
                                 <IC.Heart filled={true} size={16} />
+                              </button>
+                            )}
+                            {!selectMode && (
+                              <button
+                                onClick={e => { e.stopPropagation(); setMenuSong(song); }}
+                                onTouchStart={e => e.stopPropagation()}
+                                onMouseDown={e => e.stopPropagation()}
+                                aria-label={`More options for ${name}`}
+                                style={{ background: "transparent", border: "none", cursor: "pointer", padding: "6px 2px 6px 6px", display: "flex", flexShrink: 0, color: TH.muted }}
+                              >
+                                <IC.Dots />
                               </button>
                             )}
                           </div>
@@ -2077,6 +2243,7 @@ export default function App() {
               topInset={topInset}
               bottomInset={bottomH + 12}
               resetToListSignal={page === "songs"}
+              backSignal={playlistBackSignal}
               playlists={playlists}
               smartPlaylists={smartPlaylists}
               songs={songs}
@@ -2102,7 +2269,7 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selectMode && (() => {
+        {currentSong && !selectMode && !chromeCollapsed && (() => {
           const sliderMin = currentSong.isCut ? (currentSong.cutFrom ?? 0) : 0;
           const sliderMax = currentSong.isCut ? (currentSong.cutTo ?? duration) : (duration || 100);
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
@@ -2147,7 +2314,18 @@ export default function App() {
                   onClick={() => setPlayerExpanded(true)}
                   style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1, cursor: "pointer" }}>
                   <AlbumArt title={dispName(currentSong)} size={40} active customPhoto={nowPlayingPhoto(currentSong)} T={TH} />
-                  <div style={{ minWidth: 0 }}>
+                  {/* Keyed on the song so every track change remounts this and
+                      replays the slide-in; the inline transform handles the
+                      live drag between those animations. */}
+                  <div
+                    key={currentSong.id}
+                    className={titleDir === 1 ? "mp-title-r" : "mp-title-l"}
+                    style={{
+                      minWidth: 0,
+                      transform: titleDragX ? `translateX(${titleDragX}px)` : undefined,
+                      transition: titleDragX ? "none" : "transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
+                  >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
                     <div style={{ fontSize: 12, color: TH.muted, marginTop: 1 }}>{dispArtist(currentSong) || "Unknown Artist"}</div>
                   </div>
@@ -2179,6 +2357,37 @@ export default function App() {
         )}
 
         {/* ═══ SHEETS ══════════════════════════════════════════════════════ */}
+        {menuSong && (
+          <SongMenuSheet
+            song={menuSong}
+            dispName={dispName(menuSong)}
+            dispArtist={dispArtist(menuSong)}
+            customPhoto={getMeta(menuSong).customPhoto}
+            isLiked={isLiked(menuSong)}
+            playlists={playlists}
+            onPlay={() => { const s = menuSong; setMenuSong(null); handleTap(s); }}
+            onPlayNext={() => handlePlayNext(menuSong)}
+            onAddToPlaylist={id => handleAddToPlaylist(id, menuSong)}
+            onCreatePlaylistWithSong={name => handleCreatePlaylistWithSong(name, menuSong)}
+            onEdit={() => { const s = menuSong; setMenuSong(null); setEditSong(s); }}
+            onCut={() => { const s = menuSong; setMenuSong(null); openCutSheet(s); }}
+            onToggleLike={() => {
+              hapticImpact("light");
+              const s = menuSong;
+              setMeta(prev => {
+                const cur = prev[s.id] || {};
+                const nowLiked = !cur.liked;
+                showToast(nowLiked ? "Liked ❤️" : "Removed from favorites");
+                return { ...prev, [s.id]: { ...cur, liked: nowLiked } };
+              });
+              setMenuSong(null);
+            }}
+            onShare={() => { const s = menuSong; setMenuSong(null); shareSong(s); }}
+            onRemove={() => { const s = menuSong; setMenuSong(null); setRemoveSong(s); }}
+            onClose={() => setMenuSong(null)}
+            T={TH}
+          />
+        )}
         {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); if (editFromPlayer) { setEditFromPlayer(false); setPlayerExpanded(true); } }} T={TH} />}
         {removeSong && <ConfirmSheet title="Remove song" body={`"${dispName(removeSong)}" will be moved to the bin. You can restore it from Settings.`} confirmLabel="Move to Bin" onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={`Remove ${selected.size} songs`} body={`${selected.size} songs will be moved to the bin. You can restore them from Settings.`} confirmLabel={`Move ${selected.size} to Bin`} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}

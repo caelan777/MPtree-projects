@@ -50,6 +50,9 @@ interface Props {
   /** When true (App switched to the Songs tab), collapse any open detail view
    *  back to the playlist list — otherwise the page-swipe stays disabled. */
   resetToListSignal?: boolean;
+  /** Incremented by App when Android's Back is pressed on the Playlists tab.
+   *  Each bump pops exactly one level of this component's own navigation. */
+  backSignal?: number;
   /** Called when the user backs out of the root "list" view — App treats this as "go to Songs page" */
   onClose:            () => void;
   T:                  T;
@@ -122,16 +125,12 @@ export const PlaylistsView: React.FC<Props> = ({
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, currentSongId, onToggleLike, onPlayNext,
   onEditSong, onCutSong, onShareSong, onRemoveSong,
-  isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, onClose, T,
+  isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
-
-  // Tell App whenever we move in/out of a detail view, so it can disable the
-  // horizontal page swipe there (swiping inside a playlist should not jump
-  // all the way back to the Songs page).
-  useEffect(() => {
-    onDetailChange?.(view !== "list");
-  }, [view, onDetailChange]);
+  // NOTE: the effect that reports our depth to App lives further down, after
+  // every piece of state it reads has been declared — a dependency array is
+  // evaluated during render, so it cannot sit above those declarations.
   const [activeId,        setActiveId]       = useState<string | null>(null);
   const [activeSmartId,   setActiveSmartId]  = useState<SmartPlaylistId | null>(null);
 
@@ -201,8 +200,32 @@ export const PlaylistsView: React.FC<Props> = ({
     return () => clearTimeout(t);
   }, [currentSongId, view]);
   useEffect(() => { if (resetToListSignal) exitSelect(); }, [resetToListSignal, exitSelect]);
-  // While selecting, the horizontal page swipe must stay disabled.
-  useEffect(() => { if (selectMode) onDetailChange?.(true); }, [selectMode, onDetailChange]);
+
+  // ── Depth reporting ───────────────────────────────────────────────────────
+  // True whenever we have something of our own to back out of. App uses this
+  // twice: to disable the horizontal page swipe (swiping inside a playlist
+  // should not jump back to Songs), and to decide whether Android's Back
+  // belongs to us or should leave the tab.
+  const canPop = view !== "list" || selectMode || !!menuSong
+    || creating || !!renamingId || !!confirmDeleteId;
+  useEffect(() => { onDetailChange?.(canPop); }, [canPop, onDetailChange]);
+
+  // ── Android Back, delegated from App ──────────────────────────────────────
+  // Pops exactly one level per bump, topmost first. The first render is not a
+  // bump, hence seeding the ref with the incoming value.
+  const lastBackSignalRef = useRef(backSignal);
+  useEffect(() => {
+    if (backSignal === lastBackSignalRef.current) return;
+    lastBackSignalRef.current = backSignal;
+    if (menuSong)         { setMenuSong(null); return; }
+    if (confirmDeleteId)  { setConfirmDeleteId(null); return; }
+    if (renamingId)       { setRenamingId(null); return; }
+    if (creating)         { setCreating(false); return; }
+    if (selectMode)       { exitSelect(); return; }
+    if (view === "addSongs") { setView("detail"); return; }
+    if (view !== "list")  { setView("list"); setActiveId(null); setActiveSmartId(null); return; }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backSignal]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const dispName   = (s: Song) => meta[s.id]?.customName   || s.title;
@@ -1010,9 +1033,11 @@ export const PlaylistsView: React.FC<Props> = ({
       )}
 
       {/* ── Long-press action menu ────────────────────────────────────────
-          Uses the exact same ExpandedSongRow card as the Songs page, so the
-          menu is identical. Portalled to body + centered so it always sits
-          above the floating mini-player. */}
+          Still the ExpandedSongRow card. The Songs page moved to a "⋮" button
+          and SongMenuSheet; this page kept long-press because a playlist row
+          also needs "remove from playlist", which that sheet does not carry.
+          Portalled to body + centered so it always sits above the floating
+          mini-player. */}
       {menuSong && createPortal(
         <div
           onClick={() => setMenuSong(null)}

@@ -218,9 +218,15 @@ export function PlayerExpandSheet({
         @keyframes pesSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
         @keyframes pesFadeIn    { from { opacity: 0; } to { opacity: 1; } }
         @keyframes pesFadeOut   { from { opacity: 1; } to { opacity: 0; } }
-        .pes-overlay-in  { animation: pesFadeIn 0.22s ease both; }
+        /* Enter animations use fill-mode "backwards", NOT "both". With "both"
+           the finished animation keeps asserting transform/opacity forever,
+           which outranks the inline styles the drag-to-close writes — so a
+           sheet opened by TAP could not be dragged back down. "backwards"
+           hands control back once the animation ends. The exit animations do
+           need "both" to hold their final state until unmount. */
+        .pes-overlay-in  { animation: pesFadeIn 0.22s ease backwards; }
         .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
-        .pes-sheet-in    { animation: pesSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .pes-sheet-in    { animation: pesSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .pes-sheet-out   { animation: pesSlideDown 0.24s ease-in both; }
         @media (prefers-reduced-motion: reduce) {
           .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
