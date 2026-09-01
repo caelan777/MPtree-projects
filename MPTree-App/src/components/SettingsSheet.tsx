@@ -266,7 +266,9 @@ export function SettingsSheet({
           </div>
         </div>
 
-        <div style={{ padding: "14px 20px 0", color: T.muted, fontSize: 12 }}>MPTree 0.1.0</div>
+        {/* Version comes from package.json via Vite, so it always matches the
+            build rather than whatever was last typed here. */}
+        <div style={{ padding: "14px 20px 0", color: T.muted, fontSize: 12 }}>MPTree {__APP_VERSION__}</div>
 
         </div>
       </div>

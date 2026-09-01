@@ -541,6 +541,92 @@ a { color: inherit; text-decoration: none; }
 .why { max-width: 660px; }
 .why p { margin: 14px 0 0; color: var(--mp-text-sub); font-size: var(--mp-text-body); line-height: 1.7; }
 
+/* ── The phone mockup as a button into the demo ───────────────────────── */
+.phone-btn {
+  position: relative; padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; cursor: pointer; display: block;
+  transition: transform var(--mp-motion-base) var(--mp-ease);
+}
+.phone-btn:hover { transform: translateY(-4px); }
+.phone-cta {
+  position: absolute; z-index: 3; left: 50%; bottom: -14px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--mp-accent); color: var(--mp-on-accent);
+  border-radius: var(--mp-radius-pill); padding: 9px 18px;
+  font-size: var(--mp-text-small); font-weight: var(--mp-weight-bold);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+
+/* ── Demo overlay ─────────────────────────────────────────────────────── */
+.demo-modal { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; }
+.demo-modal[hidden] { display: none; }
+.demo-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.82); }
+.demo-shell {
+  position: relative; z-index: 1;
+  width: min(392px, 100vw); height: min(844px, 100vh);
+  display: flex; flex-direction: column;
+}
+.demo-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 4px;
+}
+.demo-note { font-size: var(--mp-text-caption); color: var(--mp-muted); }
+.demo-x {
+  background: transparent; border: 0; color: var(--mp-muted);
+  cursor: pointer; padding: 6px; display: flex; border-radius: 8px;
+}
+.demo-x:hover { color: var(--mp-white); }
+.demo-screen {
+  flex: 1; min-height: 0; overflow: hidden;
+  border: 1px solid var(--mp-border); border-radius: var(--mp-radius-lg);
+  background: #000; box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+}
+.demo-screen iframe { width: 100%; height: 100%; border: 0; display: block; }
+@media (max-width: 480px) {
+  .demo-shell { width: 100vw; height: 100vh; }
+  .demo-screen { border-radius: 0; border-left: 0; border-right: 0; }
+}
+
+/* ── Version badge under the hero buttons ─────────────────────────────── */
+.ver-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--mp-border); border-radius: var(--mp-radius-pill);
+  padding: 5px 12px; color: var(--mp-text-sub); font-size: var(--mp-text-caption);
+  font-weight: var(--mp-weight-medium);
+  transition: border-color var(--mp-motion-fast) var(--mp-ease), color var(--mp-motion-fast) var(--mp-ease);
+}
+.ver-badge:hover { border-color: var(--mp-text); color: var(--mp-text); }
+.ver-dot { opacity: 0.5; }
+.ver-note { display: block; margin-top: 10px; }
+
+/* ── Comments ─────────────────────────────────────────────────────────── */
+.comments { margin-top: 28px; max-width: 680px; }
+.comments-fallback {
+  margin: 28px 0 0; padding: 22px; max-width: 680px;
+  border: 1px dashed var(--mp-border); border-radius: var(--mp-radius-md);
+  color: var(--mp-muted); font-size: var(--mp-text-small); text-align: center;
+}
+
+/* ── Release list (versions.html) ─────────────────────────────────────── */
+.rel-list { list-style: none; margin: 28px 0 0; padding: 0; max-width: 660px; display: flex; flex-direction: column; gap: 14px; }
+.rel-empty { color: var(--mp-muted); font-size: var(--mp-text-small); }
+.rel {
+  background: var(--mp-surface); border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius-md); padding: 18px 18px 20px;
+}
+.rel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rel-head h3 { margin: 0; font-size: var(--mp-text-title); font-weight: var(--mp-weight-bold); letter-spacing: var(--mp-track-title); }
+.rel-meta { margin: 4px 0 0; font-size: var(--mp-text-small); color: var(--mp-muted); }
+.rel-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.rel-tag {
+  font-size: var(--mp-text-label); letter-spacing: 0.08em; text-transform: uppercase;
+  font-weight: var(--mp-weight-bold); color: var(--mp-muted);
+  border: 1px solid var(--mp-border); border-radius: var(--mp-radius-pill); padding: 4px 10px;
+}
+.rel-tag-now { color: var(--mp-on-accent); background: var(--mp-accent); border-color: var(--mp-accent); }
+.rel-notes { margin: 14px 0 0; padding-left: 18px; color: var(--mp-text-sub); font-size: var(--mp-text-small); line-height: 1.7; }
+.rel .btn { margin-top: 18px; }
+
 /* ── Legal pages (privacy) ────────────────────────────────────────────── */
 .legal { padding-bottom: 20px; }
 .prose { max-width: 660px; }

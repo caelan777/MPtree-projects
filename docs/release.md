@@ -84,3 +84,33 @@ with an empty library.
 
 That is why the rename happened before publishing rather than after. To carry data across,
 export a backup from the old app and restore it in the new one.
+
+## Version numbering
+
+- `0.1.x` are **betas, published on this website only**. Every fix bumps the patch:
+  0.1.1, 0.1.2, and so on.
+- `0.2.0` is where those betas are gathered up and sent to the Google Play Store.
+
+`versionCode` is a single counter that keeps rising across **both** channels. It must
+never be reused or go backwards: Android refuses to install a lower `versionCode` over a
+higher one, so a Play release whose code sits below the newest website beta cannot be
+installed by anyone who sideloaded that beta.
+
+> ⚠️ The two channels are signed by different keys if Play App Signing generated its own.
+> Where that is the case, someone who installed from the website cannot update to the Play
+> build at all; they must uninstall first, losing their library unless they export a backup.
+> Compare the SHA-256 under Play Console → App integrity → App signing with the local
+> keystore's before relying on either path.
+
+## Per release, in order
+
+1. Bump `MPTree-App/package.json` version and `android/app/build.gradle`
+   (`versionName` to match, `versionCode` up by one). Settings reads the version from
+   package.json through Vite, so there is nothing to edit in the UI.
+2. Add an entry at the TOP of `Website/assets/versions.js` with the version, the date, and
+   the notes. The homepage badge and versions.html both read from it.
+3. Rebuild the website demo if the app changed: `npm run build:demo` in `MPTree-App/`.
+   It writes `Website/demo/`, which is committed.
+4. Bump the `?v=` query on the site's assets so returning visitors get the new CSS and JS.
+5. Build and sign the APK, then publish a GitHub release tagged to match `tag` in
+   versions.js, with an asset named exactly `MPTree.apk`.

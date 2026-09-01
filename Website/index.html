@@ -15,18 +15,18 @@
 <meta property="og:title" content="MPTree, an offline music player">
 <meta property="og:description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
 <meta property="og:url" content="https://mp-tree.net/">
-<meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=13">
+<meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=14">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=13">
+<meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=14">
 
 <link rel="icon" type="image/svg+xml" href="assets/icon/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
-<link rel="stylesheet" href="assets/tokens.css?v=13">
-<link rel="stylesheet" href="assets/site.css?v=13">
+<link rel="stylesheet" href="assets/tokens.css?v=14">
+<link rel="stylesheet" href="assets/site.css?v=14">
 </head>
 <body>
 
@@ -41,6 +41,7 @@
     <nav class="bar-nav">
       <a href="#features">Features</a>
       <a href="#feedback">Feedback</a>
+      <a href="#community">Community</a>
       <a href="#support">Support</a>
       <a class="btn btn-sm" href="download.html">Download</a>
     </nav>
@@ -55,7 +56,7 @@
 
     <div class="hero-disc" aria-hidden="true">
       <div class="disc">
-        <img src="assets/img/vinyl.webp?v=13" alt="" width="1000" height="1000">
+        <img src="assets/img/vinyl.webp?v=14" alt="" width="1000" height="1000">
       </div>
       <div class="disc-label">
         <img src="assets/img/mptree-mark-black.svg" alt="" width="26" height="26">
@@ -66,8 +67,8 @@
       <p class="kicker">Free music player for Android</p>
       <h1>Your music.<br>On your device.</h1>
       <p class="lede">
-        MPTree plays the music files already on your phone. No account, no subscription,
-        no internet. It is free, and nothing you listen to ever leaves your device.
+        MPTree plays the music files already on your phone. No subscription, no
+        internet needed. It is free, and nothing you listen to ever leaves your device.
       </p>
       <div class="cta">
         <a class="btn btn-lg" href="download.html">
@@ -75,10 +76,23 @@
         </a>
         <span class="btn btn-lg btn-soon" aria-disabled="true">
           Windows
-          <span class="soon">Coming soon</span>
+          <span class="soon">2027</span>
+        </span>
+        <span class="btn btn-lg btn-soon" aria-disabled="true">
+          iOS
+          <span class="soon">2028</span>
         </span>
       </div>
-      <p class="cta-sub">Free APK download. Works on Android 7.0 and newer.</p>
+      <!-- Version and date are filled in from assets/versions.js, the one place
+           a release is described. -->
+      <p class="cta-sub">
+        <a class="ver-badge" href="versions.html">
+          <span id="latest-version">Latest version</span>
+          <span class="ver-dot" aria-hidden="true">·</span>
+          <span id="latest-date"></span>
+        </a>
+        <span class="ver-note">Beta, released here first. Works on Android 7.0 and newer.</span>
+      </p>
     </div>
 
   </section>
@@ -120,10 +134,18 @@
        carries no copyrighted song names. Update when the app's look changes. -->
   <section class="section wrap">
     <h2>How it looks</h2>
-    <p class="section-lede">Black and white, with colour only where it means something.</p>
+    <p class="section-lede">
+      Black and white, with colour only where it means something.
+      Tap the phone to open the real app, running here in your browser with a
+      sample library.
+    </p>
 
     <div class="phone-row">
-      <div class="phone">
+      <button class="phone phone-btn" id="demo-open" aria-label="Open the interactive demo">
+        <span class="phone-cta" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Try it
+        </span>
         <div class="phone-screen">
 
           <div class="ui-card-head">
@@ -181,17 +203,37 @@
           </div>
 
         </div>
-      </div>
+      </button>
     </div>
   </section>
+
+  <!-- ── Interactive demo ─────────────────────────────────────────────────
+       The real app, built for the web into /demo/ and shown in an iframe. Its
+       audio and library plugins have browser stand-ins, so the whole interface
+       is explorable; there is no actual sound. Loaded only when opened. ──── -->
+  <div class="demo-modal" id="demo-modal" hidden>
+    <div class="demo-backdrop" data-demo-close></div>
+    <div class="demo-shell" role="dialog" aria-modal="true" aria-label="MPTree interactive demo">
+      <div class="demo-bar">
+        <span class="demo-note">Sample library, no sound</span>
+        <button class="demo-x" data-demo-close aria-label="Close demo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="demo-screen">
+        <iframe id="demo-iframe" title="MPTree interactive demo" src="about:blank"></iframe>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Privacy ──────────────────────────────────────────────────────── -->
   <section class="section wrap">
     <div class="claim">
       <h2>Nothing is uploaded</h2>
       <p class="section-lede">
-        There is no account, no tracking and no server. Your music and what you listen to
-        stay on your phone.
+        No ads and no tracking. Your music and what you listen to stay on your phone.
       </p>
     </div>
   </section>
@@ -261,6 +303,32 @@
     </div>
   </section>
 
+  <!-- ── Comments ─────────────────────────────────────────────────────────
+       Cusdis. The script is only fetched once this section scrolls into view
+       (see assets/site.js), so the rest of the page stays free of third-party
+       requests. Put the app id in data-app-id; until it is filled in, the
+       section shows a placeholder rather than a broken widget. ──────────── -->
+  <section id="community" class="section wrap">
+    <h2>Community</h2>
+    <p class="section-lede">
+      Questions, ideas, or just want to say hello? Leave a comment. No account needed,
+      pick any name. For a bug report, the feedback box above reaches me directly.
+    </p>
+
+    <div
+      id="cusdis_thread"
+      class="comments"
+      data-host="https://cusdis.com"
+      data-app-id="CUSDIS_APP_ID"
+      data-page-id="mptree-home"
+      data-page-url="https://mp-tree.net/"
+      data-page-title="MPTree"
+    ></div>
+    <p class="comments-fallback" id="comments-fallback" hidden>
+      The comment section is not switched on yet. Check back soon.
+    </p>
+  </section>
+
 </main>
 
 <footer class="foot">
@@ -291,10 +359,12 @@
       </div>
     </div>
     <p>An offline music player. Built by Caelan Verkuijl.</p>
-    <p class="fine"><a href="/privacy.html">Privacy Policy</a> · Music you add through the built in browser is your own responsibility.</p>
+    <p class="fine"><a href="/privacy.html">Privacy Policy</a> · <a href="/versions.html">Versions</a></p>
   </div>
 </footer>
 
-<script src="assets/site.js?v=13" defer></script>
+<script src="assets/versions.js?v=14"></script>
+<script src="assets/releases.js?v=14" defer></script>
+<script src="assets/site.js?v=14" defer></script>
 </body>
 </html>

@@ -1,8 +1,9 @@
 import { Preferences } from "@capacitor/preferences";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { CapacitorZip } from "@capgo/capacitor-zip";
-import { registerPlugin } from "@capacitor/core";
 import type { Song, FilterId, PlayMode, Playlist, Theme } from "./types";
+// Registered once in plugins.ts; see the note there.
+import { MusicScanner } from "./plugins";
 
 // ─── Keys ─────────────────────────────────────────────────────────────────────
 
@@ -11,14 +12,6 @@ const KEY_META       = "mptree_meta";
 const KEY_REMOVED    = "mptree_removed";
 const KEY_CUT_TRACKS = "mptree_cut_tracks";
 const KEY_PLAYLISTS  = "mptree_playlists";
-
-// ─── MusicScanner (needed here for scanFolder) ────────────────────────────────
-
-type MusicScannerPlugin = {
-  scan(): Promise<{ songs: Song[] }>;
-  scanFolder(options: { path: string }): Promise<void>;
-};
-const MusicScanner = registerPlugin<MusicScannerPlugin>("MusicScanner");
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 

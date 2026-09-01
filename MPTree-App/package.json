@@ -1,13 +1,14 @@
 {
   "name": "mptree",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:demo": "tsc -b && vite build --base=./ --outDir=../Website/demo --emptyOutDir"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
