@@ -546,8 +546,10 @@ a { color: inherit; text-decoration: none; }
 .why p { margin: 14px 0 0; color: var(--mp-text-sub); font-size: var(--mp-text-body); line-height: 1.7; }
 
 /* ── The phone mockup as a button into the demo ───────────────────────── */
+/* Only the button-ness is reset here. Resetting padding/border/background too
+   erased the phone's bezel, leaving the screenshot as a bare rectangle. */
 .phone-btn {
-  position: relative; padding: 0; border: 0; background: none;
+  position: relative;
   font: inherit; color: inherit; cursor: pointer; display: block;
   transition: transform var(--mp-motion-base) var(--mp-ease);
 }
@@ -603,8 +605,20 @@ a { color: inherit; text-decoration: none; }
 .ver-dot { opacity: 0.5; }
 .ver-note { display: block; margin-top: 10px; }
 
-/* ── Comments ─────────────────────────────────────────────────────────── */
+/* ── Comments ───────────────────────────────────────────────────────────
+   Cusdis renders itself into an iframe and reports its height back over
+   postMessage. Without a full-width, borderless iframe it came out as a
+   narrow box with its own scrollbar rather than growing with the thread. */
 .comments { margin-top: 28px; max-width: 680px; }
+.comments iframe {
+  width: 100% !important;
+  /* Cusdis does not always push a height back, and its default left the Comment
+     button clipped behind an inner scrollbar. This clears the whole form. */
+  min-height: 480px;
+  border: 0;
+  display: block;
+  color-scheme: dark;
+}
 .comments-fallback {
   margin: 28px 0 0; padding: 22px; max-width: 680px;
   border: 1px dashed var(--mp-border); border-radius: var(--mp-radius-md);

@@ -8,6 +8,13 @@
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
 
+# The homepage frames the demo, so this one path has to allow being framed.
+# DENY stays everywhere else, and SAMEORIGIN still blocks other sites from
+# embedding it.
+/demo/*
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self'
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
