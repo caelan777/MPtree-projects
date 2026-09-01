@@ -2,18 +2,17 @@
 # Hashed asset names are not used here, so keep HTML uncached and let the
 # static assets cache hard.
 
+# Framing is controlled with CSP rather than X-Frame-Options. Cloudflare Pages
+# MERGES header rules instead of overriding them, so a per-path exception to a
+# global "X-Frame-Options: DENY" arrives as two contradictory headers and the
+# browser blocks the frame anyway. frame-ancestors 'self' says the same thing
+# that matters here, in one header: nobody else may embed these pages, but the
+# homepage may still frame its own /demo/.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  X-Frame-Options: DENY
-  Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
-
-# The homepage frames the demo, so this one path has to allow being framed.
-# DENY stays everywhere else, and SAMEORIGIN still blocks other sites from
-# embedding it.
-/demo/*
-  X-Frame-Options: SAMEORIGIN
   Content-Security-Policy: frame-ancestors 'self'
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
