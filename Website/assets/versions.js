@@ -8,8 +8,14 @@
  *   0.1.x  beta, released on this website only. Every fix bumps the patch.
  *   0.2.0  the point those betas are gathered up into a Play Store release.
  *
- * Each release must exist on GitHub under `tag`, carrying an asset named
- * exactly MPTree.apk, and that filename is what every download link resolves to.
+ * Each release must exist on GitHub under `tag` and carry TWO copies of the
+ * same APK:
+ *   MPTree.apk            the Download button resolves /releases/latest/ to this
+ *   MPTree-<version>.apk  what this page links to, so saved files stay telling apart
+ *
+ * Do not tick "Set as a pre-release" on GitHub, even for a beta: /releases/latest
+ * skips pre-releases, and the Download button would silently keep serving the
+ * previous version.
  */
 window.MPTREE_REPO = "caelan777/MPtree-projects";
 

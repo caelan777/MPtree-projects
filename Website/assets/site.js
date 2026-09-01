@@ -29,42 +29,9 @@
     apply();
   }
 
-  /* ── Feedback opens the reader's email app ───────────────────────────
-   * The site is static, so there is nowhere to POST. Building a mailto keeps
-   * it working with no backend and no third party.
-   */
-  var FEEDBACK_TO = "caelanverycool@gmail.com";
-
-  var form = document.getElementById("fb");
-  var field = document.getElementById("fb-text");
-  var note = document.getElementById("fb-note");
-
-  if (form && field && note) {
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-
-      var text = field.value.trim();
-      if (!text) {
-        note.textContent = "Write something first.";
-        field.focus();
-        return;
-      }
-
-      var url = "mailto:" + FEEDBACK_TO +
-        "?subject=" + encodeURIComponent("MPTree feedback") +
-        "&body=" + encodeURIComponent(text);
-
-      // Some browsers block a plain location change here, so use a click.
-      var link = document.createElement("a");
-      link.href = url;
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      note.textContent = "Opening your email app.";
-    });
-  }
+  /* The mailto feedback form was removed: the comment section covers the same
+   * ground without making anyone open an email client. The address is still in
+   * the privacy policy for anything private. */
 
   /* ── Interactive demo ────────────────────────────────────────────────
    * The app itself, in an iframe. Its src is set on open and cleared on

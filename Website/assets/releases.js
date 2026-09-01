@@ -13,8 +13,13 @@
 
   var latest = releases[0];
 
+  // Points at the version-stamped asset, not the plain MPTree.apk that the main
+  // Download button uses. GitHub is a different origin, so the `download`
+  // attribute cannot rename the file: without a distinct name on the release
+  // itself, grabbing two versions here just yields MPTree.apk and MPTree (1).apk.
   function apkUrl(rel) {
-    return "https://github.com/" + repo + "/releases/download/" + rel.tag + "/MPTree.apk";
+    return "https://github.com/" + repo + "/releases/download/" + rel.tag +
+           "/MPTree-" + rel.version + ".apk";
   }
 
   // "2026-09-01" → "1 September 2026". Built from the parts rather than parsed

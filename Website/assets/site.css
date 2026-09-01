@@ -221,12 +221,16 @@ a { color: inherit; text-decoration: none; }
 .phone-screen {
   background: #000;
   border-radius: 23px;
-  padding: 8px 0 10px;
   height: 580px;
   position: relative;
   overflow: hidden;
   display: flex; flex-direction: column;
 }
+/* A real screenshot of the app rather than a rebuilt facsimile, so the preview
+   cannot drift from what the app actually looks like. Anchored to the top and
+   cropped at the bottom, which keeps the header and the first rows sharp at
+   the frame's aspect ratio. */
+.phone-shot { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
 
 /* Floating header card */
 .ui-card-head {
