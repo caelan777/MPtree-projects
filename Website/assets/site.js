@@ -39,10 +39,10 @@
    * it, and the closed demo is not left running in the background.
    */
   var demoModal = document.getElementById("demo-modal");
-  var demoOpen  = document.getElementById("demo-open");
+  var demoOpeners = document.querySelectorAll("[data-demo-open]");
   var demoFrame = document.getElementById("demo-iframe");
 
-  if (demoModal && demoOpen && demoFrame) {
+  if (demoModal && demoOpeners.length && demoFrame) {
     var openDemo = function () {
       if (demoFrame.getAttribute("src") !== "demo/index.html") {
         demoFrame.setAttribute("src", "demo/index.html");
@@ -57,7 +57,10 @@
       demoFrame.setAttribute("src", "about:blank");
     };
 
-    demoOpen.addEventListener("click", openDemo);
+    // Every phone in the row opens the same demo.
+    for (var i = 0; i < demoOpeners.length; i++) {
+      demoOpeners[i].addEventListener("click", openDemo);
+    }
     demoModal.addEventListener("click", function (e) {
       if (e.target.hasAttribute && e.target.hasAttribute("data-demo-close")) closeDemo();
       else if (e.target.closest && e.target.closest("[data-demo-close]")) closeDemo();
