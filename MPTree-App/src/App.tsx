@@ -135,7 +135,6 @@ export default function App() {
   const [cutSong,        setCutSong]       = useState<Song | null>(null);
   const [cutDuration,    setCutDuration]   = useState(0);
   const [playerExpanded, setPlayerExpanded]= useState(false);
-  const [editFromPlayer, setEditFromPlayer]= useState(false);
   const [toast,          setToast]         = useState<{ msg: string; action?: ToastAction } | null>(null);
   const [currentTime,    setCurrentTime]   = useState(0);
   const [duration,       setDuration]      = useState(0);
@@ -1608,7 +1607,6 @@ export default function App() {
       return { ...prev, [s.id]: { ...existing, ...(u.customName !== undefined ? { customName: u.customName } : {}), ...(u.customArtist !== undefined ? { customArtist: u.customArtist } : {}), ...(u.customPhoto !== undefined ? { customPhoto: u.customPhoto ?? undefined } : {}) } };
     });
     setEditSong(null); setMenuSong(null);
-    if (editFromPlayer) { setEditFromPlayer(false); setPlayerExpanded(true); }
   };
 
   // ── Remove to bin ─────────────────────────────────────────────────────────
@@ -1905,12 +1903,7 @@ export default function App() {
       if (cutSong)             { setCutSong(null); return; }
       if (removeSong)          { setRemoveSong(null); return; }
       if (removeMultiConfirm)  { setRemoveMultiConfirm(false); return; }
-      if (editSong) {
-        setEditSong(null);
-        // Editing can be entered from the expanded player; go back to it.
-        if (editFromPlayer) { setEditFromPlayer(false); setPlayerExpanded(true); }
-        return;
-      }
+      if (editSong)            { setEditSong(null); return; }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
       if (updateInfo)          { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); return; }
       if (filterOpen)          { setFilterOpen(false); return; }
@@ -1949,6 +1942,20 @@ export default function App() {
   // just as readily as the song list does. Multi-select is the one exception:
   // it needs its own bar and the header's count visible.
   const chromeCollapsed = !selectMode && !chromeOpen;
+
+  // ONE definition of how the fold moves, used by every piece that moves with
+  // it: the header card, the mini-player, the list's bottom padding, the two
+  // floating buttons, and the Playlists insets. They used to be written out
+  // separately and had drifted apart — the shuffle and scroll-to-top buttons
+  // carried no transition at all, so they snapped to their new position while
+  // the player was still sliding underneath them.
+  //
+  // `chromeMotion` is empty when the fold is not being animated (the
+  // scroll-to-top button jumps deliberately, so arriving at the top does not
+  // play a third of a second of unfolding while the list races past).
+  const CHROME_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+  const move = (...props: string[]) =>
+    chromeAnimate ? props.map(pr => `${pr} ${CHROME_MOTION}`).join(", ") : "none";
 
   // The collapse rule itself, shared by the Songs list and the Playlists body
   // so both tabs behave identically. `lastRef` is that scroller's own previous
@@ -2173,9 +2180,7 @@ export default function App() {
             width:  chromeCollapsed ? 54 : "calc(100% - 24px)",
             height: chromeCollapsed ? 54 : expandedH + 2,
             borderRadius: chromeCollapsed ? "50%" : 22,
-            transition: chromeAnimate
-              ? "width 0.34s cubic-bezier(0.22, 1, 0.36, 1), height 0.34s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.34s cubic-bezier(0.22, 1, 0.36, 1)"
-              : "none",
+            transition: move("width", "height", "border-radius"),
           }}
         >
           {/* Full header. Kept mounted and at its natural width while collapsed
@@ -2187,9 +2192,11 @@ export default function App() {
               boxSizing: "border-box", width: "calc(100vw - 26px)", padding: "8px 14px 12px",
               opacity: chromeCollapsed ? 0 : 1,
               pointerEvents: chromeCollapsed ? "none" : "auto",
-              // Short: the two logos (this one at 48px, the collapsed one at
-              // 30px) briefly overlap during the cross-fade, and a slow fade
-              // makes that read as a ghosted double image.
+              // Deliberately NOT the shared CHROME_MOTION timing: the two
+              // logos (this one at 48px, the collapsed one at 30px) overlap
+              // during the swap, and fading them over a third of a second
+              // reads as a ghosted double image. This is a cross-fade, not a
+              // movement, so it gets its own short duration.
               transition: chromeAnimate ? "opacity 0.15s ease" : "none",
             }}
           >
@@ -2437,7 +2444,7 @@ export default function App() {
                 paddingTop: topInset, paddingBottom: bottomH + 64 + 12,
                 // Only the bottom is transitioned: paddingTop already glides,
                 // driven per-frame by the ResizeObserver on the folding header.
-                transition: chromeAnimate ? "padding-bottom 0.34s cubic-bezier(0.22, 1, 0.36, 1)" : "none",
+                transition: move("padding-bottom"),
               }}
               data-tour="songs"
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
@@ -2543,7 +2550,14 @@ export default function App() {
                 near the bottom edge instead. */}
             <div
               className={page === "songs" && !selectMode && displayList.length > 0 && listScrollTop > topInset ? "stt stt-show" : "stt stt-hide"}
-              style={{ position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90 }}
+              style={{
+                position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90,
+                // The .stt class animates the show/hide; `bottom` is added here
+                // so the button rides the mini-player down as it folds away.
+                transition: chromeAnimate
+                  ? `opacity 0.25s ease, transform 0.25s ease, bottom ${CHROME_MOTION}`
+                  : "opacity 0.25s ease, transform 0.25s ease",
+              }}
             >
               <button
                 onClick={() => {
@@ -2571,7 +2585,14 @@ export default function App() {
             {!selectMode && (
               <div
                 className={page === "songs" ? "fabw fabw-show" : "fabw fabw-hide"}
-                style={{ position: "absolute", right: 18, bottom: playerH + 10, zIndex: 90 }}>
+                style={{
+                  position: "absolute", right: 18, bottom: playerH + 10, zIndex: 90,
+                  // As above: .fabw owns the page-swipe fade, `bottom` is added
+                  // so the button tracks the folding player.
+                  transition: chromeAnimate
+                    ? `opacity 0.2s ease, transform 0.2s ease, bottom ${CHROME_MOTION}`
+                    : "opacity 0.2s ease, transform 0.2s ease",
+                }}>
                 <button
                   data-tour="shuffle"
                   onTouchStart={onShufflePressStart} onTouchEnd={onShufflePressEnd} onTouchCancel={onShufflePressEnd}
@@ -2624,6 +2645,7 @@ export default function App() {
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
+              animateInsets={chromeAnimate}
               onClose={() => setPage("songs")}
               T={TH}
             />
@@ -2648,7 +2670,7 @@ export default function App() {
                 opacity: chromeCollapsed ? 0 : 1,
                 pointerEvents: chromeCollapsed ? "none" : "auto",
                 transition: chromeAnimate
-                  ? "transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease, background 0.4s ease"
+                  ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
               }}
               onTouchStart={e => onPlayerSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
@@ -2760,7 +2782,7 @@ export default function App() {
             T={TH}
           />
         )}
-        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); if (editFromPlayer) { setEditFromPlayer(false); setPlayerExpanded(true); } }} T={TH} />}
+        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => setEditSong(null)} T={TH} />}
         {removeSong && <ConfirmSheet title="Remove song" body={`"${dispName(removeSong)}" will be moved to the bin. You can restore it from Settings.`} confirmLabel="Move to Bin" onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={`Remove ${selected.size} songs`} body={`${selected.size} songs will be moved to the bin. You can restore them from Settings.`} confirmLabel={`Move ${selected.size} to Bin`} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
@@ -2846,8 +2868,6 @@ export default function App() {
               onSeek={ms => setCurrentTime(ms)}
               onSeekStart={() => setDragging(true)}
               onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
-              onEdit={() => { setPlayerExpanded(false); setEditFromPlayer(true); setEditSong(currentSong); }}
-              onCut={() => { setPlayerExpanded(false); openCutSheet(currentSong); }}
               onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
               onRemove={() => { setPlayerExpanded(false); setRemoveSong(currentSong); }}
               onShare={() => shareSong(currentSong)}

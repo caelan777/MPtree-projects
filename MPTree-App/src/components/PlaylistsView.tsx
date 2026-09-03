@@ -57,6 +57,10 @@ interface Props {
   /** Reports this view's scroll offset so App can fold the floating header away
    *  on the Playlists tab exactly as it does on the Songs list. */
   onBodyScroll?:      (top: number) => void;
+  /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
+   *  now, or jumped (the scroll-to-top button). The insets here have to follow
+   *  the same rule as the Songs list or the two tabs fold differently. */
+  animateInsets?:     boolean;
   /** Called when the user backs out of the root "list" view — App treats this as "go to Songs page" */
   onClose:            () => void;
   T:                  T;
@@ -143,7 +147,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onCutSong, onShareSong, onRemoveSong,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onClose, T,
+  onBodyScroll, animateInsets = true, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -568,12 +572,28 @@ export const PlaylistsView: React.FC<Props> = ({
     </div>
   );
 
+  // The floating header's height, applied as a spacer INSIDE the scroller on
+  // the root list and as padding OUTSIDE it everywhere else.
+  //
+  // It used to always be padding on this root element, which meant it could
+  // never scroll away: folding the header on the Playlists tab left a band of
+  // dead black across the top of the screen, where the Songs tab simply lets
+  // its rows slide up under the collapsed logo. Views with their own sticky
+  // header row (a playlist, an auto playlist, the add-songs picker) keep the
+  // outer padding, because that header has to stay put below the floating card
+  // rather than scroll under it.
+  const insetOutside = view === "list" ? 0 : topInset;
+  const insetInside  = view === "list" ? topInset : 0;
+  const insetTransition = animateInsets
+    ? "height 0.34s cubic-bezier(0.22, 1, 0.36, 1)"
+    : "none";
+
   return (
     <div style={{
       position:   "absolute", inset: 0,
       background: t.bg, color: t.text,
       display:    "flex", flexDirection: "column",
-      paddingTop: topInset,
+      paddingTop: insetOutside,
       fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
       userSelect: "none",
     }}>
@@ -765,6 +785,7 @@ export const PlaylistsView: React.FC<Props> = ({
         onScroll={e => { cancelPress(); onBodyScroll?.((e.target as HTMLDivElement).scrollTop); }}
         style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
       >
+        {insetInside > 0 && <div style={{ height: insetInside }} aria-hidden="true" />}
 
         {/* ════ PLAYLIST LIST ════════════════════════════════════════════ */}
         {view === "list" && (
@@ -883,8 +904,9 @@ export const PlaylistsView: React.FC<Props> = ({
             {/* The floating mini-player sits over the bottom of this list. The
                 detail views already reserved room for it; the playlist list did
                 not, so the last couple of playlists were unreachable unless you
-                collapsed the player first. */}
-            <div style={{ height: bottomInset }} />
+                collapsed the player first. The transition matches the Songs
+                list's padding-bottom so both tabs fold at the same rate. */}
+            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
           </>
         )}
 
@@ -978,7 +1000,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 <SongRow key={song.id} song={song} idx={idx} list={playlistSongs} inPlaylist={true} />
               ))
             )}
-            <div style={{ height: bottomInset }} />
+            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
           </>
         )}
 
@@ -1046,7 +1068,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 <SongRow key={song.id} song={song} idx={idx} list={smartPlaylistSongs} inPlaylist={false} />
               ))
             )}
-            <div style={{ height: bottomInset }} />
+            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
           </>
         )}
 
@@ -1102,7 +1124,7 @@ export const PlaylistsView: React.FC<Props> = ({
           })}
           {/* Same reason as the playlist list: the mini-player floats over the
               bottom of this one too. */}
-          <div style={{ height: bottomInset }} />
+          <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
         </>}
       </div>
 

@@ -36,8 +36,6 @@ type PlayerExpandSheetProps = {
   onSeek: (ms: number) => void;
   onSeekStart: () => void;
   onSeekEnd: (ms: number) => void;
-  onEdit: () => void;
-  onCut: () => void;
   onToggleLike: () => void;
   onRemove: () => void;
   onShare: () => void;
@@ -64,7 +62,7 @@ export function PlayerExpandSheet({
   upNextQueue, playNextQueue = [], getDispName, getDispArtist, getCustomPhoto,
   onTogglePlay, onSkip, onCycleMode,
   onSeek, onSeekStart, onSeekEnd,
-  onEdit, onCut, onToggleLike, onRemove, onShare,
+  onToggleLike, onRemove, onShare,
   onPlayNextReorder, onSkipCurrentUpNext, onOpenMenu, onClose,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
@@ -376,10 +374,13 @@ export function PlayerExpandSheet({
           </div>
         </div>
 
-        {/* ── Action chips ─────────────────────────────────────────────────── */}
+        {/* ── Action chips ─────────────────────────────────────────────────
+            Edit and Cut used to sit here too. They are one-off, deliberate
+            actions that take you out of the player entirely, so they belong
+            with the rest of the per-song actions behind the "⋮" above rather
+            than competing with Like and Share for a spot next to the
+            transport. ─────────────────────────────────────────────────────── */}
         <div style={{ padding: "14px 16px 0", display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          <button className="chip" onClick={onEdit}><IC.Edit /> Edit</button>
-          <button className="chip" onClick={onCut}><IC.Scissors /> Cut</button>
           <button className="chip" onClick={onToggleLike}>
             <IC.Heart filled={isLiked} size={15} />
             {isLiked ? "Unlike" : "Like"}
