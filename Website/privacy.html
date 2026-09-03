@@ -12,8 +12,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
-<link rel="stylesheet" href="assets/tokens.css?v=22">
-<link rel="stylesheet" href="assets/site.css?v=22">
+<link rel="stylesheet" href="assets/tokens.css?v=23">
+<link rel="stylesheet" href="assets/site.css?v=23">
 </head>
 <body>
 
@@ -44,7 +44,7 @@
 
   <section class="section-flush">
     <div class="prose">
-      <p class="prose-date">Last updated: 1 September 2026</p>
+      <p class="prose-date">Last updated: 3 September 2026</p>
 
       <h2>Who this covers</h2>
       <p>
@@ -55,9 +55,11 @@
 
       <h2>What MPTree collects</h2>
       <p>
-        Nothing. The app does not collect, store, or transmit any personal data. It has no
-        analytics, no advertising, and no tracking of any kind. We have no way of knowing who
-        you are or what you listen to, because none of that information is ever sent anywhere.
+        Nothing. The app has no analytics, no advertising, and no tracking of any kind, and it
+        never sends us your files, your playlists, or what you listen to. We have no way of
+        knowing who you are or what you play, because none of that information is ever sent
+        anywhere. The one request the app makes on its own is the update check described under
+        <a href="#internet">Internet access</a> below.
       </p>
 
       <h2>Access to your music files</h2>
@@ -69,12 +71,23 @@
         cannot show your library.
       </p>
 
-      <h2>Internet access</h2>
+      <h2 id="internet">Internet access</h2>
       <p>
-        MPTree plays your local files and does not need the internet to work. The only time it
-        opens a connection is when you tap an outward link yourself, such as the optional support
-        page, which opens in your own browser. MPTree does not contact any server of ours, send us
-        your activity, stream anything, or phone home in the background.
+        MPTree plays your local files and does not need the internet to work. It never streams,
+        never sends us your listening activity, and never uploads your music or anything about it.
+      </p>
+      <p>
+        There is one background request, and only in the copy you download from this website:
+        about once a day, when you open the app, it fetches a small file from mp-tree.net to see
+        whether a newer version has been released. That request carries nothing except the ask
+        itself. Like any web request, including loading this page, it does reach the server with
+        your device's IP address. Nothing is stored against you, and nothing links one check to
+        the next. The Google Play version does not make this request at all, and neither does the
+        demo you can try on this site.
+      </p>
+      <p>
+        Apart from that, MPTree opens a connection only when you tap an outward link yourself,
+        such as the optional support page, which opens in your own browser.
       </p>
 
       <h2>Backups</h2>
