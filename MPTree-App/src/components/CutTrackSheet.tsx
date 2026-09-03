@@ -15,6 +15,15 @@ type AudioPlayerPlugin = {
 const AudioPlayer = registerPlugin<AudioPlayerPlugin>("AudioPlayer");
 
 // ─── CUT TRACK SHEET ─────────────────────────────────────────────────────────
+// Pick the piece of a song you want to keep, and save it as its own track.
+//
+// This used to carry three sliders (a preview scrubber plus start and end), a
+// separate waveform strip that repeated what the sliders already said, and a
+// row of three preview buttons — six controls for what is really two decisions.
+// It is now: drag START, drag END, press Play to hear it, name it, save.
+// The bar at the top is the ONLY position readout, and pressing Play always
+// previews the selection from its start, so there is no third position to
+// keep track of.
 
 type CutTrackSheetProps = {
   song: Song;
@@ -23,6 +32,8 @@ type CutTrackSheetProps = {
   onClose: () => void;
   T: T;
 };
+
+const MIN_LEN = 1000;
 
 export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackSheetProps) {
   const total = totalMs > 0 ? totalMs : 240000;
@@ -35,7 +46,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
   const sh = makeSH(T);
 
   const fmt = (ms: number) => {
-    const s = Math.floor(ms / 1000);
+    const s = Math.max(0, Math.floor(ms / 1000));
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
   };
 
@@ -53,8 +64,11 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
       cancelled = true;
       AudioPlayer.pause().catch(() => {});
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // While previewing, follow the position and stop the moment the selection
+  // ends — the preview is the selection, not the whole song.
   useEffect(() => {
     if (!isPlaying) return;
     const iv = setInterval(async () => {
@@ -64,95 +78,93 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
         if (position >= endMs - 300) {
           await AudioPlayer.pause();
           setIsPlaying(false);
-          setPreviewMs(endMs);
+          setPreviewMs(startMs);
         }
       } catch { /* ignore */ }
     }, 200);
     return () => clearInterval(iv);
-  }, [isPlaying, endMs]);
+  }, [isPlaying, endMs, startMs]);
 
-  const handlePreviewToggle = async () => {
+  const togglePreview = async () => {
     if (!isLoaded) return;
     if (isPlaying) {
       await AudioPlayer.pause();
       setIsPlaying(false);
-    } else {
-      const seekTarget = previewMs >= endMs - 300 ? startMs : previewMs;
-      await AudioPlayer.seekTo({ milliseconds: seekTarget });
-      await AudioPlayer.resume();
-      setIsPlaying(true);
+      return;
     }
+    // Always from the start of the selection: one button, one meaning.
+    await AudioPlayer.seekTo({ milliseconds: startMs });
+    setPreviewMs(startMs);
+    await AudioPlayer.resume();
+    setIsPlaying(true);
   };
 
-  const seekPreviewTo = async (ms: number) => {
+  // Moving a handle stops the preview and parks the playhead on that handle, so
+  // the bar always shows what you just dragged.
+  const scrubTo = async (ms: number) => {
     setPreviewMs(ms);
+    if (isPlaying) { await AudioPlayer.pause().catch(() => {}); setIsPlaying(false); }
     try { await AudioPlayer.seekTo({ milliseconds: ms }); } catch { /* ignore */ }
   };
+
+  const pct = (ms: number) => `${Math.min(100, Math.max(0, (ms / total) * 100))}%`;
 
   return (
     <div style={sh.overlay}>
       <div style={{ ...sh.sheet, paddingBottom: 32 }}>
         <div style={sh.handle} />
         <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Cut Track</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Cut track</div>
+            <div style={{ fontSize: 12.5, color: T.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {song.title}
+            </div>
+          </div>
           <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
         </div>
+
         <div style={{ padding: "0 20px" }}>
-          {/* Visual waveform bar */}
-          <div style={{ position: "relative", height: 44, marginBottom: 8, marginTop: 8 }}>
-            <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 6, borderRadius: 3, background: T.dim, transform: "translateY(-50%)" }} />
-            <div style={{ position: "absolute", top: "50%", left: `${(startMs / total) * 100}%`, width: `${((endMs - startMs) / total) * 100}%`, height: 6, borderRadius: 3, background: T.accent + "66", transform: "translateY(-50%)" }} />
-            <div style={{ position: "absolute", top: "50%", left: `${(previewMs / total) * 100}%`, transform: "translate(-50%,-50%)", width: 3, height: 20, borderRadius: 2, background: T.accent, transition: "left 0.1s linear" }} />
-            <div style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", left: `${(startMs / total) * 100}%`, width: 18, height: 18, borderRadius: "50%", background: "#fff", border: `2px solid ${T.accent}`, boxShadow: "0 2px 8px rgba(0,0,0,0.3)", zIndex: 2 }} />
-            <div style={{ position: "absolute", top: "50%", transform: "translate(-50%,-50%)", left: `${(endMs / total) * 100}%`, width: 18, height: 18, borderRadius: "50%", background: "#fff", border: `2px solid ${T.accent}`, boxShadow: "0 2px 8px rgba(0,0,0,0.3)", zIndex: 2 }} />
+          {/* The one position readout: full song in grey, the kept piece
+              highlighted, the playhead on top. */}
+          <div style={{ position: "relative", height: 34, marginTop: 4 }}>
+            <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 8, borderRadius: 4, background: T.dim, transform: "translateY(-50%)" }} />
+            <div style={{ position: "absolute", top: "50%", left: pct(startMs), width: pct(endMs - startMs), height: 8, borderRadius: 4, background: T.accent, transform: "translateY(-50%)" }} />
+            <div style={{ position: "absolute", top: "50%", left: pct(previewMs), transform: "translate(-50%,-50%)", width: 2, height: 22, borderRadius: 1, background: T.heart, transition: isPlaying ? "left 0.2s linear" : "none" }} />
           </div>
 
-          <input type="range" min={0} max={total} value={previewMs} step={500}
-            onChange={async e => { await seekPreviewTo(Number(e.target.value)); }}
-            style={{ width: "100%", accentColor: T.accent, marginBottom: 4 }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.muted, marginBottom: 12 }}>
-            <span>{fmt(previewMs)}</span>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 18 }}>
+            <span>{fmt(0)}</span>
+            <span style={{ color: T.text, fontWeight: 700 }}>Keeps {fmt(endMs - startMs)}</span>
             <span>{fmt(total)}</span>
           </div>
 
-          {/* Preview controls */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 18 }}>
-            <button onClick={() => seekPreviewTo(startMs)}
-              style={{ padding: "8px 14px", background: T.dim, border: "none", borderRadius: 8, color: T.text, fontSize: 13, fontWeight: "600", cursor: "pointer" }}>
-              ⏮ Start
-            </button>
-            <button onClick={handlePreviewToggle} disabled={!isLoaded}
-              style={{ width: 48, height: 48, borderRadius: "50%", background: T.accent, border: "none", color: T.playBtnFg,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: isLoaded ? "pointer" : "default", opacity: isLoaded ? 1 : 0.45,
-                boxShadow: "0 4px 16px rgba(124,58,237,0.4)" }}>
-              {isPlaying ? <IC.Pause /> : <IC.Play />}
-            </button>
-            <button onClick={() => seekPreviewTo(Math.max(0, endMs - 5000))}
-              style={{ padding: "8px 14px", background: T.dim, border: "none", borderRadius: 8, color: T.text, fontSize: 13, fontWeight: "600", cursor: "pointer" }}>
-              End ⏭
-            </button>
-          </div>
+          {/* Two decisions, one slider each. */}
+          <Handle
+            label="Start" value={startMs} T={T} fmt={fmt}
+            min={0} max={total}
+            onChange={v => { if (v <= endMs - MIN_LEN) { setStartMs(v); void scrubTo(v); } }}
+          />
+          <Handle
+            label="End" value={endMs} T={T} fmt={fmt}
+            min={0} max={total}
+            onChange={v => { if (v >= startMs + MIN_LEN) { setEndMs(v); void scrubTo(v); } }}
+          />
 
-          <div style={sh.lbl}>Start — {fmt(startMs)}</div>
-          <input type="range" min={0} max={total} value={startMs} step={1000}
-            onChange={async e => {
-              const v = Number(e.target.value);
-              if (v < endMs - 5000) { setStartMs(v); await seekPreviewTo(v); }
+          {/* One preview button. It always plays the selection. */}
+          <button
+            onClick={togglePreview}
+            disabled={!isLoaded}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
+              width: "100%", marginTop: 20, padding: "12px 0",
+              background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
+              color: T.text, fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+              cursor: isLoaded ? "pointer" : "default", opacity: isLoaded ? 1 : 0.45,
             }}
-            style={{ width: "100%", accentColor: T.accent }} />
-
-          <div style={{ ...sh.lbl, marginTop: 14 }}>End — {fmt(endMs)}</div>
-          <input type="range" min={0} max={total} value={endMs} step={1000}
-            onChange={async e => {
-              const v = Number(e.target.value);
-              if (v > startMs + 5000) { setEndMs(v); await seekPreviewTo(Math.max(0, v - 5000)); }
-            }}
-            style={{ width: "100%", accentColor: T.accent }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginTop: 4, marginBottom: 14 }}>
-            <span>Duration: {fmt(endMs - startMs)}</span>
-            <span style={{ color: T.accent, fontWeight: "600" }}>{fmt(startMs)} → {fmt(endMs)}</span>
-          </div>
+          >
+            {isPlaying ? <IC.Pause /> : <IC.Play />}
+            {isPlaying ? "Stop preview" : "Preview the cut"}
+          </button>
 
           <div style={sh.lbl}>Save as</div>
           <input value={newName} onChange={e => setNewName(e.target.value)} style={sh.inp} />
@@ -160,15 +172,35 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
             Saved as a new track. The original stays unchanged.
           </div>
         </div>
+
         <div style={{ padding: "20px 20px 0" }}>
           <button
             onClick={() => onSave(startMs, endMs, newName.trim() || song.title + " (cut)")}
             style={sh.saveBtn}
           >
-            Save Cut Track
+            Save cut track
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Handle({ label, value, min, max, onChange, fmt, T }: {
+  label: string; value: number; min: number; max: number;
+  onChange: (v: number) => void; fmt: (ms: number) => string; T: T;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <span style={{ fontSize: 13, color: T.textSub, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 17, color: T.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmt(value)}</span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={500} value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ width: "100%", accentColor: T.accent }}
+      />
     </div>
   );
 }

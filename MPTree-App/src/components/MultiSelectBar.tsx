@@ -9,6 +9,7 @@ type MultiSelectBarProps = {
   onLikeAll: () => void;
   onUnlikeAll: () => void;
   onShuffleSelection: () => void;
+  onAddToPlaylist: () => void;
   onRemoveAll: () => void;
   onSelectAll: () => void;
   onClearAll: () => void;
@@ -18,7 +19,7 @@ type MultiSelectBarProps = {
 
 export function MultiSelectBar({
   count, totalCount, allLiked,
-  onLikeAll, onUnlikeAll, onShuffleSelection, onRemoveAll,
+  onLikeAll, onUnlikeAll, onShuffleSelection, onAddToPlaylist, onRemoveAll,
   onSelectAll, onClearAll, onClose, T,
 }: MultiSelectBarProps) {
   const allSelected = count === totalCount && totalCount > 0;
@@ -49,6 +50,7 @@ export function MultiSelectBar({
           <Chip disabled={count === 0} onClick={onLikeAll} T={T}><IC.Heart filled={false} size={15} />Like</Chip>
         )}
         <Chip disabled={count === 0} onClick={onShuffleSelection} T={T}><IC.Shuffle />Shuffle</Chip>
+        <Chip disabled={count === 0} onClick={onAddToPlaylist} T={T}><IC.Plus />Add to playlist</Chip>
         <Chip disabled={count === 0} onClick={onRemoveAll} destructive T={T}>
           <IC.Trash />Remove {count > 0 ? `(${count})` : ""}
         </Chip>

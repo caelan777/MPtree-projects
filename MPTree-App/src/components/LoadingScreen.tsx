@@ -13,6 +13,13 @@ import { Logo } from "./Logo";
 // three quiet dots standing in for progress. Strictly monochrome, per the
 // brand system in Branding/README.md: black and white carry the identity, and
 // colour is reserved for functional state.
+//
+// The first frame is the MARK ONLY, on black. Android always shows its own
+// splash before the WebView exists (you cannot opt out on Android 12+), and
+// that splash is themed in res/values/styles.xml to be the same mark on the
+// same black. Holding this frame identical for a beat, then fading the wordmark
+// and dots in, makes the handover invisible — instead of the app appearing to
+// start up twice.
 
 interface LoadingScreenProps {
   /** Current app theme, so the loading screen matches light/dark mode. */
@@ -41,6 +48,13 @@ export function LoadingScreen({
 }: LoadingScreenProps) {
   const [mounted, setMounted] = useState(visible);
   const [faded, setFaded] = useState(!visible);
+  // Everything except the mark waits a beat, so the very first painted frame
+  // matches the Android splash we are taking over from.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(true), 260);
+    return () => clearTimeout(t);
+  }, []);
 
   const shownAtRef = useRef<number | null>(visible ? Date.now() : null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,12 +118,15 @@ export function LoadingScreen({
       </div>
 
       {/* Wordmark. Monochrome: the mark carries the identity, not a colour. */}
-      <div style={{ marginTop: 22, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: TH.text }}>
+      <div style={{
+        marginTop: 22, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: TH.text,
+        opacity: settled ? 1 : 0, transition: "opacity 0.35s ease",
+      }}>
         MPTree
       </div>
 
       {/* Three quiet dots standing in for progress. */}
-      <div style={{ display: "flex", gap: 7, marginTop: 26 }} aria-label={label}>
+      <div style={{ display: "flex", gap: 7, marginTop: 26, opacity: settled ? 1 : 0, transition: "opacity 0.35s ease" }} aria-label={label}>
         {[0, 1, 2].map(i => (
           <div key={i} className="mpl-anim" style={{
             width: 6, height: 6, borderRadius: "50%", background: TH.text,
@@ -119,8 +136,8 @@ export function LoadingScreen({
       </div>
 
       {/* Signature, pinned near the bottom. */}
-      <div style={{ position: "absolute", bottom: 40, textAlign: "center" }}>
-        <div style={{ fontSize: 12, color: TH.muted }}>by Caelan Verkuijl</div>
+      <div style={{ position: "absolute", bottom: 40, textAlign: "center", opacity: settled ? 1 : 0, transition: "opacity 0.35s ease" }}>
+        <div style={{ fontSize: 12, color: TH.muted }}>by Verkuijl</div>
         <div style={{ fontSize: 11, color: TH.muted, opacity: 0.65, marginTop: 4, letterSpacing: "0.06em" }}>
           your music · zero ads
         </div>

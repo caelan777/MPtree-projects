@@ -216,7 +216,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
               <Logo size={84} color={T.text} />
             </div>
             <div style={{ fontSize: 23, fontWeight: 800, color: T.text }}>Welcome to MPTree</div>
-            <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>by Caelan Verkuijl</div>
+            <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>by Verkuijl</div>
             <div style={{ fontSize: 15, color: T.textSub, marginTop: 16, lineHeight: 1.55 }}>
               Your music. Zero ads.<br />Let me show you around. It takes 20 seconds.
             </div>

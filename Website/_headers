@@ -22,3 +22,10 @@
 
 /download.html
   Cache-Control: public, max-age=0, must-revalidate
+
+# The app's update manifest. Must never be cached, or a released fix stays
+# invisible to everyone still on the old build. Open cross-origin so the app
+# can read it from its WebView origin as well as through native networking.
+/version.json
+  Cache-Control: public, max-age=0, must-revalidate
+  Access-Control-Allow-Origin: *

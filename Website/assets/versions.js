@@ -16,10 +16,33 @@
  * Do not tick "Set as a pre-release" on GitHub, even for a beta: /releases/latest
  * skips pre-releases, and the Download button would silently keep serving the
  * previous version.
+ *
+ * Also update /version.json when you add an entry here. That file is what the
+ * APK from this website reads to tell people on an older build that a new one
+ * exists; if it lags behind, nobody finds out. (The Play Store build never
+ * reads it — Play does not allow an app to point at another update channel.)
  */
 window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
+  {
+    version: "0.1.2",
+    date:    "2026-09-03",
+    channel: "beta",
+    tag:     "v0.1.2-beta",
+    notes: [
+      "The header and player fold away on the Playlists tab too, and a hint says how to bring them back.",
+      "Sorting works again. The menu used to open behind the header card and stay invisible.",
+      "Add songs to a playlist straight from multi-select, and select or deselect everything when adding.",
+      "The playing song is now obvious: accent bar, bold title and moving bars on its artwork.",
+      "Songs without a photo get a grey music icon instead of coloured initials.",
+      "Cut is simpler: two handles, one preview button.",
+      "The timeline moved out of the small player, into the full one.",
+      "Startup no longer shows two different loading screens.",
+      "Nothing hides behind the player any more, in playlists or when adding songs.",
+      "The app tells you when a newer version is on the website.",
+    ],
+  },
   {
     version: "0.1.1",
     date:    "2026-09-01",

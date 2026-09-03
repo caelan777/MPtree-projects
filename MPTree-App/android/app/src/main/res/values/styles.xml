@@ -24,7 +24,30 @@
     </style>
 
 
+    <!--
+        Launch theme. Android 12+ ALWAYS draws a system splash screen before the
+        WebView exists, and there is no way to opt out; the only choice is what
+        it looks like. Unstyled it fell back to the platform default: the
+        launcher icon on a light grey ground, which then cut to the app's own
+        black loading screen — so the app appeared to start up twice.
+
+        Both are now the same black with the same white mark, and
+        LoadingScreen.tsx holds that exact frame for a beat before fading its
+        wordmark in, which makes the handover invisible.
+
+        The unprefixed attributes come from androidx core-splashscreen (see
+        android/app/build.gradle); it maps them onto the platform's
+        android:windowSplashScreen* attributes on API 31+. android:windowBackground
+        covers older devices, which draw the launch theme's window background.
+    -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/mptree_ground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:windowBackground">@color/mptree_ground</item>
+        <item name="android:background">@color/mptree_ground</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

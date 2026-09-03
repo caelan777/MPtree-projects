@@ -54,10 +54,26 @@ interface Props {
   /** Incremented by App when Android's Back is pressed on the Playlists tab.
    *  Each bump pops exactly one level of this component's own navigation. */
   backSignal?: number;
+  /** Reports this view's scroll offset so App can fold the floating header away
+   *  on the Playlists tab exactly as it does on the Songs list. */
+  onBodyScroll?:      (top: number) => void;
   /** Called when the user backs out of the root "list" view — App treats this as "go to Songs page" */
   onClose:            () => void;
   T:                  T;
 }
+
+// ─── Add-songs sorting ────────────────────────────────────────────────────────
+// The "Add songs" picker used to be search-only, in library order, which made
+// finding anything in a large library a scroll. These mirror the Songs page's
+// own sort options so the two lists can be reasoned about the same way.
+type AddSortId = "newest" | "oldest" | "alphabetical" | "artist" | "favorites";
+const ADD_SORTS: { id: AddSortId; label: string }[] = [
+  { id: "newest",       label: "Newest"    },
+  { id: "oldest",       label: "Oldest"    },
+  { id: "alphabetical", label: "A–Z"       },
+  { id: "artist",       label: "Artist"    },
+  { id: "favorites",    label: "Favorites" },
+];
 
 // ─── Smart playlist card styling ───────────────────────────────────────────────
 // Mapped by id (not name) so a renamed SmartPlaylist still gets the right icon.
@@ -124,9 +140,10 @@ const FALLBACK_SMART_STYLE: SmartCardStyle = {
 export const PlaylistsView: React.FC<Props> = ({
   topInset = 0,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
-  onPlaySong, currentSongId, onToggleLike, onPlayNext,
+  onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onCutSong, onShareSong, onRemoveSong,
-  isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0, onClose, T,
+  isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
+  onBodyScroll, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -153,6 +170,7 @@ export const PlaylistsView: React.FC<Props> = ({
   const [confirmDeleteId, setConfirmDeleteId]= useState<string | null>(null);
   const [selectedAdd,     setSelectedAdd]    = useState<Set<string>>(new Set());
   const [addSearch,       setAddSearch]      = useState("");
+  const [addSort,         setAddSort]        = useState<AddSortId>("newest");
 
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -300,7 +318,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {isSelected && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
           </div>
         )}
-        <AlbumArt title={dispName(song)} size={48} active={isCurrent} customPhoto={meta[song.id]?.customPhoto} T={t} />
+        <AlbumArt title={dispName(song)} size={48} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} T={t} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
@@ -359,14 +377,30 @@ export const PlaylistsView: React.FC<Props> = ({
   }, [activeSmartPlaylist, songs]);
 
   const filteredAddSongs = useMemo(() => {
-    if (!addSearch) return songs;
-    const q = addSearch.toLowerCase();
-    return songs.filter(s =>
-      dispName(s).toLowerCase().includes(q) ||
-      dispArtist(s).toLowerCase().includes(q)
-    );
+    const q = addSearch.trim().toLowerCase();
+    const matched = q
+      ? songs.filter(s => dispName(s).toLowerCase().includes(q) || dispArtist(s).toLowerCase().includes(q))
+      : songs;
+    const sorted = [...matched].sort((a, b) => {
+      if (addSort === "oldest")       return (a.dateAdded || 0) - (b.dateAdded || 0);
+      if (addSort === "alphabetical") return dispName(a).localeCompare(dispName(b));
+      if (addSort === "artist")       return (dispArtist(a) || "zzz").localeCompare(dispArtist(b) || "zzz");
+      return (b.dateAdded || 0) - (a.dateAdded || 0); // newest, and the base order for favorites
+    });
+    // "Favorites" is a float-to-top rather than a filter, matching the Songs
+    // page: you still see everything, the liked tracks just come first.
+    return addSort === "favorites"
+      ? [...sorted.filter(isLiked), ...sorted.filter(s => !isLiked(s))]
+      : sorted;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [songs, meta, addSearch]);
+  }, [songs, meta, addSearch, addSort]);
+
+  /** The rows in the picker that can actually be ticked (not already added). */
+  const addSelectableIds = useMemo(
+    () => filteredAddSongs.filter(s => !(activePlaylist?.songIds ?? []).includes(s.id)).map(s => s.id),
+    [filteredAddSongs, activePlaylist],
+  );
+  const allAddSelected = addSelectableIds.length > 0 && addSelectableIds.every(id => selectedAdd.has(id));
 
   const inPlaylistSet = useMemo(
     () => new Set(activePlaylist?.songIds ?? []),
@@ -678,18 +712,57 @@ export const PlaylistsView: React.FC<Props> = ({
               <button onClick={() => setAddSearch("")} style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: 2 }}>✕</button>
             )}
           </div>
-          {selectedAdd.size > 0 && (
-            <div style={{ fontSize: 12, color: t.accent, marginTop: 6, fontWeight: 600 }}>
-              {selectedAdd.size} selected
-            </div>
-          )}
+
+          {/* Sort chips. A horizontal strip rather than a dropdown: there are
+              only five, and one tap beats open-then-pick when you are hunting
+              for songs to add. */}
+          <div style={{ display: "flex", gap: 6, marginTop: 8, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+            {ADD_SORTS.map(opt => {
+              const on = addSort === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setAddSort(opt.id)}
+                  style={{
+                    flexShrink: 0, padding: "5px 12px", borderRadius: 16,
+                    border: `1px solid ${on ? t.accent : t.border}`,
+                    background: on ? t.accent : t.surface,
+                    color: on ? t.playBtnFg : t.chipColor,
+                    fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "inherit", whiteSpace: "nowrap",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+            <span style={{ fontSize: 12, color: selectedAdd.size > 0 ? t.accent : t.muted, fontWeight: 600 }}>
+              {selectedAdd.size > 0 ? `${selectedAdd.size} selected` : `${filteredAddSongs.length} songs`}
+            </span>
+            <button
+              onClick={() => setSelectedAdd(allAddSelected ? new Set() : new Set(addSelectableIds))}
+              disabled={addSelectableIds.length === 0}
+              style={{
+                background: "none", border: "none", padding: "2px 0", fontFamily: "inherit",
+                color: addSelectableIds.length === 0 ? t.muted : t.violet,
+                fontSize: 12.5, fontWeight: 700,
+                cursor: addSelectableIds.length === 0 ? "default" : "pointer",
+                opacity: addSelectableIds.length === 0 ? 0.5 : 1,
+              }}
+            >
+              {allAddSelected ? "Deselect all" : "Select all"}
+            </button>
+          </div>
         </div>
       )}
 
       {/* ── Scrollable content ──────────────────────────────────────────── */}
       <div
         ref={scrollBodyRef}
-        onScroll={cancelPress}
+        onScroll={e => { cancelPress(); onBodyScroll?.((e.target as HTMLDivElement).scrollTop); }}
         style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
       >
 
@@ -807,6 +880,11 @@ export const PlaylistsView: React.FC<Props> = ({
                 );
               })
             )}
+            {/* The floating mini-player sits over the bottom of this list. The
+                detail views already reserved room for it; the playlist list did
+                not, so the last couple of playlists were unreachable unless you
+                collapsed the player first. */}
+            <div style={{ height: bottomInset }} />
           </>
         )}
 
@@ -973,8 +1051,14 @@ export const PlaylistsView: React.FC<Props> = ({
         )}
 
         {/* ════ ADD SONGS VIEW ═══════════════════════════════════════════ */}
-        {view === "addSongs" && (
-          filteredAddSongs.map(song => {
+        {view === "addSongs" && <>
+          {filteredAddSongs.length === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>No songs found</div>
+              <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>Try a different search</div>
+            </div>
+          )}
+          {filteredAddSongs.map(song => {
             const alreadyIn = inPlaylistSet.has(song.id);
             const isSelected = selectedAdd.has(song.id);
             return (
@@ -1015,8 +1099,11 @@ export const PlaylistsView: React.FC<Props> = ({
                 {alreadyIn && <span style={{ fontSize: 11, color: t.muted, flexShrink: 0 }}>In playlist</span>}
               </div>
             );
-          })
-        )}
+          })}
+          {/* Same reason as the playlist list: the mini-player floats over the
+              bottom of this one too. */}
+          <div style={{ height: bottomInset }} />
+        </>}
       </div>
 
       {/* ── Long-press song action menu ──────────────────────────────────── */}

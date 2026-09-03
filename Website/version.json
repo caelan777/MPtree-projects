@@ -1,0 +1,12 @@
+{
+  "_comment": "Read by the app (see MPTree-App/src/updateCheck.ts) to tell people on an older build that a newer one exists. Keep it in step with the top entry of assets/versions.js, which is what the website itself renders. Only the build handed out by this website checks this file; the Play Store build never does.",
+  "latest": "0.1.2",
+  "date": "2026-09-03",
+  "url": "https://mp-tree.net/download.html",
+  "notes": [
+    "The header and player now fold away on the Playlists tab too.",
+    "Sorting works again, add songs to a playlist from multi-select, and the playing song is easy to spot.",
+    "Cut is simpler, the startup screen no longer appears twice.",
+    "Nothing hides behind the player any more."
+  ]
+}

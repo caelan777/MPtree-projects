@@ -40,6 +40,26 @@ stale web assets, which looks like the app ignoring your latest changes.
 Gradle needs JDK 11 or newer. `android/gradle.properties` points `org.gradle.java.home` at
 the JDK bundled with Android Studio, because the system `java` is 8 and fails.
 
+### Which channel are you building for?
+
+`npm run build` bakes the distribution channel into the bundle:
+
+| Channel | Command | Effect |
+|---|---|---|
+| Website (default) | `npm run build` | The app checks `mp-tree.net/version.json` once a day and offers a link when a newer release is out. |
+| Play Store | `MPTREE_DIST=play npm run build` | That check is compiled out entirely. |
+
+**The Play AAB must be built with `MPTREE_DIST=play`.** Google Play does not allow an app
+distributed through Play to point users at another download channel for its own updates;
+that rule is why the in-app web download was removed. Nothing enforces the flag, so it is
+on you to set it. To confirm afterwards:
+
+```bash
+grep -c "mp-tree.net/version.json" MPTree-App/dist/assets/index-*.js
+```
+
+`0` for a Play build, `1` for a website build.
+
 ## Verify before publishing
 
 ```bash

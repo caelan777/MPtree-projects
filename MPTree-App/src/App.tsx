@@ -16,6 +16,7 @@ import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
 import { SongMenuSheet } from "./components/SongMenuSheet";
+import { AddToPlaylistSheet } from "./components/AddToPlaylistSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
@@ -44,6 +45,7 @@ import {
 import type { BackupData } from "./storage";
 
 import { MusicScanner, AudioPlayer } from "./plugins";
+import { checkForUpdate, dismissUpdate, type UpdateInfo } from "./updateCheck";
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -192,7 +194,31 @@ export default function App() {
   // against the previous offset keeps incidental scroll events — the ones that
   // fire when the mini-player appears or the list re-renders after shuffle or a
   // track change — from folding the chrome away while sitting at the top.
-  const lastScrollTopRef = useRef(0);
+  // One ref per scroller: Songs and Playlists scroll independently, and sharing
+  // a single "previous offset" would read the jump between them as a drag.
+  const lastScrollTopRef         = useRef(0);
+  const lastPlaylistScrollTopRef = useRef(0);
+  // A brief "tap the logo to bring them back" pill, shown the first few times
+  // the chrome folds itself away. Without it the header and player simply
+  // vanish and nothing says the round logo is now a button.
+  const [collapseHint, setCollapseHint] = useState(false);
+  const collapseHintsLeft = useRef(0);
+  const collapseHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const HINT_TIMES = 3;
+  useEffect(() => {
+    Preferences.get({ key: "mptree_collapse_hint_shown" })
+      .then(({ value }) => { collapseHintsLeft.current = Math.max(0, HINT_TIMES - Number(value ?? 0)); })
+      .catch(() => { collapseHintsLeft.current = HINT_TIMES; });
+  }, []);
+  const showCollapseHint = useCallback(() => {
+    if (collapseHintsLeft.current <= 0) return;
+    const used = HINT_TIMES - collapseHintsLeft.current + 1;
+    collapseHintsLeft.current -= 1;
+    Preferences.set({ key: "mptree_collapse_hint_shown", value: String(used) }).catch(() => {});
+    setCollapseHint(true);
+    if (collapseHintTimer.current) clearTimeout(collapseHintTimer.current);
+    collapseHintTimer.current = setTimeout(() => setCollapseHint(false), 3200);
+  }, []);
   // Animate the fold by default; suppressed for the scroll-to-top button, which
   // should just be there when you arrive.
   const [chromeAnimate, setChromeAnimate] = useState(true);
@@ -216,6 +242,16 @@ export default function App() {
     programmaticScrollRef.current = true;
     if (programmaticScrollTimer.current) clearTimeout(programmaticScrollTimer.current);
     programmaticScrollTimer.current = setTimeout(() => { programmaticScrollRef.current = false; }, 800);
+  }, []);
+
+  // Bring the chrome back. Playing something — tapping a song, hitting shuffle
+  // — should never leave you looking at a folded-away player, so those paths
+  // call this. The manual override is cleared too, otherwise a later scroll
+  // down would be ignored.
+  const openChrome = useCallback(() => {
+    chromeManualRef.current = null;
+    setChromeAnimate(true);
+    setChromeOpen(true);
   }, []);
 
   // ── Initial load / loading screen ─────────────────────────────────────────
@@ -248,6 +284,21 @@ export default function App() {
     setShowOnboarding(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
   }, []);
+
+  // ── "A newer version is on the website" ───────────────────────────────────
+  // Only ever set in the build the website hands out; the Play build compiles
+  // the check away. See src/updateCheck.ts for why.
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  useEffect(() => {
+    // Held until the library is up, so the very first launch is not competing
+    // with the scan and the permission dialog.
+    if (!libraryReady) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      checkForUpdate(__APP_VERSION__).then(info => { if (!cancelled) setUpdateInfo(info); });
+    }, 4000);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [libraryReady]);
 
   // ── Embedded album art for the now-playing surfaces ───────────────────────
   // Fetched from native (MediaMetadataRetriever) whenever the current song
@@ -299,6 +350,8 @@ export default function App() {
 
   // ── Playlists ─────────────────────────────────────────────────────────────
   const [playlists,     setPlaylists]     = useState<Playlist[]>([]);
+  // Playlist picker opened from the multi-select bar.
+  const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
   // Bumped by the Back handler to ask PlaylistsView to pop one level of its own
   // nested navigation (detail → list, add-songs → detail, close a menu, …).
@@ -1006,6 +1059,7 @@ export default function App() {
     hapticImpact("light");
     if (playMode === "repeat") { setPlayMode("off"); showToast("Repeat off"); return; }
     if (!displayList.length) return;
+    openChrome();
     const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playSong(q[0], q);
     showToast(isFavFilter ? "Shuffling favorites" : "Shuffling all songs");
   };
@@ -1510,6 +1564,10 @@ export default function App() {
     // Single tap plays immediately. Liking is done via the heart button only
     // (double-tap-to-like was removed — it forced a 250ms delay on every play
     // and made tapping a song feel laggy).
+    // Starting something to listen to means you want the player, so a folded
+    // chrome unfolds. Otherwise tapping a song from a collapsed list plays it
+    // with no visible transport at all.
+    openChrome();
     // Honour shuffle. This used to always queue displayList in order, so with
     // shuffle already on (typically restored from the previous session) tapping
     // a song silently played the library sequentially from that point.
@@ -1717,6 +1775,35 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Add every selected song to an existing playlist, from multi-select. */
+  const handleAddManyToPlaylist = useCallback((playlistId: string, ids: string[]) => {
+    setPlaylists(prev => {
+      const updated = prev.map(pl => {
+        if (pl.id !== playlistId) return pl;
+        const have = new Set(pl.songIds);
+        const toAdd = ids.filter(id => !have.has(id));
+        return toAdd.length ? { ...pl, songIds: [...pl.songIds, ...toAdd] } : pl;
+      });
+      savePlaylists(updated);
+      const target = updated.find(pl => pl.id === playlistId);
+      if (target) showToast(`Added ${ids.length} to "${target.name}"`);
+      return updated;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Create a brand-new playlist holding exactly the selected songs. */
+  const handleCreatePlaylistWithSongs = useCallback((name: string, ids: string[]) => {
+    const playlist: Playlist = { id: Date.now().toString(), name, songIds: [...ids], createdAt: Date.now() };
+    setPlaylists(prev => {
+      const updated = [...prev, playlist];
+      savePlaylists(updated);
+      return updated;
+    });
+    showToast(`Created "${name}" with ${ids.length} songs`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /** Create a brand-new playlist that starts with this one song. */
   const handleCreatePlaylistWithSong = useCallback((name: string, song: Song) => {
     const playlist: Playlist = {
@@ -1737,6 +1824,7 @@ export default function App() {
 
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean) => {
     if (!playlistSongs.length) return;
+    openChrome();
     // Stay on the Playlists tab. The queue is set to the playlist's songs below,
     // so playback and skip stay inside the playlist; there is no reason to yank
     // the user back to the Songs tab.
@@ -1824,9 +1912,11 @@ export default function App() {
         return;
       }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
+      if (updateInfo)          { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); return; }
       if (filterOpen)          { setFilterOpen(false); return; }
       if (chromeMenuOpen)      { setChromeMenuOpen(false); return; }
       if (menuSong)            { setMenuSong(null); return; }
+      if (multiAddOpen)        { setMultiAddOpen(false); return; }
       if (selectMode)          { exitSelectMode(); return; }
       if (page === "playlists") {
         // PlaylistsView owns its own nested navigation, so hand Back to it and
@@ -1855,9 +1945,49 @@ export default function App() {
   // Distance from the bottom of the screen to the TOP edge of the floating
   // mini-player card: 18px bottom offset + ~140px card height. Anything that
   // sits "just above the player" offsets from this, so the gaps stay exact.
-  // Collapsing is a Songs-list affordance only: the Playlists tab keeps its
-  // header, and multi-select needs its bar and header visible.
-  const chromeCollapsed = page === "songs" && !selectMode && !chromeOpen;
+  // Both tabs collapse — the Playlists grid runs off the bottom of the screen
+  // just as readily as the song list does. Multi-select is the one exception:
+  // it needs its own bar and the header's count visible.
+  const chromeCollapsed = !selectMode && !chromeOpen;
+
+  // The collapse rule itself, shared by the Songs list and the Playlists body
+  // so both tabs behave identically. `lastRef` is that scroller's own previous
+  // offset — see the note where those refs are declared.
+  // Deliberately NOT memoised: both call sites are inline arrows re-created on
+  // every render anyway, so there is nothing to save, and closing over `page`
+  // directly beats mirroring it into yet another ref.
+  const handleChromeScroll = (top: number, lastRef: React.MutableRefObject<number>, from: "songs" | "playlists") => {
+    // Both pages stay mounted, one sliding over the other, so BOTH scrollers
+    // keep firing. Folding the chrome changes the top inset, which relays out
+    // the page underneath, and a relayout on a scroller can emit a scroll event
+    // of its own — which would land in the "back at the top, show the chrome
+    // again" branch and undo the fold. Only the page you are looking at gets a
+    // say in whether the header is folded.
+    if (from !== page) return;
+    const prev = lastRef.current;
+    lastRef.current = top;
+    // A scroll the app started (jumping to the playing track after shuffle or
+    // skip) is not the user asking for more list room.
+    if (programmaticScrollRef.current) return;
+    // With automatic collapsing off, scrolling never touches the chrome at all,
+    // not even to restore it at the top.
+    if (!autoCollapseRef.current) return;
+    if (top <= 4) {
+      chromeManualRef.current = null;
+      setChromeOpen(true);
+      return;
+    }
+    if (chromeManualRef.current !== null) return;
+    // Only a genuine downward drag folds it away. Scrolling back up leaves the
+    // chrome hidden until you actually reach the top, which is what keeps the
+    // list from flickering mid-scroll.
+    if (top > prev + 2 && top > CHROME_COLLAPSE_AT) {
+      // Only hint on the transition, not on every scroll event while folded.
+      if (chromeOpen) showCollapseHint();
+      setChromeOpen(false);
+    }
+  };
+
   const toggleChrome = () => {
     hapticImpact("light");
     setChromeAnimate(true);
@@ -1897,7 +2027,11 @@ export default function App() {
     toggleChrome();
   };
 
-  const playerH    = currentSong && !selectMode && !chromeCollapsed ? 158 : 0;
+  // 18px bottom offset + the card's own measured height (95px). The card lost
+  // 45px when the timeline moved out of it, so this came down from 158; the
+  // shuffle FAB, the scroll-to-top button and the list's bottom padding all
+  // offset from here, and a stale number leaves a visible gap under the player.
+  const playerH    = currentSong && !selectMode && !chromeCollapsed ? 113 : 0;
   const selectBarH = selectMode ? 100 : 0;
   const bottomH    = playerH + selectBarH;
   const modeBg     = playMode === "shuffle" ? TH.violet : playMode === "repeat" ? TH.repeat : TH.dim;
@@ -2004,6 +2138,15 @@ export default function App() {
         .mp-title-l { animation: mpTitleFromL 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
+        /* Bars on the album art of the track that is playing. Defined here
+           rather than in AlbumArt so a single rule serves every list that
+           renders one (Songs, playlists, the bin). */
+        @keyframes mpEq { 0%,100% { height: 22%; } 50% { height: 92%; } }
+        .mp-eqbar { height: 40%; animation: mpEq 0.9s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .mp-eqbar { animation: none; height: 60%; } }
+        /* The "tap the logo" pill shown the first few automatic collapses. */
+        @keyframes mpHintIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+        .mp-hint { animation: mpHintIn 0.22s ease both; }
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
@@ -2118,23 +2261,13 @@ export default function App() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <span style={{ fontSize: 12, color: TH.muted }}>{displayList.length} songs</span>
-                <div style={{ position: "relative" }}>
-                  <button onClick={() => setFilterOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? TH.heart + "88" : TH.border}`, background: isFavFilter ? TH.binBg : TH.surface, color: isFavFilter ? TH.heart : TH.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
-                    <span>{filterLabel}</span><IC.Chevron />
-                  </button>
-                  {filterOpen && (
-                    <>
-                      <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
-                      <div style={{ position: "absolute", right: 0, top: "110%", background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 185, zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)", overflow: "hidden" }}>
-                        {FILTER_OPTIONS.map((opt: { id: FilterId; label: string }) => (
-                          <button key={opt.id} onClick={() => { setFilter(opt.id); setFilterOpen(false); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "13px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: filter === opt.id ? TH.text : TH.muted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", fontWeight: filter === opt.id ? "700" : "400" }}>
-                            <span>{opt.label}</span>{filter === opt.id && IC.Check(TH.accent)}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
+                {/* Just the button. The menu itself is rendered OUTSIDE this
+                    card (see "Sort menu" further down): the card clips its
+                    overflow so it can animate its height, which silently cut
+                    the dropdown off and made the sort options unusable. */}
+                <button onClick={() => setFilterOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? TH.heart + "88" : TH.border}`, background: isFavFilter ? TH.binBg : TH.surface, color: isFavFilter ? TH.heart : TH.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                  <span>{filterLabel}</span><IC.Chevron />
+                </button>
               </div>
             </div>
           )}
@@ -2166,6 +2299,96 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* ── Collapse hint ────────────────────────────────────────────────
+            The first few times the chrome folds itself away, say so. Without
+            this the header and player just disappear on a scroll and nothing
+            suggests the little round logo is the way back. Shown three times
+            total (counted in Preferences), then never again. */}
+        {chromeCollapsed && collapseHint && (
+          <div
+            className="mp-hint"
+            onClick={() => { setCollapseHint(false); toggleChrome(); }}
+            style={{
+              position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 16px)", left: 74, zIndex: 61,
+              display: "flex", alignItems: "center", gap: 7, cursor: "pointer",
+              background: TH.sheetBg, border: `1px solid ${TH.border}`, borderRadius: 18,
+              padding: "6px 13px 6px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+              fontSize: 12.5, color: TH.textSub, whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ display: "flex", transform: "rotate(180deg)", color: TH.muted }}><IC.ChevronR /></span>
+            Tap the logo to bring these back
+          </div>
+        )}
+
+        {/* ── Update notice ────────────────────────────────────────────────
+            Someone on an older build has no other way to find out that a fix
+            shipped: the app is offline by design and the website is the only
+            channel. Sits under the header rather than at the bottom, where it
+            would land on top of the shuffle button and the mini-player, and
+            dismisses per version so saying "Later" once means later for good. */}
+        {updateInfo && (
+          <div style={{
+            position: "absolute", top: topInset, left: 12, right: 12, zIndex: 120,
+            background: TH.sheetBg, border: `1px solid ${TH.border}`, borderRadius: 16,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.5)", padding: "14px 16px 12px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <span style={{ display: "flex", color: TH.text }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19V5" /><polyline points="5 12 12 5 19 12" />
+                </svg>
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: TH.text }}>
+                MPTree {updateInfo.version} is out
+              </span>
+            </div>
+            {updateInfo.notes && updateInfo.notes.length > 0 && (
+              <ul style={{ margin: "8px 0 0", padding: "0 0 0 18px", color: TH.textSub, fontSize: 13, lineHeight: 1.55 }}>
+                {updateInfo.notes.slice(0, 2).map((n, i) => <li key={i}>{n}</li>)}
+              </ul>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                onClick={() => { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); }}
+                style={{ flex: 1, padding: 11, background: TH.dim, color: TH.text, border: "none", borderRadius: 11, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Later
+              </button>
+              <button
+                onClick={() => {
+                  const info = updateInfo;
+                  setUpdateInfo(null);
+                  dismissUpdate(info.version);
+                  Browser.open({ url: info.url }).catch(() => {});
+                }}
+                style={{ flex: 1, padding: 11, background: TH.accent, color: TH.playBtnFg, border: "none", borderRadius: 11, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Get it
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Sort menu ────────────────────────────────────────────────────
+            A sibling of the header card, not a child of it. The card sets
+            overflow:hidden so its fold animation has something to clip, and
+            an absolutely-positioned dropdown inside it was clipped along with
+            everything else — the menu opened and was simply invisible. Anchored
+            here to `topInset`, which already tracks the card's bottom edge. */}
+        {filterOpen && page === "songs" && !chromeCollapsed && (
+          <>
+            <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
+            <div style={{ position: "absolute", right: 18, top: topInset - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 185, zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+              {FILTER_OPTIONS.map((opt: { id: FilterId; label: string }) => (
+                <button key={opt.id} onClick={() => { setFilter(opt.id); setFilterOpen(false); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "13px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: filter === opt.id ? TH.text : TH.muted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", fontWeight: filter === opt.id ? "700" : "400" }}>
+                  <span>{opt.label}</span>{filter === opt.id && IC.Check(TH.accent)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* ── Header options, from holding the logo ───────────────────────── */}
         {chromeMenuOpen && (
@@ -2219,28 +2442,9 @@ export default function App() {
               data-tour="songs"
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
               onScroll={() => {
-                const top  = scrollRef.current?.scrollTop ?? 0;
-                const prev = lastScrollTopRef.current;
-                lastScrollTopRef.current = top;
+                const top = scrollRef.current?.scrollTop ?? 0;
                 setListScrollTop(top);
-                // A scroll the app started (jumping to the playing track after
-                // shuffle or skip) is not the user asking for more list room.
-                if (programmaticScrollRef.current) return;
-                // With automatic collapsing off, scrolling never touches the
-                // chrome at all — not even to restore it at the top.
-                if (!autoCollapseRef.current) return;
-                // Back at the very top: always show the chrome, and drop any
-                // manual override so scrolling drives it again.
-                if (top <= 4) {
-                  chromeManualRef.current = null;
-                  setChromeOpen(true);
-                  return;
-                }
-                if (chromeManualRef.current !== null) return;
-                // Only a genuine downward drag folds it away. Scrolling back up
-                // leaves the chrome hidden until you actually reach the top,
-                // which is what keeps the list from flickering mid-scroll.
-                if (top > prev + 2 && top > CHROME_COLLAPSE_AT) setChromeOpen(false);
+                handleChromeScroll(top, lastScrollTopRef, "songs");
               }}
             >
               <div style={{ height: refreshing ? 46 : `${pullDist}px`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", transition: refreshing ? "height 0.2s ease" : "none" }}>
@@ -2279,17 +2483,23 @@ export default function App() {
                               display: "flex", alignItems: "center", padding: "10px 16px", gap: 10, cursor: "pointer",
                               background: isSelected ? TH.violet + "18" : isActive ? TH.card : "transparent",
                               transition: "background 0.15s",
-                              borderLeft: isSelected ? `3px solid ${TH.violet}` : "3px solid transparent",
+                              // The playing row used to be marked only by a
+                              // slightly lighter background, which is easy to
+                              // miss. It now also carries the accent bar down
+                              // its left edge and animated bars on its art.
+                              borderLeft: isSelected ? `3px solid ${TH.violet}`
+                                        : isActive   ? `3px solid ${TH.accent}`
+                                        : "3px solid transparent",
                             }}>
                             {selectMode && (
                               <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${isSelected ? TH.violet : TH.border}`, background: isSelected ? TH.violet : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
                                 {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                               </div>
                             )}
-                            <AlbumArt title={name} size={48} active={isActive && !selectMode} customPhoto={m.customPhoto} T={TH} />
+                            <AlbumArt title={name} size={48} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} T={TH} />
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <div style={{ fontSize: 15, fontWeight: "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                                <div style={{ fontSize: 15, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                                 {song.isCut && <span style={{ fontSize: 10, background: TH.dim, color: TH.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: "700", flexShrink: 0 }}>CUT</span>}
                               </div>
                               <div style={{ display: "flex", alignItems: "center", marginTop: 2, gap: 6 }}>
@@ -2401,7 +2611,7 @@ export default function App() {
               meta={meta}
               onPlaylistsChange={handlePlaylistsChange}
               onPlayPlaylist={handlePlayPlaylist}
-              onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
+              onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playSong(song, list); }}
               currentSongId={currentSong?.id ?? null}
               isPlaying={isPlaying}
               onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
@@ -2413,6 +2623,7 @@ export default function App() {
               isLiked={isLiked}
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
+              onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
               onClose={() => setPage("songs")}
               T={TH}
             />
@@ -2421,8 +2632,6 @@ export default function App() {
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
         {currentSong && !selectMode && (() => {
-          const sliderMin = currentSong.isCut ? (currentSong.cutFrom ?? 0) : 0;
-          const sliderMax = currentSong.isCut ? (currentSong.cutTo ?? duration) : (duration || 100);
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -2456,22 +2665,10 @@ export default function App() {
               >
                 <div className="swipe-hint" style={{ width: 36, height: 4, borderRadius: 2, background: TH.dim }} />
               </div>
-              <div
-                style={{ display: "flex", alignItems: "center", marginBottom: 10 }}
-                onTouchStart={e => e.stopPropagation()}
-                onTouchMove={e => e.stopPropagation()}
-              >
-                <span style={{ fontSize: 11, color: TH.muted, width: 34 }}>{fmt(currentTime)}</span>
-                <input className="slider" type="range" min={sliderMin} max={sliderMax} value={currentTime}
-                  onMouseDown={e => { e.stopPropagation(); setDragging(true); }}
-                  onTouchStart={e => { e.stopPropagation(); setDragging(true); }}
-                  onChange={e => setCurrentTime(Number(e.target.value))}
-                  onMouseUp={async e => { setDragging(false); await seekTo(Number((e.target as HTMLInputElement).value)); }}
-                  onTouchEnd={async e => { setDragging(false); await seekTo(Number((e.target as HTMLInputElement).value)); }} />
-                <span style={{ fontSize: 11, color: TH.muted, width: 34, textAlign: "right" }}>
-                  {currentSong.isCut && currentSong.cutTo ? fmt(currentSong.cutTo) : fmt(duration)}
-                </span>
-              </div>
+              {/* No timeline here. Seeking is a deliberate act that wants room
+                  and both hands' worth of precision, so the scrubber lives in
+                  the expanded player only. Down here it crowded the card and
+                  ate horizontal swipes meant for skipping tracks. */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div
                   onClick={() => setPlayerExpanded(true)}
@@ -2515,8 +2712,20 @@ export default function App() {
             count={selected.size} totalCount={displayList.length} allLiked={allSelectedLiked}
             onLikeAll={() => multiLikeWithMeta(true)} onUnlikeAll={() => multiLikeWithMeta(false)}
             onShuffleSelection={multiShuffleSelection} onRemoveAll={() => setRemoveMultiConfirm(true)}
+            onAddToPlaylist={() => setMultiAddOpen(true)}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
             onClose={exitSelectMode} T={TH} />
+        )}
+
+        {multiAddOpen && (
+          <AddToPlaylistSheet
+            count={selected.size}
+            playlists={playlists}
+            onAddToPlaylist={id => { handleAddManyToPlaylist(id, [...selected]); setMultiAddOpen(false); exitSelectMode(); }}
+            onCreatePlaylist={name => { handleCreatePlaylistWithSongs(name, [...selected]); setMultiAddOpen(false); exitSelectMode(); }}
+            onClose={() => setMultiAddOpen(false)}
+            T={TH}
+          />
         )}
 
         {/* ═══ SHEETS ══════════════════════════════════════════════════════ */}
@@ -2644,6 +2853,7 @@ export default function App() {
               onShare={() => shareSong(currentSong)}
               onPlayNextReorder={newQ => { setPlayNextQueue(newQ); playNextQueueRef.current = newQ; }}
               onSkipCurrentUpNext={handleSkipCurrentUpNext}
+              onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}
               onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
               dragProgress={playerExpanded ? null : expandDrag}
               dragSettling={expandSettling}

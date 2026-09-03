@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's ground. DARK.bg in src/themes.ts is the same black; the
+         splash screen has to match it exactly or the handover to the WebView
+         reads as a second, different startup screen. -->
+    <color name="mptree_ground">#000000</color>
+</resources>

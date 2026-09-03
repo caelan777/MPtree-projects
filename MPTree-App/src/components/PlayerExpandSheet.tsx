@@ -43,6 +43,10 @@ type PlayerExpandSheetProps = {
   onShare: () => void;
   onPlayNextReorder: (newQueue: string[]) => void;
   onSkipCurrentUpNext: () => void;
+  /** Opens the same "⋮" action sheet the list rows use, for this track. The
+   *  chips below cover the common actions; the menu adds Play next and Add to
+   *  playlist, which have nowhere else to live once you are in the player. */
+  onOpenMenu: () => void;
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -61,7 +65,7 @@ export function PlayerExpandSheet({
   onTogglePlay, onSkip, onCycleMode,
   onSeek, onSeekStart, onSeekEnd,
   onEdit, onCut, onToggleLike, onRemove, onShare,
-  onPlayNextReorder, onSkipCurrentUpNext, onClose,
+  onPlayNextReorder, onSkipCurrentUpNext, onOpenMenu, onClose,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
@@ -280,7 +284,13 @@ export function PlayerExpandSheet({
         >
         <div style={{ width: 36, height: 4, background: T.dim, borderRadius: 2, margin: "12px auto 0", flexShrink: 0 }} />
 
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 14px 0", flexShrink: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px 0", flexShrink: 0 }}>
+          <button
+            onClick={onOpenMenu}
+            aria-label={`More options for ${dispName}`}
+            style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+            <IC.Dots />
+          </button>
           <button onClick={animatedClose}
             style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
             <IC.ChevronDown />
