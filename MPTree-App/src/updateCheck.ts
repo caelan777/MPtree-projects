@@ -7,8 +7,9 @@ import { Preferences } from "@capacitor/preferences";
 // out. Google Play forbids an app distributed through Play from pointing users
 // at another download channel for its own updates, which is why the in-app
 // download feature was removed in the first place. `__DISTRIBUTION__` comes
-// from vite.config.ts and is "web" unless MPTREE_DIST says otherwise, so the
-// Play build (MPTREE_DIST=play) never reaches the network at all here.
+// from the build mode (see vite.config.ts): `npm run build:play` and
+// `npm run build:demo` make it something other than "web", and this function
+// then returns before touching the network at all.
 //
 // Everything else about MPTree stays offline: this is one small GET of a static
 // JSON file, only when the app is opened, at most once a day, and nothing about

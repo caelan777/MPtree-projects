@@ -42,23 +42,26 @@ the JDK bundled with Android Studio, because the system `java` is 8 and fails.
 
 ### Which channel are you building for?
 
-`npm run build` bakes the distribution channel into the bundle:
+The build bakes the distribution channel into the bundle:
 
 | Channel | Command | Effect |
 |---|---|---|
 | Website (default) | `npm run build` | The app checks `mp-tree.net/version.json` once a day and offers a link when a newer release is out. |
-| Play Store | `MPTREE_DIST=play npm run build` | That check is compiled out entirely. |
+| Play Store | `npm run build:play` | That check is compiled out entirely. |
+| Website demo | `npm run build:demo` | Also compiled out. The in-browser demo has nothing to update. |
 
-**The Play AAB must be built with `MPTREE_DIST=play`.** Google Play does not allow an app
+**The Play AAB must be built with `npm run build:play`.** Google Play does not allow an app
 distributed through Play to point users at another download channel for its own updates;
-that rule is why the in-app web download was removed. Nothing enforces the flag, so it is
-on you to set it. To confirm afterwards:
+that rule is why the in-app web download was removed. Nothing enforces this, so it is on you
+to run the right script. To confirm afterwards:
 
 ```bash
 grep -c "mp-tree.net/version.json" MPTree-App/dist/assets/index-*.js
 ```
 
-`0` for a Play build, `1` for a website build.
+`0` for a Play build, `1` for a website build. Run `npm run build` again before
+`npx cap sync android` if you built for Play and now want the website APK, since both
+scripts write to the same `dist/`.
 
 ## Verify before publishing
 

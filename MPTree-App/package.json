@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "build:demo": "tsc -b && vite build --base=./ --outDir=../Website/demo --emptyOutDir"
+    "build:demo": "tsc -b && vite build --mode demo --base=./ --outDir=../Website/demo --emptyOutDir",
+    "build:play": "tsc -b && vite build --mode play"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
