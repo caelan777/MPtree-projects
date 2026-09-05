@@ -30,6 +30,8 @@ type SongMenuSheetProps = {
   onChangePhoto: () => void;
   /** Makes this track the device ringtone. */
   onSetRingtone: () => void;
+  /** Paste, look up, or clear this song's lyrics. */
+  onEditLyrics: () => void;
   onCut: () => void;
   onToggleLike: () => void;
   onShare: () => void;
@@ -45,7 +47,7 @@ type SongMenuSheetProps = {
 export function SongMenuSheet({
   song, dispName, dispArtist, customPhoto, isLiked, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
-  onEdit, onChangePhoto, onSetRingtone, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
+  onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
   const [pane, setPane] = useState<"actions" | "playlists">("actions");
@@ -109,7 +111,7 @@ export function SongMenuSheet({
                 menu to do. The rest of the list is one-tap verbs; these three
                 open something. */}
             <div style={{ display: "flex", gap: 8, padding: "12px 20px 6px" }}>
-              <BigAction icon={<IC.Bell />}  label="Ringtone" onClick={onSetRingtone} T={T} />
+              <BigAction icon={<IC.Bell />}  label="Set as ringtone" onClick={onSetRingtone} T={T} />
               <BigAction icon={<IC.Photo />} label="Photo"    onClick={onChangePhoto} T={T} />
               <BigAction icon={<IC.Edit />}  label="Edit"     onClick={onEdit}        T={T} />
             </div>
@@ -121,6 +123,7 @@ export function SongMenuSheet({
               </svg>
             ), "Play next", onPlayNext)}
             {row("add", <IC.Plus />, "Add to playlist", () => setPane("playlists"), { trailing: <IC.ChevronR /> })}
+            {row("lyrics", <IC.Lyrics />, "Lyrics", onEditLyrics)}
             {row("cut", <IC.Scissors />, "Cut", onCut)}
             {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? "Unlike" : "Like", onToggleLike)}
             {row("share", <IC.Share />, "Share", onShare)}

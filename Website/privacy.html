@@ -12,8 +12,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
-<link rel="stylesheet" href="assets/tokens.css?v=27">
-<link rel="stylesheet" href="assets/site.css?v=27">
+<link rel="stylesheet" href="assets/tokens.css?v=28">
+<link rel="stylesheet" href="assets/site.css?v=28">
 </head>
 <body>
 
@@ -44,7 +44,7 @@
 
   <section class="section-flush">
     <div class="prose">
-      <p class="prose-date">Last updated: 3 September 2026</p>
+      <p class="prose-date">Last updated: 5 September 2026</p>
 
       <h2>Who this covers</h2>
       <p>
@@ -57,9 +57,10 @@
       <p>
         Nothing. The app has no analytics, no advertising, and no tracking of any kind, and it
         never sends us your files, your playlists, or what you listen to. We have no way of
-        knowing who you are or what you play, because none of that information is ever sent
-        anywhere. The one request the app makes on its own is the update check described under
-        <a href="#internet">Internet access</a> below.
+        knowing who you are or what you play, because none of that information is ever sent to
+        us. The two requests MPTree can make, the version check and the optional lyrics lookup,
+        are both described under <a href="#internet">Internet access</a> below. Neither of them
+        tells us anything about you.
       </p>
 
       <h2>Access to your music files</h2>
@@ -74,10 +75,12 @@
       <h2 id="internet">Internet access</h2>
       <p>
         MPTree plays your local files and does not need the internet to work. It never streams,
-        never sends us your listening activity, and never uploads your music or anything about it.
+        never sends us your listening activity, and never uploads your music. There are exactly
+        two requests it can make, described below, and one of them only ever happens because you
+        asked for it.
       </p>
       <p>
-        There is one background request, and only in the copy you download from this website:
+        The first is a version check, and only in the copy you download from this website:
         about once a day, when you open the app, it fetches a small file from mp-tree.net to see
         whether a newer version has been released. That request carries nothing except the ask
         itself. Like any web request, including loading this page, it does reach the server with
@@ -86,8 +89,18 @@
         demo you can try on this site.
       </p>
       <p>
-        Apart from that, MPTree opens a connection only when you tap an outward link yourself,
-        such as the optional support page, which opens in your own browser.
+        The second request is for lyrics, and it only happens if you ask for it. Tapping
+        <strong>Search online</strong> on a song, or switching on <strong>Look up lyrics
+        automatically</strong>, sends that song&rsquo;s title, artist, album and length to
+        <a href="https://lrclib.net" target="_blank" rel="noopener">lrclib.net</a>, which answers
+        with lyrics or with nothing. Both of those are off until you turn them on, and neither
+        sends anything else: no account, no device identifier, and no list of what is in your
+        library. As with any request, it arrives at that server with your IP address. Lyrics you
+        paste in yourself never leave your phone.
+      </p>
+      <p>
+        Apart from those two, MPTree opens a connection only when you tap an outward link
+        yourself, such as the optional support page, which opens in your own browser.
       </p>
 
       <h2>Backups</h2>

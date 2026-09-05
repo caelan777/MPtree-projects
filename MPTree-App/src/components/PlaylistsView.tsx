@@ -40,6 +40,7 @@ interface Props {
   onChangePhoto:      (song: Song) => void;
   /** Makes the song the device ringtone. */
   onSetRingtone:      (song: Song) => void;
+  onEditLyrics:       (song: Song) => void;
   /** Multi-select actions, shared with the Songs page so the selection bar is
    *  literally the same component rather than a lookalike. */
   onLikeMany:            (ids: string[], liked: boolean) => void;
@@ -76,6 +77,29 @@ interface Props {
   /** Called when the user backs out of the root "list" view — App treats this as "go to Songs page" */
   onClose:            () => void;
   T:                  T;
+}
+
+/** Shared icon tile: playlist list rows, the detail header, and the fallback
+ *  when a playlist has no cover photo. Top level, so it keeps its identity
+ *  across renders instead of being rebuilt as a new type each time. */
+function PlaylistArt({ photo, size, iconSize, onClick, T: t }: { photo?: string; size: number; iconSize?: number; onClick?: () => void; T: T }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        width: size, height: size, borderRadius: size >= 80 ? 16 : 12, flexShrink: 0,
+        background: photo ? `center/cover no-repeat url(${photo})` : t.dim,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: onClick ? "pointer" : "default", overflow: "hidden",
+      }}
+    >
+      {!photo && (
+        <svg width={iconSize ?? 22} height={iconSize ?? 22} viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      )}
+    </div>
+  );
 }
 
 // ─── Add-songs sorting ────────────────────────────────────────────────────────
@@ -157,7 +181,7 @@ export const PlaylistsView: React.FC<Props> = ({
   topInset = 0,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
-  onEditSong, onChangePhoto, onSetRingtone, onCutSong, onShareSong, onRemoveSong,
+  onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
   onLikeMany, onShuffleMany, onPlayManyNext, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
   onBodyScroll, animateInsets = true, onClose, T,
@@ -213,14 +237,14 @@ export const PlaylistsView: React.FC<Props> = ({
   // bar removes all selected songs from the playlist at once.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const exitSelect = useCallback(() => { setSelectMode(false); setSelectedIds(new Set()); }, []);
+  const exitSelect = useCallback(() => { setSelectMode(false); setSelectedIds(new Set()); }, [setSelectMode, setSelectedIds]);
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }, []);
+  }, [setSelectedIds]);
   // Leaving the detail view (or App switching to Songs) cancels selection.
   useEffect(() => { if (view === "list") exitSelect(); }, [view, exitSelect]);
 
@@ -271,7 +295,17 @@ export const PlaylistsView: React.FC<Props> = ({
   // ── Tappable / long-pressable song row ─────────────────────────────────────
   // Shared by the playlist detail and smart-playlist detail lists. Tap plays
   // the song within its list; long-press opens an action menu.
-  const SongRow: React.FC<{ song: Song; idx: number; list: Song[]; inPlaylist: boolean }> = ({ song, list, inPlaylist }) => {
+  // Deliberately a render function, NOT a component.
+  //
+  // Declared inside the parent, a component is a brand new type on every render,
+  // so React unmounts and rebuilds every row rather than updating it. With the
+  // position ticker firing twice a second that happened constantly: the playing
+  // bars restarted mid-animation (the glitch), and each row's artwork lost its
+  // cover lookup and its accent border along with it.
+  //
+  // Called as a function, the JSX it returns simply becomes part of this
+  // component's tree and reconciles by key like any other element.
+  const renderSongRow = ({ song, list, inPlaylist }: { song: Song; idx: number; list: Song[]; inPlaylist: boolean }) => {
     const isCurrent = currentSongId === song.id;
     const isSelected = selectedIds.has(song.id);
     const startPress = (x: number, y: number) => {
@@ -573,25 +607,6 @@ export const PlaylistsView: React.FC<Props> = ({
   // ── Styles ────────────────────────────────────────────────────────────────
   const t = T;
 
-  // Shared icon tile — used for the playlist list rows, the detail header,
-  // and as the fallback when a playlist has no cover photo set.
-  const PlaylistArt: React.FC<{ photo?: string; size: number; iconSize?: number; onClick?: () => void }> = ({ photo, size, iconSize, onClick }) => (
-    <div
-      onClick={onClick}
-      style={{
-        width: size, height: size, borderRadius: size >= 80 ? 16 : 12, flexShrink: 0,
-        background: photo ? `center/cover no-repeat url(${photo})` : t.dim,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: onClick ? "pointer" : "default", overflow: "hidden",
-      }}
-    >
-      {!photo && (
-        <svg width={iconSize ?? 22} height={iconSize ?? 22} viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2">
-          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-        </svg>
-      )}
-    </div>
-  );
 
   // The floating header's height, applied as a spacer INSIDE the scroller on
   // the root list and as padding OUTSIDE it everywhere else.
@@ -900,7 +915,7 @@ export const PlaylistsView: React.FC<Props> = ({
                       cursor: "pointer",
                     }}
                   >
-                    <PlaylistArt photo={pl.coverPhoto} size={52} />
+                    <PlaylistArt photo={pl.coverPhoto} size={52} T={t} />
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pl.name}</div>
@@ -943,7 +958,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {/* Cover photo + play/shuffle */}
             <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
               <div style={{ position: "relative" }}>
-                <PlaylistArt photo={activePlaylist.coverPhoto} size={84} iconSize={32} onClick={pickCoverPhoto} />
+                <PlaylistArt photo={activePlaylist.coverPhoto} size={84} iconSize={32} onClick={pickCoverPhoto} T={t} />
                 <div
                   onClick={pickCoverPhoto}
                   style={{
@@ -1024,7 +1039,7 @@ export const PlaylistsView: React.FC<Props> = ({
               </div>
             ) : (
               playlistSongs.map((song, idx) => (
-                <SongRow key={song.id} song={song} idx={idx} list={playlistSongs} inPlaylist={true} />
+                <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: playlistSongs, inPlaylist: true })}</React.Fragment>
               ))
             )}
             <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
@@ -1035,7 +1050,7 @@ export const PlaylistsView: React.FC<Props> = ({
         {view === "smartDetail" && activeSmartPlaylist && (
           <>
             <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
-              <PlaylistArt size={84} iconSize={32} />
+              <PlaylistArt size={84} iconSize={32} T={t} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: t.muted }}>
                   {smartPlaylistSongs.length} {smartPlaylistSongs.length === 1 ? "song" : "songs"}
@@ -1092,7 +1107,7 @@ export const PlaylistsView: React.FC<Props> = ({
               </div>
             ) : (
               smartPlaylistSongs.map((song, idx) => (
-                <SongRow key={song.id} song={song} idx={idx} list={smartPlaylistSongs} inPlaylist={false} />
+                <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: smartPlaylistSongs, inPlaylist: false })}</React.Fragment>
               ))
             )}
             <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
@@ -1212,6 +1227,7 @@ export const PlaylistsView: React.FC<Props> = ({
           onEdit={() => { onEditSong(menuSong.song); setMenuSong(null); }}
           onChangePhoto={() => { onChangePhoto(menuSong.song); setMenuSong(null); }}
           onSetRingtone={() => { onSetRingtone(menuSong.song); setMenuSong(null); }}
+          onEditLyrics={() => { onEditLyrics(menuSong.song); setMenuSong(null); }}
           onCut={() => { onCutSong(menuSong.song); setMenuSong(null); }}
           onToggleLike={() => { onToggleLike(menuSong.song); setMenuSong(null); }}
           onShare={() => { onShareSong(menuSong.song); setMenuSong(null); }}

@@ -34,6 +34,9 @@ export function makeCutId(uri: string, cutFrom: number, cutTo: number): string {
 export type SongMeta = {
   customName?: string;
   customArtist?: string;
+  /** Lyrics the user pasted or fetched, kept with the song rather than beside
+   *  the file. Plain text, or .lrc with timestamps for the karaoke view. */
+  customLyrics?: string;
   /** A genre the user typed. Wins over the scanned genre, same as customName
    *  wins over the scanned title. */
   customGenre?: string;
