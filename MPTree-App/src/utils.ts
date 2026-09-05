@@ -68,3 +68,53 @@ export function extractDominantColor(imageUrl: string): Promise<string | null> {
     }
   });
 }
+
+// ─── COVER PHOTOS ────────────────────────────────────────────────────────────
+//
+// A photo chosen from the gallery arrives at full camera resolution, and reading
+// it with FileReader.readAsDataURL stores it verbatim: a 3 MB photo becomes
+// roughly 4 MB of base64 sitting in song meta.
+//
+// That is expensive in every direction. Meta is serialised to Preferences as one
+// JSON blob, so every write pays for every photo; the whole store is parsed on
+// launch; backups carry it; and it crosses the bridge again to reach the lock
+// screen. Cover art is displayed at 268px at the very largest, so none of that
+// size was ever visible.
+//
+// 640px on the long edge, JPEG, keeps a cover sharp on any phone screen and
+// turns megabytes into tens of kilobytes.
+const COVER_MAX_PX = 640;
+const COVER_QUALITY = 0.82;
+
+export function readCoverPhoto(file: File, maxPx = COVER_MAX_PX): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read that image"));
+    reader.onload = () => {
+      const original = reader.result as string;
+      const img = new Image();
+      // If anything about the decode or the canvas fails, fall back to the
+      // original rather than losing the user's photo.
+      img.onerror = () => resolve(original);
+      img.onload = () => {
+        try {
+          const longest = Math.max(img.width, img.height);
+          if (longest <= maxPx) { resolve(original); return; }
+
+          const scale = maxPx / longest;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { resolve(original); return; }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", COVER_QUALITY));
+        } catch {
+          resolve(original);
+        }
+      };
+      img.src = original;
+    };
+    reader.readAsDataURL(file);
+  });
+}

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { IC } from "./Icons";
+import { readCoverPhoto } from "../utils";
 
 // ─── BULK EDIT SHEET ─────────────────────────────────────────────────────────
 //
@@ -123,9 +124,7 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
                   onChange={e => {
                     const f = e.target.files?.[0];
                     if (!f) return;
-                    const r = new FileReader();
-                    r.onload = ev => setPhoto(ev.target?.result as string);
-                    r.readAsDataURL(f);
+                    readCoverPhoto(f).then(setPhoto).catch(() => {});
                   }}
                 />
               </label>

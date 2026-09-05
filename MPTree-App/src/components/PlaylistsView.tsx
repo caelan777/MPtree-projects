@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
-import { isMissingArtist } from "../utils";
+import { isMissingArtist, readCoverPhoto } from "../utils";
 import { AlbumArt } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar } from "./MultiSelectBar";
@@ -586,15 +586,11 @@ export const PlaylistsView: React.FC<Props> = ({
     const file = e.target.files?.[0];
     e.target.value = ""; // allow picking the same file again later
     if (!file || !activePlaylist) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : undefined;
-      if (!dataUrl) return;
+    readCoverPhoto(file).then(dataUrl => {
       onPlaylistsChange(playlists.map(p =>
         p.id === activePlaylist.id ? { ...p, coverPhoto: dataUrl } : p
       ));
-    };
-    reader.readAsDataURL(file);
+    }).catch(() => {});
   }, [activePlaylist, playlists, onPlaylistsChange]);
 
   const removeCoverPhoto = useCallback(() => {

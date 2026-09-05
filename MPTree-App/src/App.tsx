@@ -385,6 +385,8 @@ export default function App() {
   const displayListRef  = useRef<Song[]>([]);
   const isPlayingRef = useRef(false);
   const metaRef      = useRef<Record<string, SongMeta>>({});
+  /** Whether meta has changed since it was last written. See the sync effect. */
+  const metaDirtyRef = useRef(false);
   const removedRef   = useRef<Song[]>([]);
   const pressTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartX  = useRef(0);
@@ -411,7 +413,12 @@ export default function App() {
   useEffect(() => { removedRef.current = removedSongs; }, [removedSongs]);
   useEffect(() => { filterRef.current = filter; }, [filter]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
-  useEffect(() => { metaRef.current = meta; }, [meta]);
+  // Song meta is the one thing worth writing lazily. It holds cover photos as
+  // base64 data URLs, so serialising it is measured in megabytes, and the
+  // session flush below runs every 2.5 seconds while a track plays. Writing it
+  // on every one of those stalled the main thread on a timer, which is what the
+  // spinning record kept catching. Mark it dirty on change; write it only then.
+  useEffect(() => { metaRef.current = meta; metaDirtyRef.current = true; }, [meta]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { crossfadeMsRef.current  = crossfadeMs;  }, [crossfadeMs]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
@@ -454,7 +461,10 @@ export default function App() {
     if (flushSessionTimer.current) return;
     flushSessionTimer.current = setTimeout(() => {
       flushSessionTimer.current = null;
-      saveMetaNow(metaRef.current);
+      if (metaDirtyRef.current) {
+        metaDirtyRef.current = false;
+        saveMetaNow(metaRef.current);
+      }
       saveSession({
         filter:       filterRef.current,
         playMode:     playModeRef.current,
@@ -3202,6 +3212,8 @@ export default function App() {
               onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
               onRemove={() => { setPlayerExpanded(false); setRemoveSong(currentSong); }}
               onShare={() => shareSong(currentSong)}
+              lyrics={getMeta(currentSong).customLyrics}
+              onAddLyrics={() => openLyricsSheet(currentSong)}
               onPlayNextReorder={newQ => { setPlayNextQueue(newQ); playNextQueueRef.current = newQ; }}
               onSkipCurrentUpNext={handleSkipCurrentUpNext}
               onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}

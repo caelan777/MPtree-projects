@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { IC } from "./Icons";
+import { readCoverPhoto } from "../utils";
 
 // ─── EDIT SHEET ──────────────────────────────────────────────────────────────
 //
@@ -86,9 +87,7 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
                 <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                   const f = e.target.files?.[0];
                   if (!f) return;
-                  const r = new FileReader();
-                  r.onload = ev => setPhoto(ev.target?.result as string);
-                  r.readAsDataURL(f);
+                  readCoverPhoto(f).then(setPhoto).catch(() => {});
                 }} />
               </label>
               <button
@@ -104,9 +103,7 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
               <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                 const f = e.target.files?.[0];
                 if (!f) return;
-                const r = new FileReader();
-                r.onload = ev => setPhoto(ev.target?.result as string);
-                r.readAsDataURL(f);
+                readCoverPhoto(f).then(setPhoto).catch(() => {});
               }} />
             </label>
           )}

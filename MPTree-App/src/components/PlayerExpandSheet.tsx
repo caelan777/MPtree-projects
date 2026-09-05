@@ -80,6 +80,11 @@ type PlayerExpandSheetProps = {
   onShare: () => void;
   onPlayNextReorder: (newQueue: string[]) => void;
   onSkipCurrentUpNext: () => void;
+  /** Lyrics saved for this song, if any. Their absence is what makes the Lyrics
+   *  button offer to add some instead of showing an empty panel. */
+  lyrics?: string;
+  /** Opens the sheet where lyrics are pasted or searched for. */
+  onAddLyrics: () => void;
   /** Opens the same "⋮" action sheet the list rows use, for this track. The
    *  chips below cover the common actions; the menu adds Play next and Add to
    *  playlist, which have nowhere else to live once you are in the player. */
@@ -102,10 +107,25 @@ export function PlayerExpandSheet({
   onTogglePlay, onSkip, onCycleMode,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
-  onPlayNextReorder, onSkipCurrentUpNext, onOpenMenu, onClose,
+  onPlayNextReorder, onSkipCurrentUpNext, lyrics, onAddLyrics, onOpenMenu, onClose,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
+  // The record gives way to the words, and back. Tied to the song, so moving to
+  // the next track always lands you on the record rather than the last song’s
+  // lyrics.
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [lyricsFor, setLyricsFor] = useState(song.id);
+  const lyricsOpen = showLyrics && lyricsFor === song.id;
+  const hasLyrics = !!lyrics && lyrics.trim().length > 0;
+
+  const toggleLyrics = () => {
+    // Nothing to show is not a state worth entering. Offer to add some instead.
+    if (!hasLyrics) { onAddLyrics(); return; }
+    setLyricsFor(song.id);
+    setShowLyrics(!lyricsOpen);
+  };
+
   const fmt = (ms: number) => {
     const s = Math.floor(ms / 1000);
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
@@ -311,10 +331,30 @@ export function PlayerExpandSheet({
             style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
             <IC.Dots />
           </button>
-          <button onClick={animatedClose}
-            style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
-            <IC.ChevronDown />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {/* Swaps the record for the words. With no lyrics stored it opens
+                the sheet to add some, rather than showing an empty panel. */}
+            <button
+              onClick={toggleLyrics}
+              aria-label="Lyrics"
+              aria-pressed={lyricsOpen}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                background: lyricsOpen ? T.dim : "transparent",
+                border: "none", borderRadius: 16, padding: "6px 10px",
+                color: lyricsOpen ? T.text : T.muted,
+                fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+              }}
+            >
+              <IC.Lyrics />
+              <span>Lyrics</span>
+            </button>
+            <button onClick={animatedClose}
+              aria-label="Close player"
+              style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+              <IC.ChevronDown />
+            </button>
+          </div>
         </div>
         </div>
 
@@ -325,12 +365,21 @@ export function PlayerExpandSheet({
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 16, marginTop: 6 }}>
-            <SpinningDisc
-              size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
-              spinning={isPlaying}
-              title={dispName}
-              customPhoto={customPhoto}
-            />
+            {lyricsOpen ? (
+              <LyricsPanel
+                text={lyrics ?? ""}
+                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
+                onEdit={onAddLyrics}
+                T={T}
+              />
+            ) : (
+              <SpinningDisc
+                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
+                spinning={isPlaying}
+                title={dispName}
+                customPhoto={customPhoto}
+              />
+            )}
             <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                 {dispName}
@@ -536,6 +585,45 @@ export function PlayerExpandSheet({
           </div>
         )}
         </div>
+      </div>
+    </div>
+  );
+}
+/**
+ * The saved lyrics, in the record's place. Plain scrolling text: MPTree stores
+ * whatever you pasted, so there are no timings to follow and pretending
+ * otherwise would just be a panel that never moves.
+ */
+function LyricsPanel({ text, size, onEdit, T }: {
+  text: string; size: number; onEdit: () => void; T: T;
+}) {
+  return (
+    <div style={{
+      width: size, height: size, flexShrink: 0,
+      borderRadius: 16, background: T.dim,
+      display: "flex", flexDirection: "column",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 14px 6px", flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
+          Lyrics
+        </span>
+        <button
+          onClick={onEdit}
+          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2 }}
+        >
+          Edit
+        </button>
+      </div>
+      <div style={{
+        flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch",
+        padding: "0 16px 14px",
+        fontSize: 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+      }}>
+        {text.trim()}
       </div>
     </div>
   );
