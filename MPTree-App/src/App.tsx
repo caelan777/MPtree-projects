@@ -143,10 +143,7 @@ export default function App() {
   const [editFocusPhoto, setEditFocusPhoto] = useState(false);
   const [bulkEditOpen,  setBulkEditOpen]  = useState(false);
   const [lyricsSong,    setLyricsSong]    = useState<Song | null>(null);
-  const [lyricsFromFile, setLyricsFromFile] = useState<string | undefined>(undefined);
-  // Off by default, deliberately. This is the only setting that lets MPTree talk
-  // to anything but the update manifest, so it is the user's to switch on.
-  const [lyricsAuto,    setLyricsAuto]    = useState(false);
+
   // The songs the open sheet applies to. Both pages fill this before opening,
   // so BulkEditSheet and AddToPlaylistSheet do not need to know which selection
   // they came from.
@@ -1147,32 +1144,19 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
 
-  // ── Editing the queue from the player ─────────────────────────────────────
-  // Both have to reach native, not just JS state. The service advances through
-  // the queue it was last handed, so a reorder or removal that only happened in
-  // JS would be undone the moment the current track ended.
-  const reorderQueue = useCallback((newQ: Song[]) => {
+  const handleSkipCurrentUpNext = useCallback(() => {
+    const q = queueRef.current;
     const cur = curRef.current;
+    if (!cur || q.length === 0) return;
+    const idx = q.findIndex(s => s.id === cur.id);
+    const pinnedSet = new Set(playNextQueueRef.current);
+    const skipTargetIdx = q.findIndex((s, i) => i > idx && !pinnedSet.has(s.id));
+    if (skipTargetIdx === -1) return;
+    const newQ = [...q];
+    const [skipped] = newQ.splice(skipTargetIdx, 1);
+    newQ.push(skipped);
     setQueue(newQ);
-    AudioPlayer.setQueue({
-      tracks: newQ.map(toNativeTrack),
-      currentIndex: cur ? newQ.findIndex(s => s.id === cur.id) : -1,
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toNativeTrack]);
-
-  const removeFromQueue = useCallback((id: string) => {
-    const cur = curRef.current;
-    // Removing what is playing would leave the service pointing at nothing.
-    // Skipping is a different action with its own control.
-    if (cur && cur.id === id) return;
-    const newQ = queueRef.current.filter(s => s.id !== id);
-    setQueue(newQ);
-    setPlayNextQueue(prev => prev.filter(pid => pid !== id));
-    AudioPlayer.setQueue({
-      tracks: newQ.map(toNativeTrack),
-      currentIndex: cur ? newQ.findIndex(s => s.id === cur.id) : -1,
-    }).catch(() => {});
+    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: idx }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toNativeTrack]);
 
@@ -1816,28 +1800,14 @@ export default function App() {
   };
 
   // ── Lyrics ────────────────────────────────────────────────────────────────
-  // Resolution order, everywhere lyrics are shown: what the user saved for this
-  // song, then a .lrc or .txt sitting next to the audio. The sheet needs to know
-  // about the file too, so it can say "there is already a file for this" rather
-  // than looking empty.
-  const dispLyrics = (s: Song) => getMeta(s).customLyrics || "";
+  // Stored with the song, read and edited in one sheet. MPTree does not fetch
+  // lyrics itself: "Search online" hands the search to the user's own browser,
+  // which keeps that request, and the choice to make it, on their side.
+  const openLyricsSheet = (s: Song) => setLyricsSong(s);
 
-  const openLyricsSheet = async (s: Song) => {
-    setLyricsSong(s);
-    setLyricsFromFile(undefined);
-    try {
-      const { lyrics } = await MusicScanner.getLyrics({ path: s.uri });
-      setLyricsFromFile(lyrics || "");
-    } catch {
-      setLyricsFromFile("");
-    }
-  };
-
-  /** An automatic lookup storing what it found. No toast: nobody asked for this
-   *  one, so it should not announce itself. */
-  const saveLyricsQuietly = (s: Song, lyrics: string) => {
-    if (!lyrics) return;
-    setMeta(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || {}), customLyrics: lyrics } }));
+  const searchLyricsOnline = (s: Song) => {
+    const q = [dispName(s), dispArtist(s), "lyrics"].filter(Boolean).join(" ");
+    Browser.open({ url: "https://duckduckgo.com/?q=" + encodeURIComponent(q) }).catch(() => {});
   };
 
   const saveLyrics = (s: Song, lyrics: string | null) => {
@@ -1850,16 +1820,6 @@ export default function App() {
     showToast(lyrics === null ? "Lyrics removed" : "Lyrics saved");
   };
 
-  // Remembered across launches, like every other preference.
-  useEffect(() => {
-    Preferences.get({ key: "mptree_lyrics_auto" })
-      .then(({ value }) => { if (value === "1") setLyricsAuto(true); })
-      .catch(() => {});
-  }, []);
-  const changeLyricsAuto = (on: boolean) => {
-    setLyricsAuto(on);
-    Preferences.set({ key: "mptree_lyrics_auto", value: on ? "1" : "0" }).catch(() => {});
-  };
 
   // ── Set as ringtone ───────────────────────────────────────────────────────
   // Three outcomes worth telling apart, because "nothing happened" is the worst
@@ -3088,14 +3048,11 @@ export default function App() {
 
         {lyricsSong && (
           <LyricsSheet
-            song={lyricsSong}
             dispName={dispName(lyricsSong)}
             dispArtist={dispArtist(lyricsSong)}
             current={getMeta(lyricsSong).customLyrics}
-            fromFile={lyricsFromFile}
-            autoFetch={lyricsAuto}
-            onAutoFetchChange={changeLyricsAuto}
             onSave={l => saveLyrics(lyricsSong, l)}
+            onSearchOnline={() => searchLyricsOnline(lyricsSong)}
             onClose={() => setLyricsSong(null)}
             T={TH}
           />
@@ -3245,12 +3202,8 @@ export default function App() {
               onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
               onRemove={() => { setPlayerExpanded(false); setRemoveSong(currentSong); }}
               onShare={() => shareSong(currentSong)}
-              savedLyrics={dispLyrics(currentSong)}
-              lyricsAutoFetch={lyricsAuto}
-              onLyricsFetched={l => saveLyricsQuietly(currentSong, l)}
-              onQueueReorder={reorderQueue}
-              onQueueRemove={removeFromQueue}
-              onPlayFromQueue={s => playSong(s, queueRef.current.length ? queueRef.current : displayList)}
+              onPlayNextReorder={newQ => { setPlayNextQueue(newQ); playNextQueueRef.current = newQ; }}
+              onSkipCurrentUpNext={handleSkipCurrentUpNext}
               onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}
               onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
               dragProgress={playerExpanded ? null : expandDrag}

@@ -1,12 +1,48 @@
-import { useState, useRef, useEffect, useMemo, memo, forwardRef } from "react";
+import { useState, useRef, memo } from "react";
 import type { T } from "../themes";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
-import { MusicScanner } from "../plugins";
-import { parseLrc, stripTimestamps, activeLineIndex, hasLyrics } from "../lyrics";
-import { fetchExact } from "../lyricsFetch";
+
+/**
+ * The blurred album-art wash behind the player.
+ *
+ * Two things make this affordable. It is memoised, because it depends on the
+ * photo alone and the position ticker re-renders the sheet twice a second: it
+ * used to be rebuilt on every one of those, and a 46px blur over a full-bleed
+ * image is among the most expensive things a mobile GPU can be asked for.
+ *
+ * And the blur is done at quarter scale. Blur cost grows with area times radius,
+ * so blurring a quarter-size image by a quarter of the radius and scaling the
+ * result up costs roughly a sixteenth as much and looks the same: the output is
+ * a smooth wash either way, and there is no detail left to lose.
+ */
+const Backdrop = memo(function Backdrop({ photo, sheetBg }: { photo?: string; sheetBg: string }) {
+  if (!photo) return null;
+  return (
+    <div style={{
+      position: "absolute", inset: 0, zIndex: 0, overflow: "hidden",
+      borderRadius: "20px 20px 0 0", pointerEvents: "none",
+      // Its own layer, and nothing inside can affect anything outside it.
+      contain: "paint", willChange: "transform",
+    }}>
+      <img
+        src={photo}
+        alt=""
+        style={{
+          position: "absolute", top: "-15%", left: "-15%",
+          width: "32.5%", height: "32.5%",
+          transform: "scale(4)", transformOrigin: "top left",
+          objectFit: "cover", filter: "blur(11.5px) saturate(1.4)",
+          opacity: 0.42,
+        }}
+      />
+      {/* Gradient scrim so text stays readable over the blur. */}
+      <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, ${sheetBg}66 0%, ${sheetBg}cc 55%, ${sheetBg} 100%)` }} />
+    </div>
+  );
+});
 
 // ─── PLAYER EXPAND SHEET ─────────────────────────────────────────────────────
 
@@ -42,19 +78,8 @@ type PlayerExpandSheetProps = {
   onToggleLike: () => void;
   onRemove: () => void;
   onShare: () => void;
-  /** Reorder the real playback queue. Must reach native: the service advances
-   *  through the queue it was last handed. */
-  onQueueReorder: (newQueue: Song[]) => void;
-  /** Drop one track out of the queue. Never the one playing. */
-  onQueueRemove: (songId: string) => void;
-  /** Jump straight to a track in the queue. */
-  onPlayFromQueue: (s: Song) => void;
-  /** Lyrics the user pasted or looked up for this song, if any. */
-  savedLyrics?: string;
-  /** Whether an automatic online lookup is allowed. Off unless switched on. */
-  lyricsAutoFetch?: boolean;
-  /** Hands back what an automatic lookup found, so it is stored once. */
-  onLyricsFetched?: (lyrics: string) => void;
+  onPlayNextReorder: (newQueue: string[]) => void;
+  onSkipCurrentUpNext: () => void;
   /** Opens the same "⋮" action sheet the list rows use, for this track. The
    *  chips below cover the common actions; the menu adds Play next and Add to
    *  playlist, which have nowhere else to live once you are in the player. */
@@ -77,77 +102,10 @@ export function PlayerExpandSheet({
   onTogglePlay, onSkip, onCycleMode,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
-  onQueueReorder, onQueueRemove, onPlayFromQueue,
-  savedLyrics, lyricsAutoFetch = false, onLyricsFetched,
-  onOpenMenu, onClose,
+  onPlayNextReorder, onSkipCurrentUpNext, onOpenMenu, onClose,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
-  // Which face of the sheet is showing. Laid over the player rather than
-  // swapping the body out, so the transport keeps its state and the artwork does
-  // not remount every time you glance at the queue.
-  //
-  // The pane belongs to the song it was opened on. Rather than reset it from an
-  // effect when the track changes, it is derived: a queue or a lyric sheet for
-  // the song that just finished is worse than useless, and deriving means there
-  // is never a frame showing the wrong one.
-  const [pane, setPane] = useState<"player" | "queue" | "lyrics">("player");
-  const [paneSong, setPaneSong] = useState(song.id);
-  const activePane = paneSong === song.id ? pane : "player";
-  const showPane = (next: "player" | "queue" | "lyrics") => {
-    setPaneSong(song.id);
-    setPane(next);
-  };
-
-  const [lyrics, setLyrics] = useState<{ songId: string; text: string; source?: string } | null>(null);
-  const lyricsReady = lyrics !== null && lyrics.songId === song.id;
-
-  // Where the words come from, in order: what the user saved for this song, a
-  // .lrc or .txt sitting beside the audio, and only then, and only if switched
-  // on, an online lookup.
-  useEffect(() => {
-    if (activePane !== "lyrics" || lyricsReady) return;
-    let cancelled = false;
-    const id = song.id;
-
-    (async () => {
-      // What the user saved wins outright, and costs nothing to check.
-      if (savedLyrics) {
-        if (!cancelled) setLyrics({ songId: id, text: savedLyrics, source: "saved" });
-        return;
-      }
-
-      let found = "";
-      let source: string | undefined;
-      try {
-        const r = await MusicScanner.getLyrics({ path: song.uri });
-        found = r.lyrics || "";
-        source = r.source;
-      } catch { /* no sidecar */ }
-
-      if (!found && lyricsAutoFetch) {
-        try {
-          const hit = await fetchExact({
-            title: dispName,
-            artist: dispArtist,
-            album: song.album || undefined,
-            durationMs: duration || song.duration,
-          });
-          if (hit?.text) {
-            found = hit.text;
-            source = "lrclib.net";
-            onLyricsFetched?.(hit.text);
-          }
-        } catch { /* offline, or nothing there */ }
-      }
-
-      if (!cancelled) setLyrics({ songId: id, text: found, source });
-    })();
-
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePane, lyricsReady, song.id, song.uri, savedLyrics, lyricsAutoFetch]);
-
   const fmt = (ms: number) => {
     const s = Math.floor(ms / 1000);
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
@@ -164,7 +122,73 @@ export function PlayerExpandSheet({
   };
   const speedLabel = `${playbackSpeed}×`;
 
+  // ── touch-based drag-and-drop for pinned queue ────────────────────────────
+  // We track which index is being dragged and which slot we're hovering over.
+  const [dragIdx,     setDragIdx]     = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
+  // ref to item elements so we can hit-test touch position
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // touch start: record which item the user grabbed
+  const onTouchStartDrag = (i: number) => (e: React.TouchEvent) => {
+    e.preventDefault(); // prevent page scroll while dragging
+    e.stopPropagation();
+    setDragIdx(i);
+    setDragOverIdx(i);
+  };
+
+  // touch move: find which item the finger is over
+  const onTouchMoveDrag = (e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches[0];
+    for (let j = 0; j < itemRefs.current.length; j++) {
+      const el = itemRefs.current[j];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+        setDragOverIdx(j);
+        break;
+      }
+    }
+  };
+
+  // touch end: commit the reorder
+  const onTouchEndDrag = (e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+      const newQ = [...playNextQueue];
+      const [moved] = newQ.splice(dragIdx, 1);
+      newQ.splice(dragOverIdx, 0, moved);
+      onPlayNextReorder(newQ);
+    }
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleRemovePinned = (idx: number) => {
+    const newQ = [...playNextQueue];
+    newQ.splice(idx, 1);
+    onPlayNextReorder(newQ);
+  };
+
+  // ── resolve the "normal" next song (first non-pinned after current) ────────
+  const normalNext: Song | null = (() => {
+    if (!upNextQueue || upNextQueue.length === 0) return null;
+    const curIdx = upNextQueue.findIndex(s => s.id === song.id);
+    const rest = curIdx >= 0 ? upNextQueue.slice(curIdx + 1) : upNextQueue;
+    const pinnedSet = new Set(playNextQueue);
+    return rest.find(s => !pinnedSet.has(s.id)) ?? null;
+  })();
+
+  // resolve Song objects for the pinned queue
+  const pinnedSongs: (Song | null)[] = playNextQueue.map(id =>
+    upNextQueue?.find(s => s.id === id) ?? null
+  );
+
+  const showUpNext = pinnedSongs.length > 0 || normalNext !== null;
 
   const getName   = (s: Song) => getDispName   ? getDispName(s)   : s.title;
   const getArtist = (s: Song) => getDispArtist ? getDispArtist(s) : s.artist;
@@ -189,20 +213,9 @@ export function PlayerExpandSheet({
   // anything less snaps back. `closeSnap` turns the transition on for the
   // settle, off while the finger is down.
   const [closeDragY, setCloseDragY] = useState(0);
-  // The sheet is its own scroll container. Dragging down closes it, but only
-  // from the top: anywhere else that gesture is a scroll, and stealing it would
-  // make the queue below unreachable.
-  const sheetRef = useRef<HTMLDivElement | null>(null);
-  const atTopRef = useRef(true);
   const [closeSnap, setCloseSnap]   = useState(false);
   const closeDragStartRef = useRef<number | null>(null);
-  const startCloseDrag = (y: number) => {
-    if (closingRef.current) return;
-    atTopRef.current = (sheetRef.current?.scrollTop ?? 0) <= 0;
-    if (!atTopRef.current) return;
-    closeDragStartRef.current = y;
-    setCloseSnap(false);
-  };
+  const startCloseDrag = (y: number) => { if (!closingRef.current) { closeDragStartRef.current = y; setCloseSnap(false); } };
   const moveCloseDrag  = (y: number) => {
     if (closeDragStartRef.current === null) return;
     const dy = y - closeDragStartRef.current;
@@ -261,16 +274,8 @@ export function PlayerExpandSheet({
         }
       `}</style>
       <div
-        ref={sheetRef}
         className={closing ? "pes-sheet-out" : dragProgress !== null || skipEnter ? undefined : "pes-sheet-in"}
         onClick={e => e.stopPropagation()}
-        // Drag-to-close works from anywhere on the sheet, not just the handle.
-        // startCloseDrag only arms itself when the sheet is scrolled to the top,
-        // so further down the same gesture scrolls the queue instead.
-        onTouchStart={e => startCloseDrag(e.touches[0].clientY)}
-        onTouchMove={e => moveCloseDrag(e.touches[0].clientY)}
-        onTouchEnd={endCloseDrag}
-        onTouchCancel={endCloseDrag}
         style={{
           background: T.sheetBg,
           borderRadius: "20px 20px 0 0",
@@ -286,19 +291,17 @@ export function PlayerExpandSheet({
           touchAction: closeDragY > 0 ? "none" : undefined,
         }}
       >
-        {/* Blurred album-art backdrop, in its own memo component. A 46px blur
-            over a full-bleed image is one of the most expensive things a mobile
-            GPU can be asked for, and it used to be rebuilt twice a second along
-            with the rest of the sheet as the position ticker fired. It depends
-            on nothing but the photo, so it now re-renders only when that
-            changes. Pointer-events off so it never intercepts taps. */}
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
 
         <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column" }}>
-        {/* The handle and header row. The close gesture used to be bound here
-            alone, which meant the sheet could only be dismissed by grabbing a
-            4px bar. It lives on the sheet itself now. */}
-        <div style={{ flexShrink: 0 }}>
+        {/* Top zone = the drag-down-to-close grab area (handle + header row). */}
+        <div
+          onTouchStart={e => startCloseDrag(e.touches[0].clientY)}
+          onTouchMove={e => moveCloseDrag(e.touches[0].clientY)}
+          onTouchEnd={endCloseDrag}
+          onTouchCancel={endCloseDrag}
+          style={{ flexShrink: 0 }}
+        >
         <div style={{ width: 36, height: 4, background: T.dim, borderRadius: 2, margin: "12px auto 0", flexShrink: 0 }} />
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px 0", flexShrink: 0 }}>
@@ -308,22 +311,10 @@ export function PlayerExpandSheet({
             style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
             <IC.Dots />
           </button>
-          {/* Lyrics swaps the record for the words. The queue used to have a
-              toggle beside it; it lives in the flow of the sheet now, because
-              what is coming next is something you glance at by scrolling, not
-              somewhere you navigate to. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <TopToggle
-              active={activePane === "lyrics"} label="Lyrics"
-              onClick={() => showPane(activePane === "lyrics" ? "player" : "lyrics")}
-              icon={<IC.Lyrics />} T={T}
-            />
-            <button onClick={animatedClose}
-              aria-label="Close player"
-              style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
-              <IC.ChevronDown />
-            </button>
-          </div>
+          <button onClick={animatedClose}
+            style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+            <IC.ChevronDown />
+          </button>
         </div>
         </div>
 
@@ -334,22 +325,12 @@ export function PlayerExpandSheet({
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 16, marginTop: 6 }}>
-            {activePane === "lyrics" ? (
-              <LyricsPane
-                loading={!lyricsReady}
-                lyrics={lyricsReady ? lyrics : null}
-                positionMs={currentTime}
-                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
-                T={T}
-              />
-            ) : (
-              <SpinningDisc
-                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
-                spinning={isPlaying}
-                title={dispName}
-                customPhoto={customPhoto}
-              />
-            )}
+            <SpinningDisc
+              size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
+              spinning={isPlaying}
+              title={dispName}
+              customPhoto={customPhoto}
+            />
             <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                 {dispName}
@@ -430,372 +411,132 @@ export function PlayerExpandSheet({
           <button className="chip red" onClick={onRemove}><IC.Trash /> Remove</button>
         </div>
 
-        {/* ── The queue ──────────────────────────────────────────────────────
-            The whole queue, in the flow of the sheet, so scrolling down from the
-            player reveals it. It used to be a two-row teaser behind a button;
-            the button is gone because "what is coming" is something you glance
-            at, not something you navigate to. */}
-        <QueueList
-          song={song}
-          queue={upNextQueue ?? []}
-          pinned={playNextQueue}
-          isPlaying={isPlaying}
-          getName={getName} getArtist={getArtist} getPhoto={getPhoto}
-          onReorder={onQueueReorder}
-          onRemove={onQueueRemove}
-          onPlay={onPlayFromQueue}
-          T={T}
-        />
-        </div>
+        {/* ── Up Next panel ────────────────────────────────────────────────── */}
+        {showUpNext && (
+          <div style={{ margin: "16px 16px 0", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: "700", color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Up Next
+              </span>
+              <span style={{ fontSize: 11, color: T.muted }}>
+                {pinnedSongs.filter(Boolean).length + (normalNext ? 1 : 0)} songs
+              </span>
+            </div>
 
-      </div>
-    </div>
-  );
-}
+            {/* container: touch events for drag live here so move/end are always caught */}
+            <div
+              onTouchMove={dragIdx !== null ? onTouchMoveDrag : undefined}
+              onTouchEnd={dragIdx !== null ? onTouchEndDrag : undefined}
+              style={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
+              {/* ── Pinned / Play Next items ── */}
+              {pinnedSongs.map((s, i) => {
+                if (!s) return null;
+                const name   = getName(s);
+                const artist = getArtist(s);
+                const photo  = getPhoto(s);
+                const isDragging = dragIdx === i;
+                const isOver     = dragOverIdx === i && dragIdx !== null && dragIdx !== i;
+                return (
+                  <div
+                    key={s.id + i}
+                    ref={el => { itemRefs.current[i] = el; }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      background: isOver ? T.dim : T.card,
+                      border: `1px solid ${isOver ? T.accent : T.border}`,
+                      opacity: isDragging ? 0.4 : 1,
+                      transform: isOver ? "scale(1.02)" : "scale(1)",
+                      transition: "opacity 0.12s, transform 0.12s, border-color 0.12s",
+                      touchAction: "none", // critical: tells browser not to scroll
+                    }}
+                  >
+                    {/* drag handle — only this triggers the drag */}
+                    <div
+                      onTouchStart={onTouchStartDrag(i)}
+                      style={{ color: T.muted, display: "flex", flexShrink: 0, cursor: "grab", padding: "4px 2px" }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="3" y1="7" x2="21" y2="7"/>
+                        <line x1="3" y1="12" x2="21" y2="12"/>
+                        <line x1="3" y1="17" x2="21" y2="17"/>
+                      </svg>
+                    </div>
+                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={s.uri} albumId={s.albumId} T={T} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {name}
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {artist || "Unknown Artist"}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: 9, fontWeight: "700", color: T.textSub,
+                      background: T.dim, borderRadius: 4, padding: "2px 6px",
+                      whiteSpace: "nowrap", flexShrink: 0, letterSpacing: "0.04em",
+                    }}>
+                      NEXT
+                    </span>
+                    <button
+                      onClick={() => handleRemovePinned(i)}
+                      title="Remove from queue"
+                      style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}
+                    >
+                      <IC.Close />
+                    </button>
+                  </div>
+                );
+              })}
 
-/**
- * The blurred album-art wash behind the player. Its own component purely so
- * memo can hold it still: nothing here depends on playback position, and
- * re-rasterising a 46px blur twice a second was the single most expensive thing
- * the expanded player did.
- */
-const Backdrop = memo(function Backdrop({ photo, sheetBg }: { photo?: string; sheetBg: string }) {
-  if (!photo) return null;
-  return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden", borderRadius: "20px 20px 0 0", pointerEvents: "none" }}>
-      <img
-        src={photo}
-        alt=""
-        style={{
-          position: "absolute", top: "-15%", left: "-15%", width: "130%", height: "130%",
-          objectFit: "cover", filter: "blur(46px) saturate(1.4)",
-          opacity: 0.42,
-          // Promote to its own layer so the blur is rasterised once and then
-          // simply composited, rather than recomputed whenever anything above
-          // it repaints.
-          willChange: "transform",
-          transform: "translateZ(0)",
-        }}
-      />
-      {/* Gradient scrim so text stays readable over the blur. */}
-      <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, ${sheetBg}66 0%, ${sheetBg}cc 55%, ${sheetBg} 100%)` }} />
-    </div>
-  );
-});
-
-/** One of the two view switches in the player's top row. */
-function TopToggle({ active, label, icon, onClick, T }: {
-  active: boolean; label: string; icon: React.ReactNode; onClick: () => void; T: T;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={active}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 5,
-        background: active ? T.dim : "transparent",
-        border: "none", borderRadius: 16, padding: "6px 10px",
-        color: active ? T.text : T.muted,
-        fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
-      }}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-/**
- * The queue, from the current track onward, reorderable and prunable.
- *
- * Reordering is a long-press-then-drag on the grip, not a drag on the row: the
- * sheet itself scrolls, and a row that moved whenever a finger travelled down it
- * would make the queue impossible to scroll past.
- */
-function QueueList({
-  song, queue, pinned, isPlaying, getName, getArtist, getPhoto,
-  onReorder, onRemove, onPlay, T,
-}: {
-  song: Song;
-  queue: Song[];
-  pinned: string[];
-  isPlaying: boolean;
-  getName: (s: Song) => string;
-  getArtist: (s: Song) => string;
-  getPhoto: (s: Song) => string | undefined;
-  onReorder: (q: Song[]) => void;
-  onRemove: (id: string) => void;
-  onPlay: (s: Song) => void;
-  T: T;
-}) {
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  const curIdx = queue.findIndex(s => s.id === song.id);
-  const rest = curIdx >= 0 ? queue.slice(curIdx + 1) : queue;
-  const pinnedSet = new Set(pinned);
-
-  const beginDrag = (i: number) => (e: React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragFrom(i);
-    setDragOver(i);
-  };
-
-  const moveDrag = (e: React.TouchEvent) => {
-    if (dragFrom === null) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const y = e.touches[0].clientY;
-    for (let j = 0; j < rowRefs.current.length; j++) {
-      const el = rowRefs.current[j];
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      if (y >= r.top && y <= r.bottom) { setDragOver(j); break; }
-    }
-  };
-
-  const endDrag = (e: React.TouchEvent) => {
-    if (dragFrom === null) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (dragOver !== null && dragOver !== dragFrom) {
-      // Indices here are into the tail after the current track, so shift them
-      // back onto the real queue before moving anything.
-      const offset = curIdx >= 0 ? curIdx + 1 : 0;
-      const next = [...queue];
-      const [moved] = next.splice(offset + dragFrom, 1);
-      next.splice(offset + dragOver, 0, moved);
-      onReorder(next);
-    }
-    setDragFrom(null);
-    setDragOver(null);
-  };
-
-  return (
-    <div style={{ margin: "18px 16px 0" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          Queue
-        </span>
-        <span style={{ fontSize: 11, color: T.muted }}>
-          {rest.length === 0 ? "nothing after this" : rest.length + " to go"}
-        </span>
-      </div>
-
-      <div
-        onTouchMove={dragFrom !== null ? moveDrag : undefined}
-        onTouchEnd={dragFrom !== null ? endDrag : undefined}
-        onTouchCancel={dragFrom !== null ? endDrag : undefined}
-        style={{ display: "flex", flexDirection: "column", gap: 3 }}
-      >
-        <QueueRow
-          song={song} current pinned={false} playing={isPlaying}
-          getName={getName} getArtist={getArtist} getPhoto={getPhoto} T={T}
-        />
-
-        {rest.map((s, i) => (
-          <QueueRow
-            key={s.id + i}
-            ref={(el: HTMLDivElement | null) => { rowRefs.current[i] = el; }}
-            song={s}
-            current={false}
-            pinned={pinnedSet.has(s.id)}
-            playing={false}
-            dragging={dragFrom === i}
-            dropTarget={dragOver === i && dragFrom !== null && dragFrom !== i}
-            onGrab={beginDrag(i)}
-            onRemove={() => onRemove(s.id)}
-            onPlay={() => onPlay(s)}
-            getName={getName} getArtist={getArtist} getPhoto={getPhoto} T={T}
-          />
-        ))}
-
-        {rest.length === 0 && (
-          <p style={{ margin: "6px 2px", fontSize: 13, color: T.muted, lineHeight: 1.6 }}>
-            This is the last track in the queue.
-          </p>
+              {/* ── Normal next song ── */}
+              {normalNext && (() => {
+                const name   = getName(normalNext);
+                const artist = getArtist(normalNext);
+                const photo  = getPhoto(normalNext);
+                return (
+                  <div
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      background: T.card,
+                      border: `1px solid ${T.border}`,
+                    }}
+                  >
+                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={normalNext.uri} albumId={normalNext.albumId} T={T} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {name}
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {artist || "Unknown Artist"}
+                      </div>
+                    </div>
+                    {/* Skip button with label */}
+                    <button
+                      onClick={onSkipCurrentUpNext}
+                      title="Skip this song"
+                      style={{
+                        background: "transparent", border: "none", color: T.muted,
+                        cursor: "pointer", padding: "4px 6px", display: "flex",
+                        alignItems: "center", gap: 4, flexShrink: 0,
+                        fontSize: 12, fontWeight: "600",
+                      }}
+                    >
+                      <IC.SkipF />
+                      Skip
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-const QueueRow = forwardRef<HTMLDivElement, {
-  song: Song;
-  current: boolean;
-  pinned: boolean;
-  playing?: boolean;
-  dragging?: boolean;
-  dropTarget?: boolean;
-  onGrab?: (e: React.TouchEvent) => void;
-  onRemove?: () => void;
-  onPlay?: () => void;
-  getName: (s: Song) => string;
-  getArtist: (s: Song) => string;
-  getPhoto: (s: Song) => string | undefined;
-  T: T;
-}>(function QueueRow({
-  song, current, pinned, playing = false, dragging = false, dropTarget = false,
-  onGrab, onRemove, onPlay, getName, getArtist, getPhoto, T,
-}, ref) {
-  return (
-    <div
-      ref={ref}
-      onClick={onPlay}
-      style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "8px 10px", borderRadius: 10,
-        background: dropTarget ? T.dim : current ? T.dim : T.card,
-        border: "1px solid " + (current ? T.accent : dropTarget ? T.accent : T.border),
-        opacity: dragging ? 0.4 : 1,
-        transform: dropTarget ? "scale(1.02)" : "scale(1)",
-        transition: "opacity 0.12s, transform 0.12s, border-color 0.12s",
-        cursor: onPlay ? "pointer" : "default",
-      }}
-    >
-      {/* The grip, and only the grip, starts a reorder. Dragging anywhere else
-          has to stay free for scrolling the sheet. */}
-      {onGrab ? (
-        <div
-          onTouchStart={onGrab}
-          onClick={e => e.stopPropagation()}
-          aria-label="Reorder"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 26, height: 34, flexShrink: 0, color: T.muted,
-            cursor: "grab", touchAction: "none",
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/>
-          </svg>
-        </div>
-      ) : (
-        <div style={{ width: 26, flexShrink: 0 }} />
-      )}
-
-      <AlbumArt title={getName(song)} size={36} active={false} playing={current && playing}
-        customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: current ? 700 : 600, color: current ? T.accent : T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {getName(song)}
-        </div>
-        <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {getArtist(song) || "Unknown Artist"}
         </div>
       </div>
-
-      {pinned && !current && (
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: T.violet, flexShrink: 0 }}>NEXT</span>
-      )}
-      {current && (
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: T.accent, flexShrink: 0 }}>PLAYING</span>
-      )}
-
-      {/* No X on the current track: taking the queue out from under the service
-          while it is playing that track has no sensible meaning. Skip does that. */}
-      {onRemove && !current && (
-        <button
-          onClick={e => { e.stopPropagation(); onRemove(); }}
-          aria-label={"Remove " + getName(song) + " from the queue"}
-          style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 6, display: "flex", flexShrink: 0 }}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      )}
-    </div>
-  );
-});
-/**
- * Lyrics in the record's place: karaoke, when the words carry timestamps.
- *
- * An .lrc gives each line a time, so the current one can be highlighted and kept
- * centred while the rest dim. Without timestamps this is simply readable text,
- * which is the honest thing to show rather than faking a follow-along.
- */
-function LyricsPane({ loading, lyrics, positionMs, size, T }: {
-  loading: boolean;
-  lyrics: { text: string; source?: string } | null;
-  positionMs: number;
-  size: number;
-  T: T;
-}) {
-  const text = lyrics?.text ?? "";
-  const timed = useMemo(() => parseLrc(text), [text]);
-  const plain = useMemo(() => stripTimestamps(text), [text]);
-  const active = timed ? activeLineIndex(timed, positionMs) : -1;
-
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  const activeRef = useRef<HTMLParagraphElement | null>(null);
-
-  // Keep the current line centred. Scrolling the container directly rather than
-  // scrollIntoView, which would drag the whole sheet around it.
-  useEffect(() => {
-    const box = boxRef.current, line = activeRef.current;
-    if (!box || !line) return;
-    const target = line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2;
-    box.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
-  }, [active]);
-
-  const frame = {
-    width: size, height: size, flexShrink: 0,
-    borderRadius: 16, background: T.dim,
-    overflowY: "auto" as const, WebkitOverflowScrolling: "touch" as const,
-    padding: "14px 16px",
-  };
-
-  if (loading) {
-    return (
-      <div style={{ ...frame, display: "grid", placeItems: "center" }}>
-        <span style={{ fontSize: 13, color: T.muted }}>Looking…</span>
-      </div>
-    );
-  }
-
-  if (!hasLyrics(text)) {
-    return (
-      <div style={{ ...frame, display: "grid", placeItems: "center", textAlign: "center" }}>
-        <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.65 }}>
-          <p style={{ margin: "0 0 8px", fontWeight: 700, color: T.text }}>No lyrics yet</p>
-          <p style={{ margin: 0 }}>Add them from the song menu.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!timed) {
-    return (
-      <div ref={boxRef} style={frame}>
-        <div style={{ fontSize: 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap" }}>{plain}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={boxRef} style={frame}>
-      {timed.map((line, i) => (
-        <p
-          key={i}
-          ref={i === active ? activeRef : undefined}
-          style={{
-            margin: "0 0 10px",
-            fontSize: i === active ? 17 : 15,
-            fontWeight: i === active ? 700 : 500,
-            color: i === active ? T.accent : T.muted,
-            opacity: i === active ? 1 : 0.55,
-            lineHeight: 1.45,
-            transition: "color 0.2s, opacity 0.2s, font-size 0.2s",
-          }}
-        >
-          {line.text || " "}
-        </p>
-      ))}
     </div>
   );
 }
