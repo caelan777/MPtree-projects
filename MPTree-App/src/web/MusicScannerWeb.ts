@@ -14,4 +14,13 @@ export class MusicScannerWeb extends WebPlugin {
   async scanFolder(): Promise<void> {
     return;
   }
+  /** No sidecar files to read in the browser fixture. */
+  async getLyrics(): Promise<{ lyrics: string }> {
+    return { lyrics: "" };
+  }
+
+  /** The browser has no ringtone to set. */
+  async setAsRingtone(): Promise<{ ok: boolean }> {
+    return { ok: false };
+  }
 }

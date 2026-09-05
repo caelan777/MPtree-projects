@@ -8,6 +8,18 @@ export type Song = {
   uri: string;
   dateAdded: number;
   duration?: number;    // milliseconds from MediaStore — undefined on cut tracks
+  /** Album name from MediaStore. "" when the file has no album tag. */
+  album?: string;
+  /** MediaStore album id. Addresses the system's cached album thumbnail, which
+   *  is why cover lookups cost one call per album rather than one per song. */
+  albumId?: number;
+  /** Position within its disc, 1-based. 0 = unknown. */
+  track?: number;
+  disc?: number;
+  year?: number;
+  /** Only populated by the scan on Android 11+. Users can always set one by
+   *  hand, which is stored as SongMeta.customGenre instead. */
+  genre?: string;
   isCut?: boolean;
   cutFrom?: number;
   cutTo?: number;
@@ -22,6 +34,9 @@ export function makeCutId(uri: string, cutFrom: number, cutTo: number): string {
 export type SongMeta = {
   customName?: string;
   customArtist?: string;
+  /** A genre the user typed. Wins over the scanned genre, same as customName
+   *  wins over the scanned title. */
+  customGenre?: string;
   customPhoto?: string;
   liked?: boolean;
   /** Timestamp (ms) of the most recent time this song was played — drives the "Recently Played" smart playlist. */

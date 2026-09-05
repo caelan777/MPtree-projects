@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { T } from "../themes";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
+import { MusicScanner } from "../plugins";
 
 // ─── PLAYER EXPAND SHEET ─────────────────────────────────────────────────────
 
@@ -67,6 +68,35 @@ export function PlayerExpandSheet({
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
+  // Which face of the sheet is showing. Laid over the player rather than
+  // swapping the body out, so the transport keeps its state and the artwork does
+  // not remount every time you glance at the queue.
+  //
+  // The pane belongs to the song it was opened on. Rather than reset it from an
+  // effect when the track changes, it is derived: a queue or a lyric sheet for
+  // the song that just finished is worse than useless, and deriving means there
+  // is never a frame showing the wrong one.
+  const [pane, setPane] = useState<"player" | "queue" | "lyrics">("player");
+  const [paneSong, setPaneSong] = useState(song.id);
+  const activePane = paneSong === song.id ? pane : "player";
+  const showPane = (next: "player" | "queue" | "lyrics") => {
+    setPaneSong(song.id);
+    setPane(next);
+  };
+
+  const [lyrics, setLyrics] = useState<{ songId: string; text: string; source?: string } | null>(null);
+  const lyricsReady = lyrics !== null && lyrics.songId === song.id;
+
+  useEffect(() => {
+    if (activePane !== "lyrics" || lyricsReady) return;
+    let cancelled = false;
+    const id = song.id;
+    MusicScanner.getLyrics({ path: song.uri })
+      .then(r => { if (!cancelled) setLyrics({ songId: id, text: r.lyrics || "", source: r.source }); })
+      .catch(() => { if (!cancelled) setLyrics({ songId: id, text: "" }); });
+    return () => { cancelled = true; };
+  }, [activePane, lyricsReady, song.id, song.uri]);
+
   const fmt = (ms: number) => {
     const s = Math.floor(ms / 1000);
     return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
@@ -289,10 +319,26 @@ export function PlayerExpandSheet({
             style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
             <IC.Dots />
           </button>
-          <button onClick={animatedClose}
-            style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
-            <IC.ChevronDown />
-          </button>
+          {/* Queue and Lyrics sit up here rather than as chips, because they
+              swap what the sheet is showing rather than doing something to the
+              song. Tapping the active one returns to the player. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <TopToggle
+              active={activePane === "queue"} label="Queue"
+              onClick={() => showPane(activePane === "queue" ? "player" : "queue")}
+              icon={<IC.Queue />} T={T}
+            />
+            <TopToggle
+              active={activePane === "lyrics"} label="Lyrics"
+              onClick={() => showPane(activePane === "lyrics" ? "player" : "lyrics")}
+              icon={<IC.Lyrics />} T={T}
+            />
+            <button onClick={animatedClose}
+              aria-label="Close player"
+              style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+              <IC.ChevronDown />
+            </button>
+          </div>
         </div>
         </div>
 
@@ -442,7 +488,7 @@ export function PlayerExpandSheet({
                         <line x1="3" y1="17" x2="21" y2="17"/>
                       </svg>
                     </div>
-                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={s.uri} T={T} />
+                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={s.uri} albumId={s.albumId} T={T} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {name}
@@ -484,7 +530,7 @@ export function PlayerExpandSheet({
                       border: `1px solid ${T.border}`,
                     }}
                   >
-                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={normalNext.uri} T={T} />
+                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={normalNext.uri} albumId={normalNext.albumId} T={T} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {name}
@@ -514,7 +560,177 @@ export function PlayerExpandSheet({
           </div>
         )}
         </div>
+
+        {/* ── Queue / Lyrics ────────────────────────────────────────────────
+            Laid over the player rather than replacing it. The transport keeps
+            running underneath with its state intact, and the artwork does not
+            remount every time someone checks what is coming next. */}
+        {activePane !== "player" && (
+          <div style={{
+            position: "absolute", left: 0, right: 0, top: 92, bottom: 0,
+            background: T.sheetBg, zIndex: 3,
+            display: "flex", flexDirection: "column",
+            borderTop: `1px solid ${T.border}`,
+          }}>
+            {activePane === "queue" ? (
+              <QueuePane
+                song={song} upNextQueue={upNextQueue} playNextQueue={playNextQueue}
+                getDispName={getName} getDispArtist={getArtist} getCustomPhoto={getPhoto}
+                T={T}
+              />
+            ) : (
+              <LyricsPane loading={!lyricsReady} lyrics={lyricsReady ? lyrics : null} T={T} />
+            )}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** One of the two view switches in the player's top row. */
+function TopToggle({ active, label, icon, onClick, T }: {
+  active: boolean; label: string; icon: React.ReactNode; onClick: () => void; T: T;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5,
+        background: active ? T.dim : "transparent",
+        border: "none", borderRadius: 16, padding: "6px 10px",
+        color: active ? T.text : T.muted,
+        fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+      }}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+/** The whole queue from here on, not just the next couple of rows. */
+function QueuePane({ song, upNextQueue, playNextQueue, getDispName, getDispArtist, getCustomPhoto, T }: {
+  song: Song;
+  upNextQueue?: Song[];
+  playNextQueue: string[];
+  getDispName: (s: Song) => string;
+  getDispArtist: (s: Song) => string;
+  getCustomPhoto: (s: Song) => string | undefined;
+  T: T;
+}) {
+  const queue = upNextQueue ?? [];
+  const curIdx = queue.findIndex(s => s.id === song.id);
+  const rest = curIdx >= 0 ? queue.slice(curIdx + 1) : queue;
+  const pinned = new Set(playNextQueue);
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "14px 16px 8px", flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Queue
+        </span>
+        <span style={{ fontSize: 11, color: T.muted }}>
+          {rest.length === 0 ? "nothing after this" : `${rest.length} to go`}
+        </span>
+      </div>
+
+      <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
+        {/* The current track heads the list, so the queue reads as a position
+            in a sequence rather than a detached list of what is left. */}
+        <QueueRow song={song} current pinned={false}
+          getDispName={getDispName} getDispArtist={getDispArtist} getCustomPhoto={getCustomPhoto} T={T} />
+        {rest.map((s, i) => (
+          <QueueRow key={s.id + i} song={s} current={false} pinned={pinned.has(s.id)}
+            getDispName={getDispName} getDispArtist={getDispArtist} getCustomPhoto={getCustomPhoto} T={T} />
+        ))}
+        {rest.length === 0 && (
+          <p style={{ margin: "10px 2px", fontSize: 13, color: T.muted, lineHeight: 1.6 }}>
+            This is the last track in the queue.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
+
+function QueueRow({ song, current, pinned, getDispName, getDispArtist, getCustomPhoto, T }: {
+  song: Song; current: boolean; pinned: boolean;
+  getDispName: (s: Song) => string;
+  getDispArtist: (s: Song) => string;
+  getCustomPhoto: (s: Song) => string | undefined;
+  T: T;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "8px 10px", borderRadius: 10,
+      background: current ? T.dim : T.card,
+      border: `1px solid ${current ? T.accent : T.border}`,
+    }}>
+      <AlbumArt title={getDispName(song)} size={36} active={false}
+        customPhoto={getCustomPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: current ? 700 : 600, color: current ? T.accent : T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {getDispName(song)}
+        </div>
+        <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {getDispArtist(song) || "Unknown Artist"}
+        </div>
+      </div>
+      {(current || pinned) && (
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: current ? T.accent : T.violet, flexShrink: 0 }}>
+          {current ? "PLAYING" : "NEXT"}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Lyrics read from a file sitting next to the song. Timestamps are stripped for
+ * display: this shows the words, it does not follow along with playback, and
+ * saying so is better than a scroll that silently never moves.
+ */
+function LyricsPane({ loading, lyrics, T }: {
+  loading: boolean; lyrics: { text: string; source?: string } | null; T: T;
+}) {
+  const lines = (lyrics?.text ?? "")
+    .split(/\r?\n/)
+    .map(l => l.replace(/^\s*(\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*)+/, "").trimEnd())
+    // Drop the [ar:] / [ti:] / [by:] metadata header an .lrc file starts with.
+    .filter(l => !/^\s*\[[a-z]+:[^\]]*\]\s*$/i.test(l));
+  const hasWords = lines.some(l => l.trim().length > 0);
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "14px 16px 8px", flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Lyrics
+        </span>
+        {lyrics?.source && <span style={{ fontSize: 11, color: T.muted }}>{lyrics.source}</span>}
+      </div>
+
+      <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "0 18px 24px" }}>
+        {loading ? (
+          <p style={{ fontSize: 13, color: T.muted }}>Looking…</p>
+        ) : hasWords ? (
+          <div style={{ fontSize: 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap" }}>
+            {lines.join("\n").trim()}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.7 }}>
+            <p style={{ margin: "0 0 10px" }}>No lyrics for this song.</p>
+            <p style={{ margin: 0 }}>
+              MPTree reads lyrics from a file next to the music, so a track at
+              <em> Music/song.mp3</em> gets its words from <em>Music/song.lrc</em>
+              {" "}or <em>Music/song.txt</em>. Nothing is fetched from the internet.
+            </p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

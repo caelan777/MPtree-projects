@@ -4,6 +4,7 @@ import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from ".
 import { isMissingArtist } from "../utils";
 import { AlbumArt } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
+import { MultiSelectBar } from "./MultiSelectBar";
 import { IC } from "./Icons";
 import type { T } from "../themes";
 
@@ -35,6 +36,17 @@ interface Props {
   onPlayNext:         (song: Song) => void;
   /** Long-press actions, shared with the Songs page so the menu is identical. */
   onEditSong:         (song: Song) => void;
+  /** Same edit sheet, opened onto the cover photo. */
+  onChangePhoto:      (song: Song) => void;
+  /** Makes the song the device ringtone. */
+  onSetRingtone:      (song: Song) => void;
+  /** Multi-select actions, shared with the Songs page so the selection bar is
+   *  literally the same component rather than a lookalike. */
+  onLikeMany:            (ids: string[], liked: boolean) => void;
+  onShuffleMany:         (ids: string[]) => void;
+  onPlayManyNext:        (ids: string[]) => void;
+  onAddManyToPlaylist:   (ids: string[]) => void;
+  onBulkEditMany:        (ids: string[]) => void;
   onCutSong:          (song: Song) => void;
   onShareSong:        (song: Song) => void;
   onRemoveSong:       (song: Song) => void;
@@ -145,7 +157,8 @@ export const PlaylistsView: React.FC<Props> = ({
   topInset = 0,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
-  onEditSong, onCutSong, onShareSong, onRemoveSong,
+  onEditSong, onChangePhoto, onSetRingtone, onCutSong, onShareSong, onRemoveSong,
+  onLikeMany, onShuffleMany, onPlayManyNext, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
   onBodyScroll, animateInsets = true, onClose, T,
 }) => {
@@ -322,7 +335,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {isSelected && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
           </div>
         )}
-        <AlbumArt title={dispName(song)} size={48} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} T={t} />
+        <AlbumArt title={dispName(song)} size={48} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} albumId={song.albumId} T={t} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
@@ -379,6 +392,14 @@ export const PlaylistsView: React.FC<Props> = ({
       .map(id => songs.find(s => s.id === id))
       .filter((s): s is Song => !!s);
   }, [activeSmartPlaylist, songs]);
+
+  // What "Select all" covers: whichever detail list is open. Smart playlists are
+  // computed, so songs cannot be pulled out of one, but every other action in
+  // the bar still applies to them.
+  const selectableIds = useMemo(
+    () => (activePlaylist ? playlistSongs : smartPlaylistSongs).map(s => s.id),
+    [activePlaylist, playlistSongs, smartPlaylistSongs],
+  );
 
   const filteredAddSongs = useMemo(() => {
     const q = addSearch.trim().toLowerCase();
@@ -584,9 +605,14 @@ export const PlaylistsView: React.FC<Props> = ({
   // rather than scroll under it.
   const insetOutside = view === "list" ? 0 : topInset;
   const insetInside  = view === "list" ? topInset : 0;
-  const insetTransition = animateInsets
-    ? "height 0.34s cubic-bezier(0.22, 1, 0.36, 1)"
-    : "none";
+  // One motion for everything the fold moves, matching CHROME_MOTION in App.
+  // The root padding used to have no transition at all, so in a playlist the
+  // whole view snapped to its new offset while the logo was still folding: that
+  // was the glitchy jump. Spacers animate height, the root animates padding,
+  // both on the same curve as the header itself.
+  const FOLD_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+  const insetTransition = animateInsets ? `height ${FOLD_MOTION}` : "none";
+  const rootTransition  = animateInsets ? `padding-top ${FOLD_MOTION}` : "none";
 
   return (
     <div style={{
@@ -594,6 +620,7 @@ export const PlaylistsView: React.FC<Props> = ({
       background: t.bg, color: t.text,
       display:    "flex", flexDirection: "column",
       paddingTop: insetOutside,
+      transition: rootTransition,
       fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
       userSelect: "none",
     }}>
@@ -1134,44 +1161,35 @@ export const PlaylistsView: React.FC<Props> = ({
           fixed — descendants get positioned relative to the panel and trapped
           in its stacking context, which sits BELOW the mini-player. No z-index
           can fix that from inside; the menu must escape the panel's DOM. */}
-      {/* ── Multi-select action bar (playlist detail) ─────────────────────── */}
+      {/* ── Multi-select action bar (playlist detail) ───────────────────────
+          The very same bar the Songs page uses, not a second one that looks
+          similar. It previously offered exactly one action, which meant the
+          gesture taught on one page did nothing familiar on the other. The two
+          extra props are the difference a playlist actually justifies: pulling
+          songs out of it, and the library removal that on the Songs page lives
+          up in the header (there is no header button in here to carry it). */}
       {selectMode && createPortal(
-        <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 340,
-          background: t.sheetBg, borderTop: `1px solid ${t.border}`,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 18px", paddingBottom: "calc(12px + env(safe-area-inset-bottom, 12px))",
-        }}>
-          <button
-            onClick={exitSelect}
-            style={{ background: "transparent", border: "none", color: t.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            Cancel
-          </button>
-          <span style={{ fontSize: 14, fontWeight: 700, color: t.text }}>{selectedIds.size} selected</span>
-          {/* Deliberately not a red bin. Taking a song out of a playlist deletes
-              nothing: the file stays, and so does the song everywhere else in the
-              app. Styled like a normal chip and spelled out in full, so it cannot
-              be mistaken for the Songs-page Remove that moves files to the bin. */}
-          <button
-            onClick={() => { const ids = selectedIds; exitSelect(); removeManyFromPlaylist(ids); }}
-            disabled={selectedIds.size === 0}
-            style={{
-              display: "flex", alignItems: "center", gap: 7,
-              background: selectedIds.size > 0 ? t.chipBg : "transparent",
-              color: selectedIds.size > 0 ? t.text : t.muted,
-              border: "1px solid " + (selectedIds.size > 0 ? t.chipBorder : t.border),
-              borderRadius: 10, padding: "9px 16px",
-              fontSize: 14, fontWeight: 700,
-              opacity: selectedIds.size > 0 ? 1 : 0.5,
-              cursor: selectedIds.size > 0 ? "pointer" : "default", fontFamily: "inherit",
-            }}
-          >
-            <IC.MinusCircle />
-            Remove from playlist
-          </button>
-        </div>,
+        <MultiSelectBar
+          count={selectedIds.size}
+          totalCount={selectableIds.length}
+          allLiked={selectedIds.size > 0 && [...selectedIds].every(id => {
+            const song = songs.find(x => x.id === id);
+            return song ? isLiked(song) : false;
+          })}
+          onLikeAll={() => { onLikeMany([...selectedIds], true); }}
+          onUnlikeAll={() => { onLikeMany([...selectedIds], false); }}
+          onShuffleSelection={() => { const ids = [...selectedIds]; exitSelect(); onShuffleMany(ids); }}
+          onAddToPlaylist={() => { onAddManyToPlaylist([...selectedIds]); }}
+          onPlayNext={() => { const ids = [...selectedIds]; exitSelect(); onPlayManyNext(ids); }}
+          onBulkEdit={() => { onBulkEditMany([...selectedIds]); }}
+          onRemoveFromPlaylist={activePlaylist
+            ? () => { const ids = selectedIds; exitSelect(); removeManyFromPlaylist(ids); }
+            : undefined}
+          onSelectAll={() => setSelectedIds(new Set(selectableIds))}
+          onClearAll={() => setSelectedIds(new Set())}
+          onClose={exitSelect}
+          T={t}
+        />,
         document.body
       )}
 
@@ -1192,6 +1210,8 @@ export const PlaylistsView: React.FC<Props> = ({
           onAddToPlaylist={id => { addSongToPlaylist(id, menuSong.song.id); setMenuSong(null); }}
           onCreatePlaylistWithSong={name => { createPlaylistWithSong(name, menuSong.song.id); setMenuSong(null); }}
           onEdit={() => { onEditSong(menuSong.song); setMenuSong(null); }}
+          onChangePhoto={() => { onChangePhoto(menuSong.song); setMenuSong(null); }}
+          onSetRingtone={() => { onSetRingtone(menuSong.song); setMenuSong(null); }}
           onCut={() => { onCutSong(menuSong.song); setMenuSong(null); }}
           onToggleLike={() => { onToggleLike(menuSong.song); setMenuSong(null); }}
           onShare={() => { onShareSong(menuSong.song); setMenuSong(null); }}

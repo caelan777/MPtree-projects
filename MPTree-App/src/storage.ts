@@ -49,6 +49,7 @@ export async function loadSession(): Promise<Session> {
 export type SongMetaStore = Record<string, {
   customName?:   string;
   customArtist?: string;
+  customGenre?:  string;
   customPhoto?:  string;
   liked?:        boolean;
   lastPlayedAt?: number;

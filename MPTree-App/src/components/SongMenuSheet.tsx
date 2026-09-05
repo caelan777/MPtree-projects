@@ -26,6 +26,10 @@ type SongMenuSheetProps = {
   onAddToPlaylist: (playlistId: string) => void;
   onCreatePlaylistWithSong: (name: string) => void;
   onEdit: () => void;
+  /** Opens the same edit sheet aimed at the cover photo. */
+  onChangePhoto: () => void;
+  /** Makes this track the device ringtone. */
+  onSetRingtone: () => void;
   onCut: () => void;
   onToggleLike: () => void;
   onShare: () => void;
@@ -41,7 +45,7 @@ type SongMenuSheetProps = {
 export function SongMenuSheet({
   song, dispName, dispArtist, customPhoto, isLiked, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
-  onEdit, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
+  onEdit, onChangePhoto, onSetRingtone, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
   const [pane, setPane] = useState<"actions" | "playlists">("actions");
@@ -83,7 +87,7 @@ export function SongMenuSheet({
 
         {/* Song header — identifies what the actions apply to. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 20px 14px", flexShrink: 0 }}>
-          <AlbumArt title={dispName} size={44} active={false} customPhoto={customPhoto} songPath={song.uri} T={T} />
+          <AlbumArt title={dispName} size={44} active={false} customPhoto={customPhoto} songPath={song.uri} albumId={song.albumId} T={T} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: "700", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {dispName}
@@ -99,6 +103,17 @@ export function SongMenuSheet({
 
         {pane === "actions" ? (
           <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+            {/* ── The three that change the song itself ──────────────────────
+                Ringtone, Photo and Edit sit up here as full targets rather than
+                in the list below, because they are the ones people come to this
+                menu to do. The rest of the list is one-tap verbs; these three
+                open something. */}
+            <div style={{ display: "flex", gap: 8, padding: "12px 20px 6px" }}>
+              <BigAction icon={<IC.Bell />}  label="Ringtone" onClick={onSetRingtone} T={T} />
+              <BigAction icon={<IC.Photo />} label="Photo"    onClick={onChangePhoto} T={T} />
+              <BigAction icon={<IC.Edit />}  label="Edit"     onClick={onEdit}        T={T} />
+            </div>
+            <div style={{ height: 1, background: T.border, margin: "8px 20px 2px" }} />
             {row("play", <IC.Play />, "Play", onPlay)}
             {row("next", (
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -106,7 +121,6 @@ export function SongMenuSheet({
               </svg>
             ), "Play next", onPlayNext)}
             {row("add", <IC.Plus />, "Add to playlist", () => setPane("playlists"), { trailing: <IC.ChevronR /> })}
-            {row("edit", <IC.Edit />, "Edit", onEdit)}
             {row("cut", <IC.Scissors />, "Cut", onCut)}
             {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? "Unlike" : "Like", onToggleLike)}
             {row("share", <IC.Share />, "Share", onShare)}
@@ -117,9 +131,10 @@ export function SongMenuSheet({
                 <line x1="3" y1="3" x2="21" y2="21"/>
               </svg>
             ), "Remove from playlist", onRemoveFromPlaylist)}
-            {/* Labelled explicitly when both removals are on offer, so it is
-                obvious which one touches the library itself. */}
-            {row("remove", <IC.Trash />, onRemoveFromPlaylist ? "Remove from library" : "Remove", onRemove, { danger: true })}
+            {/* Always spelled out the same way, in the playlist and out of it.
+                It reads identically wherever you meet it, and it says what it
+                actually does rather than leaving "Remove" to be guessed at. */}
+            {row("remove", <IC.Trash />, "Remove from library", onRemove, { danger: true })}
           </div>
         ) : (
           <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -192,5 +207,28 @@ export function SongMenuSheet({
         )}
       </div>
     </div>
+  );
+}
+
+/** One of the three large targets at the top of the menu. Equal widths, so the
+ *  row reads as a set of three rather than three things that happen to be next
+ *  to each other. */
+function BigAction({ icon, label, onClick, T }: {
+  icon: React.ReactNode; label: string; onClick: () => void; T: T;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1, minWidth: 0,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+        padding: "14px 6px",
+        background: T.chipBg, border: "1px solid " + T.chipBorder, borderRadius: 12,
+        color: T.text, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+      }}
+    >
+      {icon}
+      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{label}</span>
+    </button>
   );
 }

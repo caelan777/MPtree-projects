@@ -17,6 +17,7 @@ import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
 import { SongMenuSheet } from "./components/SongMenuSheet";
 import { AddToPlaylistSheet } from "./components/AddToPlaylistSheet";
+import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
@@ -27,6 +28,7 @@ import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
+import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { BackupSheet }      from "./components/BackupSheet";
 import type { BackupSheetState } from "./components/BackupSheet";
@@ -123,6 +125,10 @@ export default function App() {
   const [playMode,       setPlayMode]      = useState<PlayMode>("off");
   const [search,         setSearch]        = useState("");
   const [filter,         setFilter]        = useState<FilterId>("newest");
+  // Narrow the list to one artist. Separate from `filter` because it is a
+  // different question: filter says how to order, this says what to include, and
+  // you routinely want both (this artist, newest first).
+  const [artistFilter,   setArtistFilter]  = useState<string | null>(null);
   const [filterOpen,     setFilterOpen]    = useState(false);
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
@@ -131,6 +137,14 @@ export default function App() {
   // `activeMenu`, which expanded the row inline on long-press.
   const [menuSong,       setMenuSong]      = useState<Song | null>(null);
   const [editSong,       setEditSong]      = useState<Song | null>(null);
+  // "Photo" in the song menu is the same edit sheet, opened straight onto the
+  // picker. One sheet rather than two that would drift apart.
+  const [editFocusPhoto, setEditFocusPhoto] = useState(false);
+  const [bulkEditOpen,  setBulkEditOpen]  = useState(false);
+  // The songs the open sheet applies to. Both pages fill this before opening,
+  // so BulkEditSheet and AddToPlaylistSheet do not need to know which selection
+  // they came from.
+  const [multiIds,      setMultiIds]      = useState<string[]>([]);
   const [removeSong,     setRemoveSong]    = useState<Song | null>(null);
   const [cutSong,        setCutSong]       = useState<Song | null>(null);
   const [cutDuration,    setCutDuration]   = useState(0);
@@ -418,6 +432,7 @@ export default function App() {
   const dispName   = (s: Song) => getMeta(s).customName   || s.title;
   const dispArtist = (s: Song) =>
     getMeta(s).customArtist || (!isMissingArtist(s.artist) ? s.artist : "");
+  const dispGenre  = (s: Song) => getMeta(s).customGenre || s.genre || "";
   const isLiked    = (s: Song) => !!getMeta(s).liked;
   const showToast  = (m: string, action?: ToastAction) => setToast({ msg: m, action });
   const showError  = useCallback((m: string) => setToast({ msg: "⚠ " + m }), []);
@@ -947,11 +962,34 @@ export default function App() {
   }, [syncToNativePath]);
 
   // ── Display list ──────────────────────────────────────────────────────────
+  // Every artist actually present, counted. Built from dispArtist, so an artist
+  // typed into Edit shows up here exactly like one that came from the file.
+  const artistList = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of songs) {
+      const a = dispArtist(s);
+      if (!a || isMissingArtist(a)) continue;
+      counts.set(a, (counts.get(a) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((x, y) => x.name.localeCompare(y.name));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songs, meta]);
+
+  // An artist can vanish underneath the filter: renamed in Edit, or its last
+  // song removed. Derived rather than corrected in an effect, so the list can
+  // never be left filtered to nothing by a name that is no longer there.
+  const activeArtist = artistFilter && artistList.some(a => a.name === artistFilter)
+    ? artistFilter
+    : null;
+
   const isFavFilter = filter === "favorites";
   const displayList: Song[] = React.useMemo(() => {
     const processed = songs.filter(s =>
       (dispName(s).toLowerCase().includes(search.toLowerCase()) || dispArtist(s).toLowerCase().includes(search.toLowerCase())) &&
-      (!isFavFilter || isLiked(s))
+      (!isFavFilter || isLiked(s)) &&
+      (!activeArtist || dispArtist(s) === activeArtist)
     ).slice().sort((a, b) => {
       if (filter === "favorites" || filter === "newest") return (b.dateAdded || 0) - (a.dateAdded || 0);
       if (filter === "oldest")       return (a.dateAdded || 0) - (b.dateAdded || 0);
@@ -961,8 +999,9 @@ export default function App() {
     });
     return isFavFilter ? [...processed.filter(isLiked), ...processed.filter(s => !isLiked(s))] : processed;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [songs, search, filter, meta]);
+  }, [songs, search, filter, meta, activeArtist]);
   displayListRef.current = displayList;
+
 
   // ── Playback ──────────────────────────────────────────────────────────────
   const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
@@ -1064,7 +1103,7 @@ export default function App() {
       currentIndex: newQ.findIndex(s => s.id === cur.id),
     }).catch(() => {});
 
-    setPlayNextQueue(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
+    setPlayNextQueue(prev => mergePins(prev, [song.id]));
     showToast(`"${dispName(song)}" plays next`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
@@ -1085,28 +1124,19 @@ export default function App() {
       return;
     }
 
-    // The current track cannot queue after itself.
     const toPin = chosen.filter(s => s.id !== cur.id);
     if (!toPin.length) { showToast("Already playing"); return; }
 
-    const pinIds = new Set(toPin.map(s => s.id));
     const base = queueRef.current.length ? queueRef.current : displayListRef.current;
-    const without = base.filter(s => !pinIds.has(s.id));
-    const curIdx = without.findIndex(s => s.id === cur.id);
-    if (curIdx === -1) return;
-
-    const alreadyPinned = playNextQueueRef.current;
-    let insertAt = curIdx + 1;
-    while (insertAt < without.length && alreadyPinned.includes(without[insertAt].id)) insertAt++;
-
-    const newQ = [...without.slice(0, insertAt), ...toPin, ...without.slice(insertAt)];
+    const newQ = planPlayNext(base, cur.id, toPin, playNextQueueRef.current);
+    if (!newQ) return;
     setQueue(newQ);
     AudioPlayer.setQueue({
       tracks: newQ.map(toNativeTrack),
       currentIndex: newQ.findIndex(s => s.id === cur.id),
     }).catch(() => {});
 
-    setPlayNextQueue(prev => [...prev, ...toPin.map(s => s.id).filter(id => !prev.includes(id))]);
+    setPlayNextQueue(prev => mergePins(prev, toPin.map(s => s.id)));
     showToast(toPin.length === 1 ? `"${dispName(toPin[0])}" plays next` : `${toPin.length} songs play next`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
@@ -1707,6 +1737,85 @@ export default function App() {
       AudioPlayer.setTrackArt({ path: s.uri, dataUrl: u.customPhoto ?? null }).catch(() => {});
     }
     setEditSong(null); setMenuSong(null);
+  };
+
+  // Id-taking versions of the multi-select actions, so the Playlists page can
+  // drive the same selection bar. The Songs page keeps using its own
+  // selection-scoped handlers, which already existed.
+  const likeMany = useCallback((ids: string[], like: boolean) => {
+    setMeta(prev => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = { ...(next[id] || {}), liked: like };
+      return next;
+    });
+    showToast(like ? `${ids.length} liked` : `${ids.length} removed from favorites`);
+  }, []);
+
+  const shuffleMany = useCallback((ids: string[]) => {
+    const chosen = songs.filter(s => ids.includes(s.id));
+    if (!chosen.length) return;
+    const shuffled = [...chosen].sort(() => Math.random() - 0.5);
+    setPlayMode("shuffle");
+    setQueue(shuffled);
+    playSong(shuffled[0], shuffled);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songs]);
+
+  // ── Bulk edit ─────────────────────────────────────────────────────────────
+  // One pass over the selection, applying only the fields the sheet actually
+  // returned. null means the user asked to clear that field, which is why this
+  // cannot simply spread the payload: `undefined` has to erase the stored value
+  // rather than be written as a literal.
+  const applyBulkEdit = (ids: string[], u: BulkEdit) => {
+    const changedPhoto = u.customPhoto !== undefined;
+    setMeta(prev => {
+      const next = { ...prev };
+      for (const id of ids) {
+        const cur = { ...(next[id] || {}) };
+        if (u.customArtist !== undefined) {
+          if (u.customArtist === null) delete cur.customArtist; else cur.customArtist = u.customArtist;
+        }
+        if (u.customGenre !== undefined) {
+          if (u.customGenre === null) delete cur.customGenre; else cur.customGenre = u.customGenre;
+        }
+        if (changedPhoto) {
+          if (u.customPhoto === null) delete cur.customPhoto; else cur.customPhoto = u.customPhoto!;
+        }
+        next[id] = cur;
+      }
+      return next;
+    });
+
+    // Covers also live natively, for the lock screen. Push each change so the
+    // notification does not keep showing the old art (or the logo).
+    if (changedPhoto) {
+      for (const id of ids) {
+        AudioPlayer.setTrackArt({ path: id, dataUrl: u.customPhoto ?? null }).catch(() => {});
+      }
+    }
+    showToast(`${ids.length} song${ids.length === 1 ? "" : "s"} updated`);
+  };
+
+  // ── Set as ringtone ───────────────────────────────────────────────────────
+  // Three outcomes worth telling apart, because "nothing happened" is the worst
+  // possible feedback: it worked, Android wants the user to flip a switch first
+  // (we have just opened that screen for them), or the file is not in MediaStore
+  // so there is no ringtone URI to point at.
+  const setSongAsRingtone = async (s: Song) => {
+    try {
+      const res = await MusicScanner.setAsRingtone({ path: s.uri });
+      if (res.ok) {
+        showToast(`"${dispName(s)}" is now your ringtone`);
+      } else if (res.needsPermission) {
+        showToast("Allow MPTree to change system settings, then try again");
+      } else if (res.reason === "notIndexed") {
+        showToast("This track is not in the device library yet");
+      } else {
+        showToast("Could not set that as a ringtone");
+      }
+    } catch (e) {
+      showError("Ringtone failed: " + e);
+    }
   };
 
   // ── Remove to bin ─────────────────────────────────────────────────────────
@@ -2389,7 +2498,22 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
-                <span style={{ fontSize: 12, color: TH.muted }}>{displayList.length} songs</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{displayList.length} songs</span>
+                  {/* An active artist filter has to be visible and undoable from
+                      here. Buried in the sort menu it reads as "my songs are
+                      missing" rather than "you filtered them out". */}
+                  {activeArtist && (
+                    <button
+                      onClick={() => setArtistFilter(null)}
+                      aria-label={"Show all artists, currently showing " + activeArtist}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, maxWidth: 200, background: TH.violet + "22", color: TH.violet, border: "none", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeArtist}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" style={{ flexShrink: 0 }}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  )}
+                </div>
                 {/* Just the button. The menu itself is rendered OUTSIDE this
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
@@ -2509,12 +2633,38 @@ export default function App() {
         {filterOpen && page === "songs" && !chromeCollapsed && (
           <>
             <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
-            <div style={{ position: "absolute", right: 18, top: topInset - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 185, zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+            <div style={{ position: "absolute", right: 18, top: topInset - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
               {FILTER_OPTIONS.map((opt: { id: FilterId; label: string }) => (
                 <button key={opt.id} onClick={() => { setFilter(opt.id); setFilterOpen(false); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "13px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: filter === opt.id ? TH.text : TH.muted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", fontWeight: filter === opt.id ? "700" : "400" }}>
                   <span>{opt.label}</span>{filter === opt.id && IC.Check(TH.accent)}
                 </button>
               ))}
+
+              {/* ── Artists ───────────────────────────────────────────────
+                  Ordering and narrowing are different questions, so an artist
+                  can be picked alongside any sort above rather than replacing
+                  it. The list is whatever artists the library actually has,
+                  including ones typed in by hand, so it grows on its own. */}
+              {artistList.length > 0 && (
+                <>
+                  <div style={{ padding: "10px 16px 6px", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: TH.muted, fontWeight: 700, borderBottom: `1px solid ${TH.dim}`, background: TH.dim }}>
+                    Artists
+                  </div>
+                  {activeArtist && (
+                    <button onClick={() => { setArtistFilter(null); setFilterOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "11px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: TH.violet, fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                      <IC.Close />All artists
+                    </button>
+                  )}
+                  {artistList.map(a => (
+                    <button key={a.name} onClick={() => { setArtistFilter(a.name === activeArtist ? null : a.name); setFilterOpen(false); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, width: "100%", padding: "11px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: a.name === activeArtist ? TH.text : TH.muted, fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: a.name === activeArtist ? "700" : "400", textAlign: "left" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{a.name}</span>
+                      {a.name === activeArtist
+                        ? IC.Check(TH.accent)
+                        : <span style={{ fontSize: 11, color: TH.muted, flexShrink: 0 }}>{a.count}</span>}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </>
         )}
@@ -2625,7 +2775,7 @@ export default function App() {
                                 {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                               </div>
                             )}
-                            <AlbumArt title={name} size={48} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} T={TH} />
+                            <AlbumArt title={name} size={48} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ fontSize: 15, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
@@ -2759,7 +2909,14 @@ export default function App() {
               isPlaying={isPlaying}
               onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
               onPlayNext={handlePlayNext}
-              onEditSong={(song) => setEditSong(song)}
+              onEditSong={(song) => { setEditFocusPhoto(false); setEditSong(song); }}
+              onChangePhoto={(song) => { setEditFocusPhoto(true); setEditSong(song); }}
+              onSetRingtone={(song) => setSongAsRingtone(song)}
+              onLikeMany={likeMany}
+              onShuffleMany={shuffleMany}
+              onPlayManyNext={handlePlayManyNext}
+              onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
+              onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
               onCutSong={(song) => openCutSheet(song)}
               onShareSong={(song) => shareSong(song)}
               onRemoveSong={(song) => setRemoveSong(song)}
@@ -2857,17 +3014,27 @@ export default function App() {
             onLikeAll={() => multiLikeWithMeta(true)} onUnlikeAll={() => multiLikeWithMeta(false)}
             onShuffleSelection={multiShuffleSelection}
             onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
-            onAddToPlaylist={() => setMultiAddOpen(true)}
+            onBulkEdit={() => { setMultiIds([...selected]); setBulkEditOpen(true); }}
+            onAddToPlaylist={() => { setMultiIds([...selected]); setMultiAddOpen(true); }}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
             onClose={exitSelectMode} T={TH} />
         )}
 
+        {bulkEditOpen && (
+          <BulkEditSheet
+            count={multiIds.length}
+            onSave={u => { applyBulkEdit(multiIds, u); setBulkEditOpen(false); exitSelectMode(); }}
+            onClose={() => setBulkEditOpen(false)}
+            T={TH}
+          />
+        )}
+
         {multiAddOpen && (
           <AddToPlaylistSheet
-            count={selected.size}
+            count={multiIds.length}
             playlists={playlists}
-            onAddToPlaylist={id => { handleAddManyToPlaylist(id, [...selected]); setMultiAddOpen(false); exitSelectMode(); }}
-            onCreatePlaylist={name => { handleCreatePlaylistWithSongs(name, [...selected]); setMultiAddOpen(false); exitSelectMode(); }}
+            onAddToPlaylist={id => { handleAddManyToPlaylist(id, multiIds); setMultiAddOpen(false); exitSelectMode(); }}
+            onCreatePlaylist={name => { handleCreatePlaylistWithSongs(name, multiIds); setMultiAddOpen(false); exitSelectMode(); }}
             onClose={() => setMultiAddOpen(false)}
             T={TH}
           />
@@ -2886,7 +3053,9 @@ export default function App() {
             onPlayNext={() => handlePlayNext(menuSong)}
             onAddToPlaylist={id => handleAddToPlaylist(id, menuSong)}
             onCreatePlaylistWithSong={name => handleCreatePlaylistWithSong(name, menuSong)}
-            onEdit={() => { const s = menuSong; setMenuSong(null); setEditSong(s); }}
+            onEdit={() => { const s = menuSong; setMenuSong(null); setEditFocusPhoto(false); setEditSong(s); }}
+            onChangePhoto={() => { const s = menuSong; setMenuSong(null); setEditFocusPhoto(true); setEditSong(s); }}
+            onSetRingtone={() => { const s = menuSong; setMenuSong(null); setSongAsRingtone(s); }}
             onCut={() => { const s = menuSong; setMenuSong(null); openCutSheet(s); }}
             onToggleLike={() => {
               hapticImpact("light");
@@ -2905,7 +3074,7 @@ export default function App() {
             T={TH}
           />
         )}
-        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => setEditSong(null)} T={TH} />}
+        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} genre={dispGenre(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
         {removeSong && <ConfirmSheet title="Remove song" body={`"${dispName(removeSong)}" will be moved to the bin. You can restore it from Settings.`} confirmLabel="Move to Bin" onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={`Remove ${selected.size} songs`} body={`${selected.size} songs will be moved to the bin. You can restore them from Settings.`} confirmLabel={`Move ${selected.size} to Bin`} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}

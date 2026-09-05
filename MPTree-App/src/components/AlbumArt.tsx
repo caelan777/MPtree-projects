@@ -28,6 +28,9 @@ type AlbumArtProps = {
    *  file when the user has not picked a photo of their own. Omit it where a
    *  fetch would be wasted. */
   songPath?: string;
+  /** MediaStore album id, when the song has one. Lets every track on an album
+   *  share a single cover lookup. */
+  albumId?: number;
   T: T;
 };
 
@@ -48,9 +51,9 @@ function PlayingBars({ size, color }: { size: number; color: string }) {
   );
 }
 
-export function AlbumArt({ title, size, active = false, playing = false, customPhoto, songPath, T }: AlbumArtProps) {
+export function AlbumArt({ title, size, active = false, playing = false, customPhoto, songPath, albumId, T }: AlbumArtProps) {
   // The user's own photo always wins, and suppresses the lookup entirely.
-  const embedded = useAlbumArt(songPath, !customPhoto);
+  const embedded = useAlbumArt(songPath, albumId, !customPhoto);
   const photo = customPhoto || embedded || undefined;
   const radius = size * 0.22;
   // 0.58 of the tile. The note sat at half the tile and read as small and

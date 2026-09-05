@@ -640,4 +640,130 @@ public class MusicScannerPlugin extends Plugin {
             call.reject("Could not open settings: " + e.getMessage());
         }
     }
+
+    // ── getLyrics ────────────────────────────────────────────────────────────
+    //
+    // Lyrics come off the device, never off the internet. MPTree is an offline
+    // player and its privacy policy says the update check is the only request it
+    // makes; fetching lyrics from a server would quietly make that untrue.
+    //
+    // So we read a sidecar file sitting next to the audio: "song.mp3" pairs with
+    // "song.lrc", the de facto standard, or "song.txt". Lyrics embedded in the
+    // file's own ID3 frames are NOT read: that means hand-parsing USLT frames,
+    // which is a real chunk of work, and the sidecar covers how lyrics are
+    // actually distributed. Better to do one thing correctly than two badly.
+    @PluginMethod
+    public void getLyrics(PluginCall call) {
+        String path = call.getString("path");
+        JSObject ret = new JSObject();
+        ret.put("lyrics", "");
+        if (path == null || path.isEmpty()) { call.resolve(ret); return; }
+
+        try {
+            int dot = path.lastIndexOf('.');
+            String base = dot > 0 ? path.substring(0, dot) : path;
+            String[] candidates = { base + ".lrc", base + ".LRC", base + ".txt", base + ".TXT" };
+
+            for (String c : candidates) {
+                File f = new File(c);
+                if (!f.exists() || !f.canRead()) continue;
+                // A lyrics file this large is not lyrics.
+                if (f.length() > 512 * 1024) continue;
+
+                StringBuilder sb = new StringBuilder();
+                java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(new java.io.FileInputStream(f), "UTF-8"));
+                try {
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line).append('\n');
+                } finally {
+                    try { r.close(); } catch (Exception ignored) {}
+                }
+                ret.put("lyrics", sb.toString());
+                ret.put("source", f.getName());
+                break;
+            }
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.resolve(ret);
+        }
+    }
+
+    // ── setAsRingtone ────────────────────────────────────────────────────────
+    //
+    // Two gates stand between us and setting a ringtone, and they fail in
+    // different ways, so JS is told which one it hit:
+    //
+    //   needsPermission  Android treats writing system settings as special. It
+    //                    is not a runtime permission dialog; the user has to
+    //                    flip a switch on a dedicated Settings screen. We open
+    //                    it for them and report back so the UI can explain why
+    //                    nothing happened yet.
+    //   ok:false         The file is not in MediaStore (a cut track that was
+    //                    never scanned, say), so there is no content URI to
+    //                    hand to RingtoneManager.
+    @PluginMethod
+    public void setAsRingtone(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
+
+        JSObject ret = new JSObject();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && !Settings.System.canWrite(getContext())) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
+                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+            } catch (Exception ignored) {
+                // Some devices have no such screen. Reporting the state is still
+                // more useful than throwing.
+            }
+            ret.put("ok", false);
+            ret.put("needsPermission", true);
+            call.resolve(ret);
+            return;
+        }
+
+        try {
+            ContentResolver resolver = getContext().getContentResolver();
+            Uri collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+
+            Long id = null;
+            Cursor c = resolver.query(collection, new String[]{ MediaStore.Audio.Media._ID },
+                    MediaStore.Audio.Media.DATA + "=?", new String[]{ path }, null);
+            if (c != null) {
+                try { if (c.moveToFirst()) id = c.getLong(0); } finally { c.close(); }
+            }
+            if (id == null) {
+                ret.put("ok", false);
+                ret.put("needsPermission", false);
+                ret.put("reason", "notIndexed");
+                call.resolve(ret);
+                return;
+            }
+
+            Uri songUri = ContentUris.withAppendedId(collection, id);
+
+            // Mark it ringtone-eligible. Harmless if it already is, and on some
+            // OEM builds the picker will not show a track without this.
+            try {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Audio.Media.IS_RINGTONE, true);
+                resolver.update(songUri, values, null, null);
+            } catch (Exception ignored) {
+                // Not fatal: setActualDefaultRingtoneUri below is what matters.
+            }
+
+            android.media.RingtoneManager.setActualDefaultRingtoneUri(
+                    getContext(), android.media.RingtoneManager.TYPE_RINGTONE, songUri);
+
+            ret.put("ok", true);
+            ret.put("needsPermission", false);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Could not set ringtone: " + e.getMessage(), e);
+        }
+    }
 }

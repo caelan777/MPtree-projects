@@ -12,6 +12,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
@@ -1047,6 +1048,61 @@ public class MusicPlayerService extends Service {
         });
     }
 
+    /**
+     * The album cover MediaStore already holds for this albumId, or null.
+     *
+     * Two routes because the platform changed under us: from Android 10 the
+     * supported call is loadThumbnail on the album URI, which serves a cached,
+     * correctly sized bitmap. Before that the only way in was the undocumented
+     * albumart content provider, which still works on those releases. Either way
+     * this is one lookup per album rather than per song.
+     *
+     * MUST be called off the main thread.
+     */
+    private Bitmap loadAlbumThumb(long albumId, int maxPx) {
+        if (albumId <= 0) return null;
+        try {
+            Uri albumUri = android.content.ContentUris.withAppendedId(
+                    Uri.parse("content://media/external/audio/albumart"), albumId);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    return getContentResolver().loadThumbnail(
+                            albumUri, new android.util.Size(maxPx, maxPx), null);
+                } catch (Exception e) {
+                    // No thumbnail for this album. Fall through to the caller,
+                    // which reads the file itself.
+                    return null;
+                }
+            }
+            java.io.InputStream in = getContentResolver().openInputStream(albumUri);
+            if (in == null) return null;
+            try {
+                BitmapFactory.Options bounds = new BitmapFactory.Options();
+                bounds.inJustDecodeBounds = true;
+                BitmapFactory.decodeStream(in, null, bounds);
+                in.close();
+
+                int sample = 1;
+                int longest = Math.max(bounds.outWidth, bounds.outHeight);
+                while (longest / sample > maxPx * 2) sample *= 2;
+
+                java.io.InputStream in2 = getContentResolver().openInputStream(albumUri);
+                if (in2 == null) return null;
+                try {
+                    BitmapFactory.Options opts = new BitmapFactory.Options();
+                    opts.inSampleSize = sample;
+                    return BitmapFactory.decodeStream(in2, null, opts);
+                } finally {
+                    try { in2.close(); } catch (Exception ignored) {}
+                }
+            } finally {
+                try { in.close(); } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /** Blocking decode — MUST be called off the main thread. */
     private Bitmap decodeEmbeddedArt(String path) {
         if (path == null || path.isEmpty()) return null;
@@ -1113,15 +1169,38 @@ public class MusicPlayerService extends Service {
      * Same single-thread art executor as everything else here, so a burst of
      * requests from a long list can never pile up on the main thread.
      */
-    public void getAlbumArtThumbAsync(String path, int maxPx, ArtBase64Callback cb) {
+    public void getAlbumArtThumbAsync(String path, long albumId, int maxPx, ArtBase64Callback cb) {
         artExecutor.execute(() -> {
             String result = "";
             Bitmap scaled = null;
+
+            // Prefer the album route. MediaStore keeps one thumbnail per album and
+            // caches it, so a library of 500 songs across 40 albums costs 40 cheap
+            // lookups instead of 500 full metadata reads. Only if that misses do we
+            // fall back to cracking the file open ourselves.
+            byte[] picture = null;
+            if (albumId > 0) {
+                Bitmap albumArt = loadAlbumThumb(albumId, maxPx);
+                if (albumArt != null) {
+                    try {
+                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                        albumArt.compress(Bitmap.CompressFormat.JPEG, 80, out);
+                        result = android.util.Base64.encodeToString(
+                                out.toByteArray(), android.util.Base64.NO_WRAP);
+                    } catch (Exception ignored) {
+                    } finally {
+                        try { albumArt.recycle(); } catch (Exception ignored) {}
+                    }
+                    cb.onResult(result);
+                    return;
+                }
+            }
+
             if (path != null && !path.isEmpty()) {
                 MediaMetadataRetriever retriever = new MediaMetadataRetriever();
                 try {
                     retriever.setDataSource(path);
-                    byte[] picture = retriever.getEmbeddedPicture();
+                    picture = retriever.getEmbeddedPicture();
                     if (picture != null && picture.length > 0) {
                         // Bounds first, then subsample, so a huge cover is never
                         // fully decoded just to be thrown away.

@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Needed only for "Set as ringtone". Android gates this behind a switch on
+         a dedicated Settings screen rather than a normal permission dialog, so
+         nothing is granted silently: see MusicScannerPlugin.setAsRingtone. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <!--  ── Required for foreground service + media controls ─────────────  -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

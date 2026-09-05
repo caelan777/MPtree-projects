@@ -32,6 +32,15 @@ export type MusicScannerPlugin = {
   // Opens this app's system settings page (App info), where the user can grant
   // the media permission after having denied it with "Don't ask again".
   openAppSettings(): Promise<void>;
+  // Makes this track the device ringtone. Android gates writing system settings
+  // behind a switch on its own Settings screen rather than a permission dialog,
+  // so this can come back ok:false with needsPermission:true after opening that
+  // screen, meaning "ask again once they have flipped it".
+  setAsRingtone(options: { path: string }):
+    Promise<{ ok: boolean; needsPermission?: boolean; reason?: string }>;
+  // Lyrics from a sidecar file next to the audio (song.lrc / song.txt). Always
+  // local: see the note in MusicScannerPlugin.getLyrics.
+  getLyrics(options: { path: string }): Promise<{ lyrics: string; source?: string }>;
 };
 
 export type AudioPlayerPlugin = {
@@ -54,7 +63,7 @@ export type AudioPlayerPlugin = {
   /** A small JPEG of the embedded cover, for list rows. "" when there is none.
    *  ready is false when the playback service had not bound yet, meaning "ask
    *  again", not "this file has no cover". */
-  getAlbumArtThumb(options: { path: string; maxPx?: number }): Promise<{ art: string; ready?: boolean }>;
+  getAlbumArtThumb(options: { path: string; albumId?: number; maxPx?: number }): Promise<{ art: string; ready?: boolean }>;
   /** Hand native the user's chosen cover for one track, so the lock screen shows
    *  it. dataUrl null clears it. */
   setTrackArt(options: { path: string; dataUrl: string | null }): Promise<void>;

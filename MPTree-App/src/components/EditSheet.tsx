@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { IC } from "./Icons";
 
@@ -15,22 +15,38 @@ import { IC } from "./Icons";
 type EditSheetProps = {
   name: string;
   artist: string;
+  genre: string;
   currentPhoto?: string;
+  /** Open straight onto the photo picker. Used by the menu's "Photo" button,
+   *  which is the same edit, just aimed at one field. */
+  focusPhoto?: boolean;
   onSave: (u: {
     customName?:   string;
     customArtist?: string;
+    customGenre?:  string;
     customPhoto?:  string | null;
   }) => void;
   onClose: () => void;
   T: T;
 };
 
-export function EditSheet({ name: initName, artist: initArtist, currentPhoto, onSave, onClose, T }: EditSheetProps) {
+export function EditSheet({ name: initName, artist: initArtist, genre: initGenre, currentPhoto, focusPhoto = false, onSave, onClose, T }: EditSheetProps) {
   const [name,   setName]   = useState(initName);
   const [artist, setArtist] = useState(initArtist);
+  const [genre,  setGenre]  = useState(initGenre);
   // undefined = unchanged, null = cleared, string = new photo
   const [photo,  setPhoto]  = useState<string | null | undefined>(undefined);
   const sh = makeSH(T);
+
+  // "Photo" in the song menu opens this sheet aimed at one field, so the picker
+  // comes up on its own. The click has to come from a real element rather than
+  // input.click() on a detached node, or Android's WebView ignores it.
+  const pickerRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!focusPhoto) return;
+    const id = setTimeout(() => pickerRef.current?.click(), 260);
+    return () => clearTimeout(id);
+  }, [focusPhoto]);
 
   const previewPhoto = photo !== undefined ? photo : currentPhoto;
 
@@ -38,6 +54,7 @@ export function EditSheet({ name: initName, artist: initArtist, currentPhoto, on
     onSave({
       customName:   name.trim()   || undefined,
       customArtist: artist.trim() || undefined,
+      customGenre:  genre.trim()  || undefined,
       // Only include in payload if something actually changed
       ...(photo !== undefined ? { customPhoto: photo } : {}),
     });
@@ -56,6 +73,8 @@ export function EditSheet({ name: initName, artist: initArtist, currentPhoto, on
           <input value={name} onChange={e => setName(e.target.value)} style={sh.inp} />
           <div style={sh.lbl}>Artist</div>
           <input value={artist} onChange={e => setArtist(e.target.value)} placeholder="Add artist name…" style={sh.inp} />
+          <div style={sh.lbl}>Genre</div>
+          <input value={genre} onChange={e => setGenre(e.target.value)} placeholder="Add a genre…" style={sh.inp} />
           <div style={sh.lbl}>Cover photo</div>
 
           {previewPhoto ? (
@@ -64,7 +83,7 @@ export function EditSheet({ name: initName, artist: initArtist, currentPhoto, on
               <span style={{ flex: 1, fontSize: 14, color: T.text }}>Cover photo set</span>
               <label style={{ cursor: "pointer" }}>
                 <span style={{ fontSize: 13, color: T.text, fontWeight: "600", textDecoration: "underline" }}>Change</span>
-                <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+                <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                   const f = e.target.files?.[0];
                   if (!f) return;
                   const r = new FileReader();
@@ -82,7 +101,7 @@ export function EditSheet({ name: initName, artist: initArtist, currentPhoto, on
             <label style={sh.photoRow}>
               <IC.Photo />
               <span style={{ marginLeft: 8, fontSize: 14, color: T.muted }}>Choose from device</span>
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+              <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                 const f = e.target.files?.[0];
                 if (!f) return;
                 const r = new FileReader();

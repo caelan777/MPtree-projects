@@ -40,7 +40,7 @@ export function ExpandedSongRow({
         <span style={{ fontSize: 13, fontWeight: "700", color: isActive ? T.accent : T.muted, flexShrink: 0, minWidth: 18 }}>
           #{idx + 1}
         </span>
-        <AlbumArt title={dispName} size={88} active={isActive} customPhoto={customPhoto} songPath={song.uri} T={T} />
+        <AlbumArt title={dispName} size={88} active={isActive} customPhoto={customPhoto} songPath={song.uri} albumId={song.albumId} T={T} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 17, fontWeight: "700", color: isActive ? T.accent : T.text, wordBreak: "break-word", lineHeight: 1.3 }}>
             {dispName}

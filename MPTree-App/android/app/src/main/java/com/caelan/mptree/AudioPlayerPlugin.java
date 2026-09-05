@@ -321,6 +321,7 @@ public class AudioPlayerPlugin extends Plugin {
     public void getAlbumArtThumb(PluginCall call) {
         String path = call.getString("path");
         int maxPx = call.getInt("maxPx", 96);
+        long albumId = call.getLong("albumId", 0L);
         // "ready" separates "this file has no cover" from "could not look yet".
         // Binding finishes a moment after launch, and without this flag a lookup
         // that lost that race would be cached as "no artwork" for the session.
@@ -331,7 +332,7 @@ public class AudioPlayerPlugin extends Plugin {
             call.resolve(ret);
             return;
         }
-        playerService.getAlbumArtThumbAsync(path, maxPx, base64 -> {
+        playerService.getAlbumArtThumbAsync(path, albumId, maxPx, base64 -> {
             JSObject ret = new JSObject();
             ret.put("art", base64 != null ? base64 : "");
             ret.put("ready", true);
