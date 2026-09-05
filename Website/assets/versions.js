@@ -31,6 +31,22 @@ window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
   {
+    version: "0.1.3",
+    date:    "2026-09-05",
+    channel: "beta",
+    tag:     "v0.1.3-beta",
+    notes: [
+      "The sort menu lists your artists, so you can narrow the library to one of them.",
+      "Songs now show the cover art stored inside the file, in every list.",
+      "Set any song as your ringtone, straight from its menu.",
+      "Edit has a genre field, and multi-select can set artist, genre and cover on many songs at once.",
+      "The big player has a Queue button and a Lyrics button.",
+      "Selecting songs inside a playlist now offers everything the songs list does.",
+      "Ringtone, Photo and Edit are bigger buttons at the top of the song menu.",
+      "Folding the header on a playlist no longer jumps.",
+    ],
+  },
+  {
     version: "0.1.2",
     date:    "2026-09-03",
     channel: "beta",
