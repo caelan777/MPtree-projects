@@ -89,11 +89,21 @@
       li.appendChild(ul);
     }
 
-    var a = document.createElement("a");
-    a.className = i === 0 ? "btn btn-sm" : "btn btn-sm btn-ghost";
-    a.href = apkUrl(rel);
-    a.textContent = "Download " + rel.version;
-    li.appendChild(a);
+    // An entry can carry download:false when no APK was ever published for it.
+    // Rendering a button anyway would just send people to a GitHub 404, so the
+    // changelog is shown on its own instead. Absent flag means downloadable.
+    if (rel.download === false) {
+      var none = document.createElement("p");
+      none.className = "rel-nodl";
+      none.textContent = "No download available for this version.";
+      li.appendChild(none);
+    } else {
+      var a = document.createElement("a");
+      a.className = i === 0 ? "btn btn-sm" : "btn btn-sm btn-ghost";
+      a.href = apkUrl(rel);
+      a.textContent = "Download " + rel.version;
+      li.appendChild(a);
+    }
 
     list.appendChild(li);
   });

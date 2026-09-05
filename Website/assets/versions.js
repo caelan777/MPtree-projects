@@ -17,6 +17,11 @@
  * skips pre-releases, and the Download button would silently keep serving the
  * previous version.
  *
+ * An entry may set `download: false` when no APK exists for it. The list then
+ * shows that release's changelog with a short note instead of a button, rather
+ * than linking somewhere that 404s. 0.1.1 is the one case: it was superseded by
+ * 0.1.2 before any APK was published for it.
+ *
  * Also update /version.json when you add an entry here. That file is what the
  * APK from this website reads to tell people on an older build that a new one
  * exists; if it lags behind, nobody finds out. (The Play Store build never
@@ -48,6 +53,7 @@ window.MPTREE_VERSIONS = [
     date:    "2026-09-01",
     channel: "beta",
     tag:     "v0.1.1-beta",
+    download: false,   // no APK was ever published for this build
     notes: [
       "Play Next now actually plays the song next, in every mode.",
       "Tapping a song while shuffle is on keeps shuffling instead of playing in order.",
