@@ -83,7 +83,7 @@ export function SongMenuSheet({
 
         {/* Song header — identifies what the actions apply to. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 20px 14px", flexShrink: 0 }}>
-          <AlbumArt title={dispName} size={44} active={false} customPhoto={customPhoto} T={T} />
+          <AlbumArt title={dispName} size={44} active={false} customPhoto={customPhoto} songPath={song.uri} T={T} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: "700", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {dispName}

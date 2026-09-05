@@ -1,4 +1,5 @@
 import type { T } from "../themes";
+import { useAlbumArt } from "../hooks/useAlbumArt";
 
 // ─── ALBUM ART ───────────────────────────────────────────────────────────────
 // A song with no photo of its own gets a grey tile with a music note. It used
@@ -10,6 +11,9 @@ import type { T } from "../themes";
 // hash of the title, which looked lively but was meaningless: the icon appeared
 // to say something about the track and did not. A single mark reads as "no
 // artwork yet" and lets the titles carry the list.
+//
+// A song that has a cover inside the file shows that instead. It is fetched
+// lazily and cached, one small thumbnail per file: see src/artCache.ts.
 
 type AlbumArtProps = {
   title: string;
@@ -20,6 +24,10 @@ type AlbumArtProps = {
    *  playing" is the question being answered, i.e. list rows. */
   playing?: boolean;
   customPhoto?: string;
+  /** The song's file path. Given this, a row shows the cover embedded in the
+   *  file when the user has not picked a photo of their own. Omit it where a
+   *  fetch would be wasted. */
+  songPath?: string;
   T: T;
 };
 
@@ -40,7 +48,10 @@ function PlayingBars({ size, color }: { size: number; color: string }) {
   );
 }
 
-export function AlbumArt({ title, size, active = false, playing = false, customPhoto, T }: AlbumArtProps) {
+export function AlbumArt({ title, size, active = false, playing = false, customPhoto, songPath, T }: AlbumArtProps) {
+  // The user's own photo always wins, and suppresses the lookup entirely.
+  const embedded = useAlbumArt(songPath, !customPhoto);
+  const photo = customPhoto || embedded || undefined;
   const radius = size * 0.22;
   // 0.58 of the tile. The note sat at half the tile and read as small and
   // tentative against the 48px rows.
@@ -52,12 +63,12 @@ export function AlbumArt({ title, size, active = false, playing = false, customP
       overflow: "hidden",
       border: active ? `2px solid ${T.accent}` : "2px solid transparent",
       boxShadow: active ? `0 0 0 1px ${T.accent}33` : "none",
-      background: customPhoto ? "transparent" : T.dim,
+      background: photo ? "transparent" : T.dim,
       display: "flex", alignItems: "center", justifyContent: "center",
       transition: "border-color 0.2s", userSelect: "none", color: T.muted,
     }}>
-      {customPhoto
-        ? <img src={customPhoto} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      {photo
+        ? <img src={photo} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         : (
           <svg width={glyph} height={glyph} viewBox="0 0 24 24" fill="none" stroke="currentColor"
                strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

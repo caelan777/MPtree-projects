@@ -322,7 +322,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {isSelected && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
           </div>
         )}
-        <AlbumArt title={dispName(song)} size={48} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} T={t} />
+        <AlbumArt title={dispName(song)} size={48} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} T={t} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
@@ -1150,20 +1150,26 @@ export const PlaylistsView: React.FC<Props> = ({
             Cancel
           </button>
           <span style={{ fontSize: 14, fontWeight: 700, color: t.text }}>{selectedIds.size} selected</span>
+          {/* Deliberately not a red bin. Taking a song out of a playlist deletes
+              nothing: the file stays, and so does the song everywhere else in the
+              app. Styled like a normal chip and spelled out in full, so it cannot
+              be mistaken for the Songs-page Remove that moves files to the bin. */}
           <button
             onClick={() => { const ids = selectedIds; exitSelect(); removeManyFromPlaylist(ids); }}
             disabled={selectedIds.size === 0}
             style={{
               display: "flex", alignItems: "center", gap: 7,
-              background: selectedIds.size > 0 ? "#e8445a" : t.border,
-              color: selectedIds.size > 0 ? "#fff" : t.muted,
-              border: "none", borderRadius: 10, padding: "9px 16px",
+              background: selectedIds.size > 0 ? t.chipBg : "transparent",
+              color: selectedIds.size > 0 ? t.text : t.muted,
+              border: "1px solid " + (selectedIds.size > 0 ? t.chipBorder : t.border),
+              borderRadius: 10, padding: "9px 16px",
               fontSize: 14, fontWeight: 700,
+              opacity: selectedIds.size > 0 ? 1 : 0.5,
               cursor: selectedIds.size > 0 ? "pointer" : "default", fontFamily: "inherit",
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            Remove
+            <IC.MinusCircle />
+            Remove from playlist
           </button>
         </div>,
         document.body

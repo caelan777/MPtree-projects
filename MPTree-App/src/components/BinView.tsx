@@ -87,7 +87,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
                 style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, cursor: "pointer" }}
               >
                 <div style={{ position: "relative", flexShrink: 0 }}>
-                  <AlbumArt title={dispName(song)} size={44} active={isCurrent} customPhoto={meta[song.id]?.customPhoto} T={T} />
+                  <AlbumArt title={dispName(song)} size={44} active={isCurrent} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} T={T} />
                   {isCurrent && (
                     <div style={{ position: "absolute", inset: 0, borderRadius: 8, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {isPlaying

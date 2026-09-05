@@ -10,7 +10,7 @@ type MultiSelectBarProps = {
   onUnlikeAll: () => void;
   onShuffleSelection: () => void;
   onAddToPlaylist: () => void;
-  onRemoveAll: () => void;
+  onPlayNext: () => void;
   onSelectAll: () => void;
   onClearAll: () => void;
   onClose: () => void;
@@ -19,7 +19,7 @@ type MultiSelectBarProps = {
 
 export function MultiSelectBar({
   count, totalCount, allLiked,
-  onLikeAll, onUnlikeAll, onShuffleSelection, onAddToPlaylist, onRemoveAll,
+  onLikeAll, onUnlikeAll, onShuffleSelection, onAddToPlaylist, onPlayNext,
   onSelectAll, onClearAll, onClose, T,
 }: MultiSelectBarProps) {
   const allSelected = count === totalCount && totalCount > 0;
@@ -51,22 +51,23 @@ export function MultiSelectBar({
         )}
         <Chip disabled={count === 0} onClick={onShuffleSelection} T={T}><IC.Shuffle />Shuffle</Chip>
         <Chip disabled={count === 0} onClick={onAddToPlaylist} T={T}><IC.Plus />Add to playlist</Chip>
-        <Chip disabled={count === 0} onClick={onRemoveAll} destructive T={T}>
-          <IC.Trash />Remove {count > 0 ? `(${count})` : ""}
-        </Chip>
+        {/* Remove is deliberately NOT here. It moved up beside the settings
+            gear, where the count used to sit, so the one destructive action in
+            this mode is not sitting in the same row as four harmless ones. */}
+        <Chip disabled={count === 0} onClick={onPlayNext} T={T}><IC.PlayNext />Play next</Chip>
       </div>
     </div>
   );
 }
 
-function Chip({ children, disabled, onClick, destructive = false, T }: { children: React.ReactNode; disabled: boolean; onClick: () => void; destructive?: boolean; T: T }) {
+function Chip({ children, disabled, onClick, T }: { children: React.ReactNode; disabled: boolean; onClick: () => void; T: T }) {
   return (
     <button onClick={disabled ? undefined : onClick} style={{
       display: "inline-flex", alignItems: "center", gap: 5,
       padding: "9px 14px", borderRadius: 20,
-      border: `1px solid ${disabled ? T.border : destructive ? T.binBorder : T.chipBorder}`,
-      background: disabled ? T.dim : destructive ? T.binBg : T.chipBg,
-      color: disabled ? T.muted : destructive ? "#e8445a" : T.chipColor,
+      border: `1px solid ${disabled ? T.border : T.chipBorder}`,
+      background: disabled ? T.dim : T.chipBg,
+      color: disabled ? T.muted : T.chipColor,
       fontSize: 13, fontWeight: "600", cursor: disabled ? "default" : "pointer",
       whiteSpace: "nowrap" as const, fontFamily: "inherit", opacity: disabled ? 0.5 : 1, flexShrink: 0,
     }}>

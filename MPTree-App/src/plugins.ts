@@ -51,6 +51,13 @@ export type AudioPlayerPlugin = {
   setPlaybackSpeed(options: { speed: number }): Promise<void>;
   getPlaybackSpeed(): Promise<{ speed: number }>;
   getAlbumArt(options: { path: string }): Promise<{ art: string }>;
+  /** A small JPEG of the embedded cover, for list rows. "" when there is none.
+   *  ready is false when the playback service had not bound yet, meaning "ask
+   *  again", not "this file has no cover". */
+  getAlbumArtThumb(options: { path: string; maxPx?: number }): Promise<{ art: string; ready?: boolean }>;
+  /** Hand native the user's chosen cover for one track, so the lock screen shows
+   *  it. dataUrl null clears it. */
+  setTrackArt(options: { path: string; dataUrl: string | null }): Promise<void>;
   setEqualizerEnabled(options: { enabled: boolean }): Promise<void>;
   setEqualizerBandLevels(options: { levels: number[] }): Promise<void>;
   getEqualizerInfo(): Promise<{ available: boolean; bandFreqsHz: number[]; minMillibel: number; maxMillibel: number }>;

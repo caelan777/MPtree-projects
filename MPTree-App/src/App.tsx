@@ -709,6 +709,57 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
 
+  // ── Sync user-picked covers to native ─────────────────────────────────────
+  // applyEdit pushes a cover to native as it is set, but that only covers edits
+  // made from now on. Photos set before this existed, or brought in by a backup
+  // restore, are unknown to native until we tell it. We keep the list of ids we
+  // have pushed so a restore is picked up too, and so a launch with nothing new
+  // does no work at all.
+  useEffect(() => {
+    if (isInitializing) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { value } = await Preferences.get({ key: "mptree_track_art_pushed" });
+        const pushed: string[] = value ? JSON.parse(value) : [];
+        if (cancelled) return;
+
+        const pushedSet = new Set(pushed);
+        const withPhoto = Object.keys(metaRef.current).filter(id => metaRef.current[id]?.customPhoto);
+        const withPhotoSet = new Set(withPhoto);
+
+        const toAdd   = withPhoto.filter(id => !pushedSet.has(id));
+        const toClear = pushed.filter(id => !withPhotoSet.has(id));
+        if (!toAdd.length && !toClear.length) return;
+
+        // Only tick off what actually landed. setTrackArt rejects while the
+        // playback service is still binding, and recording a push that never
+        // happened would leave that cover missing from the lock screen forever.
+        const landed = new Set(pushed.filter(id => withPhotoSet.has(id)));
+        for (const id of toAdd) {
+          if (cancelled) return;
+          try {
+            await AudioPlayer.setTrackArt({ path: id, dataUrl: metaRef.current[id]!.customPhoto! });
+            landed.add(id);
+          } catch { /* try again next launch */ }
+        }
+        for (const id of toClear) {
+          if (cancelled) return;
+          try {
+            await AudioPlayer.setTrackArt({ path: id, dataUrl: null });
+            landed.delete(id);
+          } catch { /* still ours to clear next launch */ landed.add(id); }
+        }
+        if (cancelled) return;
+        await Preferences.set({ key: "mptree_track_art_pushed", value: JSON.stringify([...landed]) });
+      } catch {
+        // Nothing here is worth bothering the user about: the lock screen just
+        // falls back to embedded art or the logo, exactly as it did before.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isInitializing]);
+
   // Dominant-color extraction for the mini-player tint / expanded-player blur
   // backdrop. Mirrors the art-source logic above directly (rather than calling
   // the later-defined nowPlayingPhoto helper) to avoid any ordering ambiguity.
@@ -1015,6 +1066,48 @@ export default function App() {
 
     setPlayNextQueue(prev => (prev.includes(song.id) ? prev : [...prev, song.id]));
     showToast(`"${dispName(song)}" plays next`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, toNativeTrack]);
+
+  // The multi-select version. Same rules as handlePlayNext, applied to a whole
+  // selection at once: the songs land together, directly after the current
+  // track, in the order they appear in the list rather than the order they were
+  // ticked. Splicing into the queue (not just recording ids) matters for the
+  // reason given above: native advances on its own and never reads playNextQueue.
+  const handlePlayManyNext = useCallback((ids: string[]) => {
+    const chosen = displayListRef.current.filter(s => ids.includes(s.id));
+    if (!chosen.length) return;
+
+    const cur = curRef.current;
+    if (!cur) {
+      setQueue(chosen);
+      playSong(chosen[0], chosen);
+      return;
+    }
+
+    // The current track cannot queue after itself.
+    const toPin = chosen.filter(s => s.id !== cur.id);
+    if (!toPin.length) { showToast("Already playing"); return; }
+
+    const pinIds = new Set(toPin.map(s => s.id));
+    const base = queueRef.current.length ? queueRef.current : displayListRef.current;
+    const without = base.filter(s => !pinIds.has(s.id));
+    const curIdx = without.findIndex(s => s.id === cur.id);
+    if (curIdx === -1) return;
+
+    const alreadyPinned = playNextQueueRef.current;
+    let insertAt = curIdx + 1;
+    while (insertAt < without.length && alreadyPinned.includes(without[insertAt].id)) insertAt++;
+
+    const newQ = [...without.slice(0, insertAt), ...toPin, ...without.slice(insertAt)];
+    setQueue(newQ);
+    AudioPlayer.setQueue({
+      tracks: newQ.map(toNativeTrack),
+      currentIndex: newQ.findIndex(s => s.id === cur.id),
+    }).catch(() => {});
+
+    setPlayNextQueue(prev => [...prev, ...toPin.map(s => s.id).filter(id => !prev.includes(id))]);
+    showToast(toPin.length === 1 ? `"${dispName(toPin[0])}" plays next` : `${toPin.length} songs play next`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
 
@@ -1606,6 +1699,13 @@ export default function App() {
       const existing = prev[s.id] || {};
       return { ...prev, [s.id]: { ...existing, ...(u.customName !== undefined ? { customName: u.customName } : {}), ...(u.customArtist !== undefined ? { customArtist: u.customArtist } : {}), ...(u.customPhoto !== undefined ? { customPhoto: u.customPhoto ?? undefined } : {}) } };
     });
+    // Hand the cover to native too, or the lock screen and notification keep
+    // showing the logo for exactly the songs the user bothered to set art on.
+    // Native stores it on disk, so it survives the WebView being frozen and
+    // still applies when the service advances tracks by itself.
+    if (u.customPhoto !== undefined) {
+      AudioPlayer.setTrackArt({ path: s.uri, dataUrl: u.customPhoto ?? null }).catch(() => {});
+    }
     setEditSong(null); setMenuSong(null);
   };
 
@@ -2242,7 +2342,29 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {selectMode && <span style={{ fontSize: 13, color: TH.violet, fontWeight: 700 }}>{selected.size} selected</span>}
+            {/* In select mode the count gives way to Remove. It is the only action
+                in this mode that destroys anything, so it sits up here on its own
+                rather than in a row of four harmless chips where a mis-tap is easy.
+                The count is still shown, in the bar at the bottom. The confirm
+                sheet behind removeMultiConfirm is what actually guards it. */}
+            {selectMode && (
+              <button
+                onClick={selected.size === 0 ? undefined : () => setRemoveMultiConfirm(true)}
+                aria-label="Remove selected songs"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  background: selected.size > 0 ? TH.binBg : "transparent",
+                  border: "1px solid " + (selected.size > 0 ? TH.binBorder : TH.border),
+                  color: selected.size > 0 ? "#e8445a" : TH.muted,
+                  borderRadius: 20, padding: "6px 12px",
+                  fontSize: 13, fontWeight: 700, fontFamily: "inherit",
+                  cursor: selected.size > 0 ? "pointer" : "default",
+                  opacity: selected.size > 0 ? 1 : 0.5,
+                }}
+              >
+                <IC.Trash />Remove
+              </button>
+            )}
             <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: TH.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
@@ -2503,7 +2625,7 @@ export default function App() {
                                 {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                               </div>
                             )}
-                            <AlbumArt title={name} size={48} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} T={TH} />
+                            <AlbumArt title={name} size={48} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} T={TH} />
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ fontSize: 15, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
@@ -2733,7 +2855,8 @@ export default function App() {
           <MultiSelectBar
             count={selected.size} totalCount={displayList.length} allLiked={allSelectedLiked}
             onLikeAll={() => multiLikeWithMeta(true)} onUnlikeAll={() => multiLikeWithMeta(false)}
-            onShuffleSelection={multiShuffleSelection} onRemoveAll={() => setRemoveMultiConfirm(true)}
+            onShuffleSelection={multiShuffleSelection}
+            onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
             onAddToPlaylist={() => setMultiAddOpen(true)}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
             onClose={exitSelectMode} T={TH} />

@@ -312,6 +312,51 @@ public class AudioPlayerPlugin extends Plugin {
         });
     }
 
+    /**
+     * A downscaled JPEG of the file's embedded cover, for list rows. Returns ""
+     * when the file has none, which JS caches as "checked, nothing there" so the
+     * same file is never probed twice.
+     */
+    @PluginMethod
+    public void getAlbumArtThumb(PluginCall call) {
+        String path = call.getString("path");
+        int maxPx = call.getInt("maxPx", 96);
+        // "ready" separates "this file has no cover" from "could not look yet".
+        // Binding finishes a moment after launch, and without this flag a lookup
+        // that lost that race would be cached as "no artwork" for the session.
+        if (!bound) {
+            JSObject ret = new JSObject();
+            ret.put("art", "");
+            ret.put("ready", false);
+            call.resolve(ret);
+            return;
+        }
+        playerService.getAlbumArtThumbAsync(path, maxPx, base64 -> {
+            JSObject ret = new JSObject();
+            ret.put("art", base64 != null ? base64 : "");
+            ret.put("ready", true);
+            call.resolve(ret);
+        });
+    }
+
+    /**
+     * Hands native the cover the user picked for one track, so the lock screen
+     * and notification can show it. Pass a null/empty dataUrl to clear it.
+     * Native stores it on disk and remembers it across process death, which is
+     * what makes it work when the service advances tracks on its own with the
+     * WebView frozen.
+     */
+    @PluginMethod
+    public void setTrackArt(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
+        // Rejects rather than resolving quietly: the caller records which covers
+        // it has handed over, and must not tick off one that never arrived.
+        if (!bound) { call.reject("Service not bound"); return; }
+        playerService.setTrackArt(path, call.getString("dataUrl"));
+        call.resolve();
+    }
+
     @PluginMethod
     public void setEqualizerEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);

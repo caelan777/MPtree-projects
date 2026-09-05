@@ -442,7 +442,7 @@ export function PlayerExpandSheet({
                         <line x1="3" y1="17" x2="21" y2="17"/>
                       </svg>
                     </div>
-                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} T={T} />
+                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={s.uri} T={T} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {name}
@@ -484,7 +484,7 @@ export function PlayerExpandSheet({
                       border: `1px solid ${T.border}`,
                     }}
                   >
-                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} T={T} />
+                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={normalNext.uri} T={T} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {name}

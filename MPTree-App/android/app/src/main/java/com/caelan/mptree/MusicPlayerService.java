@@ -33,6 +33,8 @@ import android.support.v4.media.session.MediaSessionCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.media.app.NotificationCompat.MediaStyle;
 
+import java.io.File;
+
 public class MusicPlayerService extends Service {
 
     public static final String CHANNEL_ID      = "mptree_playback";
@@ -908,6 +910,90 @@ public class MusicPlayerService extends Service {
     // binder transaction limit. 512px is plenty for lock-screen display.
     private static final int ART_MAX_PX = 512;
 
+    // ── User-picked covers ─────────────────────────────────────────────────
+    //
+    // A cover the user chose in Edit lives in JS as a base64 data URL, which the
+    // lock screen and notification never saw: they only ever showed the picture
+    // embedded in the file, or the logo. Pushing art per track through setQueue
+    // is not an option (queues run to hundreds of tracks, and these photos are
+    // uncompressed straight from a file picker), and pushing only the current
+    // one fails whenever the service advances a track by itself with the WebView
+    // frozen, which is the normal case.
+    //
+    // So native owns the mapping. JS calls setTrackArt once per photo; we write
+    // a downscaled JPEG into cacheDir and remember path -> file in our own
+    // SharedPreferences. It survives the WebView being frozen and the process
+    // being killed, so background auto-advance still shows the right cover.
+    private static final String ART_PREFS = "mptree_track_art";
+
+    private File customArtFile(String trackPath) {
+        if (trackPath == null || trackPath.isEmpty()) return null;
+        String name = getSharedPreferences(ART_PREFS, Context.MODE_PRIVATE)
+                .getString(trackPath, null);
+        if (name == null) return null;
+        File f = new File(new File(getCacheDir(), "art"), name);
+        return f.exists() ? f : null;
+    }
+
+    /** Store (or with a null dataUrl, clear) the user's cover for one track. */
+    public void setTrackArt(String trackPath, String dataUrl) {
+        if (trackPath == null || trackPath.isEmpty()) return;
+        artExecutor.execute(() -> {
+            android.content.SharedPreferences prefs =
+                    getSharedPreferences(ART_PREFS, Context.MODE_PRIVATE);
+            File dir = new File(getCacheDir(), "art");
+            String existing = prefs.getString(trackPath, null);
+            if (existing != null) {
+                try { new File(dir, existing).delete(); } catch (Exception ignored) {}
+            }
+
+            if (dataUrl == null || dataUrl.isEmpty()) {
+                prefs.edit().remove(trackPath).apply();
+            } else {
+                try {
+                    if (!dir.exists()) dir.mkdirs();
+                    int comma = dataUrl.indexOf(',');
+                    byte[] raw = android.util.Base64.decode(
+                            comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl,
+                            android.util.Base64.DEFAULT);
+
+                    BitmapFactory.Options bounds = new BitmapFactory.Options();
+                    bounds.inJustDecodeBounds = true;
+                    BitmapFactory.decodeByteArray(raw, 0, raw.length, bounds);
+                    int sample = 1;
+                    int longest = Math.max(bounds.outWidth, bounds.outHeight);
+                    while (longest / sample > ART_MAX_PX) sample *= 2;
+
+                    BitmapFactory.Options opts = new BitmapFactory.Options();
+                    opts.inSampleSize = sample;
+                    Bitmap bmp = BitmapFactory.decodeByteArray(raw, 0, raw.length, opts);
+                    if (bmp != null) {
+                        // Name the file after the track path's hash, so replacing a
+                        // photo never collides with the copy it replaces.
+                        String name = Integer.toHexString(trackPath.hashCode())
+                                + "_" + System.currentTimeMillis() + ".jpg";
+                        java.io.FileOutputStream out = new java.io.FileOutputStream(new File(dir, name));
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 90, out);
+                        out.close();
+                        bmp.recycle();
+                        prefs.edit().putString(trackPath, name).apply();
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // The cover for the track playing right now may have just changed.
+            mainHandler.post(() -> {
+                if (trackPath.equals(currentPath)) {
+                    currentTrackArt     = null;
+                    currentTrackArtPath = null;
+                    loadArtForCurrentTrack();
+                    updateMediaSessionMetadata();
+                    showNotification();
+                }
+            });
+        });
+    }
+
     /** Main-thread-safe: returns whatever art is ready right now, no I/O. */
     private Bitmap currentArtOrLogo() {
         if (currentTrackArt != null && currentPath != null
@@ -939,17 +1025,23 @@ public class MusicPlayerService extends Service {
         }
 
         artExecutor.execute(() -> {
-            Bitmap decoded = decodeEmbeddedArt(path);
+            // A cover the user picked wins over whatever is embedded in the file.
+            File custom = customArtFile(path);
+            Bitmap decoded = custom != null
+                    ? BitmapFactory.decodeFile(custom.getAbsolutePath())
+                    : null;
+            if (decoded == null) decoded = decodeEmbeddedArt(path);
+            final Bitmap ready = decoded;
             mainHandler.post(() -> {
                 // If the track changed again while we were decoding, drop this result.
                 if (path.equals(currentPath)) {
-                    currentTrackArt     = decoded;
+                    currentTrackArt     = ready;
                     currentTrackArtPath = path;
                     // Refresh surfaces now that real art is available.
                     updateMediaSessionMetadata();
                     showNotification();
-                } else if (decoded != null) {
-                    decoded.recycle();
+                } else if (ready != null) {
+                    ready.recycle();
                 }
             });
         });
@@ -1004,6 +1096,67 @@ public class MusicPlayerService extends Service {
                     }
                 } catch (Exception ignored) {
                 } finally {
+                    try { retriever.release(); } catch (Exception ignored) {}
+                }
+            }
+            cb.onResult(result);
+        });
+    }
+
+    /**
+     * Like getAlbumArtBase64Async, but returns a small JPEG instead of the
+     * original picture. The list views need one of these per visible row, and
+     * embedded covers are routinely 1000x1000 or larger: handing those to the
+     * WebView by the hundred would put tens of megabytes of base64 on the JS
+     * heap. At 96px a cover is a few kilobytes.
+     *
+     * Same single-thread art executor as everything else here, so a burst of
+     * requests from a long list can never pile up on the main thread.
+     */
+    public void getAlbumArtThumbAsync(String path, int maxPx, ArtBase64Callback cb) {
+        artExecutor.execute(() -> {
+            String result = "";
+            Bitmap scaled = null;
+            if (path != null && !path.isEmpty()) {
+                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                try {
+                    retriever.setDataSource(path);
+                    byte[] picture = retriever.getEmbeddedPicture();
+                    if (picture != null && picture.length > 0) {
+                        // Bounds first, then subsample, so a huge cover is never
+                        // fully decoded just to be thrown away.
+                        BitmapFactory.Options bounds = new BitmapFactory.Options();
+                        bounds.inJustDecodeBounds = true;
+                        BitmapFactory.decodeByteArray(picture, 0, picture.length, bounds);
+
+                        int sample = 1;
+                        int longest = Math.max(bounds.outWidth, bounds.outHeight);
+                        while (longest / sample > maxPx * 2) sample *= 2;
+
+                        BitmapFactory.Options opts = new BitmapFactory.Options();
+                        opts.inSampleSize = sample;
+                        Bitmap decoded = BitmapFactory.decodeByteArray(picture, 0, picture.length, opts);
+                        if (decoded != null) {
+                            int w = decoded.getWidth(), h = decoded.getHeight();
+                            int longEdge = Math.max(w, h);
+                            if (longEdge > maxPx) {
+                                float f = (float) maxPx / longEdge;
+                                scaled = Bitmap.createScaledBitmap(
+                                        decoded, Math.max(1, Math.round(w * f)),
+                                        Math.max(1, Math.round(h * f)), true);
+                                if (scaled != decoded) decoded.recycle();
+                            } else {
+                                scaled = decoded;
+                            }
+                            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                            scaled.compress(Bitmap.CompressFormat.JPEG, 80, out);
+                            result = android.util.Base64.encodeToString(
+                                    out.toByteArray(), android.util.Base64.NO_WRAP);
+                        }
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    if (scaled != null) { try { scaled.recycle(); } catch (Exception ignored) {} }
                     try { retriever.release(); } catch (Exception ignored) {}
                 }
             }

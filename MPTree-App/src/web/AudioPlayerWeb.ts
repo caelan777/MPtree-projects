@@ -140,6 +140,15 @@ export class AudioPlayerWeb extends WebPlugin {
     return { art: "" };
   }
 
+  /** Same: no embedded covers in the browser, so every row shows the grey note.
+   *  ready:true, because there is no service to wait for here. */
+  async getAlbumArtThumb(): Promise<{ art: string; ready: boolean }> {
+    return { art: "", ready: true };
+  }
+
+  /** Nothing to tell: the browser has no lock screen or notification. */
+  async setTrackArt(): Promise<void> {}
+
   async setEqualizerEnabled(options: { enabled: boolean }): Promise<void> {
     this.eqEnabled = options.enabled;
   }
