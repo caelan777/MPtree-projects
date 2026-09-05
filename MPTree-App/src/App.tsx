@@ -3010,7 +3010,7 @@ export default function App() {
                 <div
                   onClick={() => setPlayerExpanded(true)}
                   style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1, cursor: "pointer" }}>
-                  <AlbumArt title={dispName(currentSong)} size={40} active customPhoto={nowPlayingPhoto(currentSong)} T={TH} />
+                  <AlbumArt title={dispName(currentSong)} size={40} active playing={isPlaying} customPhoto={nowPlayingPhoto(currentSong)} T={TH} />
                   {/* Keyed on the song so every track change remounts this and
                       replays the slide-in; the inline transform handles the
                       live drag between those animations. */}

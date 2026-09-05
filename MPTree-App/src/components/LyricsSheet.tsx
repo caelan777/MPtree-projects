@@ -35,8 +35,11 @@ export function LyricsSheet({
 
   const lineCount = text.split("\n").filter(l => l.trim()).length;
 
+  // Above the expanded player rather than level with it. makeSH.overlay is
+  // zIndex 400 and so is the player, so at equal depth whichever renders last
+  // wins, and this opened behind it.
   return (
-    <div style={sh.overlay} onClick={onClose}>
+    <div style={{ ...sh.overlay, zIndex: 420 }} onClick={onClose}>
       <div
         style={{ ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column" }}
         onClick={e => e.stopPropagation()}
