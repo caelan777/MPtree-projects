@@ -39,6 +39,12 @@ const line = (y, size, weight, text, opts = {}) => `
         text-anchor="middle"${opts.spacing ? ` letter-spacing="${opts.spacing}"` : ""}
         ${opts.opacity ? `opacity="${opts.opacity}"` : ""}>${esc(text)}</text>`;
 
+/** A left-aligned line, for the numbered steps. */
+const lineAt = (x, y, size, weight, text, opts = {}) => `
+  <text x="${x}" y="${y}" fill="${opts.fill ?? "#FFFFFF"}"
+        font-family="${FONT}" font-size="${size}" font-weight="${weight}"
+        ${opts.opacity ? `opacity="${opts.opacity}"` : ""}>${esc(text)}</text>`;
+
 /**
  * The poster. `top` shifts the whole block down for the taller canvas, where
  * TikTok's own interface eats the bottom of the screen.
@@ -65,22 +71,27 @@ function poster(H, top) {
         stroke="#FFFFFF" stroke-width="3" opacity="0.35"/>
 
   <!-- Why -->
-  ${line(top + 668, 36, 400, "Google Play will not let me publish until", { opacity: 0.9 })}
-  ${line(top + 714, 36, 400, "12 people have tested the app for", { opacity: 0.9 })}
-  ${line(top + 760, 36, 700, "14 days in a row.")}
+  ${line(top + 664, 36, 400, "Google Play needs 12 people to test my app", { opacity: 0.9 })}
+  ${line(top + 710, 36, 400, "for 14 days before I can publish it.", { opacity: 0.9 })}
 
   <!-- What they are installing -->
-  ${line(top + 842, 34, 400, "MPTree is an offline music player for Android.", { opacity: 0.72 })}
-  ${line(top + 886, 34, 400, "No ads. No account. No internet.", { opacity: 0.72 })}
+  ${line(top + 790, 34, 400, "MPTree is an offline music player for Android.", { opacity: 0.72 })}
+  ${line(top + 834, 34, 400, "No ads. No account. No internet.", { opacity: 0.72 })}
 
-  <!-- The offer back -->
-  <rect x="90" y="${top + 962}" width="${W - 180}" height="132" rx="22"
+  <!-- The whole of what is being asked. Three lines, so nobody has to wonder
+       whether there is more to it. -->
+  ${line(top + 912, 38, 700, "That is all you do")}
+  <rect x="90" y="${top + 944}" width="${W - 180}" height="196" rx="22"
         fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.5"/>
-  ${line(top + 1016, 36, 700, "Building something yourself?")}
-  ${line(top + 1062, 34, 400, "Send it over and I will test yours too.", { opacity: 0.85 })}
+  ${lineAt(140, top + 1000, 34, 800, "1", { opacity: 0.55 })}
+  ${lineAt(196, top + 1000, 34, 400, "Send me your Google Play email")}
+  ${lineAt(140, top + 1058, 34, 800, "2", { opacity: 0.55 })}
+  ${lineAt(196, top + 1058, 34, 400, "Download the app")}
+  ${lineAt(140, top + 1116, 34, 800, "3", { opacity: 0.55 })}
+  ${lineAt(196, top + 1116, 34, 400, "Keep it installed for 14 days")}
 
-  ${line(top + 1166, 34, 700, "Comment or DM to join", { opacity: 0.95 })}
-  ${line(top + 1214, 30, 400, "@mp_tree3   ·   mp-tree.net", { opacity: 0.6 })}
+  ${line(top + 1210, 34, 700, "Comment or DM to join", { opacity: 0.95 })}
+  ${line(top + 1258, 30, 400, "@mp_tree3   ·   mp-tree.net", { opacity: 0.6 })}
 </svg>`;
 }
 
@@ -88,8 +99,8 @@ const OUT = join(HERE, "social");
 mkdirSync(OUT, { recursive: true });
 
 const sizes = [
-  { h: 1350, top: 66,  name: "mptree-testers-1080x1350.png", note: "Instagram feed" },
-  { h: 1920, top: 268, name: "mptree-testers-1080x1920.png", note: "TikTok / Stories" },
+  { h: 1350, top: 46,  name: "mptree-testers-1080x1350.png", note: "Instagram feed" },
+  { h: 1920, top: 236, name: "mptree-testers-1080x1920.png", note: "TikTok / Stories" },
 ];
 
 for (const s of sizes) {
