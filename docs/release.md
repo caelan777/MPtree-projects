@@ -31,7 +31,21 @@ cd android
 ./gradlew assembleRelease
 ```
 
-The APK lands at `android/app/build/outputs/apk/release/app-release.apk`.
+The APK lands at `android/app/build/outputs/apk/release/app-release.apk`. That is the file
+the website hands out.
+
+**Google Play does not take an APK.** It wants an Android App Bundle, so for Play the last
+step is `bundleRelease` instead, and the web build before it must be the Play channel:
+
+```bash
+cd MPTree-App
+npm run build:play
+npx cap sync android
+cd android
+./gradlew bundleRelease
+```
+
+The AAB lands at `android/app/build/outputs/bundle/release/app-release.aab`.
 
 Order matters. `npm run build` then `npx cap sync android` copies the current web build into
 the Android project. Running `assembleRelease` without those two first produces an APK with
