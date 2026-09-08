@@ -1,0 +1,91 @@
+{
+  "artboards": [
+    {
+      "file": "Current.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 2500,
+      "title": "Live now, mp-tree.net"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 1320,
+      "y": 0,
+      "w": 1200,
+      "h": 1820,
+      "title": "A, Proof first"
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "x": 0,
+      "y": 2720,
+      "w": 1200,
+      "h": 1440,
+      "title": "B, The record"
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "x": 1320,
+      "y": 2720,
+      "w": 1200,
+      "h": 1740,
+      "title": "C, Show the app"
+    },
+    {
+      "file": "MainPhone.dc.html",
+      "x": 0,
+      "y": 4680,
+      "w": 390,
+      "h": 844,
+      "title": "A on a phone"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -620,
+      "w": 1200,
+      "text": "Can the site be better? Yes, but mostly not by looking different.\n\nThe biggest single problem is that every route into the site ends at \"download an APK and click past Android's warning\". Once MPTree is out of closed testing, replacing that with a Play Store button is worth more than any redesign on this canvas.\n\nThe visual problems, in order of how much they cost you:\n1. The app is not visible until you scroll. The record is beautiful but it is decoration.\n2. There is no proof. No rating, no installs, no word from anyone but you.\n3. Two CTAs compete in the hero, and one of them ships in 2027.\n4. All six features are the same size, so nothing stands out. Cutting a track is genuinely rare and it sits in box four."
+    },
+    {
+      "id": "note-current",
+      "x": 0,
+      "y": -230,
+      "w": 560,
+      "text": "The site as it stands, rebuilt from your own CSS so the comparison is fair. Same type ramp, same tokens, same spacing, same copy. Note how far you scroll before the app itself appears."
+    },
+    {
+      "id": "note-a",
+      "x": 1320,
+      "y": -230,
+      "w": 560,
+      "text": "A, Proof first. The safest change and the one I would ship.\nWhy: product visible immediately, one CTA, the four \"no\" claims as facts instead of a paragraph, a real quote, and Cut a track promoted to lead the grid.\nTradeoff: the record loses its starring role, and it is the most conventional of the three."
+    },
+    {
+      "id": "note-b",
+      "x": 0,
+      "y": 2500,
+      "w": 560,
+      "text": "B, The record. Leans all the way into the vinyl and adds a display serif, with features as a sleeve tracklist, Side A and Side B.\nWhy: memorable, and nobody else's music player site looks like this.\nTradeoff: slowest to explain what the app does, and it commits you to a second typeface on a brand that is currently system fonts only."
+    },
+    {
+      "id": "note-c",
+      "x": 1320,
+      "y": 2500,
+      "w": 560,
+      "text": "C, Show the app. One big screenshot with callouts pointing at the real interface.\nWhy: the strongest at answering \"what am I installing\", and it reuses the screenshots you already keep current.\nTradeoff: every UI change means new screenshots and repositioned callouts, so it is the highest maintenance of the three."
+    },
+    {
+      "id": "note-phone",
+      "x": 0,
+      "y": 4460,
+      "w": 560,
+      "text": "Worth remembering: almost everyone reading this page is on an Android phone, because that is who wants an Android app. This is A at 390px, which is the layout that actually matters."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

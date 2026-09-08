@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #000000; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: #ffffff; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; overflow: hidden; background: #000000; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.55; letter-spacing: -0.006em; -webkit-font-smoothing: antialiased; position: relative;">
+
+  <!-- The record, cropped hard so it reads as texture rather than a cropped object -->
+  <div style="position: absolute; top: -140px; right: -220px; width: 440px; height: 440px; border-radius: 50%; overflow: hidden; opacity: 0.26;">
+    <img src="vinyl.webp" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+  </div>
+
+  <div style="position: relative; z-index: 1;">
+
+    <div style="height: 56px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1E1E1E;">
+      <div style="display: flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: -0.03em; font-size: 16px;">
+        <img src="mptree-mark-white.svg" alt="" style="width: 22px; height: 22px;">
+        <span>MPTree</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 6px;">
+        <span style="display: block; width: 18px; height: 1.5px; background: #777777;"></span>
+        <span style="display: block; width: 18px; height: 1.5px; background: #777777;"></span>
+      </div>
+    </div>
+
+    <div style="padding: 26px 20px 0;">
+      <p style="margin: 0 0 12px; font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #777777; font-weight: 600;">Free music player for Android</p>
+      <h1 style="margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -0.045em; line-height: 1.02;">Your music.<br>On your device.</h1>
+      <p style="margin: 14px 0 0; font-size: 15px; color: #777777; line-height: 1.6;">Plays the music files already on your phone. No subscription, no internet.</p>
+
+      <div style="margin-top: 22px; display: flex; flex-direction: column; gap: 12px;">
+        <span style="display: flex; align-items: center; justify-content: center; gap: 10px; background: #ffffff; color: #000000; border-radius: 10px; height: 52px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 3.2v17.6a1 1 0 0 0 1.5.87l14.2-8.8a1 1 0 0 0 0-1.74L5.5 2.33A1 1 0 0 0 4 3.2z"/></svg>
+          Get it on Google Play
+        </span>
+        <span style="display: block; text-align: center; font-size: 13px; color: #777777;">or download the APK</span>
+      </div>
+
+      <div style="margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #1E1E1E; border: 1px solid #1E1E1E; border-radius: 12px; overflow: hidden;">
+        <div style="background: #000000; padding: 11px 14px; font-size: 13px; font-weight: 700; letter-spacing: -0.01em;">No ads</div>
+        <div style="background: #000000; padding: 11px 14px; font-size: 13px; font-weight: 700; letter-spacing: -0.01em;">No account</div>
+        <div style="background: #000000; padding: 11px 14px; font-size: 13px; font-weight: 700; letter-spacing: -0.01em;">No internet</div>
+        <div style="background: #000000; padding: 11px 14px; font-size: 13px; font-weight: 700; letter-spacing: -0.01em;">No tracking</div>
+      </div>
+    </div>
+
+    <!-- The app peeks over the fold, so scrolling feels obvious -->
+    <div style="box-sizing: border-box; margin: 26px auto 0; width: 244px; border: 1px solid #2A2A2A; border-top-left-radius: 30px; border-top-right-radius: 30px; border-bottom: 0; background: #000000; padding: 8px 8px 0;">
+      <div style="background: #000000; border-top-left-radius: 23px; border-top-right-radius: 23px; width: 226px; height: 340px; overflow: hidden;">
+        <img src="songs.webp" alt="The MPTree song list" style="width: 100%; height: auto; display: block;">
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

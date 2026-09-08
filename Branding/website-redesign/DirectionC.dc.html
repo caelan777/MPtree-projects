@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #000000; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: #ffffff; }
+  </style>
+</helmet>
+
+<div style="width: 1200px; background: #000000; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.55; letter-spacing: -0.006em; -webkit-font-smoothing: antialiased;">
+
+  <!-- Bar -->
+  <div style="border-bottom: 1px solid #2A2A2A;">
+    <div style="max-width: 1080px; margin: 0 auto; padding: 0 24px; height: 62px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.03em; font-size: 17px;">
+        <img src="mptree-mark-white.svg" alt="" style="width: 26px; height: 26px;">
+        <span>MPTree</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <span style="color: #777777; font-size: 13px; font-weight: 600;">Features</span>
+        <span style="color: #777777; font-size: 13px; font-weight: 600;">Community</span>
+        <span style="color: #777777; font-size: 13px; font-weight: 600;">Support</span>
+        <span style="background: #ffffff; color: #000000; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 700;">Get the app</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Headline, deliberately short so the app gets the room -->
+  <div style="max-width: 1080px; margin: 0 auto; padding: 62px 24px 0; text-align: center;">
+    <p style="margin: 0 0 14px; font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #777777; font-weight: 600;">Free music player for Android</p>
+    <h1 style="margin: 0; font-size: 52px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.04;">Your music. On your device.</h1>
+    <p style="margin: 16px auto 0; max-width: 46ch; font-size: 17px; color: #777777;">No subscription, no internet, no account. Here is the whole thing.</p>
+    <div style="margin-top: 26px; display: flex; justify-content: center; align-items: center; gap: 14px;">
+      <span style="background: #ffffff; color: #000000; border-radius: 10px; padding: 15px 24px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">Get it on Google Play</span>
+      <span style="border: 1px solid #2A2A2A; color: #ffffff; border-radius: 10px; padding: 15px 24px; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">Try it in your browser</span>
+    </div>
+  </div>
+
+  <!-- The app, annotated -->
+  <div style="position: relative; height: 830px; margin-top: 34px;">
+
+    <div style="position: absolute; left: 50%; top: 30px; transform: translateX(-50%); width: 340px; border: 1px solid #2A2A2A; box-sizing: border-box; border-radius: 36px; background: #000000; padding: 9px; box-shadow: 0 40px 100px rgba(0,0,0,0.9); z-index: 1;">
+      <div style="background: #000000; border-radius: 28px; width: 320px; height: 711px; overflow: hidden;">
+        <img src="songs.webp" alt="The MPTree song list" style="width: 100%; height: 100%; object-fit: cover; object-position: top center;">
+      </div>
+    </div>
+
+    <!-- Left callouts -->
+    <div style="position: absolute; left: 84px; top: 96px; width: 300px; text-align: right;">
+      <div style="font-size: 14px; font-weight: 700; letter-spacing: -0.015em;">Search, sort and filter</div>
+      <p style="margin: 5px 0 0; font-size: 13px; color: #777777; line-height: 1.55;">All three live in the header, so finding a track never leaves the list.</p>
+      <div style="margin-top: 12px; margin-left: auto; width: 132px; height: 1px; background: #2A2A2A;"></div>
+    </div>
+
+    <div style="position: absolute; left: 84px; top: 386px; width: 300px; text-align: right;">
+      <div style="font-size: 14px; font-weight: 700; letter-spacing: -0.015em;">Covers pulled from your files</div>
+      <p style="margin: 5px 0 0; font-size: 13px; color: #777777; line-height: 1.55;">Artwork already in your music shows up. Anything missing gets a generated cover.</p>
+      <div style="margin-top: 12px; margin-left: auto; width: 132px; height: 1px; background: #2A2A2A;"></div>
+    </div>
+
+    <!-- Right callouts -->
+    <div style="position: absolute; right: 84px; top: 560px; width: 300px;">
+      <div style="font-size: 14px; font-weight: 700; letter-spacing: -0.015em;">Shuffle, the one splash of colour</div>
+      <p style="margin: 5px 0 0; font-size: 13px; color: #777777; line-height: 1.55;">The rest of the app is black and white on purpose, so the state you care about stands out.</p>
+      <div style="margin-top: 12px; width: 132px; height: 1px; background: #2A2A2A;"></div>
+    </div>
+
+    <div style="position: absolute; right: 84px; top: 700px; width: 300px;">
+      <div style="font-size: 14px; font-weight: 700; letter-spacing: -0.015em;">Drag the bar up for the full player</div>
+      <p style="margin: 5px 0 0; font-size: 13px; color: #777777; line-height: 1.55;">Spinning record, lyrics, equaliser and the queue, one gesture away.</p>
+      <div style="margin-top: 12px; width: 132px; height: 1px; background: #2A2A2A;"></div>
+    </div>
+
+  </div>
+
+  <!-- Second screen, plus the honest caveat about the demo -->
+  <div style="border-top: 1px solid #2A2A2A; padding: 56px 24px 60px;">
+    <div style="max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 40px; align-items: center;">
+      <div style="grid-column: span 4;">
+        <div style="width: 240px; border: 1px solid #2A2A2A; box-sizing: border-box; border-radius: 28px; background: #000000; padding: 7px;">
+          <div style="background: #000000; border-radius: 22px; width: 226px; height: 320px; overflow: hidden;">
+            <img src="playlists.webp" alt="The MPTree playlists page" style="width: 100%; height: 100%; object-fit: cover; object-position: top center;">
+          </div>
+        </div>
+      </div>
+      <div style="grid-column: span 8;">
+        <h2 style="margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.1;">Playlists that fill themselves</h2>
+        <p style="margin: 14px 0 0; max-width: 52ch; font-size: 15px; color: #777777; line-height: 1.7;">Favourites, Recently Played, Most Played and Last Added update as you listen, sitting above the ones you build yourself.</p>
+        <p style="margin: 18px 0 0; font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #777777;">Try the real thing in your browser, no install</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
