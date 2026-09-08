@@ -81,9 +81,46 @@ body {
    genuinely the loudest thing on the page. */
 section { padding: 30px 0; border-bottom: 1px solid var(--line-lo); }
 section:last-of-type { border-bottom: 0; }
-.head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+/* Wraps, because a section can carry two status chips and a chip never breaks
+   its own text. On a narrow screen they drop under the heading instead of
+   pushing the page sideways. */
+.head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.head .rule { min-width: 20px; }
 .head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
 .head .rule { flex: 1; height: 1px; background: var(--line-lo); }
+
+/* The summary strip. Six tiles divided by hairlines rather than six cards:
+   at this size a border and a radius on each one turns the strip into
+   wallpaper, and the whole point is that it reads as a single object. */
+.summary-wrap { padding-top: 24px; padding-bottom: 26px; }
+.summary {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: var(--line-lo);
+  border: 1px solid var(--line-lo);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tile {
+  background: var(--bg);
+  padding: 14px 14px 15px;
+  display: flex; flex-direction: column; gap: 5px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.tile .fig { margin-top: 1px; }
+.tile-sub {
+  font-family: var(--mono); font-size: 10px; color: var(--dim);
+  letter-spacing: 0.06em;
+}
+/* Chips do not wrap anywhere else, and should not: a status chip broken over
+   two lines reads as two chips. In a tile there is nowhere to escape to, so
+   here it wraps rather than pushing the whole page sideways. */
+.tile .chip {
+  margin-top: 4px; font-size: 9px; padding: 2px 6px;
+  white-space: normal; max-width: 100%;
+}
 
 /* Figures */
 .fig {
@@ -193,7 +230,12 @@ a:hover { text-decoration-color: var(--text); }
 .foot { padding: 26px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
 .foot code { font-family: var(--mono); font-size: 11.5px; color: var(--text); background: var(--raised); padding: 2px 6px; border-radius: 5px; }
 
+@media (max-width: 860px) {
+  .summary { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 560px) {
+  .summary { grid-template-columns: repeat(2, 1fr); }
+  .tile { padding: 12px; }
   .fig { font-size: 42px; }
   .stats { gap: 22px 26px; }
   .rel { grid-template-columns: 78px 1fr 44px; gap: 10px; }
@@ -279,6 +321,56 @@ const ago = iso => {
 
 /* ── Panels ────────────────────────────────────────────────────────────── */
 
+/* Everything that matters, above the fold, before any detail. Six tiles is
+ * the most that still reads in one glance, so anything that would be a
+ * seventh belongs in a section below instead. A tile carries a figure and,
+ * only when something is wrong or missing, an inverted flag. */
+function panelSummary() {
+  const g = auto?.sources?.github;
+  const s = auto?.sources?.site;
+  const c = auto?.sources?.cloudflare;
+  const p = auto?.sources?.play;
+  const k = auto?.sources?.cusdis;
+  const t = manual.test;
+
+  const start = t.startDate ? new Date(t.startDate + "T00:00:00Z") : null;
+  const done  = start ? Math.max(0, Math.min(t.days, Math.floor((Date.now() - start) / DAY) + 1)) : 0;
+  const short = (t.testers ?? 0) < t.target;
+
+  const visits = c?.ok && !c.traffic?.error ? c.traffic?.last7?.uniques : null;
+  const installs = p?.ok && p.installs?.totalUsers !== undefined ? p.installs.totalUsers : null;
+
+  const tiles = [
+    { k: "Test day",   v: start ? done : DASH, sub: "of " + t.days,
+      flag: !start ? "not set" : (short ? "under " + t.target : null) },
+    { k: "Testers",    v: num(t.testers), sub: "of " + t.target,
+      flag: short ? "short" : null },
+    { k: "Downloads",  v: g?.ok ? num(g.total) : DASH, sub: "all time" },
+    { k: "Visits",     v: visits === null ? DASH : num(visits), sub: "last 7 days",
+      flag: visits === null ? "not connected" : null },
+    { k: "Play",       v: installs === null ? DASH : num(installs), sub: "installs",
+      flag: installs === null ? "not connected" : null },
+    { k: "Comments",   v: k?.ok ? num(k.approved) : DASH, sub: "approved" },
+  ];
+
+  const health = s?.ok && !s.agrees
+    ? '<span class="chip alert">Update path broken</span>' : "";
+
+  return `
+  <section class="summary-wrap">
+    <div class="summary">
+      ${tiles.map(tile => `
+        <div class="tile">
+          <span class="label">${tile.k}</span>
+          <div class="fig sm">${tile.v}</div>
+          <span class="tile-sub">${tile.sub}</span>
+          ${tile.flag ? '<span class="chip alert">' + tile.flag + "</span>" : ""}
+        </div>`).join("")}
+    </div>
+    ${health ? '<div style="margin-top:16px">' + health + "</div>" : ""}
+  </section>`;
+}
+
 function panelTest() {
   const t = manual.test;
   const start = t.startDate ? new Date(t.startDate + "T00:00:00Z") : null;
@@ -343,9 +435,8 @@ function panelTest() {
     </div>
 
     <p class="note">
-      Google exposes neither of these through any API, so they are typed in.
-      The count restarts if testers drop below ${t.target}, so the day number
-      above is only true for as long as the number beside it holds.
+      Typed in, because no Google API exposes either. The count restarts if
+      testers drop below ${t.target}.
     </p>
   </section>`;
 }
@@ -447,10 +538,8 @@ function panelWebsite() {
     </div>`);
     parts.push(spark(t.days.map(d => d.uniques)));
     parts.push(`<p class="note">
-      Counted at Cloudflare's edge, so this is every request it served,
-      crawlers and scanners included. Read it as a ceiling rather than as
-      people. Visitors are counted once per day, so someone who came back on
-      Tuesday is in there twice.
+      Counted at Cloudflare's edge, so crawlers are in here too and a
+      returning visitor counts once per day. A ceiling, not people.
     </p>`);
     if (t.topCountries?.length) {
       parts.push('<div class="rows" style="margin-top:20px">' + t.topCountries.map(row =>
@@ -505,10 +594,8 @@ function panelReach() {
     </div>
     <div class="fields">${fields}</div>
     <p class="note">
-      Typed in because none of the three hands these over for free. Instagram
-      wants a Business account and a Meta app, X's cheapest tier is a hundred
-      dollars a month, and TikTok's API is built for posting rather than for
-      reading your own numbers.
+      Typed in. None of the three hands these over without a business account
+      or a paid tier.
     </p>
   </section>`;
 }
@@ -535,8 +622,7 @@ function panelComments() {
     ${latest}
     ${c.latestNote ? '<p class="note">' + esc(c.latestNote) + "</p>" : ""}
     <p class="note">
-      Comments waiting for moderation are not in this count. Cusdis only
-      exposes the approved ones, so a silent week here could just mean unread.
+      Approved only. Anything still awaiting moderation is invisible here.
     </p>
   </section>`;
 }
@@ -616,6 +702,7 @@ function render() {
   scope.className = stale ? "chip alert" : "chip";
 
   $("body").innerHTML = [
+    panelSummary(),
     panelTest(), panelDownloads(), panelPlay(),
     panelWebsite(), panelReach(), panelComments(), panelHealth(),
   ].join("");
