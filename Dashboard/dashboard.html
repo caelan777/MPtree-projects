@@ -446,6 +446,12 @@ function panelWebsite() {
       <div class="stat"><span class="label">Visits, last 30 days</span><div class="fig sm">${num(t.last30.uniques)}</div></div>
     </div>`);
     parts.push(spark(t.days.map(d => d.uniques)));
+    parts.push(`<p class="note">
+      Counted at Cloudflare's edge, so this is every request it served,
+      crawlers and scanners included. Read it as a ceiling rather than as
+      people. Visitors are counted once per day, so someone who came back on
+      Tuesday is in there twice.
+    </p>`);
     if (t.topCountries?.length) {
       parts.push('<div class="rows" style="margin-top:20px">' + t.topCountries.map(row =>
         `<div class="row"><span class="k">${esc(row.country)}</span><span class="v mono">${num(row.requests)} requests</span></div>`
