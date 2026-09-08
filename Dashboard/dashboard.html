@@ -1,0 +1,709 @@
+<title>MPTree Dashboard</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+
+<style>
+/* Pinned dark, like the website, and for the same reason: dark is MPTree's
+   home ground and the brand is black and white. Every colour here comes from
+   Website/assets/tokens.css, which mirrors the app's own themes.ts.
+
+   There is deliberately no status colour. Violet belongs to shuffle and red to
+   the like state, and borrowing either here would be a brand regression. So
+   anything needing attention INVERTS instead: solid white block, black text.
+   In a page that is otherwise all hairlines, an inverted chip is the loudest
+   thing on the screen. */
+:root {
+  --bg:      #000000;
+  --panel:   #0E0E0E;
+  --raised:  #141414;
+  --line:    #2A2A2A;
+  --line-lo: #1C1C1C;
+  --text:    #FFFFFF;
+  --muted:   #777777;
+  --dim:     #4A4A4A;
+
+  --sans:  "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --cond:  "IBM Plex Sans Condensed", "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 940px; margin: 0 auto; padding: 0 20px 72px; }
+
+.label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Masthead */
+.top {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding: 28px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.mark { display: flex; align-items: center; gap: 9px; }
+.mark svg { display: block; }
+.mark b { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.stamp { margin-left: auto; text-align: right; }
+.stamp .label { display: block; }
+.stamp time { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+/* An inverted chip is the alarm. Nothing else on the page is a solid block. */
+.chip {
+  display: inline-block;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted);
+  white-space: nowrap;
+}
+.chip.alert { background: var(--text); color: #000; border-color: var(--text); }
+.chip.on    { border-color: var(--dim); color: var(--text); }
+
+/* Sections are hairlines rather than cards, so the one filled panel below is
+   genuinely the loudest thing on the page. */
+section { padding: 30px 0; border-bottom: 1px solid var(--line-lo); }
+section:last-of-type { border-bottom: 0; }
+.head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
+.head .rule { flex: 1; height: 1px; background: var(--line-lo); }
+
+/* Figures */
+.fig {
+  font-family: var(--cond); font-weight: 700;
+  font-size: 52px; line-height: 0.9; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.fig.sm { font-size: 30px; }
+.fig .unit { font-size: 0.42em; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 28px 40px; }
+.stat { min-width: 92px; }
+.stat .label { display: block; margin-bottom: 7px; }
+.stat .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* The closed test panel, the only filled surface on the page */
+.test {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  margin-top: 22px;
+}
+.test-top { display: flex; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
+.test-top .stat { flex: 1; min-width: 110px; }
+
+/* Fourteen segments because Google counts fourteen continuous days. The unit
+   is real, so the meter uses it rather than a percentage bar. */
+.meter { display: flex; gap: 3px; margin: 22px 0 10px; }
+.meter i {
+  flex: 1; height: 34px; border-radius: 3px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.meter i.done  { background: var(--text); border-color: var(--text); }
+.meter i.today { border-color: var(--text); background: #333333; }
+.meter-foot {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+}
+
+/* Editable fields */
+.fields { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 20px; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field .label { font-size: 9px; }
+.field .when {
+  font-family: var(--mono); font-size: 10px; color: var(--dim);
+}
+input {
+  font-family: var(--mono); font-size: 14px;
+  color: var(--text); background: #000000;
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; width: 148px;
+  font-variant-numeric: tabular-nums;
+}
+input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-color: var(--text); }
+input:disabled { color: var(--dim); border-color: var(--line-lo); cursor: not-allowed; }
+input[type="number"] { width: 96px; }
+.saved {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted);
+  opacity: 0; transition: opacity 200ms; padding-bottom: 10px;
+}
+.saved.show { opacity: 1; }
+
+/* Release bars */
+.rel { display: grid; grid-template-columns: 96px 1fr 54px; gap: 14px; align-items: center; padding: 9px 0; }
+.rel + .rel { border-top: 1px solid var(--line-lo); }
+.rel .tag { font-family: var(--mono); font-size: 12px; }
+.rel .n { font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.bar { height: 10px; background: var(--line-lo); border-radius: 2px; overflow: hidden; display: flex; }
+.bar span { display: block; height: 100%; }
+.bar .a { background: var(--text); }
+.bar .b { background: var(--dim); }
+.key {
+  display: flex; gap: 18px; margin-top: 14px;
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* Rows */
+.rows { display: flex; flex-direction: column; }
+.row { display: flex; gap: 14px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line-lo); }
+.row:first-child { border-top: 0; }
+.row .k {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  min-width: 148px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.row .v { flex: 1; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.row .v.mono { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* The unavailable state, which doubles as the setup list */
+.todo { border: 1px dashed var(--line); border-radius: 12px; padding: 18px; display: flex; gap: 16px; align-items: flex-start; }
+.todo .n { font-family: var(--cond); font-weight: 700; font-size: 26px; color: var(--dim); line-height: 1; flex-shrink: 0; }
+.todo p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.todo p b { color: var(--text); font-weight: 600; }
+
+.quote { border-left: 2px solid var(--line); padding: 2px 0 2px 14px; margin: 14px 0 0; font-size: 14px; color: var(--text); }
+.quote cite { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-style: normal; margin-top: 6px; letter-spacing: 0.06em; }
+
+.spark { width: 100%; height: 64px; display: block; margin-top: 14px; }
+.note { font-size: 12.5px; color: var(--muted); margin: 16px 0 0; max-width: 62ch; }
+a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--dim); }
+a:hover { text-decoration-color: var(--text); }
+
+.foot { padding: 26px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+.foot code { font-family: var(--mono); font-size: 11.5px; color: var(--text); background: var(--raised); padding: 2px 6px; border-radius: 5px; }
+
+@media (max-width: 560px) {
+  .fig { font-size: 42px; }
+  .stats { gap: 22px 26px; }
+  .rel { grid-template-columns: 78px 1fr 44px; gap: 10px; }
+  .row { flex-direction: column; gap: 3px; }
+  .row .k { min-width: 0; }
+  .meter i { height: 28px; }
+  .meter { gap: 2px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="mark">
+      <svg width="22" height="22" viewBox="0 0 512 512" aria-hidden="true">
+        <path fill="#FFFFFF" d="M256 40 L432 300 H336 L336 472 H176 L176 300 H80 Z"/>
+      </svg>
+      <b>MPTree</b>
+    </div>
+    <span class="chip" id="scope">Dashboard</span>
+    <div class="stamp">
+      <span class="label">Collected</span>
+      <time id="collected">never</time>
+    </div>
+  </header>
+
+  <main id="body"></main>
+
+  <p class="foot">
+    Refresh by running <code>node Dashboard/collect.mjs</code>, then asking Claude to push it.
+    Numbers typed in here are saved on this page and survive a refresh.
+  </p>
+</div>
+
+<script>
+/* The page fetches nothing, because a published artifact cannot: its content
+ * security policy blocks every outbound request. So the numbers arrive two
+ * ways instead.
+ *
+ *   SNAPSHOT  baked in at publish time, so the page is never blank on the
+ *             first frame and still reads correctly if the database is
+ *             unreachable.
+ *   db        the live version, pushed from the collector, plus the handful
+ *             of figures typed in below.
+ *
+ * Whichever is newer wins.
+ */
+const SNAPSHOT = __SNAPSHOT__;
+
+const MANUAL_DEFAULT = {
+  test:    { startDate: "", testers: null, target: 12, days: 14 },
+  reach:   { tiktok: null, instagram: null, x: null },
+  reachAt: {},
+};
+
+let auto   = SNAPSHOT;
+let manual = structuredClone(MANUAL_DEFAULT);
+let db     = null;
+
+const $  = id => document.getElementById(id);
+const nf = new Intl.NumberFormat("en-GB");
+const DASH = "—";
+const num = n => (n === null || n === undefined || Number.isNaN(n)) ? DASH : nf.format(n);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const DAY = 86400000;
+const day = iso => {
+  if (!iso) return DASH;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return DASH;
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+};
+const ago = iso => {
+  if (!iso) return "";
+  const h = (Date.now() - new Date(iso)) / 3600000;
+  if (h < 1) return "just now";
+  if (h < 24) return Math.round(h) + "h ago";
+  const d = Math.round(h / 24);
+  return d + (d === 1 ? " day ago" : " days ago");
+};
+
+/* ── Panels ────────────────────────────────────────────────────────────── */
+
+function panelTest() {
+  const t = manual.test;
+  const start = t.startDate ? new Date(t.startDate + "T00:00:00Z") : null;
+  const elapsed = start ? Math.floor((Date.now() - start) / DAY) + 1 : 0;
+  const done = Math.max(0, Math.min(t.days, elapsed));
+  const left = Math.max(0, t.days - done);
+  const enough = (t.testers ?? 0) >= t.target;
+  const finish = start ? new Date(start.getTime() + t.days * DAY) : null;
+
+  const segs = Array.from({ length: t.days }, (_, i) => {
+    const cls = i < done - 1 ? "done" : (i === done - 1 && done > 0 ? "today" : "");
+    return '<i class="' + cls + '"></i>';
+  }).join("");
+
+  const status = !start
+    ? '<span class="chip alert">No start date set</span>'
+    : left === 0
+      ? '<span class="chip alert">Fourteen days done</span>'
+      : '<span class="chip on">' + left + (left === 1 ? " day" : " days") + ' to go</span>';
+
+  return `
+  <section>
+    <div class="head"><h2>Closed test</h2><div class="rule"></div>
+      ${status}
+      ${enough ? "" : '<span class="chip alert">Under ' + t.target + ' testers</span>'}
+    </div>
+
+    <div class="test">
+      <div class="test-top">
+        <div class="stat">
+          <span class="label">Day</span>
+          <div class="fig">${start ? done : DASH}<span class="unit">of ${t.days}</span></div>
+        </div>
+        <div class="stat">
+          <span class="label">Testers opted in</span>
+          <div class="fig">${num(t.testers)}<span class="unit">of ${t.target}</span></div>
+        </div>
+        <div class="stat">
+          <span class="label">Production opens</span>
+          <div class="fig sm">${finish ? day(finish.toISOString()) : DASH}</div>
+          <div class="sub">if nobody drops out</div>
+        </div>
+      </div>
+
+      <div class="meter">${segs}</div>
+      <div class="meter-foot">
+        <span>${start ? day(t.startDate) : "start date not set"}</span>
+        <span>${finish ? day(finish.toISOString()) : ""}</span>
+      </div>
+
+      <div class="fields">
+        <label class="field">
+          <span class="label">Test started</span>
+          <input type="date" id="f-start" value="${esc(t.startDate)}">
+        </label>
+        <label class="field">
+          <span class="label">Testers</span>
+          <input type="number" id="f-testers" min="0" max="999" value="${t.testers ?? ""}">
+        </label>
+        <span class="saved" id="saved">Saved</span>
+      </div>
+    </div>
+
+    <p class="note">
+      Google exposes neither of these through any API, so they are typed in.
+      The count restarts if testers drop below ${t.target}, so the day number
+      above is only true for as long as the number beside it holds.
+    </p>
+  </section>`;
+}
+
+function panelDownloads() {
+  const g = auto?.sources?.github;
+  if (!g?.ok) return unavailable("Downloads from the website", g?.reason ?? "No data collected yet.");
+
+  const max = Math.max(...g.releases.map(r => r.total), 1);
+  const rows = g.releases.map(r => {
+    const button = r.assets.find(a => a.name === "MPTree.apk")?.downloads ?? 0;
+    const page = r.total - button;
+    return `<div class="rel">
+      <span class="tag">${esc(r.tag.replace(/^v/, "").replace(/-beta$/, ""))}</span>
+      <span class="bar" title="${button} from the button, ${page} from the versions page">
+        <span class="a" style="width:${(button / max) * 100}%"></span>
+        <span class="b" style="width:${(page / max) * 100}%"></span>
+      </span>
+      <span class="n">${num(r.total)}</span>
+    </div>`;
+  }).join("");
+
+  return `
+  <section>
+    <div class="head"><h2>Downloads from the website</h2><div class="rule"></div></div>
+    <div class="stats">
+      <div class="stat">
+        <span class="label">APKs downloaded</span>
+        <div class="fig">${num(g.total)}</div>
+      </div>
+      <div class="stat">
+        <span class="label">Download button</span>
+        <div class="fig sm">${num(g.byDoor.downloadButton)}</div>
+      </div>
+      <div class="stat">
+        <span class="label">Versions page</span>
+        <div class="fig sm">${num(g.byDoor.versionsPage)}</div>
+      </div>
+    </div>
+    <div style="margin-top:24px">${rows}</div>
+    <div class="key">
+      <span><i style="background:#FFFFFF"></i>Download button</span>
+      <span><i style="background:#4A4A4A"></i>Versions page</span>
+    </div>
+  </section>`;
+}
+
+function panelPlay() {
+  const p = auto?.sources?.play;
+  if (!p?.ok) return unavailable("Google Play", p?.reason ?? "Not set up yet.", 3);
+
+  const parts = [];
+  const inst = p.installs ?? {};
+
+  if (inst.note || inst.error) {
+    parts.push('<p class="note">' + esc(inst.note ?? inst.error) + "</p>");
+  } else {
+    parts.push(`<div class="stats">
+      <div class="stat"><span class="label">Total installs</span><div class="fig">${num(inst.totalUsers)}</div></div>
+      <div class="stat"><span class="label">Active devices</span><div class="fig sm">${num(inst.activeDevices)}</div></div>
+      <div class="stat"><span class="label">Through</span><div class="fig sm">${esc(inst.through ?? DASH)}</div></div>
+    </div>`);
+  }
+
+  const rev = p.reviews ?? {};
+  if (rev.error) {
+    parts.push('<p class="note">Reviews: ' + esc(rev.error) + "</p>");
+  } else if (rev.note) {
+    parts.push('<p class="note">' + esc(rev.note) + "</p>");
+  } else {
+    parts.push(`<div class="stats" style="margin-top:24px">
+      <div class="stat"><span class="label">Rating</span><div class="fig sm">${rev.average ?? DASH}</div></div>
+      <div class="stat"><span class="label">Reviews</span><div class="fig sm">${num(rev.count)}</div></div>
+    </div>`);
+    parts.push((rev.latest ?? []).map(r => `
+      <blockquote class="quote">${esc(r.text) || "<em>No text, a rating only.</em>"}
+        <cite>${esc(r.author)} &middot; ${r.stars ?? "?"} of 5 &middot; ${esc(r.version ?? "")} &middot; ${day(r.at)}</cite>
+      </blockquote>`).join(""));
+  }
+
+  return '<section><div class="head"><h2>Google Play</h2><div class="rule"></div></div>' +
+         parts.join("") + "</section>";
+}
+
+function panelWebsite() {
+  const c = auto?.sources?.cloudflare;
+  if (!c?.ok) return unavailable("Website visitors", c?.reason ?? "Not set up yet.", 1);
+
+  const parts = [];
+  const t = c.traffic ?? {};
+
+  if (t.error) {
+    parts.push('<p class="note">' + esc(t.error) + "</p>");
+  } else if (t.days?.length) {
+    parts.push(`<div class="stats">
+      <div class="stat"><span class="label">Visits, last 7 days</span><div class="fig">${num(t.last7.uniques)}</div></div>
+      <div class="stat"><span class="label">Page views, 7 days</span><div class="fig sm">${num(t.last7.pageViews)}</div></div>
+      <div class="stat"><span class="label">Visits, last 30 days</span><div class="fig sm">${num(t.last30.uniques)}</div></div>
+    </div>`);
+    parts.push(spark(t.days.map(d => d.uniques)));
+    if (t.topCountries?.length) {
+      parts.push('<div class="rows" style="margin-top:20px">' + t.topCountries.map(row =>
+        `<div class="row"><span class="k">${esc(row.country)}</span><span class="v mono">${num(row.requests)} requests</span></div>`
+      ).join("") + "</div>");
+    }
+  }
+
+  const pg = c.pages ?? {};
+  if (pg.error) {
+    parts.push('<p class="note">Deploys: ' + esc(pg.error) + "</p>");
+  } else if (pg.deployments?.length) {
+    const d = pg.deployments[0];
+    parts.push(`<div class="rows" style="margin-top:22px">
+      <div class="row"><span class="k">Last deploy</span><span class="v mono">${day(d.created)} &middot; ${ago(d.created)} &middot; ${esc(d.status ?? "")}</span></div>
+      <div class="row"><span class="k">From</span><span class="v">${esc(d.message ?? DASH)}</span></div>
+    </div>`);
+  }
+
+  return '<section><div class="head"><h2>Website visitors</h2><div class="rule"></div></div>' +
+         parts.join("") + "</section>";
+}
+
+function panelReach() {
+  const nets = [
+    ["tiktok", "TikTok", "@mp_tree3"],
+    ["instagram", "Instagram", "@mptree33"],
+    ["x", "X", "@mp_tree3"],
+  ];
+
+  const fields = nets.map(([key, name, handle]) => `
+    <label class="field">
+      <span class="label">${name} &middot; ${esc(handle)}</span>
+      <input type="number" min="0" id="f-${key}" value="${manual.reach[key] ?? ""}">
+      <span class="when">${manual.reachAt?.[key] ? "set " + ago(manual.reachAt[key]) : "never set"}</span>
+    </label>`).join("");
+
+  const stale = Object.values(manual.reachAt ?? {})
+    .some(at => Date.now() - new Date(at) > 30 * DAY);
+
+  return `
+  <section>
+    <div class="head"><h2>Followers</h2><div class="rule"></div>
+      ${stale ? '<span class="chip alert">Over a month old</span>' : ""}
+    </div>
+    <div class="stats">
+      ${nets.map(([key, name]) => `
+        <div class="stat">
+          <span class="label">${name}</span>
+          <div class="fig sm">${num(manual.reach[key])}</div>
+        </div>`).join("")}
+    </div>
+    <div class="fields">${fields}</div>
+    <p class="note">
+      Typed in because none of the three hands these over for free. Instagram
+      wants a Business account and a Meta app, X's cheapest tier is a hundred
+      dollars a month, and TikTok's API is built for posting rather than for
+      reading your own numbers.
+    </p>
+  </section>`;
+}
+
+function panelComments() {
+  const c = auto?.sources?.cusdis;
+  if (!c?.ok) return unavailable("Comments on the site", c?.reason ?? "No data.");
+
+  const latest = (c.latest ?? []).map(x => `
+    <blockquote class="quote">${esc(x.content)}
+      <cite>${esc(x.by)} &middot; ${day(x.at)}</cite>
+    </blockquote>`).join("");
+
+  return `
+  <section>
+    <div class="head"><h2>Comments on the site</h2><div class="rule"></div></div>
+    <div class="stats">
+      <div class="stat">
+        <span class="label">Approved</span>
+        <div class="fig">${num(c.approved)}</div>
+        <div class="sub"><a href="${esc(c.thread)}" target="_blank" rel="noopener">Open the thread</a></div>
+      </div>
+    </div>
+    ${latest}
+    ${c.latestNote ? '<p class="note">' + esc(c.latestNote) + "</p>" : ""}
+    <p class="note">
+      Comments waiting for moderation are not in this count. Cusdis only
+      exposes the approved ones, so a silent week here could just mean unread.
+    </p>
+  </section>`;
+}
+
+function panelHealth() {
+  const s = auto?.sources?.site;
+  const g = auto?.sources?.github;
+  if (!s?.ok) return unavailable("Health", s?.reason ?? "No data.");
+
+  const commit = g?.ok ? g.commits?.[0] : null;
+
+  return `
+  <section>
+    <div class="head"><h2>Health</h2><div class="rule"></div>
+      ${s.agrees ? '<span class="chip on">Update path fine</span>'
+                 : '<span class="chip alert">Update path broken</span>'}
+    </div>
+    <div class="rows">
+      <div class="row"><span class="k">Site answers</span><span class="v mono">${s.reachable ? "yes" : "no"}</span></div>
+      <div class="row"><span class="k">version.json says</span><span class="v mono">${esc(s.liveVersion)} &middot; ${day(s.liveDate)}</span></div>
+      <div class="row"><span class="k">versions.js says</span><span class="v mono">${esc(s.repoVersion)} &middot; ${day(s.repoDate)}</span></div>
+      <div class="row"><span class="k">Assets serving</span><span class="v mono">v=${esc(s.assetVersion ?? "?")}</span></div>
+      ${commit ? `<div class="row"><span class="k">Last commit</span><span class="v">${esc(commit.message)} <span class="mono" style="color:var(--muted)">&middot; ${ago(commit.date)}</span></span></div>` : ""}
+      ${g?.ok ? `<div class="row"><span class="k">Open issues</span><span class="v mono">${num(g.repo.openIssues)}</span></div>` : ""}
+    </div>
+    ${s.warning ? '<p class="note" style="color:var(--text)">' + esc(s.warning) + "</p>" : ""}
+  </section>`;
+}
+
+/* A panel with no credentials yet is not an error, it is the next job. So it
+ * says what to do about it, in place, rather than showing an empty box. */
+const SETUP = {
+  1: "Cloudflare dashboard, My Profile, API Tokens. Three read permissions: Zone/Zone, Zone/Analytics, Account/Cloudflare Pages. Paste it into <b>Dashboard/secrets.env</b>.",
+  3: "Play Console, Setup, API access. Link a Google Cloud project, make a service account, download its JSON key, then invite that account under Users and permissions with <b>Download bulk reports</b> ticked.",
+};
+
+function unavailable(title, reason, step) {
+  return `
+  <section>
+    <div class="head"><h2>${esc(title)}</h2><div class="rule"></div>
+      <span class="chip">Not connected</span>
+    </div>
+    <div class="todo">
+      ${step ? '<span class="n">' + step + "</span>" : ""}
+      <p><b>${esc(reason)}</b>${step ? "<br>" + SETUP[step] : ""}</p>
+    </div>
+  </section>`;
+}
+
+/* Area, faint ground, emphasised last point. One scale places every mark, so
+ * the endpoint dot sits exactly on the value the label names. */
+function spark(values) {
+  if (!values?.length) return "";
+  const w = 900, h = 64, pad = 5;
+  const max = Math.max(...values, 1);
+  const step = values.length > 1 ? (w - pad * 2) / (values.length - 1) : 0;
+  const pts = values.map((v, i) => [pad + i * step, h - pad - (v / max) * (h - pad * 2)]);
+  const line = pts.map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ");
+  const [lx, ly] = pts[pts.length - 1];
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img"
+      aria-label="Daily visitors over ${values.length} days, peaking at ${max}">
+    <polygon fill="#1C1C1C" points="${pad},${h - pad} ${line} ${w - pad},${h - pad}"></polygon>
+    <polyline fill="none" stroke="#FFFFFF" stroke-width="1.5" points="${line}"></polyline>
+    <circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3" fill="#FFFFFF"></circle>
+  </svg>`;
+}
+
+/* ── Render ────────────────────────────────────────────────────────────── */
+
+function render() {
+  const at = auto?.collectedAt;
+  $("collected").textContent = at ? day(at) + " · " + ago(at) : "never";
+
+  const stale = at && (Date.now() - new Date(at)) > 2 * DAY;
+  const scope = $("scope");
+  scope.textContent = stale ? "Numbers are stale" : "Dashboard";
+  scope.className = stale ? "chip alert" : "chip";
+
+  $("body").innerHTML = [
+    panelTest(), panelDownloads(), panelPlay(),
+    panelWebsite(), panelReach(), panelComments(), panelHealth(),
+  ].join("");
+
+  wire();
+}
+
+let flash;
+function flashSaved() {
+  const el = $("saved");
+  if (!el) return;
+  el.classList.add("show");
+  clearTimeout(flash);
+  flash = setTimeout(() => el.classList.remove("show"), 1400);
+}
+
+async function persist() {
+  if (!db) return;
+  try {
+    await db.doc("data/manual").set(manual);
+    flashSaved();
+  } catch (err) {
+    console.warn("Could not save the typed-in numbers", err);
+  }
+}
+
+function wire() {
+  const editable = Boolean(db);
+
+  const start = $("f-start");
+  if (start) {
+    start.disabled = !editable;
+    start.onchange = () => { manual.test.startDate = start.value; persist(); render(); };
+  }
+
+  const testers = $("f-testers");
+  if (testers) {
+    testers.disabled = !editable;
+    testers.onchange = () => {
+      manual.test.testers = testers.value === "" ? null : Number(testers.value);
+      persist();
+      render();
+    };
+  }
+
+  for (const key of ["tiktok", "instagram", "x"]) {
+    const el = $("f-" + key);
+    if (!el) continue;
+    el.disabled = !editable;
+    el.onchange = () => {
+      manual.reach[key] = el.value === "" ? null : Number(el.value);
+      manual.reachAt = { ...manual.reachAt, [key]: new Date().toISOString() };
+      persist();
+      render();
+    };
+  }
+}
+
+render();
+
+/* The database resolves later than the first paint, and may never resolve at
+ * all. Either way the page above is already correct, so this only upgrades it. */
+(async () => {
+  db = (await window.claude?.use?.("db")) ?? null;
+  if (!db) { render(); return; }
+
+  // get() answers with a snapshot, not the document body: `exists` covers both
+  // a missing document and one this viewer may not see, and data() is a call.
+  try {
+    const snap = await db.doc("data/auto").get();
+    const live = snap.exists ? snap.data() : null;
+    if (live?.collectedAt && (!auto?.collectedAt || live.collectedAt > auto.collectedAt)) {
+      auto = live;
+    }
+  } catch (err) {
+    console.warn("No collected data in the database yet", err);
+  }
+
+  try {
+    const snap = await db.doc("data/manual").get();
+    const stored = snap.exists ? snap.data() : null;
+    if (stored) {
+      manual = {
+        ...structuredClone(MANUAL_DEFAULT),
+        ...stored,
+        test:    { ...MANUAL_DEFAULT.test,  ...(stored.test ?? {}) },
+        reach:   { ...MANUAL_DEFAULT.reach, ...(stored.reach ?? {}) },
+        reachAt: stored.reachAt ?? {},
+      };
+    }
+  } catch (err) {
+    console.warn("Nothing typed in yet", err);
+  }
+
+  render();
+})();
+</script>

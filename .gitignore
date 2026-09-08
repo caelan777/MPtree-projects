@@ -27,3 +27,14 @@ build/
 # Seeded design canvas: a 2.6 MB build output, re-made by seed-canvas.mjs
 Branding/website-redesign/*.html
 !Branding/website-redesign/*.dc.html
+
+# ── Dashboard credentials and output ──────────────────────────────────────
+# The collector reads live numbers from Cloudflare, Google Play and Cusdis.
+# Its keys and its output are local only: a leaked Play service account key
+# can read everything about the app in the Play Console.
+Dashboard/secrets.env
+Dashboard/data.json
+Dashboard/*service-account*.json
+
+# The published dashboard, rebuilt by collect.mjs from dashboard.html
+Dashboard/dashboard.build.html

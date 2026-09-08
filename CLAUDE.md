@@ -29,12 +29,18 @@ MPtree projects/            ← workspace root (this folder)
 ├─ CLAUDE.md                ← this file
 ├─ docs/roadmap.md          ← the roadmap
 ├─ MPTree-App/              ← the Android app (React + Capacitor). THE real code today.
-├─ Branding/                ← (empty) → MPTree brand assets/tokens will live here
-├─ Website/                 ← (empty) → official website will live here
+├─ Branding/                ← brand assets, generated from one master SVG
+├─ Website/                 ← the site, live at mp-tree.net (Cloudflare Pages)
+├─ Dashboard/               ← internal tooling: collects every MPTree number into one page
 └─ Desktop/                 ← (empty) → Tauri desktop prototype will live here
 ```
 
-Note: `Branding/`, `Website/`, `Desktop/` are currently empty placeholders, and the
+`Dashboard/` is not a surface, it is a workbench. `node Dashboard/collect.mjs`
+pulls download counts, site health, Cloudflare traffic, Play and comments into
+one JSON, which is pushed into a published dashboard artifact. Credentials live
+in `Dashboard/secrets.env` and never leave the machine. See its README.
+
+Note: `Desktop/` is still an empty placeholder, and the
 top-level `README.md` is (oddly) a directory. Both are cleanup targets, see the roadmap.
 
 ## The Android app (`MPTree-App/`)
