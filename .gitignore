@@ -23,3 +23,7 @@ dist/
 build/
 *.apk
 *.aab
+
+# Seeded design canvas: a 2.6 MB build output, re-made by seed-canvas.mjs
+Branding/website-redesign/*.html
+!Branding/website-redesign/*.dc.html
