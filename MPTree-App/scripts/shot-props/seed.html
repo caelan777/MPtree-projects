@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>seed</title>
+<body style="background:#000">
+<script>
+(async () => {
+  const toDataUrl = async u => {
+    const b = await (await fetch(u)).blob();
+    return await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+  };
+  const covers = await Promise.all([0,1,2].map(i => toDataUrl('/demo-cover-' + i + '.jpg')));
+  const meta = {};
+  covers.forEach((p, i) => { meta['demo://' + i] = { customPhoto: p }; });
+  for (const i of [1, 5, 9, 13, 17, 22]) {
+    meta['demo://' + i] = Object.assign(meta['demo://' + i] || {}, { liked: true });
+  }
+  // A listening history, so Recently Played and Most Played are not both empty.
+  const HOUR = 3600000, now = Date.UTC(2026, 8, 8, 19, 40);
+  [[2, 31, 1], [1, 14, 3], [9, 9, 5], [5, 8, 9], [17, 7, 14], [0, 6, 20],
+   [13, 5, 27], [22, 4, 33], [4, 3, 41], [8, 2, 52]].forEach(([i, plays, hoursAgo]) => {
+    meta['demo://' + i] = Object.assign(meta['demo://' + i] || {}, {
+      playCount: plays, lastPlayedAt: now - hoursAgo * HOUR,
+    });
+  });
+  localStorage.setItem('CapacitorStorage.mptree_meta', JSON.stringify(meta));
+  localStorage.setItem('CapacitorStorage.mptree_session', JSON.stringify({
+    filter: 'newest', playMode: 'shuffle', currentId: 'demo://2',
+    queueIds: Array.from({ length: 64 }, (_, i) => 'demo://' + i),
+    positionMs: 74000, isPlaying: false
+  }));
+  // Two playlists of the user's own, so the tab is not only the automatic ones.
+  localStorage.setItem('CapacitorStorage.mptree_playlists', JSON.stringify([
+    { id: '1000', name: 'Late drives', createdAt: Date.UTC(2026, 6, 12),
+      songIds: [0,8,16,24,32,40,9,17].map(i => 'demo://' + i), coverPhoto: covers[0] },
+    { id: '1001', name: 'Kitchen radio', createdAt: Date.UTC(2026, 5, 3),
+      songIds: [1,5,13,21,29,37].map(i => 'demo://' + i) },
+    { id: '1002', name: 'Long walk', createdAt: Date.UTC(2026, 4, 21),
+      songIds: [2,10,18,26,34,42,50,58,3,11,19].map(i => 'demo://' + i), coverPhoto: covers[2] }
+  ]));
+  localStorage.setItem('CapacitorStorage.mptree_onboarded_v2', '1');
+  location.replace('/');
+})();
+</script>
