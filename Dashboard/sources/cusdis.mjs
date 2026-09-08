@@ -41,7 +41,10 @@ export async function cusdis(env) {
 
   const token = env.CUSDIS_PROJECT_TOKEN;
   if (!token) {
-    out.latestNote = "Add CUSDIS_PROJECT_TOKEN to secrets.env to show what the comments say.";
+    // Cusdis does not surface the project token anywhere in its settings
+    // screen, so there is normally nothing to paste. The count is the part
+    // worth having; the text is one tap away on the site itself.
+    out.latestNote = "Open the thread to read the comments themselves.";
     return out;
   }
 

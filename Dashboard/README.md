@@ -53,21 +53,29 @@ Website visitor numbers and deploy history.
 
 1. Cloudflare dashboard, **My Profile**, **API Tokens**, **Create Token**,
    **Create Custom Token**.
-2. Give it exactly three read permissions:
-   - Zone, Zone, **Read**
+2. Give it two read permissions:
    - Zone, Analytics, **Read**
    - Account, Cloudflare Pages, **Read**
 3. Zone Resources: include mp-tree.net. Account Resources: your account.
 4. Paste the token into `secrets.env` as `CLOUDFLARE_API_TOKEN`.
 
+The account and zone ids are already filled in, so the token never has to look
+them up. Without them it would need a third permission, Zone, Zone, Read.
+
 These are read-only permissions. The token cannot change anything, and it
 cannot deploy.
 
-### 2. Cusdis, about two minutes, optional
+### 2. Cusdis, skip it
 
-The comment **count already works with no key at all**. This is only to show
-what the comments say. Cusdis dashboard, your project, Settings, copy the
-project token into `CUSDIS_PROJECT_TOKEN`.
+The comment **count already works with no key at all**, and that is the part
+worth having. Reading the comment text needs a project token, and Cusdis does
+not show that token anywhere in its settings screen, so there is nothing to
+copy. `CUSDIS_PROJECT_TOKEN` stays empty and the dashboard links straight to
+the thread instead, which is one tap and shows the same thing.
+
+The app id in the widget on the homepage is not that token. It identifies the
+project publicly, which is why the count needs no authentication in the first
+place.
 
 ### 3. Google Play, about thirty minutes, the fiddly one
 
