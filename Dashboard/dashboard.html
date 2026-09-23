@@ -330,7 +330,6 @@ function panelSummary() {
   const s = auto?.sources?.site;
   const c = auto?.sources?.cloudflare;
   const p = auto?.sources?.play;
-  const k = auto?.sources?.cusdis;
   const t = manual.test;
 
   const start = t.startDate ? new Date(t.startDate + "T00:00:00Z") : null;
@@ -339,6 +338,9 @@ function panelSummary() {
 
   const visits = c?.ok && !c.traffic?.error ? c.traffic?.last7?.uniques : null;
   const installs = p?.ok && p.installs?.totalUsers !== undefined ? p.installs.totalUsers : null;
+
+  const published = g?.ok ? g.releases?.[0]?.published : null;
+  const shipped = published ? Math.floor((Date.now() - new Date(published)) / DAY) : null;
 
   const tiles = [
     { k: "Test day",   v: start ? done : DASH, sub: "of " + t.days,
@@ -350,7 +352,10 @@ function panelSummary() {
       flag: visits === null ? "not connected" : null },
     { k: "Play",       v: installs === null ? DASH : num(installs), sub: "installs",
       flag: installs === null ? "not connected" : null },
-    { k: "Comments",   v: k?.ok ? num(k.approved) : DASH, sub: "approved" },
+    // Sixth tile was the comment count until Cusdis went dark. Days since the
+    // last release earns the spot better: Play wants an update shipped during
+    // the closed test, and this is the number that says whether that happened.
+    { k: "Last release", v: shipped === null ? DASH : shipped, sub: "days ago" },
   ];
 
   const health = s?.ok && !s.agrees
@@ -600,32 +605,9 @@ function panelReach() {
   </section>`;
 }
 
-function panelComments() {
-  const c = auto?.sources?.cusdis;
-  if (!c?.ok) return unavailable("Comments on the site", c?.reason ?? "No data.");
-
-  const latest = (c.latest ?? []).map(x => `
-    <blockquote class="quote">${esc(x.content)}
-      <cite>${esc(x.by)} &middot; ${day(x.at)}</cite>
-    </blockquote>`).join("");
-
-  return `
-  <section>
-    <div class="head"><h2>Comments on the site</h2><div class="rule"></div></div>
-    <div class="stats">
-      <div class="stat">
-        <span class="label">Approved</span>
-        <div class="fig">${num(c.approved)}</div>
-        <div class="sub"><a href="${esc(c.thread)}" target="_blank" rel="noopener">Open the thread</a></div>
-      </div>
-    </div>
-    ${latest}
-    ${c.latestNote ? '<p class="note">' + esc(c.latestNote) + "</p>" : ""}
-    <p class="note">
-      Approved only. Anything still awaiting moderation is invisible here.
-    </p>
-  </section>`;
-}
+/* There was a comments panel here, fed by Cusdis. Their service returns 521
+ * and their repository is archived, so the comment section came off the site
+ * and this went with it. */
 
 function panelHealth() {
   const s = auto?.sources?.site;
@@ -704,7 +686,7 @@ function render() {
   $("body").innerHTML = [
     panelSummary(),
     panelTest(), panelDownloads(), panelPlay(),
-    panelWebsite(), panelReach(), panelComments(), panelHealth(),
+    panelWebsite(), panelReach(), panelHealth(),
   ].join("");
 
   wire();

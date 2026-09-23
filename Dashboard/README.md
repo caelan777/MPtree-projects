@@ -1,7 +1,7 @@
 # Dashboard
 
 One page with every MPTree number on it: downloads, Play, website visitors,
-comments, and the state of the closed test. Built because those numbers live in
+and the state of the closed test. Built because those numbers live in
 five places that never talk to each other, so there was no single answer to
 "is this working".
 
@@ -37,9 +37,8 @@ worse than no dashboard.
 
 ## What needs setting up
 
-Nothing is required to get started: downloads, site health and the comment
-count already work. The rest is three independent jobs, and a stall on one does
-not block the others.
+Nothing is required to get started: downloads and site health already work.
+The rest is two independent jobs, and a stall on one does not block the other.
 
 Copy the credentials file first:
 
@@ -65,19 +64,7 @@ them up. Without them it would need a third permission, Zone, Zone, Read.
 These are read-only permissions. The token cannot change anything, and it
 cannot deploy.
 
-### 2. Cusdis, skip it
-
-The comment **count already works with no key at all**, and that is the part
-worth having. Reading the comment text needs a project token, and Cusdis does
-not show that token anywhere in its settings screen, so there is nothing to
-copy. `CUSDIS_PROJECT_TOKEN` stays empty and the dashboard links straight to
-the thread instead, which is one tap and shows the same thing.
-
-The app id in the widget on the homepage is not that token. It identifies the
-project publicly, which is why the count needs no authentication in the first
-place.
-
-### 3. Google Play, about thirty minutes, the fiddly one
+### 2. Google Play, about thirty minutes, the fiddly one
 
 1. **Play Console**, Setup, **API access**. Link a Google Cloud project, or let
    it create one.
@@ -119,12 +106,11 @@ Not an oversight, these have no path at all:
 | `sources/site.mjs` | Live `version.json` against `versions.js`. No setup |
 | `sources/cloudflare.mjs` | Zone analytics and Pages deploys. Needs a token |
 | `sources/play.mjs` | Reviews, and installs from the reports bucket |
-| `sources/cusdis.mjs` | Comment count. Count needs no key |
 | `dashboard.html` | The page itself, published as an artifact |
 | `secrets.env` | Credentials. Gitignored |
 | `data.json` | Output. Gitignored |
 
-No shared abstraction between the sources on purpose. Five APIs with five
+No shared abstraction between the sources on purpose. Four APIs with four
 different authentication schemes have nothing real in common, and a base class
 here would be the premature abstraction `CLAUDE.md` warns off.
 

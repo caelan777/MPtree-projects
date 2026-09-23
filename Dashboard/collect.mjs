@@ -28,7 +28,6 @@ import { github }     from "./sources/github.mjs";
 import { site }       from "./sources/site.mjs";
 import { cloudflare } from "./sources/cloudflare.mjs";
 import { play }       from "./sources/play.mjs";
-import { cusdis }     from "./sources/cusdis.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -64,7 +63,6 @@ const SOURCES = [
   ["site",       "Site health",     () => site(ROOT)],
   ["cloudflare", "Cloudflare",      () => cloudflare(env)],
   ["play",       "Google Play",     () => play(env, HERE)],
-  ["cusdis",     "Comments",        () => cusdis(env)],
 ];
 
 const say = (...a) => { if (!QUIET) console.log(...a); };

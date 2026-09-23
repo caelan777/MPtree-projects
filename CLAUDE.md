@@ -36,7 +36,7 @@ MPtree projects/            ← workspace root (this folder)
 ```
 
 `Dashboard/` is not a surface, it is a workbench. `node Dashboard/collect.mjs`
-pulls download counts, site health, Cloudflare traffic, Play and comments into
+pulls download counts, site health, Cloudflare traffic and Play into
 one JSON, which is pushed into a published dashboard artifact. Credentials live
 in `Dashboard/secrets.env` and never leave the machine. See its README.
 

@@ -82,7 +82,7 @@ export async function play(env, dashboardDir) {
   if (!existsSync(keyPath)) {
     return {
       ok: false,
-      reason: "No Play service account key. Follow step 3 in Dashboard/README.md, " +
+      reason: "No Play service account key. Follow step 2 in Dashboard/README.md, " +
               "then put the JSON key at Dashboard/play-service-account.json.",
     };
   }

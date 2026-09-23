@@ -70,43 +70,7 @@
     });
   }
 
-  /* ── Comments, loaded only when scrolled to ──────────────────────────
-   * Cusdis is a third party, so its script is fetched lazily rather than on
-   * every page load: someone who never scrolls that far never touches it.
-   * Until an app id is filled into the markup, a plain message stands in.
-   */
-  var thread   = document.getElementById("cusdis_thread");
-  var fallback = document.getElementById("comments-fallback");
-
-  if (thread) {
-    var appId = thread.getAttribute("data-app-id");
-    var configured = appId && appId !== "CUSDIS_APP_ID";
-
-    if (!configured) {
-      thread.hidden = true;
-      if (fallback) fallback.hidden = false;
-    } else {
-      var loaded = false;
-      var load = function () {
-        if (loaded) return;
-        loaded = true;
-        var s = document.createElement("script");
-        s.src = "https://cusdis.com/js/cusdis.es.js";
-        s.async = true;
-        s.defer = true;
-        document.body.appendChild(s);
-      };
-
-      if ("IntersectionObserver" in window) {
-        var io = new IntersectionObserver(function (entries) {
-          for (var i = 0; i < entries.length; i++) {
-            if (entries[i].isIntersecting) { load(); io.disconnect(); return; }
-          }
-        }, { rootMargin: "200px" });
-        io.observe(thread);
-      } else {
-        load();
-      }
-    }
-  }
+  /* The comment section used to be loaded here, lazily, from Cusdis. Their
+   * service returns 521 and their repository is archived, so the whole thing
+   * is gone. Nothing on the site loads from a third party any more. */
 })();
