@@ -129,11 +129,10 @@ type SmartCardStyle = {
 // so it follows the theme.
 const SMART_CARD_STYLES: Record<SmartPlaylistId, SmartCardStyle> = {
   favorites: {
-    icon: (size) => (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 21s-7.46-4.51-9.5-9.04C1.18 8.4 2.6 4.5 6.5 4.5c2.02 0 3.36 1.06 3.7 2.13.34-1.07 1.68-2.13 3.7-2.13 3.9 0 5.32 3.9 4 7.46C19.46 16.49 12 21 12 21z"/>
-      </svg>
-    ),
+    // The same heart as everywhere else. This card used to draw its own,
+    // fuller one, so the Favourites card and the mark on a liked song were
+    // two different silhouettes.
+    icon: (size) => <IC.Heart filled={true} size={size} />,
   },
   recentlyPlayed: {
     icon: (size) => (
@@ -385,8 +384,13 @@ export const PlaylistsView: React.FC<Props> = ({
             )}
           </div>
         </div>
+        {/* This used to be a hand-drawn heart with a different path from the one
+            in Icons.tsx, so the same "liked" mark had two shapes depending on
+            which screen you were looking at. One icon now. */}
         {isLiked(song) && !inPlaylist && (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill={t.heart} style={{ flexShrink: 0 }}><path d="M12 21s-7.46-4.51-9.5-9.04C1.18 8.4 2.6 4.5 6.5 4.5c2.02 0 3.36 1.06 3.7 2.13.34-1.07 1.68-2.13 3.7-2.13 3.9 0 5.32 3.9 4 7.46C19.46 16.49 12 21 12 21z"/></svg>
+          <span style={{ display: "flex", flexShrink: 0, color: t.accent }}>
+            <IC.Heart filled={true} size={16} />
+          </span>
         )}
         {!selectMode && (
           <button

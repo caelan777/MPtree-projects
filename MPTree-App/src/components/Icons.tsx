@@ -47,9 +47,15 @@ export const IC = {
       <circle cx="20" cy="10" r="2"/>
     </svg>
   ),
+  /* Takes its colour from whatever contains it, like every other icon here.
+     It used to hardcode a red, which made it the one icon in a row of chips
+     that ignored the row: next to Play, Edit and Share it stayed red while
+     they followed the theme. A tester said the heart did not fit, and that
+     was why. Liked or not is carried by filled against outline instead, which
+     needs no second colour. */
   Heart:   ({ filled, size=16 }: { filled:boolean; size?:number }) => (
     <svg width={size} height={size} viewBox="0 0 24 24"
-      fill={filled ? "#e8445a" : "none"} stroke={filled ? "#e8445a" : "#888"} strokeWidth="2" strokeLinecap="round">
+      fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
     </svg>
   ),

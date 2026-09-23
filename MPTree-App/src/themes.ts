@@ -3,6 +3,11 @@ import type { FilterId } from "./types";
 
 // ─── THEMES ──────────────────────────────────────────────────────────────────
 
+// `heart` is no longer the colour of the like state. The heart follows the
+// accent now, like the rest of the interface, and liked is shown by filling
+// the shape rather than by colouring it. The token is kept because the cut
+// screen uses it for its preview playhead, which is a genuine "you are here"
+// marker and the one place a warm colour still earns its place.
 export const DARK = {
   accent:"#FFFFFF", surface:"#111111", card:"#141414", bg:"#000000",
   muted:"#777777", dim:"#252525", border:"#2a2a2a",
