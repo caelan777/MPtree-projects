@@ -61,14 +61,15 @@ const SHOTS = [
     sub:  "Favourites, Recently Played, Most Played and Last Added.",
   },
   {
-    file: "04-offline.png",
-    statement: "It works<br>with no signal",
-    sub: "Flight mode, the underground, abroad with the data off. It plays.",
+    file: "04-song.png",
+    shot: "menu.png",
+    head: "Everything,<br>on every song",
+    sub:  "Ringtone, cover art, tags, lyrics, trimming, playlists. One menu.",
   },
   {
     file: "05-private.png",
-    statement: "Nothing leaves<br>your device",
-    sub: "No ads, no tracking, no account. Free, and staying that way.",
+    statement: "No signal,<br>no account, no ads",
+    sub: "It plays what is already on your phone, and nothing about it ever leaves.",
   },
 ];
 
@@ -125,9 +126,9 @@ function page(shot) {
   .stage { flex: 1; display: flex; justify-content: center; margin-top: 66px; min-height: 0; }
 
   .frame {
-    width: 706px; flex-shrink: 0; align-self: flex-start;
-    padding: 13px;
-    border-radius: 64px;
+    width: 790px; flex-shrink: 0; align-self: flex-start;
+    padding: 14px;
+    border-radius: 70px;
     /* A rail, not a flat block: light catches the top left of a real phone. */
     background: linear-gradient(150deg, #55555F 0%, #1B1B20 26%, #0B0B0E 62%, #3A3A44 100%);
     box-shadow:
@@ -136,7 +137,7 @@ function page(shot) {
       0 2px 0 rgba(255, 255, 255, 0.35) inset;
   }
   .screen {
-    border-radius: 52px; overflow: hidden; background: #000;
+    border-radius: 57px; overflow: hidden; background: #000;
     position: relative;
   }
   .screen img { width: 100%; height: auto; display: block; }
