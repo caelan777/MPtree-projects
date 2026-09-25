@@ -101,13 +101,20 @@ if (!CHROME) { console.error("No Chrome found."); process.exit(1); }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const PORT = 9446;
-const profile = resolve(tmpdir(), "mptree-ad-profile");
-rmSync(profile, { recursive: true, force: true });
+
+// A profile of its own per run. Chrome's crash handler outlives the process we
+// started and holds a lock inside the profile for a while afterwards, so a
+// shared directory means the next render dies on EBUSY trying to clear it.
+// --disable-breakpad stops that handler being started at all; the unique
+// directory is the belt to its braces, since a stale lock can then only ever
+// hurt the run that made it.
+const profile = resolve(tmpdir(), `mptree-ad-${process.pid}-${Date.now()}`);
 
 const proc = spawn(CHROME, [
   flag("headful") ? "--window-size=520,900" : "--headless=new",
   "--disable-gpu", "--hide-scrollbars", "--mute-audio",
   "--no-first-run", "--no-default-browser-check",
+  "--disable-breakpad", "--no-crash-upload",
   "--autoplay-policy=no-user-gesture-required",
   `--user-data-dir=${profile}`, `--remote-debugging-port=${PORT}`,
   "about:blank",
@@ -255,5 +262,18 @@ try {
 
   cdp.close();
 } finally {
+  // Chrome leaves a family behind: killing the one we started leaves its
+  // renderer and utility children running, and those hold this script's pipe
+  // open long enough to look like a hang. So kill ours, take the tree down
+  // with it on Windows, and stop waiting on either of them.
   proc.kill();
+  if (process.platform === "win32" && proc.pid) {
+    const sweep = spawn("taskkill", ["/pid", String(proc.pid), "/T", "/F"], { stdio: "ignore" });
+    sweep.unref();
+  }
+  proc.unref();
+  // Best effort: a profile left behind is a few megabytes in temp, not a
+  // reason to fail a render that already produced its file.
+  await sleep(400);
+  try { rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* it can wait for the OS */ }
 }

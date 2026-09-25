@@ -27,7 +27,7 @@ Everything below is timed to the film as it renders. If you change a timing in
 | 0:13.1 | The phone and the words fade together. | |
 | 0:13.5 | Black. | **No ads.** |
 | 0:14.0 | | **No subscription.** |
-| 0:14.4 | | **No problem.** |
+| 0:14.4 | | **No problems.** |
 | 0:16.1 | Cut. The record returns, slowing, and comes to rest with the mark upright. | |
 | 0:16.6 | | **MPTree** |
 | 0:17.0 | | An offline music player. |

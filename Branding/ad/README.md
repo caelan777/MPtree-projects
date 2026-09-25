@@ -28,7 +28,7 @@ Same length means one piece of music fits every cut.
 |---|---|---|
 | 0:00 | 0:05 | A record forms out of three rings, turns, and rises. "Your music. Already on your phone." |
 | 0:05 | 0:13 | One phone, three screens. The songs list, the player, the playlists. The screen changes under a lit wipe rather than the phone cutting away. |
-| 0:13 | 0:16 | "No ads. No subscription. No problem." |
+| 0:13 | 0:16 | "No ads. No subscription. No problems." |
 | 0:16 | 0:19 | The record returns, settles upright, and the name arrives. |
 
 It holds on the last frame instead of fading, so the end card can be frozen for
