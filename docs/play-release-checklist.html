@@ -195,7 +195,7 @@ const STEPS = [
     items: [
       {
         id: "version",
-        title: "Decide the version number: 0.2.0, not 0.1.4",
+        title: "Version number: 0.2.0, not 0.1.4",
         body: `<p>Your own <code>docs/release.md</code> says it plainly: <b>0.1.x are betas
           published on the website only, and 0.2.0 is where those betas are gathered up and
           sent to the Play Store.</b> This is that moment. I set the code to 0.1.4 before
@@ -205,17 +205,18 @@ const STEPS = [
       },
       {
         id: "snippet",
-        title: "Get the Add key snippet from Play Console",
-        body: `<p>Android developer verification, the MPTree package, <b>Add key</b>. Google
-          gives you a snippet. Paste it to me and it goes into the build, so you do not have
-          to build twice.</p>`,
+        title: "Register the website signing key",
+        body: `<p>Android developer verification, the MPTree package, <b>Add key</b>. It asks
+          only for the SHA-256 fingerprint, so this is one paste and it is done. Nothing to
+          build, which is simpler than it first looked.</p>
+          <pre><code>D7:82:DE:08:2F:BF:D8:8A:91:89:AC:93:6F:34:67:17:1F:02:ED:68:9C:80:86:EA:4D:90:49:04:8C:5D:C9:BD</code></pre>`,
         warn: {
-          t: "This one has a deadline: 30 September",
-          p: `The key your website APK is signed with (<code>D7:82:DE:08…</code>) is not among
-              the three registered ones. I checked the live APK on your site against the list.
-              After the deadline that download stops installing on certified devices in Brazil,
-              Indonesia, Singapore and Thailand, and everywhere in 2027. Brazil is in your top
-              eight countries.`,
+          t: "Deadline 30 September, and this one paste clears it",
+          p: `That is the key your website APK is signed with, and it was not among the three
+              already registered. I checked it twice, once from the keystore and once from the
+              APK live on your site. Without it that download stops installing on certified
+              devices in Brazil, Indonesia, Singapore and Thailand after the deadline, and
+              everywhere in 2027.`,
         },
       },
       {
@@ -290,16 +291,7 @@ cd android
     ],
   },
   {
-    n: 4, title: "Register the signing key", who: "you",
-    lede: "The 30 September job. Two minutes once the APK exists.",
-    items: [
-      { id: "uploadkey", title: "Upload the APK on the Add key screen",
-        body: `<p>Same file you just built. It carries the snippet, which proves the key is
-          yours. Wait for the confirmation mail.</p>` },
-    ],
-  },
-  {
-    n: 5, title: "Publish to the website", who: "together",
+    n: 4, title: "Publish to the website", who: "together",
     lede: "This first, so the update path for your existing users is intact before Play sees anyone.",
     items: [
       { id: "ghrelease", title: "GitHub release, tagged v0.2.0-beta",
@@ -315,7 +307,7 @@ cd android
     ],
   },
   {
-    n: 6, title: "Publish to Play", who: "you",
+    n: 5, title: "Publish to Play", who: "you",
     lede: "The part you have been waiting for.",
     items: [
       { id: "playcountries", title: "Select countries and regions" },
@@ -328,7 +320,7 @@ cd android
     ],
   },
   {
-    n: 7, title: "One thing to say out loud", who: "together",
+    n: 6, title: "One thing to say out loud", who: "together",
     lede: "This affects the people who already trusted you enough to sideload.",
     items: [
       {
