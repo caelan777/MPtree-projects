@@ -1,0 +1,426 @@
+<title>MPTree Play Release Runbook</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+
+<style>
+/* Same visual language as the MPTree dashboard on purpose: these are two parts
+   of one toolset, and they should look like it. Pinned dark, monochrome, with
+   attention signalled by inverting a block rather than by colour. */
+:root {
+  --bg:      #000000;
+  --panel:   #0E0E0E;
+  --raised:  #141414;
+  --line:    #2A2A2A;
+  --line-lo: #1C1C1C;
+  --text:    #FFFFFF;
+  --muted:   #777777;
+  --dim:     #4A4A4A;
+
+  --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 780px; margin: 0 auto; padding: 0 20px 80px; }
+
+.label {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+}
+
+/* Masthead */
+.top { padding: 30px 0 20px; border-bottom: 1px solid var(--line); }
+.mark { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.mark b { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+h1 {
+  font-family: var(--cond); font-weight: 700; font-size: 40px;
+  line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 10px;
+  text-wrap: balance;
+}
+.sub { color: var(--muted); font-size: 14px; margin: 0; max-width: 58ch; }
+
+/* Progress */
+.progress { margin-top: 22px; display: flex; align-items: center; gap: 14px; }
+.pbar { flex: 1; height: 6px; background: var(--line-lo); border-radius: 3px; overflow: hidden; }
+.pbar i { display: block; height: 100%; background: var(--text); transition: width 250ms; }
+.pcount {
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* Phases */
+.phase { padding: 30px 0; border-bottom: 1px solid var(--line-lo); }
+.phase:last-of-type { border-bottom: 0; }
+.phase-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+.phase-n {
+  font-family: var(--cond); font-weight: 700; font-size: 22px;
+  color: var(--dim); line-height: 1; flex-shrink: 0;
+}
+.phase-head h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.phase-who {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em;
+  text-transform: uppercase; padding: 3px 7px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+}
+.phase-who.you { border-color: var(--text); color: var(--text); }
+.phase-lede { color: var(--muted); font-size: 13.5px; margin: 0 0 18px; max-width: 62ch; }
+
+/* Steps */
+.step {
+  display: flex; gap: 13px; align-items: flex-start;
+  padding: 14px 0; border-top: 1px solid var(--line-lo);
+}
+.step:first-of-type { border-top: 0; }
+.box {
+  appearance: none; -webkit-appearance: none;
+  flex-shrink: 0; width: 19px; height: 19px; margin: 3px 0 0;
+  border: 1px solid var(--dim); border-radius: 5px;
+  background: transparent; cursor: pointer; position: relative;
+}
+.box:checked { background: var(--text); border-color: var(--text); }
+.box:checked::after {
+  content: ""; position: absolute; left: 6px; top: 2px;
+  width: 4px; height: 9px; border: solid #000;
+  border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.box:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.box:disabled { cursor: not-allowed; opacity: 0.4; }
+.step-body { flex: 1; min-width: 0; }
+.step-body > b { font-weight: 600; display: block; }
+.step.done .step-body > b { color: var(--muted); text-decoration: line-through; }
+.step-body p { margin: 5px 0 0; color: var(--muted); font-size: 13.5px; }
+
+pre {
+  margin: 11px 0 0; padding: 12px 14px;
+  background: var(--raised); border: 1px solid var(--line-lo);
+  border-radius: 9px; overflow-x: auto;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
+  color: var(--text);
+}
+code {
+  font-family: var(--mono); font-size: 0.89em;
+  background: var(--raised); padding: 2px 5px; border-radius: 4px;
+}
+pre code { background: none; padding: 0; font-size: 1em; }
+
+/* A warning inverts, because this page has no colour to spend. */
+.warn {
+  margin: 16px 0 0; padding: 15px 17px;
+  background: var(--text); color: #000; border-radius: 10px;
+}
+.warn b { display: block; font-weight: 700; margin-bottom: 5px; font-size: 14px; }
+.warn p { margin: 0; font-size: 13.5px; line-height: 1.55; color: #000; }
+.warn p + p { margin-top: 8px; }
+.warn code { background: rgba(0,0,0,0.11); color: #000; }
+
+.note {
+  margin: 14px 0 0; padding: 14px 16px;
+  border: 1px dashed var(--line); border-radius: 10px;
+  color: var(--muted); font-size: 13.5px;
+}
+.note b { color: var(--text); font-weight: 600; }
+
+table { width: 100%; border-collapse: collapse; margin: 13px 0 0; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line-lo); vertical-align: top; }
+th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td code { font-size: 11.5px; }
+
+.foot { padding: 26px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+.saved {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted);
+  opacity: 0; transition: opacity 200ms;
+}
+.saved.show { opacity: 1; }
+
+@media (max-width: 560px) {
+  h1 { font-size: 31px; }
+  .wrap { padding: 0 16px 60px; }
+  pre { font-size: 11.5px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="mark">
+      <svg width="20" height="20" viewBox="0 0 512 512" aria-hidden="true">
+        <path fill="#FFFFFF" d="M256 40 L432 300 H336 L336 472 H176 L176 300 H80 Z"/>
+      </svg>
+      <b>MPTree</b>
+    </div>
+    <h1>From here to the Play Store</h1>
+    <p class="sub">
+      Production access is granted. This is everything left, in the order it has
+      to happen, with the two traps in your own release notes marked where you
+      will hit them.
+    </p>
+    <div class="progress">
+      <div class="pbar"><i id="pfill" style="width:0%"></i></div>
+      <span class="pcount" id="pcount">0 of 0</span>
+      <span class="saved" id="saved">Saved</span>
+    </div>
+  </header>
+
+  <main id="phases"></main>
+
+  <p class="foot">
+    Ticks are saved on this page, so you can close it and come back. Ask Claude
+    at any step and it picks up from where the ticks are.
+  </p>
+</div>
+
+<script>
+/* The page stores nothing but which boxes are ticked. Everything else is
+ * written into the page, so it still reads correctly with no database. */
+const STEPS = [
+  {
+    n: 1, title: "Two decisions first", who: "together",
+    lede: "Both of these change what gets built, so they come before any build.",
+    items: [
+      {
+        id: "version",
+        title: "Decide the version number: 0.2.0, not 0.1.4",
+        body: `<p>Your own <code>docs/release.md</code> says it plainly: <b>0.1.x are betas
+          published on the website only, and 0.2.0 is where those betas are gathered up and
+          sent to the Play Store.</b> This is that moment. I set the code to 0.1.4 before
+          production access came through, so it needs changing.</p>
+          <p><code>versionCode</code> goes to 14 either way. That counter rises across both
+          channels and can never be reused.</p>`,
+      },
+      {
+        id: "snippet",
+        title: "Get the Add key snippet from Play Console",
+        body: `<p>Android developer verification, the MPTree package, <b>Add key</b>. Google
+          gives you a snippet. Paste it to me and it goes into the build, so you do not have
+          to build twice.</p>`,
+        warn: {
+          t: "This one has a deadline: 30 September",
+          p: `The key your website APK is signed with (<code>D7:82:DE:08…</code>) is not among
+              the three registered ones. I checked the live APK on your site against the list.
+              After the deadline that download stops installing on certified devices in Brazil,
+              Indonesia, Singapore and Thailand, and everywhere in 2027. Brazil is in your top
+              eight countries.`,
+        },
+      },
+      {
+        id: "countries",
+        title: "Decide which countries the Play release goes to",
+        body: `<p>Your website traffic over thirty days, in order: France, United States,
+          Netherlands, Australia, Canada, Germany, Belgium, Brazil. All countries is the
+          simplest answer and there is no cost to it. Ask me if you want to narrow it.</p>`,
+      },
+    ],
+  },
+  {
+    n: 2, title: "I prepare the code", who: "claude",
+    lede: "Nothing for you to do here. Say go and it is done in a few minutes.",
+    items: [
+      { id: "setver", title: "Set the version to 0.2.0 and versionCode to 14",
+        body: `<p>In <code>package.json</code> and <code>android/app/build.gradle</code>, kept in step.</p>` },
+      { id: "addsnippet", title: "Put the verification snippet in the app's assets",
+        body: `<p>So the APK you build carries the proof that the signing key is yours.</p>` },
+      { id: "notes", title: "Write the 0.2.0 entry for the website",
+        body: `<p><code>versions.js</code> and <code>version.json</code>. These stay in the
+          working tree until the release actually exists. Bump them early and every existing
+          user is told about a version they cannot download yet.</p>` },
+    ],
+  },
+  {
+    n: 3, title: "You build, twice", who: "you",
+    lede: "Two different files for two different places. They are not interchangeable.",
+    items: [
+      {
+        id: "buildapk",
+        title: "Build the website APK",
+        body: `<pre><code>cd MPTree-App
+npm run build
+npx cap sync android
+cd android
+./gradlew assembleRelease</code></pre>
+          <p>Lands at <code>android/app/build/outputs/apk/release/app-release.apk</code>.</p>`,
+      },
+      {
+        id: "verifyapk",
+        title: "Check it is signed with the right key",
+        body: `<pre><code>"$HOME/AppData/Local/Android/Sdk/build-tools/37.0.0/apksigner.bat" verify --print-certs MPTree-App/android/app/build/outputs/apk/release/app-release.apk</code></pre>
+          <p>The SHA-256 must be <code>d782de08…</code>. A different one means it was signed
+          with the wrong key and cannot update anyone who already installed.</p>`,
+      },
+      {
+        id: "buildaab",
+        title: "Build the Play AAB",
+        body: `<pre><code>cd MPTree-App
+npm run build:play
+npx cap sync android
+cd android
+./gradlew bundleRelease</code></pre>
+          <p>Lands at <code>android/app/build/outputs/bundle/release/app-release.aab</code>.</p>`,
+        warn: {
+          t: "build:play, not build. Nothing enforces this.",
+          p: `The website build makes the app check <code>mp-tree.net/version.json</code> for
+              updates. Play does not allow an app to point users at another download channel,
+              which is the same rule that got the in-app download removed. <code>build:play</code>
+              compiles that check out. Both scripts write to the same <code>dist/</code>, so
+              build the APK first and the AAB second, in that order.`,
+        },
+      },
+      {
+        id: "checkchannel",
+        title: "Confirm the AAB really is the Play build",
+        body: `<pre><code>grep -c "mp-tree.net/version.json" MPTree-App/dist/assets/index-*.js</code></pre>
+          <p>Must print <code>0</code>. A <code>1</code> means you built the website version
+          and it would be rejected, or worse, accepted.</p>`,
+      },
+    ],
+  },
+  {
+    n: 4, title: "Register the signing key", who: "you",
+    lede: "The 30 September job. Two minutes once the APK exists.",
+    items: [
+      { id: "uploadkey", title: "Upload the APK on the Add key screen",
+        body: `<p>Same file you just built. It carries the snippet, which proves the key is
+          yours. Wait for the confirmation mail.</p>` },
+    ],
+  },
+  {
+    n: 5, title: "Publish to the website", who: "together",
+    lede: "This first, so the update path for your existing users is intact before Play sees anyone.",
+    items: [
+      { id: "ghrelease", title: "GitHub release, tagged v0.2.0-beta",
+        body: `<p>I do this with <code>gh</code> once you point me at the APK. It needs two
+          copies of the same file: <code>MPTree.apk</code>, which every Download button on the
+          site resolves to, and <code>MPTree-0.2.0.apk</code> for the versions page. A release
+          missing that exact first name makes every download button 404.</p>
+          <p>Never tick pre-release. <code>/releases/latest</code> skips those and the button
+          would quietly keep serving the old build.</p>` },
+      { id: "pushsite", title: "Push the website files",
+        body: `<p>The two that have been waiting. Cloudflare deploys in about half a minute
+          and I verify it landed.</p>` },
+    ],
+  },
+  {
+    n: 6, title: "Publish to Play", who: "you",
+    lede: "The part you have been waiting for.",
+    items: [
+      { id: "playcountries", title: "Select countries and regions" },
+      { id: "playrelease", title: "Create a production release and upload the AAB",
+        body: `<p>Release notes: the same two lines as the website changelog. Keep them the
+          same so people reading either see the same thing.</p>` },
+      { id: "playreview", title: "Send the release to Google for review",
+        body: `<p>A first production review takes longer than a test review. Days rather than
+          hours is normal.</p>` },
+    ],
+  },
+  {
+    n: 7, title: "One thing to say out loud", who: "together",
+    lede: "This affects the people who already trusted you enough to sideload.",
+    items: [
+      {
+        id: "warnusers",
+        title: "Tell website users they cannot switch to the Play version",
+        body: `<p>I would put a line on the download page and in the 0.2.0 release notes.</p>`,
+        warn: {
+          t: "Your 44 website installs cannot update through Play",
+          p: `Play App Signing re-signs your upload with its own key, and I confirmed those
+              keys differ from yours. Android refuses an update signed by a different key, so
+              anyone who installed from the site has to uninstall first, losing their library
+              unless they export a backup.`,
+          p2: `Which is worth saying before they find out. The app has a backup feature, so
+               the honest instruction is: export a backup, uninstall, install from Play,
+               restore. Or simply keep using the website version, which stays supported.`,
+        },
+      },
+    ],
+  },
+];
+
+const $ = id => document.getElementById(id);
+let ticked = {};
+let db = null;
+
+function render() {
+  const all = STEPS.flatMap(p => p.items);
+  const done = all.filter(i => ticked[i.id]).length;
+
+  $("pfill").style.width = all.length ? (done / all.length) * 100 + "%" : "0%";
+  $("pcount").textContent = done + " of " + all.length;
+
+  $("phases").innerHTML = STEPS.map(phase => `
+    <section class="phase">
+      <div class="phase-head">
+        <span class="phase-n">${phase.n}</span>
+        <h2>${phase.title}</h2>
+        <span class="phase-who ${phase.who === "you" ? "you" : ""}">${
+          phase.who === "you" ? "You" : phase.who === "claude" ? "Claude" : "Together"}</span>
+      </div>
+      <p class="phase-lede">${phase.lede}</p>
+      ${phase.items.map(item => `
+        <div class="step ${ticked[item.id] ? "done" : ""}">
+          <input type="checkbox" class="box" id="cb-${item.id}" ${ticked[item.id] ? "checked" : ""}>
+          <div class="step-body">
+            <b>${item.title}</b>
+            ${item.body ?? ""}
+            ${item.warn ? `<div class="warn">
+              <b>${item.warn.t}</b>
+              <p>${item.warn.p}</p>
+              ${item.warn.p2 ? `<p>${item.warn.p2}</p>` : ""}
+            </div>` : ""}
+          </div>
+        </div>`).join("")}
+    </section>`).join("");
+
+  for (const item of all) {
+    const el = $("cb-" + item.id);
+    el.disabled = !db;
+    el.onchange = () => {
+      ticked[item.id] = el.checked;
+      persist();
+      render();
+    };
+  }
+}
+
+let flash;
+async function persist() {
+  if (!db) return;
+  try {
+    await db.doc("checklist/state").set({ ticked, updatedAt: new Date().toISOString() });
+    const el = $("saved");
+    el.classList.add("show");
+    clearTimeout(flash);
+    flash = setTimeout(() => el.classList.remove("show"), 1400);
+  } catch (err) {
+    console.warn("Could not save", err);
+  }
+}
+
+render();
+
+(async () => {
+  db = (await window.claude?.use?.("db")) ?? null;
+  if (!db) { render(); return; }
+  try {
+    const snap = await db.doc("checklist/state").get();
+    if (snap.exists) ticked = snap.data()?.ticked ?? {};
+  } catch (err) {
+    console.warn("Nothing saved yet", err);
+  }
+  render();
+})();
+</script>
