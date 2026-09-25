@@ -349,9 +349,9 @@ function drawFrame(f) {
     const out = 1 - seg(t, T.end - 0.3, T.end);
     ctx.save();
     ctx.globalAlpha = out;
-    line("No ads.",        W / 2, H * 0.40, { size: 98, weight: 700, track: -2, p: seg(l, 0.10, 0.70) });
-    line("No trackers.",   W / 2, H * 0.52, { size: 98, weight: 700, track: -2, p: seg(l, 0.55, 1.15) });
-    line("2.8 megabytes.", W / 2, H * 0.64, { size: 98, weight: 700, track: -2, p: seg(l, 1.00, 1.60) });
+    line("No ads.",          W / 2, H * 0.40, { size: 98, weight: 700, track: -2, p: seg(l, 0.10, 0.70) });
+    line("No subscription.", W / 2, H * 0.52, { size: 98, weight: 700, track: -2, p: seg(l, 0.55, 1.15) });
+    line("No problem.",      W / 2, H * 0.64, { size: 98, weight: 700, track: -2, p: seg(l, 1.00, 1.60) });
     ctx.restore();
   }
 
