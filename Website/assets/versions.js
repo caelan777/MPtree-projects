@@ -31,6 +31,20 @@ window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
   {
+    version: "0.2.0",
+    date:    "2026-09-25",
+    channel: "play",
+    tag:     "v0.2.0",
+    notes: [
+      "MPTree is on the Google Play Store.",
+      "The app is smoother. Several things were quietly redrawing over and over in the background, from the rows in a playlist to the blurred backdrop behind the player.",
+      "Cover photos you pick are scaled down before they are saved, so the app starts faster, takes up less space, and makes smaller backups.",
+      "Lyrics have their own button in the player. It swaps the record for the words and back, and follows the song you are on.",
+      "The mini player at the bottom now shows that a song is playing, the same way the lists do.",
+      "The heart on a liked song matches the rest of the app, and is the same shape everywhere.",
+    ],
+  },
+  {
     version: "0.1.3",
     date:    "2026-09-05",
     channel: "beta",
