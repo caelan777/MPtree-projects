@@ -38,3 +38,7 @@ Dashboard/*service-account*.json
 
 # The published dashboard, rebuilt by collect.mjs from dashboard.html
 Dashboard/dashboard.build.html
+
+# Raw app captures the store screenshots are built from. Remade by
+# MPTree-App/scripts/screenshot.mjs against the running app.
+Branding/store/raw/
