@@ -1,0 +1,433 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MPTree, the ad</title>
+<!--
+  The ad itself. Every frame is drawn here, in one canvas, by drawFrame(f).
+
+  Nothing animates by itself: there is no CSS animation and no rAF-driven
+  state. A frame is a pure function of its number, so frame 391 looks the
+  same whether it was rendered first or last, and a re-render never comes
+  out subtly different from the one before it.
+
+  Two ways in:
+    ad.build.html          opens in a browser and plays on a loop, for looking
+    ad.build.html#render   sits still and waits for make-ad.mjs to drive it
+
+  make-ad.mjs builds this file from ad.html by filling in the three holes
+  below with the real mark and the real screenshots. Do not edit the built
+  copy; edit this one and render again.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  body { display: grid; place-items: center; }
+  canvas { max-width: 100vw; max-height: 100vh; display: block; }
+</style>
+<canvas id="stage"></canvas>
+<script>
+/* ── Filled in by make-ad.mjs ─────────────────────────────────────────── */
+const MARK_PATH = "__MARK__";
+const SHOTS     = __SHOTS__;
+const CONFIG    = __CONFIG__;
+
+const W = CONFIG.width, H = CONFIG.height, FPS = CONFIG.fps;
+const DURATION = CONFIG.duration;
+const TOTAL = Math.round(DURATION * FPS);
+
+const cv = document.getElementById("stage");
+cv.width = W; cv.height = H;
+const ctx = cv.getContext("2d", { alpha: false });
+
+const FONT = '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
+
+/* ── Small maths ──────────────────────────────────────────────────────── */
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+/** Progress across [a, b] in seconds, flat 0 before and flat 1 after. */
+const seg = (t, a, b) => clamp01((t - a) / (b - a));
+const outCubic  = p => 1 - Math.pow(1 - p, 3);
+const outQuint  = p => 1 - Math.pow(1 - p, 5);
+const inOutCube = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const mix = (a, b, p) => a + (b - a) * p;
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+/* ── Type ─────────────────────────────────────────────────────────────────
+   Lines do not fade in, they wipe in from the left behind a moving edge and
+   rise the last few pixels into place. A fade says "a computer put this
+   here"; a wipe is how a title is cut by hand, and it holds the eye for the
+   half second the line needs to be read. ─────────────────────────────── */
+function line(str, x, y, o = {}) {
+  const size   = o.size   || 64;
+  const weight = o.weight || 600;
+  const colour = o.colour || "#ffffff";
+  const p      = o.p === undefined ? 1 : clamp01(o.p);
+  if (p <= 0) return 0;
+
+  ctx.save();
+  ctx.font = weight + " " + size + "px " + FONT;
+  ctx.letterSpacing = (o.track || 0) + "px";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  const w = ctx.measureText(str).width;
+  const e = outQuint(p);
+
+  ctx.beginPath();
+  ctx.rect(x - w / 2 - 8, y - size * 1.15, w * e + 16, size * 1.7);
+  ctx.clip();
+  // The edge does the work. What it has passed is already at full strength,
+  // because a letter sitting at five per cent looks like dirt on the lens,
+  // not like a word arriving. Multiplied, so a caller's fade still counts.
+  ctx.globalAlpha *= Math.min(1, p * 9);
+  ctx.fillStyle = colour;
+  ctx.fillText(str, x, y + (1 - e) * size * 0.16);
+  ctx.restore();
+  return w;
+}
+
+/** A stack of lines sharing one entrance, each a beat behind the last. */
+function lines(list, x, top, o = {}) {
+  const size = o.size || 64;
+  const lead = o.lead || size * 1.22;
+  list.forEach((str, i) => {
+    const p = o.p === undefined ? 1 : clamp01((o.p - i * (o.stagger || 0.16)) / (1 - (list.length - 1) * (o.stagger || 0.16)));
+    line(str, x, top + i * lead, Object.assign({}, o, { p }));
+  });
+}
+
+/* ── The record ───────────────────────────────────────────────────────────
+   Drawn rather than photographed so it can turn. It is the same shape the
+   website spins in its hero, and it is the only picture in the film that is
+   not a screenshot. 33 1/3 rpm, because that is what the thing it is
+   imitating does. ───────────────────────────────────────────────────── */
+const RPM = 33 + 1 / 3;
+const mark = new Path2D(MARK_PATH);
+
+function record(cx, cy, r, angle, o = {}) {
+  const grooves = o.grooves === undefined ? 1 : clamp01(o.grooves);
+  const alpha   = o.alpha === undefined ? 1 : clamp01(o.alpha);
+  const labelP  = o.label === undefined ? 1 : clamp01(o.label);
+  if (alpha <= 0 || r <= 0) return;
+
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+
+  // The disc. Near black, so it reads as an object against the ground
+  // rather than a hole cut in it.
+  const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.05, cx, cy, r);
+  g.addColorStop(0,    "#1c1c1c");
+  g.addColorStop(0.55, "#101010");
+  g.addColorStop(1,    "#060606");
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = g; ctx.fill();
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.20)";
+  ctx.stroke();
+
+  // Grooves, laid down from the label outwards as the disc forms.
+  const N = 44;
+  const shown = Math.round(N * grooves);
+  for (let i = 0; i < shown; i++) {
+    const rr = mix(r * 0.375, r * 0.965, i / (N - 1));
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+    ctx.lineWidth = i % 7 === 0 ? 1.6 : 1;
+    ctx.strokeStyle = i % 7 === 0 ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.045)";
+    ctx.stroke();
+  }
+
+  // Two lobes of light sweeping the surface. Concentric circles cannot show
+  // rotation on their own, and without this the disc looks frozen.
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.97, 0, Math.PI * 2); ctx.clip();
+  ctx.translate(cx, cy); ctx.rotate(angle * 0.55);
+  const sheen = ctx.createLinearGradient(-r, -r, r, r);
+  sheen.addColorStop(0,    "rgba(255,255,255,0)");
+  sheen.addColorStop(0.30, "rgba(255,255,255,0.075)");
+  sheen.addColorStop(0.44, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.62, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.76, "rgba(255,255,255,0.055)");
+  sheen.addColorStop(1,    "rgba(255,255,255,0)");
+  ctx.fillStyle = sheen;
+  ctx.fillRect(-r, -r, r * 2, r * 2);
+  ctx.restore();
+
+  // The label, and the mark turning with it.
+  if (labelP > 0) {
+    const lr = r * 0.355 * outCubic(labelP);
+    ctx.save();
+    ctx.globalAlpha *= Math.min(1, labelP * 2);
+    ctx.beginPath(); ctx.arc(cx, cy, lr, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff"; ctx.fill();
+
+    const s = lr * 1.18;
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.scale(s / 1000, s / 1000);
+    ctx.translate(-500, -500);
+    ctx.fillStyle = "#000000";
+    ctx.fill(mark, "evenodd");
+    ctx.restore();
+
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.038, 0, Math.PI * 2);
+    ctx.fillStyle = "#000000"; ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ── The phone ────────────────────────────────────────────────────────────
+   The screens inside it are real captures of the running app, so a frame of
+   this film cannot claim an interface the app does not have. ─────────── */
+const imgs = {};
+for (const [name, uri] of Object.entries(SHOTS)) {
+  const im = new Image(); im.src = uri; imgs[name] = im;
+}
+
+function phone(x, top, w, draw) {
+  const pad = w * 0.021;
+  const r   = w * 0.092;
+  const h   = H - top + 120;
+  ctx.save();
+
+  const body = ctx.createLinearGradient(x - w / 2, top, x + w / 2, top + w * 2.2);
+  body.addColorStop(0,    "#4a4a55");
+  body.addColorStop(0.22, "#191920");
+  body.addColorStop(0.65, "#0a0a0d");
+  body.addColorStop(1,    "#33333c");
+  roundRect(x - w / 2, top, w, h, r);
+  ctx.fillStyle = body; ctx.fill();
+
+  // A dark phone on a dark ground is a dark nothing. The rim is what says
+  // "this is a device", and without it the screenshot floats.
+  const rim = ctx.createLinearGradient(x - w / 2, top, x + w / 2, top + h * 0.6);
+  rim.addColorStop(0,    "rgba(255,255,255,0.58)");
+  rim.addColorStop(0.35, "rgba(255,255,255,0.20)");
+  rim.addColorStop(1,    "rgba(255,255,255,0.08)");
+  ctx.lineWidth = 2.5; ctx.strokeStyle = rim; ctx.stroke();
+
+  roundRect(x - w / 2 + pad, top + pad, w - pad * 2, h - pad * 2, r - pad);
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = "#000"; ctx.fillRect(x - w / 2, top, w, h);
+  draw(x - w / 2 + pad, top + pad, w - pad * 2);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/**
+ * One screenshot filling the screen's width, pushed in very slightly over the
+ * length of a beat.
+ *
+ * It creeps rather than scrolls on purpose. Sliding the picture up would cut
+ * the app's header off, and the header does not scroll in the real app, so the
+ * shot would be showing an interface MPTree does not have.
+ */
+function screen(name, sx, sy, sw, zoom) {
+  const im = imgs[name];
+  if (!im || !im.complete || !im.naturalWidth) return;
+  const w = sw * zoom;
+  const h = w * im.naturalHeight / im.naturalWidth;
+  ctx.drawImage(im, sx - (w - sw) / 2, sy, w, h);
+}
+
+/* ── The film ─────────────────────────────────────────────────────────── */
+const T = {
+  open:  0,      // the record forms and the promise is made
+  proof: 5.2,    // three screens of the real thing
+  facts: 13.4,   // what it does not do
+  end:   16.1,
+};
+const BEAT_LEN = 2.733;
+const BEATS = [
+  { at: 5.2,   shot: "songs",     head: ["No account.", "No subscription."] },
+  { at: 7.933, shot: "player",    head: ["A player worth", "opening."] },
+  { at: 10.667, shot: "playlists", head: ["Playlists that", "fill themselves."] },
+];
+
+function drawFrame(f) {
+  const t = f / FPS;
+
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, W, H);
+
+  const spin = Math.max(0, t - 0.55) * (RPM / 60) * Math.PI * 2;
+
+  /* ── Open ──────────────────────────────────────────────────────────── */
+  if (t < T.proof) {
+    // Three rings out of nothing, before there is anything to see. The
+    // record arrives on the third.
+    for (let i = 0; i < 3; i++) {
+      const p = seg(t, 0.12 + i * 0.16, 1.15 + i * 0.16);
+      if (p > 0 && p < 1) {
+        ctx.beginPath();
+        ctx.arc(W / 2, H * 0.5, outQuint(p) * W * 0.62, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(255,255,255," + (0.5 * (1 - p)).toFixed(3) + ")";
+        ctx.stroke();
+      }
+    }
+
+    // It forms in the middle, then makes room for the words.
+    const rise = inOutCube(seg(t, 2.45, 3.35));
+    const cy   = mix(H * 0.5,  H * 0.315, rise);
+    const r    = mix(W * 0.335, W * 0.205, rise);
+
+    record(W / 2, cy, r * mix(0.9, 1, outCubic(seg(t, 0.5, 1.4))), spin, {
+      alpha:   seg(t, 0.45, 1.0),
+      grooves: seg(t, 0.75, 1.9),
+      label:   seg(t, 1.25, 2.1),
+    });
+
+    const out = 1 - seg(t, 4.85, 5.15);
+    ctx.save();
+    ctx.globalAlpha = out;
+    lines(["Your music."], W / 2, H * 0.60, { size: 104, weight: 700, track: -2, p: seg(t, 2.95, 3.75) });
+    lines(["Already on your phone."], W / 2, H * 0.685, { size: 52, weight: 400, colour: "#8e8e8e", p: seg(t, 3.65, 4.4) });
+    ctx.restore();
+  }
+
+  /* ── Proof ─────────────────────────────────────────────────────────────
+     One phone for all three beats. It arrives once and stays put; the screen
+     inside it changes under a wipe. Cutting the whole phone away and back
+     three times would be restless, and would read as a slideshow. ─────── */
+  else if (t < T.facts) {
+    const top   = H * 0.225;
+    const width = W * 0.705;
+    const entry = outQuint(seg(t, T.proof, T.proof + 0.62));
+
+    let idx = 0;
+    for (let i = 0; i < BEATS.length; i++) if (t >= BEATS[i].at) idx = i;
+    const beat = BEATS[idx];
+    const prev = BEATS[idx - 1];
+    const wipe = idx > 0 ? seg(t, beat.at, beat.at + 0.55) : 1;
+    const held = t - beat.at;
+
+    ctx.save();
+    ctx.globalAlpha = entry;
+    ctx.translate(0, (1 - entry) * 190);
+
+    phone(W / 2, top, width, (sx, sy, sw) => {
+      const zoomOf = b => 1 + 0.035 * inOutCube(clamp01((t - b.at) / BEAT_LEN));
+      if (prev && wipe < 1) screen(prev.shot, sx, sy, sw, zoomOf(prev));
+      const cut = (H - sy + 140) * inOutCube(wipe);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(sx, sy, sw, cut); ctx.clip();
+      screen(beat.shot, sx, sy, sw, zoomOf(beat));
+      ctx.restore();
+      // The edge of the cut, lit for the half second it is travelling.
+      if (wipe > 0 && wipe < 1) {
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.fillRect(sx, sy + cut - 6, sw, 6);
+      }
+    });
+
+    ctx.restore();
+
+    const fade = 1 - seg(t, T.facts - 0.3, T.facts);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    lines(beat.head, W / 2, H * 0.112, {
+      size: 66, weight: 600, lead: 82,
+      p: idx === 0 ? seg(t, T.proof + 0.35, T.proof + 1.15) : clamp01(held / 0.8),
+      stagger: 0.2,
+    });
+    ctx.restore();
+  }
+
+  /* ── Facts ────────────────────────────────────────────────────────────
+     Back to nothing. Three lines, each landing on its own beat. The size is
+     what the competition cannot answer. ──────────────────────────────── */
+  else if (t < T.end) {
+    const l = t - T.facts;
+    const out = 1 - seg(t, T.end - 0.3, T.end);
+    ctx.save();
+    ctx.globalAlpha = out;
+    line("No ads.",        W / 2, H * 0.40, { size: 98, weight: 700, track: -2, p: seg(l, 0.10, 0.70) });
+    line("No trackers.",   W / 2, H * 0.52, { size: 98, weight: 700, track: -2, p: seg(l, 0.55, 1.15) });
+    line("2.8 megabytes.", W / 2, H * 0.64, { size: 98, weight: 700, track: -2, p: seg(l, 1.00, 1.60) });
+    ctx.restore();
+  }
+
+  /* ── End ──────────────────────────────────────────────────────────────
+     It holds on the last frame rather than fading out, so the card can be
+     frozen for as long as a post needs it. ───────────────────────────── */
+  else {
+    const l = t - T.end;
+    const p = outQuint(seg(l, 0, 0.55));
+    // Coming to rest with the mark upright. The record has been turning for
+    // the whole film, and a logo frozen at whatever angle the last frame
+    // happened to catch is not a logo, it is a mistake.
+    const settle = (1 - outCubic(seg(l, 0, 1.9))) * 2.4;
+    record(W / 2, H * 0.355, W * 0.20 * mix(0.84, 1, p), settle, { alpha: p });
+    line("MPTree", W / 2, H * 0.60, { size: 108, weight: 700, track: -3, p: seg(l, 0.45, 1.15) });
+    line("An offline music player.", W / 2, H * 0.665, { size: 46, weight: 400, colour: "#8e8e8e", p: seg(l, 0.85, 1.55) });
+    line("Google Play  ·  mp-tree.net", W / 2, H * 0.775, { size: 40, weight: 500, colour: "#6a6a6a", track: 1, p: seg(l, 1.3, 2.0) });
+  }
+}
+
+/* ── Rendering ────────────────────────────────────────────────────────────
+   The recorder takes exactly the frames it is handed: the stream is created
+   at 0 fps and each frame is pushed by hand. What it cannot take from us is
+   its own clock, so the pushes are paced against the wall to keep the file's
+   timing honest, and the pacing corrects itself rather than drifting. ── */
+const ready = Promise.all(
+  Object.values(imgs).map(im => im.decode().catch(() => {}))
+).then(() => document.fonts ? document.fonts.ready : null);
+
+window.adReady   = () => ready.then(() => true);
+window.adTotal   = () => TOTAL;
+window.adFrame   = i => { drawFrame(i); return cv.toDataURL("image/png"); };
+
+window.adRecord = async function (mime, bitrate) {
+  await ready;
+  const stream = cv.captureStream(0);
+  const track  = stream.getVideoTracks()[0];
+  const rec    = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
+  const chunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise(r => { rec.onstop = r; });
+
+  drawFrame(0);
+  rec.start();
+  const t0 = performance.now();
+  for (let f = 0; f < TOTAL; f++) {
+    drawFrame(f);
+    track.requestFrame();
+    const wait = t0 + (f + 1) * (1000 / FPS) - performance.now();
+    if (wait > 1) await new Promise(r => setTimeout(r, wait));
+  }
+  // The last frame needs a moment on screen or the encoder gives it no length.
+  await new Promise(r => setTimeout(r, 260));
+  rec.stop();
+  await stopped;
+
+  const blob = new Blob(chunks, { type: mime });
+  const buf  = new Uint8Array(await blob.arrayBuffer());
+  let s = "";
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  window.__out = btoa(s);
+  return window.__out.length;
+};
+window.adSlice = (from, len) => window.__out.substr(from, len);
+
+/* ── Preview ──────────────────────────────────────────────────────────────
+   Opened by hand rather than by the renderer, it just plays, on a loop. */
+if (location.hash !== "#render") {
+  ready.then(() => {
+    const t0 = performance.now();
+    (function loop(now) {
+      drawFrame(Math.floor(((now - t0) / 1000 % (DURATION + 1.2)) * FPS) % TOTAL);
+      requestAnimationFrame(loop);
+    })(t0);
+  });
+} else {
+  ready.then(() => drawFrame(0));
+}
+</script>

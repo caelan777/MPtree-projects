@@ -42,3 +42,13 @@ Dashboard/dashboard.build.html
 # Raw app captures the store screenshots are built from. Remade by
 # MPTree-App/scripts/screenshot.mjs against the running app.
 Branding/store/raw/
+
+# ── The ad ────────────────────────────────────────────────────────────────
+# Source is ad.html and make-ad.mjs. Everything below is rendered from them
+# by one command, and the videos are megabytes each, so the repository keeps
+# the recipe rather than the dish.
+Branding/ad/ad.build.html
+Branding/ad/*.mp4
+Branding/ad/*.webm
+Branding/ad/frames/
+Branding/ad/stills/
