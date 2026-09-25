@@ -37,6 +37,23 @@ const cv = document.getElementById("stage");
 cv.width = W; cv.height = H;
 const ctx = cv.getContext("2d", { alpha: false });
 
+// The screenshots are 1080 wide and land about 730 wide. At the default
+// filtering that two-thirds reduction eats the app's smaller type and leaves
+// it crawling. This costs milliseconds a frame and is the single biggest
+// difference in how sharp the phone looks.
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = "high";
+
+/**
+ * Vertical placement, as a fraction of the part of the frame that is actually
+ * free. On TikTok the bottom fifth is under the caption, the username and the
+ * buttons, so a version for it hands over that band and composes into what is
+ * left. Everywhere else the stage is the whole frame.
+ */
+const SAFE_T = CONFIG.safeTop || 0;
+const SAFE_B = CONFIG.safeBottom || 0;
+const Y = f => (SAFE_T + f * (1 - SAFE_T - SAFE_B)) * H;
+
 const FONT = '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
 
 /* ── Small maths ──────────────────────────────────────────────────────── */
@@ -246,7 +263,10 @@ const T = {
 };
 const BEAT_LEN = 2.733;
 const BEATS = [
-  { at: 5.2,   shot: "songs",     head: ["No account.", "No subscription."] },
+  // This beat used to read "No account. No subscription." The end card says
+  // no subscription now, so the library screen describes the library instead
+  // of saying the same thing ten seconds early.
+  { at: 5.2,   shot: "songs",     head: ["It finds your music.", "You just press play."] },
   { at: 7.933, shot: "player",    head: ["A player worth", "opening."] },
   { at: 10.667, shot: "playlists", head: ["Playlists that", "fill themselves."] },
 ];
@@ -267,7 +287,7 @@ function drawFrame(f) {
       const p = seg(t, 0.12 + i * 0.16, 1.15 + i * 0.16);
       if (p > 0 && p < 1) {
         ctx.beginPath();
-        ctx.arc(W / 2, H * 0.5, outQuint(p) * W * 0.62, 0, Math.PI * 2);
+        ctx.arc(W / 2, Y(0.5), outQuint(p) * W * 0.62, 0, Math.PI * 2);
         ctx.lineWidth = 2;
         ctx.strokeStyle = "rgba(255,255,255," + (0.5 * (1 - p)).toFixed(3) + ")";
         ctx.stroke();
@@ -276,7 +296,7 @@ function drawFrame(f) {
 
     // It forms in the middle, then makes room for the words.
     const rise = inOutCube(seg(t, 2.45, 3.35));
-    const cy   = mix(H * 0.5,  H * 0.315, rise);
+    const cy   = mix(Y(0.5),   Y(0.315),  rise);
     const r    = mix(W * 0.335, W * 0.205, rise);
 
     record(W / 2, cy, r * mix(0.9, 1, outCubic(seg(t, 0.5, 1.4))), spin, {
@@ -288,8 +308,8 @@ function drawFrame(f) {
     const out = 1 - seg(t, 4.85, 5.15);
     ctx.save();
     ctx.globalAlpha = out;
-    lines(["Your music."], W / 2, H * 0.60, { size: 104, weight: 700, track: -2, p: seg(t, 2.95, 3.75) });
-    lines(["Already on your phone."], W / 2, H * 0.685, { size: 52, weight: 400, colour: "#8e8e8e", p: seg(t, 3.65, 4.4) });
+    lines(["Your music."], W / 2, Y(0.60), { size: 104, weight: 700, track: -2, p: seg(t, 2.95, 3.75) });
+    lines(["Already on your phone."], W / 2, Y(0.685), { size: 52, weight: 400, colour: "#8e8e8e", p: seg(t, 3.65, 4.4) });
     ctx.restore();
   }
 
@@ -298,9 +318,13 @@ function drawFrame(f) {
      inside it changes under a wipe. Cutting the whole phone away and back
      three times would be restless, and would read as a slideshow. ─────── */
   else if (t < T.facts) {
-    const top   = H * 0.225;
+    const top   = Y(0.225);
     const width = W * 0.705;
     const entry = outQuint(seg(t, T.proof, T.proof + 0.62));
+    // The whole beat leaves together. Fading the words while the phone cut
+    // away underneath them was the one edit in here that looked like an
+    // accident.
+    const fade  = 1 - seg(t, T.facts - 0.3, T.facts);
 
     let idx = 0;
     for (let i = 0; i < BEATS.length; i++) if (t >= BEATS[i].at) idx = i;
@@ -310,7 +334,7 @@ function drawFrame(f) {
     const held = t - beat.at;
 
     ctx.save();
-    ctx.globalAlpha = entry;
+    ctx.globalAlpha = entry * fade;
     ctx.translate(0, (1 - entry) * 190);
 
     phone(W / 2, top, width, (sx, sy, sw) => {
@@ -330,10 +354,9 @@ function drawFrame(f) {
 
     ctx.restore();
 
-    const fade = 1 - seg(t, T.facts - 0.3, T.facts);
     ctx.save();
     ctx.globalAlpha = fade;
-    lines(beat.head, W / 2, H * 0.112, {
+    lines(beat.head, W / 2, Y(0.112), {
       size: 66, weight: 600, lead: 82,
       p: idx === 0 ? seg(t, T.proof + 0.35, T.proof + 1.15) : clamp01(held / 0.8),
       stagger: 0.2,
@@ -349,9 +372,9 @@ function drawFrame(f) {
     const out = 1 - seg(t, T.end - 0.3, T.end);
     ctx.save();
     ctx.globalAlpha = out;
-    line("No ads.",          W / 2, H * 0.40, { size: 98, weight: 700, track: -2, p: seg(l, 0.10, 0.70) });
-    line("No subscription.", W / 2, H * 0.52, { size: 98, weight: 700, track: -2, p: seg(l, 0.55, 1.15) });
-    line("No problem.",      W / 2, H * 0.64, { size: 98, weight: 700, track: -2, p: seg(l, 1.00, 1.60) });
+    line("No ads.",          W / 2, Y(0.40), { size: 98, weight: 700, track: -2, p: seg(l, 0.10, 0.70) });
+    line("No subscription.", W / 2, Y(0.52), { size: 98, weight: 700, track: -2, p: seg(l, 0.55, 1.15) });
+    line("No problem.",      W / 2, Y(0.64), { size: 98, weight: 700, track: -2, p: seg(l, 1.00, 1.60) });
     ctx.restore();
   }
 
@@ -365,10 +388,10 @@ function drawFrame(f) {
     // the whole film, and a logo frozen at whatever angle the last frame
     // happened to catch is not a logo, it is a mistake.
     const settle = (1 - outCubic(seg(l, 0, 1.9))) * 2.4;
-    record(W / 2, H * 0.355, W * 0.20 * mix(0.84, 1, p), settle, { alpha: p });
-    line("MPTree", W / 2, H * 0.60, { size: 108, weight: 700, track: -3, p: seg(l, 0.45, 1.15) });
-    line("An offline music player.", W / 2, H * 0.665, { size: 46, weight: 400, colour: "#8e8e8e", p: seg(l, 0.85, 1.55) });
-    line("Google Play  ·  mp-tree.net", W / 2, H * 0.775, { size: 40, weight: 500, colour: "#6a6a6a", track: 1, p: seg(l, 1.3, 2.0) });
+    record(W / 2, Y(0.355), W * 0.20 * mix(0.84, 1, p), settle, { alpha: p });
+    line("MPTree", W / 2, Y(0.60), { size: 108, weight: 700, track: -3, p: seg(l, 0.45, 1.15) });
+    line("An offline music player.", W / 2, Y(0.665), { size: 46, weight: 400, colour: "#8e8e8e", p: seg(l, 0.85, 1.55) });
+    line("Google Play  ·  mp-tree.net", W / 2, Y(0.775), { size: 40, weight: 500, colour: "#6a6a6a", track: 1, p: seg(l, 1.3, 2.0) });
   }
 }
 
@@ -397,12 +420,23 @@ window.adRecord = async function (mime, bitrate) {
   drawFrame(0);
   rec.start();
   const t0 = performance.now();
+  let late = 0;
   for (let f = 0; f < TOTAL; f++) {
     drawFrame(f);
     track.requestFrame();
-    const wait = t0 + (f + 1) * (1000 / FPS) - performance.now();
+    const due = t0 + (f + 1) * (1000 / FPS);
+    const wait = due - performance.now();
     if (wait > 1) await new Promise(r => setTimeout(r, wait));
+    else if (wait < 0) late++;
   }
+  // The recorder stamps frames by the wall clock, so a machine that cannot
+  // draw one in time does not drop it, it stretches the film. Worth knowing
+  // rather than shipping something quietly running slow.
+  window.__drift = {
+    late,
+    wall:     (performance.now() - t0) / 1000,
+    intended: TOTAL / FPS,
+  };
   // The last frame needs a moment on screen or the encoder gives it no length.
   await new Promise(r => setTimeout(r, 260));
   rec.stop();
@@ -416,6 +450,23 @@ window.adRecord = async function (mime, bitrate) {
   return window.__out.length;
 };
 window.adSlice = (from, len) => window.__out.substr(from, len);
+window.adDrift = () => window.__drift || null;
+
+/** Milliseconds a frame, measured over the stretch that costs the most: a
+ *  wipe, where two full screenshots are resampled into the same frame. */
+window.adBench = function (n) {
+  const from = Math.round(BEATS[1].at * FPS);
+  drawFrame(from);
+  ctx.getImageData(0, 0, 1, 1);
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) {
+    drawFrame(from + i);
+    // Canvas calls only queue work. Reading a pixel back forces the frame to
+    // be rasterised, which is the cost the recorder actually pays.
+    ctx.getImageData(0, 0, 1, 1);
+  }
+  return (performance.now() - t0) / n;
+};
 
 /* ── Preview ──────────────────────────────────────────────────────────────
    Opened by hand rather than by the renderer, it just plays, on a loop. */

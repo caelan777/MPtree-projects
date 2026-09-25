@@ -1,15 +1,26 @@
 # The ad
 
-A nineteen second film for TikTok, Reels and Shorts. Black and white, no voice,
-no music. Music and captions are added afterwards in an editor.
+A nineteen second film for the Google Play launch. Black and white, 60 fps, no
+voice and no music: both are added afterwards in an editor.
+
+**[script.md](script.md) is the companion**, with every cut timed to the frame,
+the moments to hit with music, an optional voiceover and the copy to post under
+it.
 
 ```bash
-node Branding/ad/make-ad.mjs            # mptree-ad.mp4, 1080x1920
-node Branding/ad/make-ad.mjs --square   # mptree-ad-square.mp4, 1080x1080
+node Branding/ad/make-ad.mjs            # mptree-ad.mp4          1080x1920
+node Branding/ad/make-ad.mjs --tiktok   # mptree-ad-tiktok.mp4   1080x1920
+node Branding/ad/make-ad.mjs --square   # mptree-ad-square.mp4   1080x1080
 ```
 
-Both land next to this file. Neither is committed: they are eight and seven
-megabytes, and one command makes them again.
+All three land next to this file. None are committed: they are ten to seventeen
+megabytes each, and one command makes them again.
+
+**The TikTok cut is the same edit at the same length.** What differs is where
+it sits: TikTok lays its caption, its username and its buttons over the bottom
+fifth of the frame, so that version hands the band back and composes above it.
+Without it the end card's "Google Play · mp-tree.net" sits under the caption.
+Same length means one piece of music fits every cut.
 
 ## What is in it
 
@@ -46,10 +57,19 @@ have.
 ```bash
 node Branding/ad/make-ad.mjs --at 3.9,8.2,16.4   # those seconds as PNGs
 node Branding/ad/make-ad.mjs --frames            # every frame as a PNG
+node Branding/ad/make-ad.mjs --bench             # cost of the heaviest frame
 ```
 
 Open `ad.build.html` in a browser and it plays on a loop, which is the fastest
 way to judge a timing change. Edit `ad.html`, never the built copy.
+
+**On the frame rate.** The recorder stamps frames by the wall clock, so a
+machine that cannot draw one inside its budget does not drop it, it stretches
+the film. Every render reports how many frames ran over and how far the result
+landed from its intended length, and tells you to drop to `--fps 30` if it
+matters. On the machine this was built on the heaviest frame costs 8 ms against
+a 17 ms budget, so 60 fps has room. `--bench` asks that question without
+rendering anything.
 
 ## Two things to know
 

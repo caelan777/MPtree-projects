@@ -45,11 +45,19 @@ const SIZE = flag("square") ? [1080, 1080] : [1080, 1920];
 const CONFIG = {
   width:    Number(arg("width",  SIZE[0])),
   height:   Number(arg("height", SIZE[1])),
-  fps:      Number(arg("fps", 30)),
+  fps:      Number(arg("fps", 60)),
   duration: Number(arg("duration", 19)),
+  // TikTok lays its caption, its username and its buttons over the bottom of
+  // the frame. Handing that band back and composing above it is the whole
+  // difference between the two vertical cuts: same edit, same length, so one
+  // piece of music fits both.
+  safeTop:    flag("tiktok") ? 0.06 : 0,
+  safeBottom: flag("tiktok") ? 0.20 : 0,
 };
-const BITRATE = Number(arg("bitrate", 14_000_000));
-const OUT = resolve(HERE, arg("out", flag("square") ? "mptree-ad-square.mp4" : "mptree-ad.mp4"));
+const BITRATE = Number(arg("bitrate", 26_000_000));
+const OUT = resolve(HERE, arg("out",
+  flag("square") ? "mptree-ad-square.mp4" :
+  flag("tiktok") ? "mptree-ad-tiktok.mp4" : "mptree-ad.mp4"));
 
 /* ── Assemble the page ──────────────────────────────────────────────────
    The screenshots go in as data URIs rather than as file:// references. A
@@ -176,6 +184,11 @@ try {
   const total = await evaluate(cdp, "window.adTotal()");
   console.log(`${CONFIG.width}x${CONFIG.height}  ${CONFIG.fps} fps  ${CONFIG.duration}s  ${total} frames`);
 
+  if (flag("bench")) {
+    const ms = await evaluate(cdp, "window.adBench(60)");
+    console.log(`  heaviest frame costs ${ms.toFixed(1)} ms  (budget at ${CONFIG.fps} fps is ${(1000 / CONFIG.fps).toFixed(1)} ms)`);
+  }
+
   // A handful of moments as stills, for checking a render without sitting
   // through it: --at 0.8,3.4,6.2 (seconds).
   const at = arg("at", "");
@@ -225,6 +238,19 @@ try {
     const buf = Buffer.from(b64, "base64");
     writeFileSync(out, buf);
     console.log(`\n${out}\n  ${(buf.length / 1048576).toFixed(1)} MB, rendered in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+
+    // A frame the machine could not draw in time is not dropped, it is held,
+    // and the film comes out longer and slower than it was written. Say so.
+    const drift = await evaluate(cdp, "window.adDrift()");
+    if (drift) {
+      const off = drift.wall - drift.intended;
+      const line = `  ${drift.late} of ${total} frames ran over, film is ${off >= 0 ? "+" : ""}${off.toFixed(2)}s off ${drift.intended.toFixed(2)}s`;
+      if (Math.abs(off) > 0.25) {
+        console.log(line + "\n  This one is running slow. Render it at --fps 30.");
+      } else {
+        console.log(line);
+      }
+    }
   }
 
   cdp.close();
