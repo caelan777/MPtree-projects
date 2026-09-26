@@ -52,3 +52,8 @@ Branding/ad/*.mp4
 Branding/ad/*.webm
 Branding/ad/frames/
 Branding/ad/stills/
+# Voice clips are recordings, not source. lines.json and
+# make-guide.mjs are what the repository keeps.
+Branding/ad/voice/*.wav
+Branding/ad/voice/*.mp3
+Branding/ad/voice/*.m4a

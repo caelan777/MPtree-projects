@@ -40,46 +40,54 @@ The three screens are real captures of the running app, not mockups.
 
 ## 2. Music
 
-It is built to run silent under a track. Nothing in it needs sound to make
-sense, and there is no sound effect the music has to leave room for.
+**The film comes with its own score.** It is not a track laid over the top, it
+is written into the render: a sub, a kick, hats, bells and a pad, in A minor at
+87.8 BPM, through a hall. Original, so using it anywhere needs clearing with
+nobody.
 
-**The cuts to hit.** These are the five moments the film changes gear:
+87.8 BPM is the film's own tempo. One phone beat is one bar, so every gear
+change lands on a bar line:
 
 ```
+0:02.5   the record rises, the first words
 0:05.2   cut to the phone
 0:07.9   wipe to the player
 0:10.7   wipe to the playlists
-0:13.4   cut to black          ← the big one, put the drop here
-0:16.1   cut to the end card
+0:13.4   cut to black, and three hits under the three lines
+0:16.1   cut to the end card, and it resolves
 ```
 
-**Around 88 BPM and the wipes land on the bar.** The three phone beats are
-2.73 seconds apart, which is one bar at 87.8 BPM, so from 0:05.2 to 0:13.4 is
-three straight bars. 176 BPM works the same way with two bars each. Anything
-near that and the edit will feel scored rather than laid over.
+The statement card is the one to notice. The bar empties out and each of the
+three lines lands on its own beat with a hit, then the fourth beat is a rest,
+which is the silence before the end card.
 
-Start the track at 0:00 and let it breathe for five seconds; the opening is
-deliberately slow so that the first cut has somewhere to arrive from.
+**To use a different track instead**, render with `--silent` and lay your own
+over it in an editor. The cut points above still apply; put the drop on 0:13.4.
 
 ---
 
-## 3. If you want a voice on it
+## 3. The voiceover
 
-Optional. The film reads without one, and most of what works on TikTok runs on
-music alone. If you do record it, keep it flat and unhurried, and do not read
-the words that are already on screen.
+Six lines. They are written to sit beside the picture rather than read it out,
+so none of them says what is already on screen.
 
-| Cue | Line |
-|---|---|
-| 0:03.0 | Your phone is already full of music you own. |
-| 0:05.6 | MPTree finds it, and plays it. That is the whole idea. |
-| 0:08.0 | Your own artwork, on a record that turns while it plays. |
-| 0:10.8 | Playlists that build themselves while you listen. |
-| 0:13.5 | No ads. No subscription. No account to make. |
-| 0:16.6 | MPTree. Out now on Google Play. |
+| Cue | Line | Room |
+|---|---|---|
+| 0:03.00 | Everything you own, in one place. | 2.6s |
+| 0:05.60 | No setup. It is just there. | 2.35s |
+| 0:07.95 | Your own artwork, turning as it plays. | 2.75s |
+| 0:10.70 | Favourites, most played, last added. | 2.7s |
+| 0:13.40 | It costs nothing, and wants nothing from you. | 3.15s |
+| 0:16.55 | MPTree. On Google Play. | 2.45s |
 
-About fifty words, which is comfortable in nineteen seconds with gaps left in.
-Trim the 0:08.0 line first if it feels crowded.
+"Room" is how long the line has before the next one starts. Keep it flat and
+unhurried; the film is doing the work.
+
+**Recording your own is the best version of this.** A phone in a quiet room
+beats any synthetic voice, and it will not read as machine-made. Record the six
+lines as separate files, drop them in `voice/`, point `voice/lines.json` at
+them, and render with `--vo`. The score steps back under the voice by itself.
+`node Branding/ad/voice/make-guide.mjs` will tell you if a line runs long.
 
 ---
 

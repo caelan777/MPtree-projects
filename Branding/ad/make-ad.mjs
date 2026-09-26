@@ -55,9 +55,15 @@ const CONFIG = {
   safeBottom: flag("tiktok") ? 0.20 : 0,
 };
 const BITRATE = Number(arg("bitrate", 26_000_000));
+
+// The score is on by default now. --silent gets the film back without it, for
+// anyone who would rather lay their own track over the top in an editor.
+const SOUND = flag("silent") ? false : flag("vo-only") ? "voice-only" : true;
+
+const suffix = (flag("silent") ? "-silent" : "") + (flag("vo") ? "-vo" : "");
 const OUT = resolve(HERE, arg("out",
-  flag("square") ? "mptree-ad-square.mp4" :
-  flag("tiktok") ? "mptree-ad-tiktok.mp4" : "mptree-ad.mp4"));
+  (flag("square") ? "mptree-ad-square" :
+   flag("tiktok") ? "mptree-ad-tiktok" : "mptree-ad") + suffix + ".mp4"));
 
 /* ── Assemble the page ──────────────────────────────────────────────────
    The screenshots go in as data URIs rather than as file:// references. A
@@ -81,9 +87,36 @@ for (const name of SHOT_FILES) {
   shots[name] = "data:image/png;base64," + readFileSync(p).toString("base64");
 }
 
+/* ── The voiceover, if there is one ──────────────────────────────────────
+   voice/lines.json is [{ at, file, gain? }], `at` being seconds into the
+   film. Anything decodable by a browser works: wav, mp3, m4a. Record the
+   lines on a phone, drop them in, render. Nothing here generates a voice. */
+const voice = [];
+const VOICE_DIR = join(HERE, "voice");
+const VOICE_LIST = join(VOICE_DIR, "lines.json");
+if (SOUND && flag("vo")) {
+  if (!existsSync(VOICE_LIST)) {
+    console.error(`--vo needs ${VOICE_LIST}\nSee the README: it is a list of { at, file }.`);
+    process.exit(1);
+  }
+  const TYPES = { wav: "audio/wav", mp3: "audio/mpeg", m4a: "audio/mp4", ogg: "audio/ogg", opus: "audio/ogg", flac: "audio/flac" };
+  for (const line of JSON.parse(readFileSync(VOICE_LIST, "utf8"))) {
+    const p = join(VOICE_DIR, line.file);
+    if (!existsSync(p)) { console.error(`Missing voice clip: ${p}`); process.exit(1); }
+    const type = TYPES[line.file.split(".").pop().toLowerCase()] || "audio/wav";
+    voice.push({
+      at: line.at,
+      gain: line.gain === undefined ? 1 : line.gain,
+      audio: `data:${type};base64,` + readFileSync(p).toString("base64"),
+    });
+  }
+  console.log(`voiceover: ${voice.length} clips from voice/lines.json`);
+}
+
 const built = readFileSync(join(HERE, "ad.html"), "utf8")
   .replace("__MARK__",   markPath)
   .replace("__SHOTS__",  JSON.stringify(shots))
+  .replace("__VOICE__",  JSON.stringify(voice))
   .replace("__CONFIG__", JSON.stringify(CONFIG));
 
 const BUILD = join(HERE, "ad.build.html");
@@ -166,7 +199,14 @@ async function evaluate(cdp, expression) {
   return r.result.value;
 }
 
-const MIMES = [
+const MIMES_SOUND = [
+  'video/mp4;codecs="avc1.640028,mp4a.40.2"',
+  'video/mp4;codecs="avc1,mp4a.40.2"',
+  "video/mp4",
+  'video/webm;codecs="vp9,opus"',
+  "video/webm",
+];
+const MIMES_SILENT = [
   'video/mp4;codecs="avc1.640028"',
   'video/mp4;codecs=avc1',
   "video/mp4",
@@ -190,6 +230,17 @@ try {
 
   const total = await evaluate(cdp, "window.adTotal()");
   console.log(`${CONFIG.width}x${CONFIG.height}  ${CONFIG.fps} fps  ${CONFIG.duration}s  ${total} frames`);
+
+  if (flag("score")) {
+    const rows = await evaluate(cdp, "window.adScoreProbe(0.25)");
+    const top = Math.max(...rows.map(r => r.peak)) || 1;
+    for (const r of rows) {
+      const bar = "#".repeat(Math.round(r.peak / top * 44));
+      const mark = [0, 2.47, 5.2, 7.93, 10.67, 13.4, 16.13].some(c => Math.abs(r.t - c) < 0.13) ? " <- cut" : "";
+      console.log(`  ${r.t.toFixed(2).padStart(5)}  ${bar.padEnd(45)}${mark}`);
+    }
+    console.log(`  peak ${top.toFixed(3)} (clipping over 1.0)`);
+  }
 
   if (flag("bench")) {
     const ms = await evaluate(cdp, "window.adBench(60)");
@@ -221,17 +272,22 @@ try {
     }
     console.log(`\n${total} frames in ${dir}`);
   } else {
+    const mimes = SOUND ? MIMES_SOUND : MIMES_SILENT;
     const mime = await evaluate(cdp,
-      `(${JSON.stringify(MIMES)}).find(m => MediaRecorder.isTypeSupported(m)) || ""`);
+      `(${JSON.stringify(mimes)}).find(m => MediaRecorder.isTypeSupported(m)) || ""`);
     if (!mime) throw new Error("This Chrome will not record any video format.");
     const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
     console.log(`recording as ${mime}`);
     if (ext !== "mp4") {
       console.log("  (no MP4 encoder here, so the file comes out WebM)");
     }
+    if (SOUND && !/mp4a|opus/.test(mime)) {
+      console.log("  warning: that format carries no audio track, so this will come out silent");
+    }
 
     const t0 = Date.now();
-    const length = await evaluate(cdp, `window.adRecord(${JSON.stringify(mime)}, ${BITRATE})`);
+    const length = await evaluate(cdp,
+      `window.adRecord(${JSON.stringify(mime)}, ${BITRATE}, ${JSON.stringify(SOUND)})`);
 
     // Pulled back in slices: one 40 MB string through a single protocol
     // message is asking for trouble.
@@ -251,11 +307,20 @@ try {
     const drift = await evaluate(cdp, "window.adDrift()");
     if (drift) {
       const off = drift.wall - drift.intended;
-      const line = `  ${drift.late} of ${total} frames ran over, film is ${off >= 0 ? "+" : ""}${off.toFixed(2)}s off ${drift.intended.toFixed(2)}s`;
-      if (Math.abs(off) > 0.25) {
-        console.log(line + "\n  This one is running slow. Render it at --fps 30.");
-      } else {
-        console.log(line);
+      console.log(`  ${drift.late} of ${total} frames ran over, film is ${off >= 0 ? "+" : ""}${off.toFixed(2)}s off ${drift.intended.toFixed(2)}s`);
+      // With sound this is not a cosmetic problem. The score is scheduled on
+      // the audio clock and plays in real time, while a frame drawn late is
+      // held rather than dropped, so a stretched render slides the picture off
+      // the music by exactly this much. A drifted file is not shippable.
+      const limit = SOUND ? 0.1 : 0.25;
+      if (Math.abs(off) > limit) {
+        console.error(
+          `\n  REJECTED: ${off.toFixed(2)}s of drift is past the ${limit}s limit.` +
+          (SOUND ? "\n  The picture would sit that far off the music by the end." : "") +
+          "\n  Run it again, or render at --fps 30 if it keeps happening.",
+        );
+        cdp.close();
+        process.exitCode = 1;
       }
     }
   }

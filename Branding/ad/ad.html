@@ -28,6 +28,9 @@
 const MARK_PATH = "__MARK__";
 const SHOTS     = __SHOTS__;
 const CONFIG    = __CONFIG__;
+/* [{ at: seconds into the film, audio: data URI }], empty when there is no
+   voiceover to lay in. See voice/lines.json. */
+const VOICE     = __VOICE__;
 
 const W = CONFIG.width, H = CONFIG.height, FPS = CONFIG.fps;
 const DURATION = CONFIG.duration;
@@ -255,20 +258,27 @@ function screen(name, sx, sy, sw, zoom) {
 }
 
 /* ── The film ─────────────────────────────────────────────────────────── */
+/* One phone beat is one bar, and the whole film is cut to it: 2.733 seconds a
+   bar is 87.8 BPM, which is why the score below can land on every cut without
+   either being bent to fit the other. */
+const BEAT_LEN = 2.7333;          // a bar
+const BEAT     = BEAT_LEN / 4;    // a quarter note, 0.6833s
+const BAR0     = 5.2 - 2 * BEAT_LEN;
+
+/* Every cut is a bar line. */
 const T = {
-  open:  0,      // the record forms and the promise is made
-  proof: 5.2,    // three screens of the real thing
-  facts: 13.4,   // what it does not do
-  end:   16.1,
+  open:  0,                      // the record forms and the promise is made
+  proof: BAR0 + 2 * BEAT_LEN,    // 5.200  three screens of the real thing
+  facts: BAR0 + 5 * BEAT_LEN,    // 13.400 what it does not do
+  end:   BAR0 + 6 * BEAT_LEN,    // 16.133
 };
-const BEAT_LEN = 2.733;
 const BEATS = [
   // This beat used to read "No account. No subscription." The end card says
   // no subscription now, so the library screen describes the library instead
   // of saying the same thing ten seconds early.
-  { at: 5.2,   shot: "songs",     head: ["It finds your music.", "You just press play."] },
-  { at: 7.933, shot: "player",    head: ["A player worth", "opening."] },
-  { at: 10.667, shot: "playlists", head: ["Playlists that", "fill themselves."] },
+  { at: BAR0 + 2 * BEAT_LEN, shot: "songs",     head: ["It finds your music.", "You just press play."] },
+  { at: BAR0 + 3 * BEAT_LEN, shot: "player",    head: ["A player worth", "opening."] },
+  { at: BAR0 + 4 * BEAT_LEN, shot: "playlists", head: ["Playlists that", "fill themselves."] },
 ];
 
 function drawFrame(f) {
@@ -372,9 +382,11 @@ function drawFrame(f) {
     const out = 1 - seg(t, T.end - 0.3, T.end);
     ctx.save();
     ctx.globalAlpha = out;
-    line("No ads.",          W / 2, Y(0.40), { size: 98, weight: 700, track: -2, p: seg(l, 0.10, 0.70) });
-    line("No subscription.", W / 2, Y(0.52), { size: 98, weight: 700, track: -2, p: seg(l, 0.55, 1.15) });
-    line("No problems.",     W / 2, Y(0.64), { size: 98, weight: 700, track: -2, p: seg(l, 1.00, 1.60) });
+    // One line per beat of the bar, so each lands with a hit rather than near
+    // one. BEAT is the quarter note the whole film is cut to.
+    line("No ads.",          W / 2, Y(0.40), { size: 98, weight: 700, track: -2, p: seg(l, 0 * BEAT, 0 * BEAT + 0.5) });
+    line("No subscription.", W / 2, Y(0.52), { size: 98, weight: 700, track: -2, p: seg(l, 1 * BEAT, 1 * BEAT + 0.5) });
+    line("No problems.",     W / 2, Y(0.64), { size: 98, weight: 700, track: -2, p: seg(l, 2 * BEAT, 2 * BEAT + 0.5) });
     ctx.restore();
   }
 
@@ -395,6 +407,200 @@ function drawFrame(f) {
   }
 }
 
+/* ── The score ────────────────────────────────────────────────────────────
+   Written here rather than laid over the top afterwards, for two reasons.
+   It is original, so nothing about using it needs clearing with anyone. And
+   it is built on the same grid as the edit: one bar to a phone beat, so the
+   hits land on the cuts instead of near them.
+
+   A minor, 87.8 BPM, five voices and a lot of space. Restraint is the brand.
+   ─────────────────────────────────────────────────────────────────────── */
+const NOTE = {
+  F1: 43.65, G1: 49.00, A1: 55.00, C2: 65.41,
+  A3: 220.0, C4: 261.6, D4: 293.7, E4: 329.6, G4: 392.0,
+  A4: 440.0, C5: 523.3, D5: 587.3, E5: 659.3, A5: 880.0,
+};
+
+/** A hall, made out of decaying noise. Without it the parts sound like parts. */
+function makeHall(ac) {
+  const len = Math.floor(ac.sampleRate * 2.4);
+  const buf = ac.createBuffer(2, len, ac.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      const decay = Math.pow(1 - i / len, 2.6);
+      d[i] = (Math.random() * 2 - 1) * decay;
+    }
+  }
+  const conv = ac.createConvolver();
+  conv.buffer = buf;
+  return conv;
+}
+
+function buildScore(ac, out, t0) {
+  // 0.76, not 0.9: at 0.9 the loudest kick came out at 1.084 and clipped, and
+  // the compressor after it cannot pull back a peak it has already passed.
+  // --score prints this envelope, so it is measured rather than judged by ear.
+  const master = ac.createGain();
+  master.gain.value = 0.76;
+  // The last bells are still ringing when the film ends. Cutting a live room
+  // off mid tail is one of the few things an audience hears as a mistake, so
+  // the room is closed rather than chopped.
+  master.gain.setValueAtTime(0.76, t0 + DURATION - 0.5);
+  master.gain.exponentialRampToValueAtTime(0.0001, t0 + DURATION - 0.03);
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = 0.006; comp.release.value = 0.22;
+  master.connect(comp).connect(out);
+
+  const hall = makeHall(ac);
+  const wet = ac.createGain(); wet.gain.value = 0.32;
+  hall.connect(wet).connect(master);
+
+  /** Everything goes to the room as well as to the front. */
+  const voice = (node, send = 1) => {
+    node.connect(master);
+    if (send > 0) { const s = ac.createGain(); s.gain.value = send; node.connect(s).connect(hall); }
+  };
+
+  const at = b => t0 + b;   // b is seconds into the film
+
+  function kick(b, gain = 0.9) {
+    const t = at(b);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(125, t);
+    o.frequency.exponentialRampToValueAtTime(46, t + 0.09);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+    o.connect(g); voice(g, 0.08);
+    o.start(t); o.stop(t + 0.5);
+  }
+
+  function hat(b, gain = 0.05) {
+    const t = at(b), len = 0.05;
+    const buf = ac.createBuffer(1, Math.ceil(ac.sampleRate * len), ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 5);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 7200;
+    const g = ac.createGain(); g.gain.value = gain;
+    src.connect(hp).connect(g); voice(g, 0.5);
+    src.start(t);
+  }
+
+  function sub(b, freq, dur, gain = 0.5) {
+    const t = at(b);
+    const o = ac.createOscillator(); o.type = "sine"; o.frequency.value = freq;
+    // A second an octave up, quiet, so it survives a phone speaker that cannot
+    // reproduce 55 Hz at all.
+    const o2 = ac.createOscillator(); o2.type = "sine"; o2.frequency.value = freq * 2;
+    const g = ac.createGain(), g2 = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.16);
+    g.gain.setValueAtTime(gain, t + dur - 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g2.gain.value = 0.16;
+    o.connect(g); o2.connect(g2).connect(g); voice(g, 0);
+    o.start(t); o2.start(t); o.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
+  }
+
+  function bell(b, freq, gain = 0.22, tail = 1.8) {
+    const t = at(b);
+    const o = ac.createOscillator(); o.type = "sine"; o.frequency.value = freq;
+    // A partial slightly off the octave is what stops a sine reading as a beep.
+    const p = ac.createOscillator(); p.type = "sine"; p.frequency.value = freq * 2.01;
+    const pg = ac.createGain(); pg.gain.value = 0.3;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+    o.connect(g); p.connect(pg).connect(g); voice(g, 0.9);
+    o.start(t); p.start(t); o.stop(t + tail); p.stop(t + tail);
+  }
+
+  function pad(b, freqs, dur, gain = 0.09) {
+    const t = at(b);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.7);
+    g.gain.setValueAtTime(gain, t + dur - 1.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1500; lp.Q.value = 0.5;
+    lp.connect(g); voice(g, 1.1);
+    for (const f of freqs) for (const detune of [-6, 6]) {
+      const o = ac.createOscillator(); o.type = "sawtooth";
+      o.frequency.value = f; o.detune.value = detune;
+      const og = ac.createGain(); og.gain.value = 0.22;
+      o.connect(og).connect(lp);
+      o.start(t); o.stop(t + dur + 0.2);
+    }
+  }
+
+  /** The rising noise that carries the opening into the first downbeat. */
+  function swell(b, dur, gain = 0.10) {
+    const t = at(b);
+    const len = Math.ceil(ac.sampleRate * dur);
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(400, t);
+    bp.frequency.exponentialRampToValueAtTime(5200, t + dur);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + dur * 0.92);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp).connect(g); voice(g, 0.7);
+    src.start(t); src.stop(t + dur);
+  }
+
+  const bar = n => BAR0 + n * BEAT_LEN;   // bar 2 is the first phone beat
+
+  /* Bar 1, under the rings. Nothing but a floor and something approaching. */
+  sub(0.35, NOTE.A1, 2.3, 0.34);
+  swell(0.9, 1.55, 0.085);
+
+  /* Bar 2, the record has formed and the words arrive. */
+  kick(bar(1), 0.85);
+  kick(bar(1) + 2 * BEAT, 0.6);
+  sub(bar(1), NOTE.A1, BEAT_LEN, 0.46);
+  bell(bar(1), NOTE.A4, 0.2);
+  bell(bar(1) + 2.5 * BEAT, NOTE.E5, 0.13);
+
+  /* Bars 3 to 5, one to a screen. The bass moves, nothing else does much. */
+  const roots = [NOTE.A1, NOTE.F1, NOTE.G1];
+  const tops  = [[NOTE.A4, NOTE.C5], [NOTE.C5, NOTE.A4], [NOTE.G4, NOTE.D5]];
+  for (let i = 0; i < 3; i++) {
+    const b = bar(2 + i);
+    sub(b, roots[i], BEAT_LEN, 0.5);
+    kick(b, 0.9);
+    kick(b + 2 * BEAT, 0.72);
+    for (let e = 1; e < 8; e++) hat(b + e * BEAT / 2, e % 2 ? 0.032 : 0.05);
+    bell(b, tops[i][0], 0.19);
+    bell(b + 2 * BEAT, tops[i][1], 0.14);
+  }
+
+  /* Bar 6, the statement. Everything else gets out of the way and three hits
+     land with the three lines. */
+  for (let i = 0; i < 3; i++) {
+    const b = bar(5) + i * BEAT;
+    kick(b, 1.0);
+    sub(b, NOTE.A1, BEAT * 0.95, 0.52);
+    bell(b, [NOTE.A4, NOTE.C5, NOTE.E5][i], 0.24, 2.2);
+  }
+
+  /* Bar 7, the end card. It resolves and is allowed to ring out. */
+  const e = bar(6);
+  kick(e, 0.7);
+  sub(e, NOTE.A1, 2.55, 0.44);
+  pad(e, [NOTE.A3, NOTE.C4, NOTE.E4], 2.7, 0.085);
+  bell(e, NOTE.A4, 0.2, 2.4);
+  bell(e + 1 * BEAT, NOTE.C5, 0.15, 2.2);
+  bell(e + 2 * BEAT, NOTE.E5, 0.13, 2.2);
+  bell(e + 3 * BEAT, NOTE.A5, 0.11, 2.6);
+}
+
 /* ── Rendering ────────────────────────────────────────────────────────────
    The recorder takes exactly the frames it is handed: the stream is created
    at 0 fps and each frame is pushed by hand. What it cannot take from us is
@@ -408,11 +614,54 @@ window.adReady   = () => ready.then(() => true);
 window.adTotal   = () => TOTAL;
 window.adFrame   = i => { drawFrame(i); return cv.toDataURL("image/png"); };
 
-window.adRecord = async function (mime, bitrate) {
+window.adRecord = async function (mime, bitrate, sound) {
   await ready;
   const stream = cv.captureStream(0);
   const track  = stream.getVideoTracks()[0];
-  const rec    = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate });
+
+  /* ── Sound ──────────────────────────────────────────────────────────────
+     The audio is a live track on the same stream, so the recorder muxes it
+     into the file itself. Both clocks run in real time: the frames are paced
+     against performance.now() and the score is scheduled on the audio clock,
+     so starting them together is all the syncing there is to do. ───────── */
+  let ac = null, voNotes = [];
+  if (sound) {
+    ac = new AudioContext({ sampleRate: 48000 });
+    if (ac.state === "suspended") { try { await ac.resume(); } catch { /* headless has no gesture to give */ } }
+    const dest = ac.createMediaStreamDestination();
+
+    // Decode the voice clips before anything is scheduled: decoding takes
+    // long enough to shift the first line if it happens on the clock.
+    for (const v of VOICE) {
+      const bytes = Uint8Array.from(atob(v.audio.slice(v.audio.indexOf(",") + 1)), c => c.charCodeAt(0));
+      voNotes.push({ at: v.at, buffer: await ac.decodeAudioData(bytes.buffer), gain: v.gain === undefined ? 1 : v.gain });
+    }
+
+    const musicOut = ac.createGain();
+    // Under a voice the score steps back; on its own it carries the film.
+    musicOut.gain.value = voNotes.length ? 0.46 : 1;
+    musicOut.connect(dest);
+
+    const lead = 0.18;                       // enough to schedule without a scramble
+    const start = ac.currentTime + lead;
+    if (sound !== "voice-only") buildScore(ac, musicOut, start);
+    for (const n of voNotes) {
+      const src = ac.createBufferSource(); src.buffer = n.buffer;
+      const g = ac.createGain(); g.gain.value = n.gain;
+      src.connect(g).connect(dest);
+      src.start(start + n.at);
+    }
+
+    stream.addTrack(dest.stream.getAudioTracks()[0]);
+    // Hold the video until the audio clock reaches the downbeat we scheduled
+    // against, so frame 0 and second 0 are the same moment.
+    while (ac.currentTime < start) await new Promise(r => setTimeout(r, 2));
+  }
+
+  const rec = new MediaRecorder(stream, Object.assign(
+    { mimeType: mime, videoBitsPerSecond: bitrate },
+    ac ? { audioBitsPerSecond: 192000 } : {},
+  ));
   const chunks = [];
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   const stopped = new Promise(r => { rec.onstop = r; });
@@ -441,6 +690,7 @@ window.adRecord = async function (mime, bitrate) {
   await new Promise(r => setTimeout(r, 260));
   rec.stop();
   await stopped;
+  if (ac) { try { await ac.close(); } catch { /* already gone */ } }
 
   const blob = new Blob(chunks, { type: mime });
   const buf  = new Uint8Array(await blob.arrayBuffer());
@@ -451,6 +701,28 @@ window.adRecord = async function (mime, bitrate) {
 };
 window.adSlice = (from, len) => window.__out.substr(from, len);
 window.adDrift = () => window.__drift || null;
+
+/** Renders the score on its own, off the clock, and reports what it actually
+ *  produced: the loudest point in each slice of the film. Cheap way to see
+ *  that the hits are where the cuts are, without listening to anything. */
+window.adScoreProbe = async function (slice) {
+  const oac = new OfflineAudioContext(2, Math.ceil(48000 * DURATION), 48000);
+  buildScore(oac, oac.destination, 0);
+  const buf = await oac.startRendering();
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  const per = Math.floor(48000 * slice);
+  const out = [];
+  for (let i = 0; i < L.length; i += per) {
+    let peak = 0, sum = 0, n = 0;
+    for (let j = i; j < Math.min(i + per, L.length); j++) {
+      const v = Math.max(Math.abs(L[j]), Math.abs(R[j]));
+      if (v > peak) peak = v;
+      sum += v * v; n++;
+    }
+    out.push({ t: +(i / 48000).toFixed(2), peak: +peak.toFixed(3), rms: +Math.sqrt(sum / n).toFixed(3) });
+  }
+  return out;
+};
 
 /** Milliseconds a frame, measured over the stretch that costs the most: a
  *  wipe, where two full screenshots are resampled into the same frame. */
