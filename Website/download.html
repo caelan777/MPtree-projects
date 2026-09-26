@@ -200,36 +200,35 @@
     "use strict";
     var APK = "https://github.com/caelan777/MPtree-projects/releases/latest/download/MPTree.apk";
     var status = document.getElementById("dl-status");
-    var started = false;
 
-    function startDownload() {
-      if (started) return;
-      started = true;
-      var a = document.createElement("a");
-      a.href = APK;
-      a.setAttribute("download", "MPTree.apk");
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      status.textContent = "Your download has started. Follow the steps below to install it.";
-    }
-
-    // Manual button triggers the same download without leaving the page.
-    document.getElementById("dl-now").addEventListener("click", function (e) {
-      e.preventDefault();
-      startDownload();
-    });
-
-    // Auto-start after a short countdown, giving the ad slot a moment.
+    // The buttons are plain links and nothing here touches them.
+    //
+    // They used to be intercepted. The click handler called preventDefault and
+    // then a one-shot function that the countdown had already spent, so once the
+    // automatic attempt had run, "Download now" did nothing at all, for good, and
+    // the only working control left on the page was the small grey link under it.
+    //
+    // The automatic attempt did nothing either. A synthetic click on a generated
+    // <a download> is a download nobody asked for, pointing at another origin,
+    // and the browser drops it on the floor without a word. The page said the
+    // download had started while no request had been made at all.
+    //
+    // So: the attempt is a plain navigation, which browsers do allow, and since
+    // GitHub serves the file as an attachment it downloads without leaving the
+    // page. There is no event that reports success or failure, so the wording
+    // afterwards points at the button rather than claiming anything. And the
+    // button is a real link, which is the one thing that cannot be blocked: it
+    // carries a genuine tap.
     var left = 5;
     var timer = setInterval(function () {
       left -= 1;
       if (left > 0) {
         status.textContent = "Your download will start automatically in " + left + "…";
-      } else {
-        clearInterval(timer);
-        startDownload();
+        return;
       }
+      clearInterval(timer);
+      status.textContent = "Your download should be starting. If nothing happened, tap Download now.";
+      window.location.href = APK;
     }, 1000);
   })();
 </script>
