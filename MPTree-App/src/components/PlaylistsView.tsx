@@ -231,6 +231,29 @@ export const PlaylistsView: React.FC<Props> = ({
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   }, []);
 
+  // ── Opening the "new playlist" field ──────────────────────────────────────
+  // The field lives at the top of the scrolled content, which in the list view
+  // is the one place it can be seen: the list view carries no top padding on
+  // purpose, so anything outside the scroller lands underneath the floating
+  // header card and the status bar, where this field used to be invisible.
+  // Sending the body back to the top guarantees it is on screen whatever the
+  // list was doing, and also brings the header back down through App's
+  // "at the top, show the chrome" rule, so the layout is where it expects.
+  //
+  // The focus is taken by hand with preventScroll rather than with autoFocus.
+  // Focusing an element the browser thinks is off screen makes it scroll every
+  // ancestor that can scroll until the element is visible, and one of those is
+  // the swipeable page area: overflow:hidden does not stop a programmatic
+  // scroll. Opening this field mid-swipe therefore shoved both pages sideways by
+  // a few hundred pixels and left them there, since nothing else ever touches
+  // that element's scrollLeft.
+  const createInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!creating) return;
+    scrollBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    createInputRef.current?.focus({ preventScroll: true });
+  }, [creating]);
+
   // ── Multi-select (playlist detail only) ─────────────────────────────────────
   // Long-pressing a row enters select mode; tapping rows toggles them; a bottom
   // bar removes all selected songs from the playlist at once.
@@ -734,30 +757,6 @@ export const PlaylistsView: React.FC<Props> = ({
         </div>
       )}
 
-      {/* ── Create playlist input ────────────────────────────────────────── */}
-      {creating && (
-        <div style={{
-          display: "flex", gap: 8, alignItems: "center",
-          padding: "10px 16px", borderBottom: `1px solid ${t.border}`,
-          flexShrink: 0,
-        }}>
-          <input
-            autoFocus
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") createPlaylist(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
-            placeholder="Playlist name…"
-            style={{ flex: 1, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "9px 12px", color: t.text, fontSize: 15, outline: "none" }}
-          />
-          <button onClick={createPlaylist} style={{ background: t.accent, border: "none", borderRadius: 8, color: t.playBtnFg, padding: "9px 16px", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-            Create
-          </button>
-          <button onClick={() => { setCreating(false); setNewName(""); }} style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: 8, fontSize: 18 }}>
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* ── Search bar (add-songs view only) ────────────────────────────── */}
       {view === "addSongs" && (
         <div style={{ padding: "10px 16px", borderBottom: `1px solid ${t.border}`, flexShrink: 0 }}>
@@ -827,7 +826,45 @@ export const PlaylistsView: React.FC<Props> = ({
         onScroll={e => { cancelPress(); onBodyScroll?.((e.target as HTMLDivElement).scrollTop); }}
         style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
       >
-        {insetInside > 0 && <div style={{ height: insetInside }} aria-hidden="true" />}
+        {/* The header's height as a spacer INSIDE the scroller, so rows scroll up
+            under the collapsed logo instead of leaving a dead band. Rendered
+            unconditionally, even at height 0: a height transition cannot run on a
+            node that is being removed, so unmounting it on a view change snapped
+            this to zero while the root's padding was still easing in, which read
+            as a double jump. */}
+        <div style={{ height: insetInside, transition: insetTransition }} aria-hidden="true" />
+
+        {/* ── Create playlist input ──────────────────────────────────────────
+            Inside the scroller, directly under the header card. It sat above
+            the scroller before, which in the list view meant y=0: behind the
+            floating card and the status bar, unreachable because it was not in
+            anything that scrolls. */}
+        {creating && (
+          <div style={{
+            display: "flex", gap: 8, alignItems: "center",
+            padding: "10px 16px", borderBottom: `1px solid ${t.border}`,
+            // Keyframed rather than a state-driven transition: a mount cannot be
+            // transitioned from a state the browser never painted, and the
+            // two-render dance around that is not worth a fade. `mpRowIn` is in
+            // App's global style block, next to the other shared keyframes.
+            animation: `mpRowIn ${FOLD_MOTION} both`,
+          }}>
+            <input
+              ref={createInputRef}
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") createPlaylist(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
+              placeholder="Playlist name…"
+              style={{ flex: 1, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "9px 12px", color: t.text, fontSize: 15, outline: "none" }}
+            />
+            <button onClick={createPlaylist} style={{ background: t.accent, border: "none", borderRadius: 8, color: t.playBtnFg, padding: "9px 16px", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              Create
+            </button>
+            <button onClick={() => { setCreating(false); setNewName(""); }} style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: 8, fontSize: 18 }}>
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* ════ PLAYLIST LIST ════════════════════════════════════════════ */}
         {view === "list" && (

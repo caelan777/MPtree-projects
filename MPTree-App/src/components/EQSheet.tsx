@@ -220,20 +220,42 @@ export function EQSheet({
                   })}
                 </div>
 
-                {/* Bar visualizer */}
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 6, height: 80, marginBottom: 8, opacity: eqEnabled ? 1 : 0.35, transition: "opacity 0.2s" }}>
-                  {bands.map((hz, i) => {
-                    const level = localLevels[i] ?? 0;
-                    const pct   = (maxMb - minMb) > 0 ? (level - minMb) / (maxMb - minMb) : 0.5;
-                    const barH  = Math.round(pct * 60) + 10;
-                    const barColor = level === 0 ? T.border : accent;
-                    return (
-                      <div key={hz} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: "100%", height: barH, borderRadius: 3, background: barColor, transition: "height 0.08s ease, background 0.15s", alignSelf: "flex-end" }} />
-                        <span style={{ fontSize: 10, color: T.muted, whiteSpace: "nowrap" }}>{fmtHz(hz)}</span>
-                      </div>
-                    );
-                  })}
+                {/* Band meter. Bars leave a zero line, upward for a boost and
+                    downward for a cut, so Flat reads as flat.
+                    It used to be one filled block per band at the full column
+                    width, growing from the bottom across the whole range, which
+                    put 0 dB at half height: five solid white slabs that read as
+                    a rendering fault rather than as a level. */}
+                <div style={{ position: "relative", height: 62, opacity: eqEnabled ? 1 : 0.35, transition: "opacity 0.2s" }}>
+                  <div style={{ position: "absolute", left: 0, right: 0, top: 30, height: 1, background: T.border }} />
+                  <div style={{ position: "absolute", inset: 0, display: "flex", gap: 6 }}>
+                    {bands.map((hz, i) => {
+                      const level = localLevels[i] ?? 0;
+                      // Boost and cut are normalised separately: the device's two
+                      // limits are not always the same distance from zero.
+                      const frac = level === 0 ? 0
+                                 : level > 0  ?  Math.min(1, level / Math.max(1,  maxMb))
+                                              : -Math.min(1, level / Math.min(-1, minMb));
+                      const barH = Math.max(2, Math.round(Math.abs(frac) * 30));
+                      return (
+                        <div key={hz} style={{ flex: 1, position: "relative" }}>
+                          <div style={{
+                            position: "absolute", left: "50%", transform: "translateX(-50%)",
+                            width: 6, borderRadius: 3,
+                            background: level === 0 ? T.border : accent,
+                            height:     level === 0 ? 2 : barH,
+                            top:        level === 0 ? 30 : frac > 0 ? 31 - barH : 31,
+                            transition: "height 0.08s ease, top 0.08s ease, background 0.15s",
+                          }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 5, marginBottom: 8, opacity: eqEnabled ? 1 : 0.35, transition: "opacity 0.2s" }}>
+                  {bands.map(hz => (
+                    <span key={hz} style={{ flex: 1, textAlign: "center", fontSize: 10, color: T.muted, whiteSpace: "nowrap" }}>{fmtHz(hz)}</span>
+                  ))}
                 </div>
 
                 {/* Vertical sliders */}

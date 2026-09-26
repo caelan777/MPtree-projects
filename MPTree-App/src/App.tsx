@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Filesystem, Directory } from "@capacitor/filesystem";
@@ -10,7 +10,7 @@ import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
-import { DARK, LIGHT, FILTER_OPTIONS } from "./themes";
+import { DARK, LIGHT, FILTER_OPTIONS, CHROME_MOTION } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
@@ -161,34 +161,63 @@ export default function App() {
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
 
-  // ── Floating header inset ─────────────────────────────────────────────────
-  // Height of the floating header card (+ its top offset and a gap), measured
-  // live so the list content always starts just below it — even when the card
-  // grows/shrinks (search row hidden on the playlists page, select mode, etc.)
-  // The card's own height is animated between "collapsed" and "expanded", so it
-  // cannot be measured directly. `headerInnerRef` wraps the real content and
-  // keeps its natural height at all times, which is what the expanded card
-  // animates to. `headerCardRef` is still observed for `topInset`: a height
-  // transition is a real layout change, so ResizeObserver fires every frame and
-  // the list's top padding glides along with the card.
-  const headerCardRef  = useRef<HTMLDivElement | null>(null);
-  const headerInnerRef = useRef<HTMLDivElement | null>(null);
-  const [topInset, setTopInset]     = useState(176);
-  const [expandedH, setExpandedH]   = useState(150);
-  useEffect(() => {
+  // ── Floating header geometry ───────────────────────────────────────────────
+  // Everything the folding header needs, measured in one pass so no consumer can
+  // ever read half of an update.
+  //
+  //   cardTop  the card's distance from the top of the viewport. This is the
+  //            safe-area inset plus 2, i.e. exactly the `top` expression on the
+  //            card itself, read rather than assumed because the WebView can be
+  //            laid out edge-to-edge or below the status bar depending on when
+  //            StatusBar.setOverlaysWebView has landed.
+  //   innerH   the card's natural expanded height. `headerInnerRef` wraps the
+  //            real content at a viewport-relative width and never reflows, so
+  //            it keeps that height even while the card is animating to 54px,
+  //            which the card cannot be asked for directly.
+  //   extraH   the height of the search + count block, which is what the card
+  //            is shorter by on the Playlists tab.
+  //   vw / vh  the viewport, used for the insets and for clamping the movable
+  //            collapse button into its band.
+  //
+  // The card is deliberately NOT observed. It used to be: its height animation
+  // is a real layout change, so ResizeObserver fired every frame and dragged the
+  // list's padding along behind it. That cost a re-render of this whole
+  // component per frame and still only moved the padding AFTER the card, and
+  // because `innerH` was page-dependent it is what made the lists jump on a tab
+  // switch. The insets are now derived from these numbers, so their target is
+  // known the instant the fold starts and CSS transitions do the gliding.
+  const headerCardRef   = useRef<HTMLDivElement | null>(null);
+  const headerInnerRef  = useRef<HTMLDivElement | null>(null);
+  const headerExtraRef  = useRef<HTMLDivElement | null>(null);
+  const searchInputRef  = useRef<HTMLInputElement | null>(null);
+  const [dims, setDims] = useState({ cardTop: 2, innerH: 150, extraH: 96, vw: 400, vh: 800 });
+  useLayoutEffect(() => {
     const card  = headerCardRef.current;
     const inner = headerInnerRef.current;
+    const extra = headerExtraRef.current;
     if (!card || !inner) return;
     const update = () => {
-      setTopInset(Math.round(card.getBoundingClientRect().bottom) + 14);
-      setExpandedH(Math.round(inner.getBoundingClientRect().height));
+      setDims({
+        cardTop: Math.max(0, Math.round(card.getBoundingClientRect().top)),
+        innerH:  Math.round(inner.getBoundingClientRect().height),
+        extraH:  extra ? Math.round(extra.getBoundingClientRect().height) : 0,
+        vw:      window.innerWidth,
+        vh:      window.innerHeight,
+      });
     };
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(card);
     ro.observe(inner);
+    if (extra) ro.observe(extra);
     window.addEventListener("resize", update);
-    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+    window.addEventListener("orientationchange", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
   }, []);
 
   // ── Collapsing chrome ─────────────────────────────────────────────────────
@@ -369,6 +398,12 @@ export default function App() {
   // Playlist picker opened from the multi-select bar.
   const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // The search field used to unmount when you left the Songs tab, which took the
+  // Android keyboard with it. It stays mounted now (see the header card), so the
+  // keyboard has to be dismissed by hand or it sits over the playlists.
+  useEffect(() => {
+    if (page !== "songs") searchInputRef.current?.blur();
+  }, [page]);
   // Bumped by the Back handler to ask PlaylistsView to pop one level of its own
   // nested navigation (detail → list, add-songs → detail, close a menu, …).
   const [playlistBackSignal, setPlaylistBackSignal] = useState(0);
@@ -841,8 +876,13 @@ export default function App() {
       const cont = scrollRef.current;
       if (idx < 0 || !cont) return;
       const ROW = 64;
-      // topInset: rows start below the floating header's padding.
-      const target = Math.max(0, topInset + idx * ROW - cont.clientHeight / 2 + ROW / 2);
+      // Rows start below the floating header's padding, so that has to be added
+      // in. Read off the scroller rather than closed over: this effect is keyed
+      // on [currentSong] alone, so a captured value would be whatever the inset
+      // was when the track changed, and the padding is mid-transition during a
+      // fold anyway. getComputedStyle gives the pixel that is actually there.
+      const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
+      const target = Math.max(0, pad + idx * ROW - cont.clientHeight / 2 + ROW / 2);
       cont.scrollTo({ top: target, behavior: "smooth" });
     }, 120);
     return () => clearTimeout(t);
@@ -2188,18 +2228,37 @@ export default function App() {
   const chromeCollapsed = !selectMode && !chromeOpen;
 
   // ONE definition of how the fold moves, used by every piece that moves with
-  // it: the header card, the mini-player, the list's bottom padding, the two
-  // floating buttons, and the Playlists insets. They used to be written out
-  // separately and had drifted apart — the shuffle and scroll-to-top buttons
-  // carried no transition at all, so they snapped to their new position while
-  // the player was still sliding underneath them.
+  // it: the header card, the mini-player, the list paddings, the two floating
+  // buttons, the movable collapse button, and the Playlists insets. They used to
+  // be written out separately and had drifted apart: the shuffle and
+  // scroll-to-top buttons carried no transition at all, so they snapped to their
+  // new position while the player was still sliding underneath them.
   //
-  // `chromeMotion` is empty when the fold is not being animated (the
-  // scroll-to-top button jumps deliberately, so arriving at the top does not
-  // play a third of a second of unfolding while the list races past).
-  const CHROME_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+  // It returns "none" when the fold is not being animated (the scroll-to-top
+  // button jumps deliberately, so arriving at the top does not play a third of a
+  // second of unfolding while the list races past). ANY new piece that moves
+  // with the fold goes through here rather than naming CHROME_MOTION itself, or
+  // it will keep animating through that deliberate jump.
   const move = (...props: string[]) =>
     chromeAnimate ? props.map(pr => `${pr} ${CHROME_MOTION}`).join(", ") : "none";
+
+  // ── Where content starts, per tab ──────────────────────────────────────────
+  // The card's bottom edge plus a 14px gap. Each tab gets its own number and
+  // NEITHER depends on which tab is showing, which is the whole point: the card
+  // is shorter on Playlists (no search row), and while that was one shared
+  // measurement, switching tabs repadded the list you had just left, so its
+  // content jumped by that difference when you came back.
+  //
+  // The cost of doing it this way is that the hidden Songs list keeps the taller
+  // inset, so swiping back shows the card growing into a gap that closes over the
+  // fold's own third of a second. A gap closing reads as the card arriving;
+  // content sliding under a header that is standing still reads as a fault.
+  const COLLAPSED_INSET = dims.cardTop + 54 + 14;
+  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
+  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  // For the things anchored to the card itself rather than to a list: the update
+  // notice, the sort menu, the logo's own options panel.
+  const cardBottom      = page === "songs" ? songsInset : playlistsInset;
 
   // The collapse rule itself, shared by the Songs list and the Playlists body
   // so both tabs behave identically. `lastRef` is that scroller's own previous
@@ -2273,9 +2332,194 @@ export default function App() {
     if (logoPressTimer.current) { clearTimeout(logoPressTimer.current); logoPressTimer.current = null; }
   };
   const onLogoClick = () => {
-    // Swallow the click that follows a long-press, or holding would also toggle.
+    // Swallow the click that follows a long-press or a drag, or either would
+    // also toggle the fold on the way out.
     if (logoLongPressed.current) { logoLongPressed.current = false; return; }
     toggleChrome();
+  };
+
+  // ── Moving the collapse button ─────────────────────────────────────────────
+  // While the chrome is folded, the round logo can be dragged out of the top
+  // left and left anywhere in the band below it. The position applies ONLY while
+  // folded: expanding puts the card back where the whole header expects to be,
+  // and the button flies home into it.
+  //
+  // Stored as fractions OF THE BAND rather than of the viewport. A viewport
+  // fraction breaks the moment the viewport does: 0.9 of an 800px screen is a
+  // legal 720, and 0.9 of the 400px left when the keyboard opens is 360, which
+  // is inside the strip at the bottom the band exists to keep clear. Normalised
+  // to the band, any resize keeps the button in the same relative place and the
+  // clamp holds by construction. Pixels are derived at render from the live
+  // viewport, so there is one source of truth and nothing to re-clamp on read.
+  const LOGO_SIZE  = 54;
+  const HOME_X     = 12;
+  // Drop it this close to the docked spot and it goes home rather than parking
+  // a few pixels off it. Has to be larger than the button, or the nearest place
+  // you could actually drop it would already be outside the zone and the snap
+  // would never fire.
+  const DOCK_RADIUS = 70;
+  // Below the docked spot, and clear of the shuffle and scroll-to-top buttons at
+  // the bottom, which sit above this one and would otherwise draw over it. The
+  // mini-player cannot be in the way: it is gone whenever the chrome is folded.
+  const BAND_BOTTOM_GUARD = 80;
+  const [logoPos,  setLogoPos]  = useState<{ fx: number; fy: number } | null>(null);
+  const [logoDrag, setLogoDrag] = useState<{ x: number; y: number } | null>(null);
+  const [overRemove, setOverRemove] = useState(false);
+  useEffect(() => {
+    Preferences.get({ key: "mptree_logo_pos" })
+      .then(({ value }) => {
+        if (!value) return;
+        const p = JSON.parse(value) as { fx?: unknown; fy?: unknown };
+        if (typeof p.fx === "number" && typeof p.fy === "number") {
+          setLogoPos({ fx: Math.min(1, Math.max(0, p.fx)), fy: Math.min(1, Math.max(0, p.fy)) });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const bandMinX = HOME_X;
+  const bandMaxX = Math.max(HOME_X, dims.vw - LOGO_SIZE - 12);
+  // The band starts at the docked spot itself rather than below it. Starting it
+  // under the button put every reachable drop point further from home than the
+  // dock radius, so "drop it near the top left and it goes home" could not
+  // happen at all.
+  const bandMinY = dims.cardTop;
+  const bandMaxY = Math.max(bandMinY, dims.vh - LOGO_SIZE - BAND_BOTTOM_GUARD);
+  const parkedX  = logoPos ? bandMinX + logoPos.fx * (bandMaxX - bandMinX) : HOME_X;
+  const parkedY  = logoPos ? bandMinY + logoPos.fy * (bandMaxY - bandMinY) : dims.cardTop;
+  // Where the free-floating button is drawn. Dragging wins over the stored spot,
+  // and an expanded header wins over both: it goes home and fades into the card.
+  const logoFloating = logoPos !== null || logoDrag !== null;
+  const logoDragging = logoDrag !== null;
+  const floatX = !chromeCollapsed ? HOME_X : logoDrag ? logoDrag.x : parkedX;
+  const floatY = !chromeCollapsed ? dims.cardTop : logoDrag ? logoDrag.y : parkedY;
+
+  // The remove target, centred at the bottom. Hit-tested against the finger
+  // rather than the button, which is clamped short of it.
+  const removeCX = dims.vw / 2;
+  const removeCY = dims.vh - 40 - LOGO_SIZE / 2;
+  const nearPoint = (x: number, y: number, cx: number, cy: number, r: number) =>
+    Math.hypot(x - cx, y - cy) <= r;
+
+  const dockLogo = () => {
+    setLogoPos(null);
+    setLogoDrag(null);
+    setOverRemove(false);
+    hapticImpact("medium");
+    Preferences.remove({ key: "mptree_logo_pos" }).catch(() => {});
+  };
+
+  // One grab, driven by either touch or mouse. The live position lives in the
+  // ref as well as in state: state is for drawing, and the window-level mouse
+  // listeners below are closed over the render that started the drag, so reading
+  // the drop position out of state there would read it as it was on mousedown.
+  const logoGrab = useRef<{
+    dx: number; dy: number; x0: number; y0: number;
+    moved: boolean; x: number; y: number; over: boolean;
+  } | null>(null);
+
+  const logoGrabStart = (cx: number, cy: number, rect: DOMRect) => {
+    logoGrab.current = {
+      dx: cx - rect.left, dy: cy - rect.top, x0: cx, y0: cy,
+      moved: false, x: rect.left, y: rect.top, over: false,
+    };
+  };
+
+  const logoGrabMove = (cx: number, cy: number) => {
+    const g = logoGrab.current;
+    if (!g || !chromeCollapsed) return;
+    if (!g.moved) {
+      // 14px rather than the usual 8: this button also answers a tap and a hold,
+      // and a hold on a 54px target rolls a few pixels under the thumb.
+      if (Math.abs(cx - g.x0) < 14 && Math.abs(cy - g.y0) < 14) return;
+      g.moved = true;
+      onLogoPressEnd();                 // a drag is not a hold
+      logoLongPressed.current = true;   // nor a tap: swallow the click it ends on
+      hapticImpact("light");
+    }
+    g.x = Math.min(bandMaxX, Math.max(bandMinX, cx - g.dx));
+    g.y = Math.min(bandMaxY, Math.max(bandMinY, cy - g.dy));
+    g.over = nearPoint(cx, cy, removeCX, removeCY, 52);
+    setLogoDrag({ x: g.x, y: g.y });
+    setOverRemove(g.over);
+  };
+
+  const logoGrabEnd = () => {
+    const g = logoGrab.current;
+    logoGrab.current = null;
+    onLogoPressEnd();
+    if (!g || !g.moved) return;
+    // The click that follows this drag is swallowed by the flag set in
+    // logoGrabMove. Release the flag straight after, in its own task: a click
+    // is dispatched in the same task as the mouseup or touchend, so this always
+    // runs after it. Without this the flag survives a drag that ends off the
+    // button, which never produces a click at all, and eats the next tap.
+    window.setTimeout(() => { logoLongPressed.current = false; }, 0);
+    setLogoDrag(null);
+    setOverRemove(false);
+    // Playback can expand the chrome mid-drag (a crossfade into the next track
+    // calls openChrome), which sends the button home under your finger. Saving
+    // where it would have landed then means saving somewhere nobody chose.
+    if (!chromeCollapsed) return;
+    if (g.over || nearPoint(g.x, g.y, HOME_X, dims.cardTop, DOCK_RADIUS)) { dockLogo(); return; }
+    const next = {
+      fx: bandMaxX > bandMinX ? (g.x - bandMinX) / (bandMaxX - bandMinX) : 0,
+      fy: bandMaxY > bandMinY ? (g.y - bandMinY) / (bandMaxY - bandMinY) : 0,
+    };
+    setLogoPos(next);
+    hapticImpact("light");
+    Preferences.set({ key: "mptree_logo_pos", value: JSON.stringify(next) }).catch(() => {});
+  };
+
+  // The card's own surface, shared with the floating button so the two are the
+  // same object wherever it is sitting.
+  const CARD_SKIN: React.CSSProperties = {
+    background: TH.playerBg,
+    border: `1px solid ${TH.border}`,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+  };
+
+  // Where the logo's own options panel and the collapse hint go. Both belong to
+  // the button, so they follow it rather than staying pinned to the top left.
+  const LOGO_MENU_W = 268;
+  const LOGO_MENU_H = 210;   // generous; the panel is clamped on screen either way
+  const anchored    = chromeCollapsed && logoFloating;
+  const logoMenuLeft = anchored ? Math.max(12, Math.min(floatX, dims.vw - LOGO_MENU_W - 12)) : 12;
+  const logoMenuTop  = anchored
+    ? (floatY + LOGO_SIZE + 8 + LOGO_MENU_H <= dims.vh - 12
+        ? floatY + LOGO_SIZE + 8
+        : Math.max(12, floatY - LOGO_MENU_H - 8))
+    : cardBottom;
+  const hintLeft = anchored ? Math.min(floatX + 62, Math.max(12, dims.vw - 250)) : 74;
+  const hintTop  = anchored ? floatY + 14 : dims.cardTop + 14;
+
+  // Attached to both the docked layer and the floating button, so the gesture is
+  // the same wherever the button happens to be.
+  const logoHandlers = {
+    onClick: onLogoClick,
+    onTouchStart: (e: React.TouchEvent<HTMLElement>) => {
+      const t = e.touches[0];
+      logoGrabStart(t.clientX, t.clientY, e.currentTarget.getBoundingClientRect());
+      onLogoPressStart();
+    },
+    onTouchMove:   (e: React.TouchEvent<HTMLElement>) => logoGrabMove(e.touches[0].clientX, e.touches[0].clientY),
+    onTouchEnd:    () => logoGrabEnd(),
+    onTouchCancel: () => logoGrabEnd(),
+    // The mouse path exists so this can be driven in a browser during
+    // development. The listeners go on the window because the cursor leaves the
+    // 54px button immediately.
+    onMouseDown: (e: React.MouseEvent<HTMLElement>) => {
+      logoGrabStart(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
+      onLogoPressStart();
+      const mv = (ev: MouseEvent) => logoGrabMove(ev.clientX, ev.clientY);
+      const up = () => {
+        window.removeEventListener("mousemove", mv);
+        window.removeEventListener("mouseup", up);
+        logoGrabEnd();
+      };
+      window.addEventListener("mousemove", mv);
+      window.addEventListener("mouseup", up);
+    },
   };
 
   // 18px bottom offset + the card's own measured height (95px). The card lost
@@ -2340,9 +2584,14 @@ export default function App() {
   if (virtualize) {
     // listScrollTop includes the pull spacer; subtract it so index math aligns
     // with the row area. Clamp to valid bounds.
-    // Content order inside the scroller: topInset padding (under the
+    // Content order inside the scroller: the top inset padding (under the
     // floating header) → pull spacer → rows. Subtract both so row math is 0-based.
-    const scrolled = Math.max(0, listScrollTop - pullOffset - topInset);
+    //
+    // During a fold the padding is mid-transition while `songsInset` is already
+    // at its target, so `scrolled` is out by up to the inset delta: under 100px,
+    // about a row and a half. VIRT_BUFFER * ROW_H (8 * 64 = 512px) absorbs that
+    // with room to spare, and has to keep doing so.
+    const scrolled = Math.max(0, listScrollTop - pullOffset - songsInset);
     virtStart = Math.max(0, Math.floor(scrolled / ROW_H) - VIRT_BUFFER);
     const visibleCount = Math.ceil(vpH / ROW_H) + VIRT_BUFFER * 2;
     virtEnd = Math.min(displayList.length, virtStart + visibleCount);
@@ -2398,6 +2647,11 @@ export default function App() {
         /* The "tap the logo" pill shown the first few automatic collapses. */
         @keyframes mpHintIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
         .mp-hint { animation: mpHintIn 0.22s ease both; }
+        /* A row arriving at the top of a list. Used by the new-playlist field in
+           PlaylistsView, which is a fresh mount and so has nothing to
+           transition from. */
+        @keyframes mpRowIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes mpFadeIn { from { opacity: 0; } to { opacity: 1; } }
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
@@ -2406,25 +2660,32 @@ export default function App() {
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
         {/* Everything up top lives in one rounded card that floats ABOVE the
             list — the songs scroll underneath it. Its height is measured via
-            ResizeObserver into `topInset`, which pads the scroll content so
-            the first rows start below the card. The card's top offset adds
-            env(safe-area-inset-top) so it sits below the status bar instead
-            of underneath it — the WebView renders edge-to-edge, so without
-            this the status bar icons overlap the Songs/Playlists toggle. */}
+            ResizeObserver, and the per-tab insets derived from it pad the scroll
+            content so the first rows start below the card. The card's top offset
+            adds env(safe-area-inset-top) so it sits below the status bar instead
+            of underneath it: the WebView renders edge-to-edge, so without this
+            the status bar icons overlap the Songs/Playlists toggle. That `top`
+            expression and the measured `dims.cardTop` are one number read two
+            ways: change one and change the other. */}
         <div
           ref={headerCardRef}
           style={{
             position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, zIndex: 60,
-            background: TH.playerBg, border: `1px solid ${TH.border}`,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+            ...CARD_SKIN,
             boxSizing: "border-box", overflow: "hidden",
             // Animating requires real numbers on both ends, so the expanded
             // height is measured from the inner wrapper rather than left auto.
             // +2 covers the card's own top and bottom border.
             width:  chromeCollapsed ? 54 : "calc(100% - 24px)",
-            height: chromeCollapsed ? 54 : expandedH + 2,
+            height: chromeCollapsed ? 54 : (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2,
             borderRadius: chromeCollapsed ? "50%" : 22,
-            transition: move("width", "height", "border-radius"),
+            // The card is the collapse button too, until the button is moved
+            // away: then there is nothing here at all, and the floating circle
+            // below is the whole of it. The card is still what expands, so it
+            // fades back in as it grows.
+            opacity:       chromeCollapsed && logoFloating ? 0 : 1,
+            pointerEvents: chromeCollapsed && logoFloating ? "none" : "auto",
+            transition: move("width", "height", "border-radius", "opacity"),
           }}
         >
           {/* Full header. Kept mounted and at its natural width while collapsed
@@ -2451,6 +2712,7 @@ export default function App() {
               onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
               onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label="Collapse header"
+              data-tour="logo"
               style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
             >
               <Logo size={48} color={TH.text} />
@@ -2515,17 +2777,36 @@ export default function App() {
           </div>
           </div>
 
-          {/* Search + count/filter — part of the floating card, songs page only. */}
-          {page === "songs" && (
-            <div style={{ paddingTop: 6 }}>
+          {/* Search + count/filter. Shown on the Songs page only, but ALWAYS
+              MOUNTED, which is load-bearing rather than cosmetic: this block is
+              about 96px tall, so gating it on the page made the card's measured
+              height depend on which tab was showing, and the two lists took
+              their top inset from that measurement. Switching tabs therefore
+              repadded the list you were not looking at, and its content jumped
+              by that 96px when you came back. Kept mounted, the card's natural
+              height is one number on both tabs and `extraH` is what the
+              Playlists card is shorter by. See the inset derivation above.
+              It is simply clipped away by the card's shorter height here, so
+              nothing about the Playlists card looks different. */}
+          <div
+            ref={headerExtraRef}
+            aria-hidden={page !== "songs"}
+            style={{
+              paddingTop: 6,
+              opacity: page === "songs" ? 1 : 0,
+              pointerEvents: page === "songs" ? "auto" : "none",
+              transition: "opacity 0.2s ease",
+            }}
+          >
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <div data-tour="search" style={{ flex: 1, display: "flex", alignItems: "center", background: TH.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${TH.border}` }}>
                   {IC.Search(TH.muted)}
-                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search songs or artists…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 15, minWidth: 0 }} />
+                  <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search songs or artists…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 15, minWidth: 0 }} />
                   {search.length > 0 && (
                     <button
                       onClick={() => { setSearch(""); hapticImpact("light"); }}
                       aria-label="Clear search"
+                      tabIndex={page === "songs" ? undefined : -1}
                       style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0, color: TH.muted }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" fill={TH.dim} stroke="none"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                     </button>
@@ -2553,40 +2834,106 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
-                <button onClick={() => setFilterOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? TH.accent : TH.border}`, background: TH.surface, color: isFavFilter ? TH.accent : TH.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" ? undefined : -1} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? TH.accent : TH.border}`, background: TH.surface, color: isFavFilter ? TH.accent : TH.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterLabel}</span><IC.Chevron />
                 </button>
               </div>
-            </div>
-          )}
+          </div>
           </div>
 
           {/* Collapsed state: the round logo, cross-fading with the header it
-              shrank into. Always mounted so both ends of the fold animate. */}
+              shrank into. Always mounted so both ends of the fold animate.
+              The button fills all 54px rather than being a 30px mark with dead
+              space around it: it answers a tap, a hold and a drag, and none of
+              those want a thumb-sized target the size of the icon. */}
           <div
             style={{
-              position: "absolute", inset: 0, display: "flex", alignItems: "center",
-              // Pinned left rather than centred: while the card is still wide,
-              // "centre" is far from where the header's own logo sits, so the
-              // mark would visibly sweep inward as the card shrinks. Held here
-              // it simply stays put and the card closes around it.
-              justifyContent: "flex-start", paddingLeft: 11,
+              position: "absolute", inset: 0,
               opacity: chromeCollapsed ? 1 : 0,
               pointerEvents: chromeCollapsed ? "auto" : "none",
               transition: chromeAnimate ? "opacity 0.15s ease" : "none",
             }}
           >
             <button
-              onClick={onLogoClick}
-              onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
-              onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
+              {...logoHandlers}
               aria-label="Show search and player"
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
+              style={{
+                // Pinned left rather than centred: while the card is still wide,
+                // "centre" is far from where the header's own logo sits, so the
+                // mark would visibly sweep inward as the card shrinks. Held here
+                // it simply stays put and the card closes around it.
+                width: "100%", height: "100%", display: "flex", alignItems: "center",
+                justifyContent: "flex-start", paddingLeft: 11,
+                background: "transparent", border: "none", cursor: "pointer",
+                color: TH.text, touchAction: "none",
+              }}
             >
               <Logo size={30} color={TH.text} />
             </button>
           </div>
         </div>
+
+        {/* ── The collapse button, once it has been moved ───────────────────
+            Its own fixed element rather than the card relocated. The card's
+            content is laid out at calc(100vw - 26px) from the card's left edge,
+            so moving the card would drag the whole header row diagonally across
+            the screen for the 150ms the inner takes to fade in. This way the
+            card keeps its geometry and its measurements exactly, and the mark
+            visibly flies home into the card as the card grows there. */}
+        {logoFloating && (
+          <button
+            {...logoHandlers}
+            aria-label="Show search and player"
+            style={{
+              position: "fixed", top: 0, left: 0,
+              width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
+              transform: `translate3d(${floatX}px, ${floatY}px, 0)`,
+              ...CARD_SKIN,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: TH.text, cursor: "pointer", zIndex: 60, touchAction: "none",
+              opacity: !chromeCollapsed ? 0 : overRemove ? 0.4 : 1,
+              pointerEvents: chromeCollapsed ? "auto" : "none",
+              // No transform easing while it is following a finger.
+              transition: logoDragging
+                ? "opacity 0.15s ease"
+                : chromeAnimate
+                  ? `transform ${CHROME_MOTION}, opacity 0.2s ease`
+                  : "opacity 0.2s ease",
+            }}
+          >
+            <Logo size={30} color={TH.text} />
+          </button>
+        )}
+
+        {/* ── Drop here to send it back ─────────────────────────────────────
+            Only while dragging. Hit-tested against the finger, not the button,
+            which is clamped to a band that stops short of here. */}
+        {logoDragging && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "fixed", left: 0, right: 0, bottom: 40, zIndex: 510,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+              pointerEvents: "none", animation: "mpFadeIn 0.16s ease both",
+            }}
+          >
+            <div style={{ fontSize: 12, color: overRemove ? "#e8445a" : TH.muted, fontWeight: 600 }}>
+              Back to the top left
+            </div>
+            <div style={{
+              width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: overRemove ? TH.binBg : TH.sheetBg,
+              border: `1px solid ${overRemove ? TH.binBorder : TH.border}`,
+              color: overRemove ? "#e8445a" : TH.muted,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+              transform: `scale(${overRemove ? 1.14 : 1})`,
+              transition: "transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease",
+            }}>
+              <IC.Close />
+            </div>
+          </div>
+        )}
 
         {/* ── Collapse hint ────────────────────────────────────────────────
             The first few times the chrome folds itself away, say so. Without
@@ -2598,7 +2945,10 @@ export default function App() {
             className="mp-hint"
             onClick={() => { setCollapseHint(false); toggleChrome(); }}
             style={{
-              position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 16px)", left: 74, zIndex: 61,
+              // Beside the button, wherever the button is. Pinned to the top left
+              // it pointed at nothing once the button had been moved.
+              position: "absolute", top: hintTop, left: hintLeft, zIndex: 61,
+              transition: move("top", "left"),
               display: "flex", alignItems: "center", gap: 7, cursor: "pointer",
               background: TH.sheetBg, border: `1px solid ${TH.border}`, borderRadius: 18,
               padding: "6px 13px 6px 10px", boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
@@ -2618,7 +2968,8 @@ export default function App() {
             dismisses per version so saying "Later" once means later for good. */}
         {updateInfo && (
           <div style={{
-            position: "absolute", top: topInset, left: 12, right: 12, zIndex: 120,
+            position: "absolute", top: cardBottom, left: 12, right: 12, zIndex: 120,
+            transition: move("top"),
             background: TH.sheetBg, border: `1px solid ${TH.border}`, borderRadius: 16,
             boxShadow: "0 12px 40px rgba(0,0,0,0.5)", padding: "14px 16px 12px",
           }}>
@@ -2664,11 +3015,11 @@ export default function App() {
             overflow:hidden so its fold animation has something to clip, and
             an absolutely-positioned dropdown inside it was clipped along with
             everything else — the menu opened and was simply invisible. Anchored
-            here to `topInset`, which already tracks the card's bottom edge. */}
+            here to `cardBottom`, which already tracks the card's bottom edge. */}
         {filterOpen && page === "songs" && !chromeCollapsed && (
           <>
             <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
-            <div style={{ position: "absolute", right: 18, top: topInset - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
+            <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
               {FILTER_OPTIONS.map((opt: { id: FilterId; label: string }) => (
                 <button key={opt.id} onClick={() => { setFilter(opt.id); setFilterOpen(false); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "13px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: filter === opt.id ? TH.text : TH.muted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", fontWeight: filter === opt.id ? "700" : "400" }}>
                   <span>{opt.label}</span>{filter === opt.id && IC.Check(TH.accent)}
@@ -2710,7 +3061,8 @@ export default function App() {
             <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setChromeMenuOpen(false)} />
             <div
               style={{
-                position: "absolute", top: topInset, left: 12, zIndex: 200,
+                position: "absolute", top: logoMenuTop, left: logoMenuLeft, zIndex: 200,
+                transition: move("top", "left"),
                 background: TH.sheetBg, border: `1px solid ${TH.border}`, borderRadius: 16,
                 boxShadow: "0 12px 40px rgba(0,0,0,0.45)", padding: "6px 6px 10px", width: 268,
               }}
@@ -2733,6 +3085,24 @@ export default function App() {
                   ? "The header and player fold away as you scroll down."
                   : "They only fold when you tap the logo."}
               </div>
+
+              {/* Only once the button has been moved. The X you drop it on is
+                  the other way back, and that one you have to find. */}
+              {logoPos && (
+                <button
+                  onClick={() => { dockLogo(); setChromeMenuOpen(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    marginTop: 10, background: "transparent", border: "none",
+                    borderTop: `1px solid ${TH.border}`, cursor: "pointer",
+                    padding: "12px 12px 4px", color: TH.text,
+                    fontFamily: "inherit", fontSize: 15, textAlign: "left",
+                  }}
+                >
+                  <span style={{ display: "flex", color: TH.muted }}><IC.Close /></span>
+                  <span>Move the button back</span>
+                </button>
+              )}
             </div>
           </>
         )}
@@ -2748,10 +3118,13 @@ export default function App() {
               ref={scrollRef}
               style={{
                 flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y",
-                paddingTop: topInset, paddingBottom: bottomH + 64 + 12,
-                // Only the bottom is transitioned: paddingTop already glides,
-                // driven per-frame by the ResizeObserver on the folding header.
-                transition: move("padding-bottom"),
+                paddingTop: songsInset, paddingBottom: bottomH + 64 + 12,
+                // Both are transitioned now. The top used to be driven a frame at
+                // a time by a ResizeObserver on the animating card, so it followed
+                // the card rather than moving with it. React writes this padding
+                // and the card's height in the same commit, so they share a
+                // transition start time and stay locked together.
+                transition: move("padding-top", "padding-bottom"),
               }}
               data-tour="songs"
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
@@ -2856,7 +3229,7 @@ export default function App() {
                 the player with a fixed gap; when nothing is playing it sits
                 near the bottom edge instead. */}
             <div
-              className={page === "songs" && !selectMode && displayList.length > 0 && listScrollTop > topInset ? "stt stt-show" : "stt stt-hide"}
+              className={page === "songs" && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
               style={{
                 position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90,
                 // The .stt class animates the show/hide; `bottom` is added here
@@ -2871,12 +3244,21 @@ export default function App() {
                   // Jumping to the top should simply arrive with the chrome
                   // already there — folding it back open over a third of a
                   // second while the list races past reads as a glitch.
-                  setChromeAnimate(false);
-                  chromeManualRef.current = null;
-                  setChromeOpen(true);
+                  //
+                  // With automatic collapsing off, though, the fold is the
+                  // user's to set: this button used to force the header open
+                  // and throw the manual override away, so folding it by hand
+                  // and then tapping here quietly undid the setting. It only
+                  // scrolls now, exactly as handleChromeScroll only scrolls.
+                  const auto = autoCollapseRef.current;
+                  if (auto) {
+                    setChromeAnimate(false);
+                    chromeManualRef.current = null;
+                    setChromeOpen(true);
+                  }
                   beginProgrammaticScroll();
                   scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-                  window.setTimeout(() => setChromeAnimate(true), 600);
+                  if (auto) window.setTimeout(() => setChromeAnimate(true), 600);
                 }}
                 aria-label="Scroll to top"
                 style={{ width: 46, height: 46, borderRadius: "50%", background: TH.surface, border: `1px solid ${TH.border}`, color: TH.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.4)" }}>
@@ -2929,7 +3311,7 @@ export default function App() {
             onTouchEnd={onPageTouchEnd}
           >
             <PlaylistsView
-              topInset={topInset}
+              topInset={playlistsInset}
               bottomInset={bottomH + 12}
               resetToListSignal={page === "songs"}
               backSignal={playlistBackSignal}

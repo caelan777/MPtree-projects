@@ -29,6 +29,11 @@ interface Step {
 
 const STEPS: Step[] = [
   {
+    target: '[data-tour="logo"]',
+    title: "The logo is a button",
+    body: "Tap it to fold the header and the player away and give the list the whole screen. Tap again to bring them back. Hold it for options, and while it is folded you can drag it wherever you want it.",
+  },
+  {
     target: '[data-tour="search"]',
     title: "Find anything fast",
     body: "Search your whole library by song or artist. The ✕ clears it in one tap.",
