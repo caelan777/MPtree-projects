@@ -6,6 +6,11 @@ own score.
 **[script.md](script.md) is the companion**, with every cut timed to the frame,
 the voiceover, and the copy to post under it.
 
+**[paper-ad.md](paper-ad.md) is a second film**, forty seconds in cut paper,
+about opening an app and being handed an ad instead of a song. It is a script
+rather than a renderer: nothing in this folder builds it, because the whole
+point is that a person cut it out and photographed it.
+
 ```bash
 node Branding/ad/make-ad.mjs            # mptree-ad.mp4          1080x1920
 node Branding/ad/make-ad.mjs --tiktok   # mptree-ad-tiktok.mp4   1080x1920
