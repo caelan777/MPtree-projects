@@ -42,7 +42,8 @@
       <a href="#look">How it looks</a>
       <a href="#features">Features</a>
       <a href="#support">Support</a>
-      <a class="btn btn-sm" href="download.html">Download</a>
+      <a class="btn btn-sm" href="https://play.google.com/store/apps/details?id=com.caelan.mptree"
+         target="_blank" rel="noopener">Google Play</a>
     </nav>
   </div>
 </header>
@@ -69,9 +70,15 @@
         MPTree plays the music files already on your phone. No subscription, no
         internet needed. It is free, and nothing you listen to ever leaves your device.
       </p>
+      <!-- Google Play is the way in now. The direct download is still here,
+           one step down, for anyone who cannot use Play or wants an older
+           build. Note the two are signed with different keys: Play re-signs
+           what it is given, so Android will not install one over the other.
+           See docs/play-release-checklist.html. -->
       <div class="cta">
-        <a class="btn btn-lg" href="download.html">
-          Download for Android
+        <a class="btn btn-lg" href="https://play.google.com/store/apps/details?id=com.caelan.mptree"
+           target="_blank" rel="noopener">
+          Get it on Google Play
         </a>
         <span class="btn btn-lg btn-soon" aria-disabled="true">
           Windows
@@ -81,12 +88,14 @@
       <!-- Version and date are filled in from assets/versions.js, the one place
            a release is described. -->
       <p class="cta-sub">
-        <a class="ver-badge" href="versions.html">
+        <a class="ver-badge" href="download.html">Download another version</a>
+        <span class="ver-note">
           <span id="latest-version">Latest version</span>
           <span class="ver-dot" aria-hidden="true">·</span>
           <span id="latest-date"></span>
-        </a>
-        <span class="ver-note">Beta, released here first. Works on Android 7.0 and newer.</span>
+          <span class="ver-dot" aria-hidden="true">·</span>
+          Android 7.0 and newer
+        </span>
       </p>
     </div>
 
@@ -179,10 +188,11 @@
   <section id="get" class="section wrap">
     <div class="get">
       <h2>Get MPTree</h2>
-      <p>Free, for Android 7.0 or newer. Installing takes about a minute.</p>
+      <p>Free, for Android 7.0 or newer. No account, no ads, 2.8 MB.</p>
       <div class="cta cta-center">
-        <a class="btn btn-lg" href="download.html">
-          Download for Android
+        <a class="btn btn-lg" href="https://play.google.com/store/apps/details?id=com.caelan.mptree"
+           target="_blank" rel="noopener">
+          Get it on Google Play
         </a>
         <span class="btn btn-lg btn-soon" aria-disabled="true">
           Windows
@@ -190,20 +200,25 @@
         </span>
       </div>
 
+      <!-- Two steps rather than the old three. Installing from Play is one
+           tap, so the walkthrough for allowing an unknown source moved to
+           download.html, where it is still needed. -->
       <ol class="steps">
         <li>
           <span class="step-n">1</span>
-          <div><b>Download the app</b><p>Tap the button. Your phone saves the MPTree.apk file.</p></div>
+          <!-- strong, not b: .steps b is display:block so that the step title
+               sits on its own line, which turns an inline b into a line break. -->
+          <div><b>Install it</b><p>Tap the button, then <strong>Install</strong> on the Play Store page. Nothing to sign up for.</p></div>
         </li>
         <li>
           <span class="step-n">2</span>
-          <div><b>Open the file</b><p>Tap it in your downloads. Android may ask to allow installing from your browser. Allow it, this is normal for apps outside the Play Store.</p></div>
-        </li>
-        <li>
-          <span class="step-n">3</span>
           <div><b>Let it find your music</b><p>Open MPTree and allow access to your audio files. Your library appears, and you are ready to play.</p></div>
         </li>
       </ol>
+
+      <p class="cta-sub">
+        Not using Google Play? You can <a href="download.html">install it directly</a> instead.
+      </p>
     </div>
   </section>
 
