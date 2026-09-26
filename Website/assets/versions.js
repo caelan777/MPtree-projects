@@ -31,6 +31,21 @@ window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
   {
+    version: "0.2.1",
+    date:    "2026-09-27",
+    channel: "beta",
+    tag:     "v0.2.1",
+    notes: [
+      "Swapping between Songs and Playlists no longer nudges the list you were reading. Each tab keeps its own place now, so nothing moves under your thumb.",
+      "The collapse button can be moved. Fold the header away, then hold the round logo and drag it anywhere down the screen. An X appears at the bottom to send it back to the corner, and dropping it near the corner puts it back by itself.",
+      "Naming a new playlist works. The box used to open behind the header card, where you could not see it or reach it.",
+      "Everything that folds away now folds at the same rate. The Playlists tab used to snap while the logo was still moving.",
+      "With auto-collapse switched off, the scroll-to-top button leaves the header alone instead of opening it again.",
+      "The equaliser shows the bands as a level either side of zero, rather than five white blocks.",
+      "The tutorial says what the logo does.",
+    ],
+  },
+  {
     version: "0.2.0",
     date:    "2026-09-25",
     channel: "play",
