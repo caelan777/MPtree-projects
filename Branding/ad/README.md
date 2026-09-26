@@ -1,7 +1,7 @@
 # The ad
 
-A nineteen second film for the Google Play launch. Black and white, 60 fps,
-with its own score.
+A nineteen second film for the Google Play launch. Black and white, with its
+own score.
 
 **[script.md](script.md) is the companion**, with every cut timed to the frame,
 the voiceover, and the copy to post under it.
@@ -10,9 +10,12 @@ the voiceover, and the copy to post under it.
 node Branding/ad/make-ad.mjs            # mptree-ad.mp4          1080x1920
 node Branding/ad/make-ad.mjs --tiktok   # mptree-ad-tiktok.mp4   1080x1920
 node Branding/ad/make-ad.mjs --square   # mptree-ad-square.mp4   1080x1080
+node Branding/ad/make-ad.mjs --clean    # ...-clean.mp4, no writing until the end
 node Branding/ad/make-ad.mjs --vo       # ...-vo.mp4, with the voiceover
 node Branding/ad/make-ad.mjs --silent   # ...-silent.mp4, no sound at all
 ```
+
+The flags combine: `--clean --tiktok` is the clean cut composed for TikTok.
 
 They land next to this file. None are committed: they are eleven to seventeen
 megabytes each, and one command makes them again.
@@ -34,6 +37,20 @@ Same length means one piece of music fits every cut.
 
 It holds on the last frame instead of fading, so the end card can be frozen for
 as long as a post needs.
+
+## The clean cut
+
+`--clean` carries no writing at all until the end card, which reads **MPTree /
+Now on Google Play**. It is for laying your own captions over, and for the
+places that cover the picture with their own furniture anyway.
+
+It is not the captioned film with the words switched off. Dropping the
+statement card would leave nearly three seconds of black in the middle, which
+reads as a fault on mute, so that bar runs a fourth screen instead, the song
+menu, and the three hits in the score land on it rather than on three lines.
+The record also stays centred in the opening, since it was only moving up to
+make room for words that no longer arrive, and the phone sits higher for the
+same reason.
 
 ## The sound
 
@@ -98,20 +115,32 @@ node Branding/ad/make-ad.mjs --bench             # cost of the heaviest frame
 Open `ad.build.html` in a browser and it plays on a loop, which is the fastest
 way to judge a timing change. Edit `ad.html`, never the built copy.
 
-**On the frame rate.** The recorder stamps frames by the wall clock, so a
-machine that cannot draw one inside its budget does not drop it, it holds it,
-and the film comes out longer and slower than it was written.
+**On the frame rate, which is 30.** The recorder stamps frames by the wall
+clock, so a machine that cannot draw one inside its budget does not drop it, it
+holds it, and the film comes out longer and slower than it was written.
 
 With sound that is not cosmetic. The score is scheduled on the audio clock and
 plays in real time, so a render that stretches by a second puts the picture a
-second off the music by the end. Every render measures it, and a render with
-sound that drifts past 0.1s is **rejected** with a non-zero exit rather than
-written off as a warning. It has happened: one pass came out 0.72s long and was
-thrown away.
+second off the music by the end.
 
-If it keeps happening, render at `--fps 30`. On the machine this was built on
-the heaviest frame costs 8 ms against a 17 ms budget, so 60 fps has room.
-`--bench` asks that question without rendering anything.
+This was built at 60 and moved to 30, because 60 did not hold. A 16.7 ms budget
+was enough for the captioned cut on a quiet machine and not enough for anything
+else: renders came out 0.72s, 2.22s, 4.49s and once 15.66s long. At 30 there is
+twice the room and every cut lands on 19.00s. `--fps 60` is still there for a
+quiet machine, and it does look better on the turning record, but check what it
+prints before using the file.
+
+**Every render is checked twice and can fail.** Total drift past 0.1s with
+sound is rejected with a non-zero exit. So is a take where more than a tenth of
+the frames missed their slot, even when the total comes out right: one cold
+render finished dead on 19.00s with 462 of 570 frames late and came out 2.8 MB
+against the 13 MB the same film makes when it runs clean. The clock was fine
+and the file was not.
+
+There was a `--bench` here that measured a frame with `getImageData`. It read
+about five times high, because that forces a pixel readback the recorder never
+does, and it called a render that drifts nothing impossible. It is gone. The
+drift line at the end of a render is the honest measurement.
 
 ## Two things to know
 

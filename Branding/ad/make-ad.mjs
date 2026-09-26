@@ -45,7 +45,13 @@ const SIZE = flag("square") ? [1080, 1080] : [1080, 1920];
 const CONFIG = {
   width:    Number(arg("width",  SIZE[0])),
   height:   Number(arg("height", SIZE[1])),
-  fps:      Number(arg("fps", 60)),
+  // 30, not 60. The recorder stamps frames by the wall clock, so a frame drawn
+  // late is held rather than dropped and the film stretches. At 60 the budget
+  // is 16.7 ms a frame and the heavier cuts blew through it, coming out two,
+  // four and once fifteen seconds long. At 30 there is twice the room and the
+  // renders land on 19.00s. A film in sync with its own score beats a smoother
+  // one that is not. --fps 60 is there for a quiet machine.
+  fps:      Number(arg("fps", 30)),
   duration: Number(arg("duration", 19)),
   // TikTok lays its caption, its username and its buttons over the bottom of
   // the frame. Handing that band back and composing above it is the whole
@@ -53,6 +59,9 @@ const CONFIG = {
   // piece of music fits both.
   safeTop:    flag("tiktok") ? 0.06 : 0,
   safeBottom: flag("tiktok") ? 0.20 : 0,
+  // --clean carries no writing at all until the end card, for laying your own
+  // captions over the top.
+  text: !flag("clean"),
 };
 const BITRATE = Number(arg("bitrate", 26_000_000));
 
@@ -60,7 +69,7 @@ const BITRATE = Number(arg("bitrate", 26_000_000));
 // anyone who would rather lay their own track over the top in an editor.
 const SOUND = flag("silent") ? false : flag("vo-only") ? "voice-only" : true;
 
-const suffix = (flag("silent") ? "-silent" : "") + (flag("vo") ? "-vo" : "");
+const suffix = (flag("clean") ? "-clean" : "") + (flag("silent") ? "-silent" : "") + (flag("vo") ? "-vo" : "");
 const OUT = resolve(HERE, arg("out",
   (flag("square") ? "mptree-ad-square" :
    flag("tiktok") ? "mptree-ad-tiktok" : "mptree-ad") + suffix + ".mp4"));
@@ -76,7 +85,9 @@ if (!markPath) {
   process.exit(1);
 }
 
-const SHOT_FILES = ["songs", "player", "playlists"];
+// The clean cut runs a fourth screen where the captioned one puts its
+// statement card, so both sets of screenshots go in either way.
+const SHOT_FILES = ["songs", "player", "playlists", "menu"];
 const shots = {};
 for (const name of SHOT_FILES) {
   const p = join(RAW, name + ".png");
@@ -242,11 +253,6 @@ try {
     console.log(`  peak ${top.toFixed(3)} (clipping over 1.0)`);
   }
 
-  if (flag("bench")) {
-    const ms = await evaluate(cdp, "window.adBench(60)");
-    console.log(`  heaviest frame costs ${ms.toFixed(1)} ms  (budget at ${CONFIG.fps} fps is ${(1000 / CONFIG.fps).toFixed(1)} ms)`);
-  }
-
   // A handful of moments as stills, for checking a render without sitting
   // through it: --at 0.8,3.4,6.2 (seconds).
   const at = arg("at", "");
@@ -313,10 +319,17 @@ try {
       // held rather than dropped, so a stretched render slides the picture off
       // the music by exactly this much. A drifted file is not shippable.
       const limit = SOUND ? 0.1 : 0.25;
-      if (Math.abs(off) > limit) {
+      const lateFrac = drift.late / total;
+      // Total drift alone is not enough to pass a take. A cold first render
+      // once finished dead on 19.00s with 462 of 570 frames late, and came out
+      // 2.8 MB against the 13 MB the same film makes when it runs clean: the
+      // loop caught up on the clock while the encoder was handed a mess.
+      if (Math.abs(off) > limit || lateFrac > 0.1) {
         console.error(
-          `\n  REJECTED: ${off.toFixed(2)}s of drift is past the ${limit}s limit.` +
-          (SOUND ? "\n  The picture would sit that far off the music by the end." : "") +
+          `\n  REJECTED: ` + (Math.abs(off) > limit
+            ? `${off.toFixed(2)}s of drift is past the ${limit}s limit.`
+            : `${drift.late} of ${total} frames missed their slot (${(lateFrac * 100).toFixed(0)}%).`) +
+          (SOUND && Math.abs(off) > limit ? "\n  The picture would sit that far off the music by the end." : "") +
           "\n  Run it again, or render at --fps 30 if it keeps happening.",
         );
         cdp.close();
