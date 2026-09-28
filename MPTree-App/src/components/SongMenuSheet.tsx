@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { makeSH, type T } from "../themes";
+import { t } from "../i18n";
 import type { Song, Playlist } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
@@ -95,7 +96,7 @@ export function SongMenuSheet({
               {dispName}
             </div>
             <div style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {dispArtist || "Unknown Artist"}
+              {dispArtist || t("Unknown Artist")}
             </div>
           </div>
           <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
@@ -111,33 +112,33 @@ export function SongMenuSheet({
                 menu to do. The rest of the list is one-tap verbs; these three
                 open something. */}
             <div style={{ display: "flex", gap: 8, padding: "12px 20px 6px" }}>
-              <BigAction icon={<IC.Bell />}  label="Set as ringtone" onClick={onSetRingtone} T={T} />
-              <BigAction icon={<IC.Photo />} label="Photo"    onClick={onChangePhoto} T={T} />
-              <BigAction icon={<IC.Edit />}  label="Edit"     onClick={onEdit}        T={T} />
+              <BigAction icon={<IC.Bell />}  label={t("Set as ringtone")} onClick={onSetRingtone} T={T} />
+              <BigAction icon={<IC.Photo />} label={t("Photo")}    onClick={onChangePhoto} T={T} />
+              <BigAction icon={<IC.Edit />}  label={t("Edit")}     onClick={onEdit}        T={T} />
             </div>
             <div style={{ height: 1, background: T.border, margin: "8px 20px 2px" }} />
-            {row("play", <IC.Play />, "Play", onPlay)}
+            {row("play", <IC.Play />, t("Play"), onPlay)}
             {row("next", (
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>
               </svg>
-            ), "Play next", onPlayNext)}
-            {row("add", <IC.Plus />, "Add to playlist", () => setPane("playlists"), { trailing: <IC.ChevronR /> })}
-            {row("lyrics", <IC.Lyrics />, "Lyrics", onEditLyrics)}
-            {row("cut", <IC.Scissors />, "Cut", onCut)}
-            {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? "Unlike" : "Like", onToggleLike)}
-            {row("share", <IC.Share />, "Share", onShare)}
+            ), t("Play next"), onPlayNext)}
+            {row("add", <IC.Plus />, t("Add to playlist"), () => setPane("playlists"), { trailing: <IC.ChevronR /> })}
+            {row("lyrics", <IC.Lyrics />, t("Lyrics"), onEditLyrics)}
+            {row("cut", <IC.Scissors />, t("Cut"), onCut)}
+            {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? t("Unlike") : t("Like"), onToggleLike)}
+            {row("share", <IC.Share />, t("Share"), onShare)}
             <div style={{ height: 1, background: T.border, margin: "6px 20px" }} />
             {onRemoveFromPlaylist && row("unpin", (
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
                 <line x1="3" y1="3" x2="21" y2="21"/>
               </svg>
-            ), "Remove from playlist", onRemoveFromPlaylist)}
+            ), t("Remove from playlist"), onRemoveFromPlaylist)}
             {/* Always spelled out the same way, in the playlist and out of it.
                 It reads identically wherever you meet it, and it says what it
                 actually does rather than leaving "Remove" to be guessed at. */}
-            {row("remove", <IC.Trash />, "Remove from library", onRemove, { danger: true })}
+            {row("remove", <IC.Trash />, t("Remove from library"), onRemove, { danger: true })}
           </div>
         ) : (
           <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -151,14 +152,14 @@ export function SongMenuSheet({
               }}
             >
               <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}><IC.ChevronR /></span>
-              Add to playlist
+              {t("Add to playlist")}
             </button>
 
             {creating ? (
               <div style={{ padding: "0 20px 8px" }}>
                 <input
                   autoFocus value={newName} onChange={e => setNewName(e.target.value)}
-                  placeholder="Playlist name" style={sh.inp}
+                  placeholder={t("Playlist name")} style={sh.inp}
                   onKeyDown={e => {
                     if (e.key === "Enter" && newName.trim()) onCreatePlaylistWithSong(newName.trim());
                     if (e.key === "Escape") { setCreating(false); setNewName(""); }
@@ -169,24 +170,24 @@ export function SongMenuSheet({
                     onClick={() => { setCreating(false); setNewName(""); }}
                     style={{ flex: 1, padding: 12, background: T.dim, color: T.text, border: "none", borderRadius: 12, fontSize: 14, fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}
                   >
-                    Cancel
+                    {t("Cancel")}
                   </button>
                   <button
                     onClick={() => { if (newName.trim()) onCreatePlaylistWithSong(newName.trim()); }}
                     disabled={!newName.trim()}
                     style={{ flex: 1, padding: 12, background: T.accent, color: T.playBtnFg, border: "none", borderRadius: 12, fontSize: 14, fontWeight: "700", cursor: newName.trim() ? "pointer" : "default", opacity: newName.trim() ? 1 : 0.5, fontFamily: "inherit" }}
                   >
-                    Create
+                    {t("Create")}
                   </button>
                 </div>
               </div>
             ) : (
-              row("new", <IC.Plus />, "New playlist", () => setCreating(true))
+              row("new", <IC.Plus />, t("New playlist"), () => setCreating(true))
             )}
 
             {playlists.length === 0 && !creating && (
               <div style={{ padding: "18px 20px 24px", color: T.muted, fontSize: 13, lineHeight: 1.6 }}>
-                No playlists yet. Create one to add this song to it.
+                {t("No playlists yet. Create one to add this song to it.")}
               </div>
             )}
 
@@ -201,7 +202,7 @@ export function SongMenuSheet({
                 () => { if (!already) onAddToPlaylist(pl.id); },
                 {
                   trailing: already
-                    ? <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.muted, fontSize: 12 }}>{IC.Check(T.muted)} Added</span>
+                    ? <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.muted, fontSize: 12 }}>{IC.Check(T.muted)} {t("Added")}</span>
                     : <span style={{ color: T.muted, fontSize: 12 }}>{pl.songIds.length}</span>,
                 },
               );

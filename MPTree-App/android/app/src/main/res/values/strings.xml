@@ -4,4 +4,13 @@
     <string name="title_activity_main">MPTree</string>
     <string name="package_name">com.caelan.mptree</string>
     <string name="custom_url_scheme">com.caelan.mptree</string>
+    <!-- Everything else the app says is in the WebView (src/i18n.ts). These few
+         are drawn by Android itself, so they follow the phone's language. -->
+    <string name="channel_playback">Music playback</string>
+    <string name="channel_playback_desc">MPTree now-playing controls</string>
+    <string name="action_previous">Previous</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_next">Next</string>
+    <string name="not_playing">Not playing</string>
 </resources>

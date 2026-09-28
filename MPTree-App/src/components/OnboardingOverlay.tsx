@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { T } from "../themes";
+import { t } from "../i18n";
 import { Logo } from "./Logo";
 
 // ─── ONBOARDING OVERLAY ──────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ const STEPS: Step[] = [
   {
     target: '[data-tour="settings"]',
     title: "Make it yours",
-    body: "Equalizer with presets, crossfade, sleep timer, backups, themes, and the bin all live here. Enjoy the music!",
+    body: "Sound, sleep timer, backups, size, language and help all live here. Enjoy the music!",
   },
 ];
 
@@ -220,7 +221,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
             <div style={{ margin: "0 auto 18px", width: 84 }}>
               <Logo size={84} color={T.text} />
             </div>
-            <div style={{ fontSize: 23, fontWeight: 800, color: T.text }}>Welcome to MPTree</div>
+            <div style={{ fontSize: 23, fontWeight: 800, color: T.text }}>{t("Welcome to MPTree")}</div>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>by Verkuijl</div>
             <div style={{ fontSize: 15, color: T.textSub, marginTop: 16, lineHeight: 1.55 }}>
               Your music. Zero ads.<br />Let me show you around. It takes 20 seconds.
@@ -234,7 +235,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
                 fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               }}
             >
-              Show me
+              {t("Show me")}
             </button>
             <button
               onClick={onDone}
@@ -244,7 +245,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
                 border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}
             >
-              Skip
+              {t("Skip")}
             </button>
           </div>
         </div>
@@ -256,9 +257,9 @@ export function OnboardingOverlay({ onDone, T }: Props) {
             maxWidth: 420, margin: "0 auto",
             boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
           }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>{current!.title}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>{t(current!.title)}</div>
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 8, lineHeight: 1.55 }}>
-              {current!.body}
+              {t(current!.body)}
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
               {/* Progress dots */}
@@ -277,7 +278,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
                     onClick={onDone}
                     style={{ background: "transparent", border: "none", color: T.muted, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "9px 10px", fontFamily: "inherit" }}
                   >
-                    Skip
+                    {t("Skip")}
                   </button>
                 )}
                 <button
@@ -288,7 +289,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
                     fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                   }}
                 >
-                  {isLast ? "Let's go" : "Next"}
+                  {isLast ? t("Let's go") : t("Next")}
                 </button>
               </div>
             </div>

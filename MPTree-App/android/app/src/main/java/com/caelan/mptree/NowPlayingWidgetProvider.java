@@ -46,7 +46,7 @@ public class NowPlayingWidgetProvider extends AppWidgetProvider {
     private void updateOne(Context context, AppWidgetManager appWidgetManager, int widgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_now_playing);
 
-        String title    = "Not playing";
+        String title    = context.getString(R.string.not_playing);
         String artist   = "";
         boolean playing = false;
         boolean hasTrack = false;

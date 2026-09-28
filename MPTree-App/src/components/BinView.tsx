@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { T } from "../themes";
+import { t, tn } from "../i18n";
 import type { Song, SongMeta } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
@@ -53,15 +54,15 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
         <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, padding: 4 }}>
           <IC.Close />
         </button>
-        <span style={{ fontSize: 17, fontWeight: "700", color: T.text }}>Removed Songs</span>
+        <span style={{ fontSize: 17, fontWeight: "700", color: T.text }}>{t("Removed Songs")}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, color: T.muted }}>{removedSongs.length} songs</span>
+          <span style={{ fontSize: 13, color: T.muted }}>{tn(removedSongs.length, "{n} song", "{n} songs")}</span>
           {removedSongs.length > 0 && (
             <button
               onClick={() => setConfirmEmpty(true)}
               style={{ padding: "6px 11px", background: "transparent", border: "1px solid #e8445a55", borderRadius: 8, color: "#e8445a", fontSize: 12, fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap" }}
             >
-              Empty Bin
+              {t("Empty Bin")}
             </button>
           )}
         </div>
@@ -70,13 +71,13 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
       {removedSongs.length === 0 ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: T.muted, gap: 12 }}>
           <IC.Bin />
-          <div style={{ fontSize: 15, fontWeight: "600" }}>Bin is empty</div>
-          <div style={{ fontSize: 13 }}>Removed songs appear here</div>
+          <div style={{ fontSize: 15, fontWeight: "600" }}>{t("Bin is empty")}</div>
+          <div style={{ fontSize: 13 }}>{t("Removed songs appear here")}</div>
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
           <div style={{ padding: "10px 16px 6px", fontSize: 12, color: T.muted }}>
-            These songs won't be re-added when you scan. Tap Restore to bring them back, or use the trash icon to delete a song permanently.
+            {t("These songs won't be re-added when you scan. Tap Restore to bring them back, or use the trash icon to delete a song permanently.")}
           </div>
           {removedSongs.map(song => {
             const isCurrent = currentSongId === song.id;
@@ -101,7 +102,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
                     {dispName(song)}
                   </div>
                   <div style={{ fontSize: 13, color: T.muted, opacity: 0.7, marginTop: 2 }}>
-                    {dispArtist(song) || "Unknown Artist"}
+                    {dispArtist(song) || t("Unknown Artist")}
                   </div>
                 </div>
               </div>
@@ -113,7 +114,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
               </button>
               <button
                 onClick={() => setDeleteSong(song)}
-                title="Delete permanently"
+                title={t("Delete permanently")}
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, background: "transparent", border: "none", borderRadius: 8, color: "#e8445a", cursor: "pointer", flexShrink: 0 }}
               >
                 <TrashIcon />
@@ -126,9 +127,9 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
 
       {deleteSong && (
         <ConfirmSheet
-          title="Delete permanently"
-          body={`"${dispName(deleteSong)}" will be permanently deleted from your device. This can't be undone.`}
-          confirmLabel="Delete Forever"
+          title={t("Delete permanently")}
+          body={t("\"{name}\" will be permanently deleted from your device. This can't be undone.", { name: dispName(deleteSong) })}
+          confirmLabel={t("Delete Forever")}
           onConfirm={() => { onDeleteForever(deleteSong); setDeleteSong(null); }}
           onCancel={() => setDeleteSong(null)}
           T={T}
@@ -137,9 +138,9 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
 
       {confirmEmpty && (
         <ConfirmSheet
-          title="Empty bin"
-          body={`${removedSongs.length} ${removedSongs.length === 1 ? "song" : "songs"} will be permanently deleted from your device. This can't be undone.`}
-          confirmLabel="Delete All"
+          title={t("Empty bin")}
+          body={tn(removedSongs.length, "{n} song will be permanently deleted from your device. This can't be undone.", "{n} songs will be permanently deleted from your device. This can't be undone.")}
+          confirmLabel={t("Delete All")}
           onConfirm={() => { onEmptyBin(); setConfirmEmpty(false); }}
           onCancel={() => setConfirmEmpty(false)}
           T={T}

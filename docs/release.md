@@ -146,6 +146,9 @@ installed by anyone who sideloaded that beta.
    package.json through Vite, so there is nothing to edit in the UI.
 2. Add an entry at the TOP of `Website/assets/versions.js` with the version, the date, and
    the notes. The homepage badge and versions.html both read from it.
+   Put the same notes in `MPTree-App/src/changelog.ts`: that is the "New in MPTree" sheet
+   people see once after updating, bundled because the app is offline. Every line there is
+   an English key, so add its Dutch to `src/i18n-nl.ts` in the same commit.
 3. Rebuild the website demo if the app changed: `npm run build:demo` in `MPTree-App/`.
    It writes `Website/demo/`, which is committed.
 4. Bump the `?v=` query on the site's assets so returning visitors get the new CSS and JS.

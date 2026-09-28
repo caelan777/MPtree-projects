@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { registerPlugin } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
+import { t } from "../i18n";
 import type { Song } from "../types";
 import { IC } from "./Icons";
 
@@ -115,7 +116,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
         <div style={sh.handle} />
         <div style={sh.hdr}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Cut track</div>
+            <div style={{ fontSize: 16, fontWeight: "700", color: T.text }}>{t("Cut track")}</div>
             <div style={{ fontSize: 12.5, color: T.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {song.title}
             </div>
@@ -140,12 +141,12 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
 
           {/* Two decisions, one slider each. */}
           <Handle
-            label="Start" value={startMs} T={T} fmt={fmt}
+            label={t("Start")} value={startMs} T={T} fmt={fmt}
             min={0} max={total}
             onChange={v => { if (v <= endMs - MIN_LEN) { setStartMs(v); void scrubTo(v); } }}
           />
           <Handle
-            label="End" value={endMs} T={T} fmt={fmt}
+            label={t("End")} value={endMs} T={T} fmt={fmt}
             min={0} max={total}
             onChange={v => { if (v >= startMs + MIN_LEN) { setEndMs(v); void scrubTo(v); } }}
           />
@@ -163,13 +164,13 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
             }}
           >
             {isPlaying ? <IC.Pause /> : <IC.Play />}
-            {isPlaying ? "Stop preview" : "Preview the cut"}
+            {isPlaying ? t("Stop preview") : t("Preview the cut")}
           </button>
 
-          <div style={sh.lbl}>Save as</div>
+          <div style={sh.lbl}>{t("Save as")}</div>
           <input value={newName} onChange={e => setNewName(e.target.value)} style={sh.inp} />
           <div style={{ fontSize: 12, color: T.muted, marginTop: 10, lineHeight: 1.6 }}>
-            Saved as a new track. The original stays unchanged.
+            {t("Saved as a new track. The original stays unchanged.")}
           </div>
         </div>
 
@@ -178,7 +179,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
             onClick={() => onSave(startMs, endMs, newName.trim() || song.title + " (cut)")}
             style={sh.saveBtn}
           >
-            Save cut track
+            {t("Save cut track")}
           </button>
         </div>
       </div>

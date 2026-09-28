@@ -1,25 +1,72 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { makeSH, type T } from "../themes";
 import type { Theme } from "../types";
 import { IC } from "./Icons";
+import { Switch } from "./Switch";
+import { FaqSheet } from "./FaqSheet";
+import { LicencesSheet } from "./LicencesSheet";
+import { LanguageSheet } from "./LanguageSheet";
+import { t, phoneLang, type LangPref } from "../i18n";
 
-const DownloadIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+export type UiSize = "small" | "medium" | "large";
+
+const Svg = ({ children }: { children: ReactNode }) => (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
+    {children}
   </svg>
 );
 
-const UploadIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="17 8 12 3 7 8"/>
-    <line x1="12" y1="3" x2="12" y2="15"/>
-  </svg>
-);
+const DownloadIcon = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
+const UploadIcon   = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></Svg>;
+const GlobeIcon    = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></Svg>;
+const BellIcon     = () => <Svg><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Svg>;
+const TextIcon     = () => <Svg><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></Svg>;
+const LayersIcon   = () => <Svg><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Svg>;
+const ArrowDownIcon= () => <Svg><polyline points="7 13 12 18 17 13"/><line x1="12" y1="6" x2="12" y2="18"/></Svg>;
+const PlayIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></Svg>;
+const HelpIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>;
+const MailIcon     = () => <Svg><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></Svg>;
+const StarIcon     = () => <Svg><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Svg>;
+const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Svg>;
+const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
+const CupIcon      = () => <Svg><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></Svg>;
+
+// Every row in this sheet is the same shape: an icon and a label on the left,
+// something on the right, the whole row one button. Declared out here, not
+// inside the sheet, so React sees the same component on every render and does
+// not rebuild each row whenever the sleep timer ticks.
+const rowStyle = (T: T): React.CSSProperties => ({
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+  width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px",
+  cursor: "pointer", color: T.text, fontFamily: "inherit", textAlign: "left",
+});
+
+function Row({ icon, label, sub, right, onClick, first, T }: {
+  icon: ReactNode; label: string; sub?: string; right?: ReactNode; onClick: () => void; first?: boolean; T: T;
+}) {
+  return (
+    <button onClick={onClick} style={{ ...rowStyle(T), marginTop: first ? 0 : 8 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, minWidth: 0 }}>
+        <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block" }}>{label}</span>
+          {sub && <span style={{ display: "block", fontSize: 12.5, color: T.muted, lineHeight: 1.45, marginTop: 2 }}>{sub}</span>}
+        </span>
+      </span>
+      {right ?? <IC.ChevronR />}
+    </button>
+  );
+}
+
+function Section({ title, children, T }: { title: string; children: ReactNode; T: T }) {
+  return (
+    <div style={{ padding: "0 20px" }}>
+      <div style={makeSH(T).lbl}>{title}</div>
+      {children}
+    </div>
+  );
+}
 
 type SettingsSheetProps = {
   theme: Theme;
@@ -43,6 +90,23 @@ type SettingsSheetProps = {
   /** Whether a song is loaded (enables the "end of track" option). */
   hasCurrentSong: boolean;
   onSetSleepTimer: (minutes: number | "endOfTrack" | null) => void;
+  // ── Appearance and general ──
+  uiSize: UiSize;
+  onSetUiSize: (s: UiSize) => void;
+  lang: LangPref;
+  onSetLang: (l: LangPref) => void;
+  /** null hides the row: the demo has nothing to update. */
+  updateNotices: boolean | null;
+  onSetUpdateNotices: (on: boolean) => void;
+  // ── Other apps ──
+  mixOthers: boolean;
+  duckOthers: boolean;
+  onSetMix: (mix: boolean, duck: boolean) => void;
+  // ── Help ──
+  onFeedback: () => void;
+  /** Absent outside the Play build: a sideloaded copy cannot be rated on Play. */
+  onRate?: () => void;
+  onPrivacy: () => void;
   onClose: () => void;
   T: T;
 };
@@ -52,9 +116,15 @@ export function SettingsSheet({
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen, onSupport,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
+  uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
+  mixOthers, duckOthers, onSetMix,
+  onFeedback, onRate, onPrivacy,
   onClose, T,
 }: SettingsSheetProps) {
   const sh = makeSH(T);
+  // Sheets opened from here stack on top of this one, so closing them lands
+  // you back where you were in Settings rather than on the song list.
+  const [sub, setSub] = useState<null | "faq" | "licences" | "language">(null);
 
   // Live remaining-time label for an active fixed-clock timer.
   const [now, setNow] = useState(() => Date.now());
@@ -92,8 +162,8 @@ export function SettingsSheet({
   const sleepActive = sleepUntil != null || sleepEndOfTrack;
   const remainingMs = sleepUntil != null ? Math.max(0, sleepUntil - now) : 0;
   const remainingLabel = (() => {
-    if (sleepEndOfTrack) return "End of track";
-    if (sleepUntil == null) return "Off";
+    if (sleepEndOfTrack) return t("End of track");
+    if (sleepUntil == null) return t("Off");
     const totalSec = Math.round(remainingMs / 1000);
     const m = Math.floor(totalSec / 60);
     const s = totalSec % 60;
@@ -101,6 +171,17 @@ export function SettingsSheet({
   })();
 
   const SLEEP_PRESETS = [15, 30, 45, 60];
+
+  const row = rowStyle(T);
+
+  const SIZES: { id: UiSize; label: string }[] = [
+    { id: "small",  label: t("Small")  },
+    { id: "medium", label: t("Medium") },
+    { id: "large",  label: t("Large")  },
+  ];
+  const langLabel = lang === "auto"
+    ? t("Phone ({name})", { name: phoneLang() === "nl" ? "Nederlands" : "English" })
+    : lang === "nl" ? "Nederlands" : "English";
 
   return (
     <div style={sh.overlay} onClick={onClose}>
@@ -122,45 +203,93 @@ export function SettingsSheet({
         >
           <div style={{ ...sh.handle }} />
           <div style={{ ...sh.hdr }}>
-            <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Settings</span>
-            <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
+            <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>{t("Settings")}</span>
+            <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
           </div>
         </div>
 
         <div style={{ overflowY: "auto", flex: 1, paddingBottom: 32, WebkitOverflowScrolling: "touch" }}>
 
-        <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Appearance</div>
-          <button onClick={onToggleTheme} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-              {theme === "dark" ? <IC.Moon /> : <IC.Sun />}
-              <span>{theme === "dark" ? "Dark mode" : "Light mode"}</span>
+        <Section T={T} title={t("Appearance")}>
+          <Row T={T}
+            first
+            onClick={onToggleTheme}
+            icon={theme === "dark" ? <IC.Moon /> : <IC.Sun />}
+            label={theme === "dark" ? t("Dark mode") : t("Light mode")}
+            right={<Switch on={theme === "light"} T={T} />}
+          />
+          {/* Size: text and rows together. One control rather than two: a
+              bigger font in a row that stays the same height is a row that
+              clips. */}
+          <div style={{ ...row, marginTop: 8, cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
+              <TextIcon /><span>{t("Size")}</span>
+            </span>
+            <div role="radiogroup" aria-label={t("Size")} style={{ display: "flex", gap: 4, background: T.surface, borderRadius: 10, padding: 3, border: `1px solid ${T.border}` }}>
+              {SIZES.map(s => (
+                <button
+                  key={s.id}
+                  role="radio"
+                  aria-checked={uiSize === s.id}
+                  onClick={() => onSetUiSize(s.id)}
+                  style={{
+                    flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer",
+                    fontFamily: "inherit", fontWeight: 700,
+                    // Each label drawn at the size it stands for, so the choice
+                    // shows itself before you make it.
+                    fontSize: s.id === "small" ? 12 : s.id === "medium" ? 14 : 16,
+                    background: uiSize === s.id ? T.accent : "transparent",
+                    color: uiSize === s.id ? T.playBtnFg : T.muted,
+                    transition: "background 0.2s, color 0.2s",
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
-            <div style={{ width: 46, height: 26, borderRadius: 13, background: theme === "light" ? T.accent : T.border, position: "relative", transition: "background 0.25s" }}>
-              <div style={{ position: "absolute", top: 3, left: theme === "light" ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
-            </div>
-          </button>
-        </div>
+          </div>
+        </Section>
 
-        <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Audio</div>
-          <button onClick={onOpenAudioEffects} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-              <IC.EQ /><span>Audio Effects</span>
-            </div>
-            <IC.ChevronR />
-          </button>
-          <button onClick={onShowTutorial} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 8, background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text, fontFamily: "inherit" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span>Show Tutorial</span>
-            </div>
-            <IC.ChevronR />
-          </button>
-        </div>
+        <Section T={T} title={t("General")}>
+          <Row T={T}
+            first
+            onClick={() => setSub("language")}
+            icon={<GlobeIcon />}
+            label={t("Language")}
+            right={<span style={{ display: "flex", alignItems: "center", gap: 6, color: T.muted, fontSize: 14 }}>{langLabel}<IC.ChevronR /></span>}
+          />
+          {updateNotices !== null && (
+            <Row T={T}
+              onClick={() => onSetUpdateNotices(!updateNotices)}
+              icon={<BellIcon />}
+              label={t("Update notices")}
+              sub={t("Tell me when a new version of MPTree is out.")}
+              right={<Switch on={updateNotices} T={T} />}
+            />
+          )}
+        </Section>
 
-        <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Sleep Timer</div>
+        <Section T={T} title={t("Audio")}>
+          <Row T={T} first onClick={onOpenAudioEffects} icon={<IC.EQ />} label={t("Audio Effects")} />
+          <Row T={T}
+            onClick={() => onSetMix(!mixOthers, mixOthers ? false : duckOthers)}
+            icon={<LayersIcon />}
+            label={t("Play alongside other apps")}
+            sub={t("Keep playing when another app, like a video, makes sound.")}
+            right={<Switch on={mixOthers} T={T} />}
+          />
+          {mixOthers && (
+            <Row T={T}
+              onClick={() => onSetMix(true, !duckOthers)}
+              icon={<ArrowDownIcon />}
+              label={t("Turn other apps down") + " · " + t("Experimental")}
+              sub={t("Most apps turn themselves back up on the next video.")}
+              right={<Switch on={duckOthers} T={T} />}
+            />
+          )}
+        </Section>
+
+        <Section T={T} title={t("Sleep Timer")}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {SLEEP_PRESETS.map(min => (
               <button
@@ -174,7 +303,7 @@ export function SettingsSheet({
                   fontFamily: "inherit",
                 }}
               >
-                {min}m
+                {t("{n}m", { n: min })}
               </button>
             ))}
           </div>
@@ -182,87 +311,69 @@ export function SettingsSheet({
             onClick={() => onSetSleepTimer("endOfTrack")}
             disabled={!hasCurrentSong}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              width: "100%", marginTop: 8,
-              background: sleepEndOfTrack ? T.dim : T.dim,
+              ...row, marginTop: 8,
               border: `1px solid ${sleepEndOfTrack ? T.accent : "transparent"}`,
-              borderRadius: 12, padding: "14px 16px",
               cursor: hasCurrentSong ? "pointer" : "default",
-              opacity: hasCurrentSong ? 1 : 0.5,
-              color: T.text, fontFamily: "inherit", fontSize: 15,
+              opacity: hasCurrentSong ? 1 : 0.5, fontSize: 15,
             }}
           >
-            <span>Stop at end of track</span>
+            <span>{t("Stop at end of track")}</span>
             {sleepEndOfTrack && IC.Check(T.text)}
           </button>
 
           {sleepActive && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, padding: "12px 16px", background: T.dim, borderRadius: 12, border: `1px solid ${T.border}` }}>
               <span style={{ fontSize: 14, color: T.text }}>
-                Pausing in <strong style={{ color: T.text }}>{remainingLabel}</strong>
+                {t("Pausing in")} <strong style={{ color: T.text }}>{remainingLabel}</strong>
               </span>
               <button
                 onClick={() => onSetSleepTimer(null)}
                 style={{ background: "transparent", border: "none", color: T.muted, fontSize: 13, fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}
               >
-                Cancel
+                {t("Cancel")}
               </button>
             </div>
           )}
-        </div>
+        </Section>
+
+        <Section T={T} title={t("Library")}>
+          <Row T={T}
+            first
+            onClick={() => { onClose(); onViewBin(); }}
+            icon={<IC.Bin />}
+            label={t("Removed songs")}
+            right={
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {/* A count, not an alarm. It was rose, which in MPTree means
+                    one thing only: liked. */}
+                {binCount > 0 && (
+                  <span style={{ background: T.border, color: T.text, borderRadius: 10, padding: "2px 8px", fontSize: 12, fontWeight: "700" }}>{binCount}</span>
+                )}
+                <IC.ChevronR />
+              </span>
+            }
+          />
+        </Section>
+
+        <Section T={T} title={t("Backup & Restore")}>
+          <Row T={T} first onClick={() => { onClose(); onExport(); }} icon={<DownloadIcon />} label={t("Export backup")} />
+          <Row T={T} onClick={() => { onClose(); onImportOpen(); }} icon={<UploadIcon />} label={t("Restore backup")} />
+        </Section>
+
+        <Section T={T} title={t("Help")}>
+          <Row T={T} first onClick={onShowTutorial} icon={<PlayIcon />} label={t("Show tutorial")} />
+          <Row T={T} onClick={() => setSub("faq")} icon={<HelpIcon />} label={t("Questions")} />
+          <Row T={T} onClick={onFeedback} icon={<MailIcon />} label={t("Send feedback")} />
+          {onRate && <Row T={T} onClick={onRate} icon={<StarIcon />} label={t("Rate MPTree")} />}
+          <Row T={T} onClick={onPrivacy} icon={<ShieldIcon />} label={t("Privacy policy")} />
+          <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
+        </Section>
 
         <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Library</div>
-          <button onClick={() => { onClose(); onViewBin(); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-              <IC.Bin /><span>Removed songs</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {binCount > 0 && (
-                <span style={{ background: T.heart, color: "#fff", borderRadius: 10, padding: "2px 8px", fontSize: 12, fontWeight: "700" }}>{binCount}</span>
-              )}
-              <IC.ChevronR />
-            </div>
-          </button>
-        </div>
-
-        <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Backup &amp; Restore</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              onClick={() => { onClose(); onExport(); }}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-                <DownloadIcon /><span>Export backup</span>
-              </div>
-              <IC.ChevronR />
-            </button>
-            <button
-              onClick={() => { onClose(); onImportOpen(); }}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-                <UploadIcon /><span>Restore backup</span>
-              </div>
-              <IC.ChevronR />
-            </button>
-          </div>
-        </div>
-
-        <div style={{ padding: "20px 20px 0" }}>
-          <div style={sh.lbl}>Support</div>
-          <button onClick={onSupport} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: T.dim, border: "none", borderRadius: 12, padding: "14px 16px", cursor: "pointer", color: T.text, fontFamily: "inherit" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-                <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-                <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
-              </svg>
-              <span>Buy me a coffee</span>
-            </div>
-            <IC.ChevronR />
-          </button>
+          <div style={sh.lbl}>{t("Support")}</div>
+          <Row T={T} first onClick={onSupport} icon={<CupIcon />} label={t("Buy me a coffee")} />
           <div style={{ fontSize: 12, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
-            MPTree is free. If it is useful to you, you can chip in.
+            {t("MPTree is free. If it is useful to you, you can chip in.")}
           </div>
         </div>
 
@@ -271,6 +382,16 @@ export function SettingsSheet({
         <div style={{ padding: "14px 20px 0", color: T.muted, fontSize: 12 }}>MPTree {__APP_VERSION__}</div>
 
         </div>
+      </div>
+
+      {/* Outside the sheet's own box so they are not moved by its drag, and
+          stopped here so a tap on their backdrop closes only them. */}
+      <div onClick={e => e.stopPropagation()}>
+        {sub === "faq"      && <FaqSheet onClose={() => setSub(null)} T={T} />}
+        {sub === "licences" && <LicencesSheet onClose={() => setSub(null)} T={T} />}
+        {sub === "language" && (
+          <LanguageSheet value={lang} onPick={v => { onSetLang(v); setSub(null); }} onClose={() => setSub(null)} T={T} />
+        )}
       </div>
     </div>
   );

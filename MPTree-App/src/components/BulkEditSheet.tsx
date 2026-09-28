@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
+import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 import { readCoverPhoto } from "../utils";
 
@@ -79,29 +80,28 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
 
         <div style={{ padding: "0 20px" }}>
           <p style={{ margin: "0 0 4px", fontSize: 12, color: T.muted, lineHeight: 1.5 }}>
-            Anything you leave blank stays as it is. Titles are not changed here,
-            since those belong to individual songs.
+            {t("Anything you leave blank stays as it is. Titles are not changed here, since those belong to individual songs.")}
           </p>
 
-          <div style={sh.lbl}>Artist</div>
+          <div style={sh.lbl}>{t("Artist")}</div>
           <input
             value={artist} disabled={clearArtist}
             onChange={e => setArtist(e.target.value)}
-            placeholder={clearArtist ? "Will be cleared" : "Leave blank to keep"}
+            placeholder={clearArtist ? t("Will be cleared") : t("Leave blank to keep")}
             style={{ ...sh.inp, opacity: clearArtist ? 0.5 : 1 }}
           />
-          {toggle(clearArtist, setClearArtist, "Clear artist instead")}
+          {toggle(clearArtist, setClearArtist, t("Clear artist instead"))}
 
-          <div style={sh.lbl}>Genre</div>
+          <div style={sh.lbl}>{t("Genre")}</div>
           <input
             value={genre} disabled={clearGenre}
             onChange={e => setGenre(e.target.value)}
-            placeholder={clearGenre ? "Will be cleared" : "Leave blank to keep"}
+            placeholder={clearGenre ? t("Will be cleared") : t("Leave blank to keep")}
             style={{ ...sh.inp, opacity: clearGenre ? 0.5 : 1 }}
           />
-          {toggle(clearGenre, setClearGenre, "Clear genre instead")}
+          {toggle(clearGenre, setClearGenre, t("Clear genre instead"))}
 
-          <div style={sh.lbl}>Cover photo</div>
+          <div style={sh.lbl}>{t("Cover photo")}</div>
           {photo ? (
             <div style={{ display: "flex", alignItems: "center", gap: 12, background: T.inputBg, borderRadius: 10, padding: "10px 14px" }}>
               <img src={photo} alt="" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
@@ -117,7 +117,7 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
               <label style={sh.photoRow}>
                 <IC.Photo />
                 <span style={{ marginLeft: 8, fontSize: 14, color: T.muted }}>
-                  {photo === null ? "Photos will be removed" : "Choose one for all of them"}
+                  {photo === null ? t("Photos will be removed") : t("Choose one for all of them")}
                 </span>
                 <input
                   ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }}
@@ -128,7 +128,7 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
                   }}
                 />
               </label>
-              {toggle(photo === null, on => setPhoto(on ? null : undefined), "Remove photos instead")}
+              {toggle(photo === null, on => setPhoto(on ? null : undefined), t("Remove photos instead"))}
             </>
           )}
         </div>
@@ -139,7 +139,7 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
             disabled={nothingToDo}
             style={{ ...sh.saveBtn, opacity: nothingToDo ? 0.45 : 1, cursor: nothingToDo ? "default" : "pointer" }}
           >
-            {nothingToDo ? "Nothing to change" : `Apply to ${count} song${count === 1 ? "" : "s"}`}
+            {nothingToDo ? t("Nothing to change") : tn(count, "Apply to {n} song", "Apply to {n} songs")}
           </button>
         </div>
       </div>

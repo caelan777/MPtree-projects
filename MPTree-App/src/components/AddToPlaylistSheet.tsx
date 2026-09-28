@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { makeSH, type T } from "../themes";
+import { t } from "../i18n";
 import type { Playlist } from "../types";
 import { IC } from "./Icons";
 
@@ -48,7 +49,7 @@ export function AddToPlaylistSheet({
             <div style={{ padding: "14px 20px 8px" }}>
               <input
                 autoFocus value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="Playlist name" style={sh.inp}
+                placeholder={t("Playlist name")} style={sh.inp}
                 onKeyDown={e => {
                   if (e.key === "Enter" && newName.trim()) onCreatePlaylist(newName.trim());
                   if (e.key === "Escape") { setCreating(false); setNewName(""); }
@@ -59,24 +60,24 @@ export function AddToPlaylistSheet({
                   onClick={() => { setCreating(false); setNewName(""); }}
                   style={{ flex: 1, padding: 12, background: T.dim, color: T.text, border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
                 <button
                   onClick={() => { if (newName.trim()) onCreatePlaylist(newName.trim()); }}
                   disabled={!newName.trim()}
                   style={{ flex: 1, padding: 12, background: T.accent, color: T.playBtnFg, border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: newName.trim() ? "pointer" : "default", opacity: newName.trim() ? 1 : 0.5, fontFamily: "inherit" }}
                 >
-                  Create
+                  {t("Create")}
                 </button>
               </div>
             </div>
           ) : (
-            <Row icon={<IC.Plus />} label="New playlist" onClick={() => setCreating(true)} T={T} />
+            <Row icon={<IC.Plus />} label={t("New playlist")} onClick={() => setCreating(true)} T={T} />
           )}
 
           {playlists.length === 0 && !creating && (
             <div style={{ padding: "18px 20px 24px", color: T.muted, fontSize: 13, lineHeight: 1.6 }}>
-              No playlists yet. Create one to add these songs to it.
+              {t("No playlists yet. Create one to add these songs to it.")}
             </div>
           )}
 

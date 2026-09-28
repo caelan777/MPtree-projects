@@ -1,4 +1,5 @@
 import { useState, useCallback, type Dispatch, type SetStateAction } from "react";
+import { t, tn } from "../i18n";
 import type { Song, SongMeta, PlayMode } from "../types";
 import { saveCutTracksToStorage } from "../storage";
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ export function useMultiSelect({
   // Meta (liked/unliked) updates happen in App.tsx via multiLikeWithMeta,
   // which wraps this function and patches `meta` before/after calling it.
   const multiLike = useCallback((like: boolean) => {
-    onShowToast(like ? `Liked ${selected.size} songs` : `Unliked ${selected.size} songs`);
+    onShowToast(like ? tn(selected.size, "Liked {n} song", "Liked {n} songs") : tn(selected.size, "Unliked {n} song", "Unliked {n} songs"));
     exitSelectMode();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, onShowToast, exitSelectMode]);
@@ -81,7 +82,7 @@ export function useMultiSelect({
     const q = [...sel].sort(() => Math.random() - 0.5);
     onSetPlayMode("shuffle");
     onPlaySong(q[0], q);
-    onShowToast(`Shuffling ${q.length} songs`);
+    onShowToast(tn(q.length, "Shuffling {n} song", "Shuffling {n} songs"));
     exitSelectMode();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, displayList, onSetPlayMode, onPlaySong, onShowToast, exitSelectMode]);
@@ -107,8 +108,8 @@ export function useMultiSelect({
         onSetPlaying(false);
       }
     }
-    onShowToast(`${toRemove.length} songs moved to bin`, {
-      label: "Undo",
+    onShowToast(tn(toRemove.length, "{n} song moved to bin", "{n} songs moved to bin"), {
+      label: t("Undo"),
       onClick: () => onRestoreSongs(toRemove),
     });
     setRemoveMultiConfirm(false);

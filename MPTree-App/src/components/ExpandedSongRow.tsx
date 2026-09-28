@@ -1,4 +1,5 @@
 import type { T } from "../themes";
+import { t } from "../i18n";
 import type { Song } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
@@ -52,7 +53,7 @@ export function ExpandedSongRow({
             }}>CUT</span>
           )}
           <div style={{ fontSize: 14, color: T.textSub, marginTop: 5, wordBreak: "break-word" }}>
-            {dispArtist || "Unknown Artist"}
+            {dispArtist || t("Unknown Artist")}
           </div>
         </div>
       </div>
@@ -62,23 +63,23 @@ export function ExpandedSongRow({
         <button className="chip" onClick={onPlay} style={{ flex: 1, justifyContent: "center" }}>
           <IC.Play /> Play
         </button>
-        <button className="chip" onClick={onEdit}><IC.Edit /> Edit</button>
-        <button className="chip" onClick={onCut}><IC.Scissors /> Cut</button>
+        <button className="chip" onClick={onEdit}><IC.Edit /> {t("Edit")}</button>
+        <button className="chip" onClick={onCut}><IC.Scissors /> {t("Cut")}</button>
         <button className="chip" onClick={onToggleLike}>
           <IC.Heart filled={isLiked} size={15} />
-          {isLiked ? "Unlike" : "Like"}
+          {isLiked ? t("Unlike") : t("Like")}
         </button>
-        <button className="chip" onClick={onShare}><IC.Share /> Share</button>
+        <button className="chip" onClick={onShare}><IC.Share /> {t("Share")}</button>
         <button className="chip" onClick={onPlayNext}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="5 4 15 12 5 20 5 4"/>
             <line x1="19" y1="5" x2="19" y2="19"/>
             <line x1="22" y1="12" x2="16" y2="12"/>
           </svg>
-          Play Next
+          {t("Play Next")}
         </button>
-        <button className="chip red" onClick={onRemove}><IC.Trash /> Remove</button>
-        <button className="chip" onClick={onClose}><IC.Close /> Done</button>
+        <button className="chip red" onClick={onRemove}><IC.Trash /> {t("Remove")}</button>
+        <button className="chip" onClick={onClose}><IC.Close /> {t("Done")}</button>
       </div>
     </div>
   );

@@ -19,6 +19,8 @@ const MANIFEST_URL = "https://mp-tree.net/version.json";
 const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
 const LAST_CHECK_KEY = "mptree_update_last_check";
 const DISMISSED_KEY  = "mptree_update_dismissed";
+/** The "Update notices" switch in Settings. Absent means on. */
+export const NOTICES_KEY = "mptree_update_notices";
 
 export type UpdateInfo = {
   version: string;
@@ -27,6 +29,10 @@ export type UpdateInfo = {
   notes?: string[];
   /** Where to send the user. Always a page, never a file. */
   url: string;
+  /** Came from Google Play rather than the website. There is no version name
+   *  (Play only reports a version code), and "Get it" hands over to Play's own
+   *  update screen instead of opening a page. */
+  play?: boolean;
 };
 
 /** "0.2.0" > "0.1.11" — numeric, segment by segment, missing segments are 0. */
@@ -51,10 +57,13 @@ export async function checkForUpdate(currentVersion: string): Promise<UpdateInfo
   if (__DISTRIBUTION__ !== "web") return null;
 
   try {
-    const [{ value: lastCheck }, { value: dismissed }] = await Promise.all([
+    const [{ value: lastCheck }, { value: dismissed }, { value: notices }] = await Promise.all([
       Preferences.get({ key: LAST_CHECK_KEY }),
       Preferences.get({ key: DISMISSED_KEY }),
+      Preferences.get({ key: NOTICES_KEY }),
     ]);
+    // Switched off: not even the request is made.
+    if (notices === "0") return null;
 
     const last = Number(lastCheck ?? 0);
     if (Number.isFinite(last) && Date.now() - last < CHECK_EVERY_MS) return null;
@@ -86,6 +95,36 @@ export async function checkForUpdate(currentVersion: string): Promise<UpdateInfo
       notes: Array.isArray(data.notes) ? data.notes.filter(n => typeof n === "string").slice(0, 4) : undefined,
       url: typeof data.url === "string" && data.url ? data.url : "https://mp-tree.net/download.html",
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The Play build's version of the same thing. It asks the Play Store app on the
+ * phone, through Google's In-App Updates library, which is the one route Play
+ * allows for this. Same once-a-day limit and the same switch. A dismissal is
+ * remembered by version code, which is all Play reports.
+ */
+export async function checkForPlayUpdate(
+  ask: () => Promise<{ available: boolean; versionCode?: number }>,
+): Promise<UpdateInfo | null> {
+  if (__DISTRIBUTION__ !== "play") return null;
+  try {
+    const [{ value: lastCheck }, { value: dismissed }, { value: notices }] = await Promise.all([
+      Preferences.get({ key: LAST_CHECK_KEY }),
+      Preferences.get({ key: DISMISSED_KEY }),
+      Preferences.get({ key: NOTICES_KEY }),
+    ]);
+    if (notices === "0") return null;
+    const last = Number(lastCheck ?? 0);
+    if (Number.isFinite(last) && Date.now() - last < CHECK_EVERY_MS) return null;
+    const r = await ask();
+    await Preferences.set({ key: LAST_CHECK_KEY, value: String(Date.now()) }).catch(() => {});
+    if (!r.available) return null;
+    const code = String(r.versionCode ?? "");
+    if (dismissed === code) return null;
+    return { version: code, url: "", play: true };
   } catch {
     return null;
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
+import { t } from "../i18n";
 import { IC } from "./Icons";
 import { readCoverPhoto } from "../utils";
 
@@ -66,24 +67,24 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
       <div style={sh.sheet}>
         <div style={sh.handle} />
         <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Edit song</span>
+          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>{t("Edit song")}</span>
           <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
         </div>
         <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>Title</div>
+          <div style={sh.lbl}>{t("Title")}</div>
           <input value={name} onChange={e => setName(e.target.value)} style={sh.inp} />
-          <div style={sh.lbl}>Artist</div>
-          <input value={artist} onChange={e => setArtist(e.target.value)} placeholder="Add artist name…" style={sh.inp} />
-          <div style={sh.lbl}>Genre</div>
-          <input value={genre} onChange={e => setGenre(e.target.value)} placeholder="Add a genre…" style={sh.inp} />
-          <div style={sh.lbl}>Cover photo</div>
+          <div style={sh.lbl}>{t("Artist")}</div>
+          <input value={artist} onChange={e => setArtist(e.target.value)} placeholder={t("Add artist name…")} style={sh.inp} />
+          <div style={sh.lbl}>{t("Genre")}</div>
+          <input value={genre} onChange={e => setGenre(e.target.value)} placeholder={t("Add a genre…")} style={sh.inp} />
+          <div style={sh.lbl}>{t("Cover photo")}</div>
 
           {previewPhoto ? (
             <div style={{ display: "flex", alignItems: "center", gap: 12, background: T.inputBg, borderRadius: 10, padding: "10px 14px" }}>
-              <img src={previewPhoto} alt="Cover" style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
-              <span style={{ flex: 1, fontSize: 14, color: T.text }}>Cover photo set</span>
+              <img src={previewPhoto} alt={t("Cover")} style={{ width: 44, height: 44, borderRadius: 6, objectFit: "cover" }} />
+              <span style={{ flex: 1, fontSize: 14, color: T.text }}>{t("Cover photo set")}</span>
               <label style={{ cursor: "pointer" }}>
-                <span style={{ fontSize: 13, color: T.text, fontWeight: "600", textDecoration: "underline" }}>Change</span>
+                <span style={{ fontSize: 13, color: T.text, fontWeight: "600", textDecoration: "underline" }}>{t("Change")}</span>
                 <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                   const f = e.target.files?.[0];
                   if (!f) return;
@@ -99,7 +100,7 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
           ) : (
             <label style={sh.photoRow}>
               <IC.Photo />
-              <span style={{ marginLeft: 8, fontSize: 14, color: T.muted }}>Choose from device</span>
+              <span style={{ marginLeft: 8, fontSize: 14, color: T.muted }}>{t("Choose from device")}</span>
               <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                 const f = e.target.files?.[0];
                 if (!f) return;
@@ -109,7 +110,7 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
           )}
         </div>
         <div style={{ padding: "20px 20px 0" }}>
-          <button onClick={handleSave} style={sh.saveBtn}>Save</button>
+          <button onClick={handleSave} style={sh.saveBtn}>{t("Save")}</button>
         </div>
       </div>
     </div>

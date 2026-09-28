@@ -67,6 +67,23 @@ public class MusicPlayerService extends Service {
     private MediaSession    mediaSession;
     private AudioManager    audioManager;
     private AudioFocusRequest audioFocusRequest;
+
+    // ── Sharing the speaker with other apps ──────────────────────────────────
+    // Off: MPTree holds audio focus the normal way, so anything else that starts
+    // playing (a TikTok video) takes it and MPTree pauses.
+    // Mix: MPTree holds no focus at all. Nobody can take from it what it does not
+    // hold, so it keeps playing, and on Android 12+ it is not force-faded either,
+    // since that only happens to a holder of AUDIOFOCUS_GAIN.
+    // Mix + duck: MPTree takes a transient "may duck" focus on every play and
+    // resume, which makes Android lower whoever held focus. That lasts until the
+    // other app asks again (TikTok does on every video). MPTree does not ask back,
+    // which would be a tug of war.
+    // Both are Capacitor Preferences keys, which live in this same
+    // SharedPreferences file, so the service knows them before the WebView does.
+    private static final String PREF_MIX  = "mptree_mix_others";
+    private static final String PREF_DUCK = "mptree_duck_others";
+    private boolean mixWithOthers = false;
+    private boolean duckOthers    = false;
     private String          currentPath   = null;
     private String          currentTitle  = "Unknown";
     private String          currentArtist = "Unknown";
@@ -238,6 +255,8 @@ public class MusicPlayerService extends Service {
         createNotificationChannel();
         setupMediaSession();
         registerActionReceiver();
+        registerNoisyReceiver();
+        loadMixMode();
         // FIX 2: Bring up a shared audio session + equalizer eagerly, so
         // getEqualizerInfo() returns real band data even before the first
         // play() call (e.g. user opens Audio Effects immediately on launch).
@@ -270,6 +289,7 @@ public class MusicPlayerService extends Service {
         releaseIncomingPlayer();
         if (mediaSession != null) { mediaSession.release(); mediaSession = null; }
         try { unregisterReceiver(actionReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) {}
         abandonAudioFocus();
         // FIX 1: Recycle cached bitmaps to release their native memory.
         if (cachedLogoArt != null)   { cachedLogoArt.recycle();   cachedLogoArt = null; }
@@ -285,8 +305,8 @@ public class MusicPlayerService extends Service {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
-                    CHANNEL_ID, "Music Playback", NotificationManager.IMPORTANCE_LOW);
-            ch.setDescription("MPTree now-playing controls");
+                    CHANNEL_ID, getString(R.string.channel_playback), NotificationManager.IMPORTANCE_LOW);
+            ch.setDescription(getString(R.string.channel_playback_desc));
             ch.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(ch);
@@ -328,41 +348,92 @@ public class MusicPlayerService extends Service {
         }
     }
 
+    // One listener for the life of the service. Focus is keyed on it, so asking
+    // again (with a different gain) replaces MPTree's entry rather than stacking
+    // a second one, and there is never a moment in between where the other app
+    // gets focus back and starts up again.
+    private final AudioManager.OnAudioFocusChangeListener focusListener = focusChange -> {
+        if (mixWithOthers) return;
+        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+                focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+            pausePlayback();
+        }
+    };
+
     private boolean requestAudioFocus() {
+        if (mixWithOthers) {
+            if (!duckOthers) { abandonAudioFocus(); return true; }
+            return requestFocus(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+        }
+        return requestFocus(AudioManager.AUDIOFOCUS_GAIN);
+    }
+
+    private boolean requestFocus(int gain) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             AudioAttributes attrs = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build();
-            audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            audioFocusRequest = new AudioFocusRequest.Builder(gain)
                     .setAudioAttributes(attrs)
-                    .setOnAudioFocusChangeListener(focusChange -> {
-                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
-                                focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                            pausePlayback();
-                        }
-                    }).build();
+                    .setOnAudioFocusChangeListener(focusListener)
+                    .build();
             return audioManager.requestAudioFocus(audioFocusRequest)
                     == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         } else {
             //noinspection deprecation
-            return audioManager.requestAudioFocus(
-                    focusChange -> {
-                        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
-                                focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                            pausePlayback();
-                        }
-                    },
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN
-            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            return audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, gain)
+                    == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         }
     }
 
     private void abandonAudioFocus() {
         if (audioManager == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
-            audioManager.abandonAudioFocusRequest(audioFocusRequest);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (audioFocusRequest != null) audioManager.abandonAudioFocusRequest(audioFocusRequest);
+            audioFocusRequest = null;
+        } else {
+            //noinspection deprecation
+            audioManager.abandonAudioFocus(focusListener);
+        }
+    }
+
+    private void loadMixMode() {
+        android.content.SharedPreferences prefs =
+                getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
+        mixWithOthers = "true".equals(prefs.getString(PREF_MIX, null));
+        duckOthers    = "true".equals(prefs.getString(PREF_DUCK, null));
+    }
+
+    /** Applied at once: if something is playing, focus is taken or let go now. */
+    public void setMixMode(boolean mix, boolean duck) {
+        mixWithOthers = mix;
+        duckOthers    = mix && duck;
+        if (isPlaying) requestAudioFocus();
+        else if (mixWithOthers) abandonAudioFocus();
+    }
+
+    // ── Headphones and Bluetooth dropping out ────────────────────────────────
+    // Android sends this the moment audio is about to move from headphones or a
+    // Bluetooth device to the phone's own speaker. Without it, a speaker going out
+    // of range meant the music carried on out loud from a pocket. Registered for
+    // the life of the service; pause() does nothing when nothing is playing.
+    private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                pausePlayback();
+            }
+        }
+    };
+
+    private void registerNoisyReceiver() {
+        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        // A system broadcast, so it still arrives with the receiver not exported.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(noisyReceiver, filter);
         }
     }
 
@@ -562,6 +633,9 @@ public class MusicPlayerService extends Service {
             try { mediaPlayer.pause(); } catch (Exception ignored) {}
             if (incomingPlayer != null) { try { incomingPlayer.pause(); } catch (Exception ignored) {} }
             isPlaying = false;
+            // A duck only makes sense while MPTree is actually playing over
+            // something. Letting go brings the other app back up.
+            if (mixWithOthers) abandonAudioFocus();
             updatePlaybackState(PlaybackState.STATE_PAUSED);
             showNotification();
             persistNowPlaying();
@@ -573,6 +647,10 @@ public class MusicPlayerService extends Service {
 
     public void resume() {
         if (mediaPlayer != null && !isPlaying && !isPreparing) {
+            // Resuming used to skip this, so after another app had paused MPTree,
+            // play started it again without focus: the other app kept playing
+            // over it, and MPTree was never told when to stop again.
+            requestAudioFocus();
             mediaPlayer.start();
             applyPlaybackSpeed(mediaPlayer);
             if (incomingPlayer != null) { try { incomingPlayer.start(); } catch (Exception ignored) {} }
@@ -1333,9 +1411,9 @@ public class MusicPlayerService extends Service {
                 .setSilent(true)
                 .setColor(android.graphics.Color.BLACK)
                 .setColorized(true)
-                .addAction(android.R.drawable.ic_media_previous, "Previous", prevPI)
-                .addAction(playPauseIcon, isPlaying ? "Pause" : "Play", playPausePI)
-                .addAction(android.R.drawable.ic_media_next, "Next", nextPI)
+                .addAction(android.R.drawable.ic_media_previous, getString(R.string.action_previous), prevPI)
+                .addAction(playPauseIcon, getString(isPlaying ? R.string.action_pause : R.string.action_play), playPausePI)
+                .addAction(android.R.drawable.ic_media_next, getString(R.string.action_next), nextPI)
                 .setStyle(style)
                 .build();
     }

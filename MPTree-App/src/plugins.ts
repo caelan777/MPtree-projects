@@ -70,6 +70,34 @@ export type AudioPlayerPlugin = {
   setEqualizerEnabled(options: { enabled: boolean }): Promise<void>;
   setEqualizerBandLevels(options: { levels: number[] }): Promise<void>;
   getEqualizerInfo(): Promise<{ available: boolean; bandFreqsHz: number[]; minMillibel: number; maxMillibel: number }>;
+  /** mix: keep playing when another app starts sound. duck: also ask Android to
+   *  lower that app, until it asks for the sound back. */
+  setMixMode(options: { mix: boolean; duck: boolean }): Promise<void>;
+  getOutputRoute(): Promise<{ route: "bluetooth" | "wired" | "speaker" }>;
+};
+
+export type SystemPlugin = {
+  getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
+  /** 0.9, 1 or 1.15, on top of the phone's own font size. */
+  setTextZoom(options: { factor: number }): Promise<void>;
+  /** mailto:, market: or https:. Rejects with code NO_HANDLER when nothing on
+   *  the phone can open it. */
+  openExternal(options: { url: string }): Promise<void>;
+  openSoundSettings(): Promise<void>;
+  checkPlayUpdate(): Promise<{ available: boolean; versionCode?: number }>;
+  startPlayUpdate(): Promise<void>;
+};
+
+// The browser has none of this. The stand-in answers the way a phone with
+// nothing special about it would, so the demo and the dev server run the same
+// code paths.
+const SystemWeb: SystemPlugin = {
+  getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
+  setTextZoom:   async () => {},
+  openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
+  openSoundSettings: async () => {},
+  checkPlayUpdate:   async () => ({ available: false }),
+  startPlayUpdate:   async () => {},
 };
 
 const isWeb = Capacitor.getPlatform() === "web";
@@ -81,3 +109,7 @@ export const MusicScanner: MusicScannerPlugin = isWeb
 export const AudioPlayer: AudioPlayerPlugin = isWeb
   ? (new AudioPlayerWeb() as unknown as AudioPlayerPlugin)
   : registerPlugin<AudioPlayerPlugin>("AudioPlayer");
+
+export const System: SystemPlugin = isWeb
+  ? SystemWeb
+  : registerPlugin<SystemPlugin>("System");

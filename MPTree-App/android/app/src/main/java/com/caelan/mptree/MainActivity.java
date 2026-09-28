@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
 
         registerPlugin(MusicScannerPlugin.class);
         registerPlugin(AudioPlayerPlugin.class);
+        registerPlugin(SystemPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

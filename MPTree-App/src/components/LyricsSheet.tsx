@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { makeSH, type T } from "../themes";
+import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 
 // ─── LYRICS SHEET ────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ export function LyricsSheet({
       >
         <div style={sh.handle} />
         <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>Lyrics</span>
+          <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>{t("Lyrics")}</span>
           <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
         </div>
 
@@ -58,7 +59,7 @@ export function LyricsSheet({
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder="Paste the lyrics here…"
+            placeholder={t("Paste the lyrics here…")}
             rows={12}
             style={{
               ...sh.inp, height: "auto", minHeight: 240, resize: "vertical",
@@ -68,7 +69,7 @@ export function LyricsSheet({
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 8 }}>
             <span style={{ fontSize: 12, color: T.muted }}>
-              {lineCount > 0 ? `${lineCount} line${lineCount === 1 ? "" : "s"}` : "Nothing yet"}
+              {lineCount > 0 ? tn(lineCount, "{n} line", "{n} lines") : t("Nothing yet")}
             </span>
             <button
               onClick={onSearchOnline}
@@ -86,8 +87,7 @@ export function LyricsSheet({
           </div>
 
           <p style={{ margin: "10px 0 0", fontSize: 11, color: T.muted, lineHeight: 1.6 }}>
-            Search opens your browser and looks up this song's lyrics. Copy what
-            you find and paste it above.
+            {t("Search opens your browser and looks up this song's lyrics. Copy what you find and paste it above.")}
           </p>
         </div>
 
@@ -101,14 +101,14 @@ export function LyricsSheet({
                 fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
               }}
             >
-              Remove
+              {t("Remove")}
             </button>
           )}
           <button
             onClick={() => onSave(text.trim() || null)}
             style={{ ...sh.saveBtn, flex: 1, marginTop: 0 }}
           >
-            Save
+            {t("Save")}
           </button>
         </div>
       </div>

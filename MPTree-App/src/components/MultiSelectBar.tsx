@@ -1,5 +1,6 @@
 import React from "react";
 import type { T } from "../themes";
+import { t } from "../i18n";
 import { IC } from "./Icons";
 
 type MultiSelectBarProps = {
@@ -38,29 +39,29 @@ export function MultiSelectBar({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 6px" }}>
         <button onClick={onClose} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 14, fontFamily: "inherit" }}>
           <IC.Close />
-          <span style={{ fontWeight: "600" }}>Cancel</span>
+          <span style={{ fontWeight: "600" }}>{t("Cancel")}</span>
         </button>
         <div style={{ background: T.violet + "22", color: T.violet, borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: "700" }}>
           {count} selected
         </div>
         <button onClick={allSelected ? onClearAll : onSelectAll} style={{ background: "transparent", border: "none", color: T.violet, cursor: "pointer", fontSize: 13, fontWeight: "700", padding: "4px 0", fontFamily: "inherit" }}>
-          {allSelected ? "Deselect all" : "Select all"}
+          {allSelected ? t("Deselect all") : t("Select all")}
         </button>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
         {allLiked ? (
-          <Chip disabled={count === 0} onClick={onUnlikeAll} T={T}><IC.Heart filled={true} size={15} />Unlike</Chip>
+          <Chip disabled={count === 0} onClick={onUnlikeAll} T={T}><IC.Heart filled={true} size={15} />{t("Unlike")}</Chip>
         ) : (
-          <Chip disabled={count === 0} onClick={onLikeAll} T={T}><IC.Heart filled={false} size={15} />Like</Chip>
+          <Chip disabled={count === 0} onClick={onLikeAll} T={T}><IC.Heart filled={false} size={15} />{t("Like")}</Chip>
         )}
-        <Chip disabled={count === 0} onClick={onShuffleSelection} T={T}><IC.Shuffle />Shuffle</Chip>
-        <Chip disabled={count === 0} onClick={onAddToPlaylist} T={T}><IC.Plus />Add to playlist</Chip>
+        <Chip disabled={count === 0} onClick={onShuffleSelection} T={T}><IC.Shuffle />{t("Shuffle")}</Chip>
+        <Chip disabled={count === 0} onClick={onAddToPlaylist} T={T}><IC.Plus />{t("Add to playlist")}</Chip>
         {/* Remove is deliberately NOT here. It moved up beside the settings
             gear, where the count used to sit, so the one destructive action in
             this mode is not sitting in the same row as four harmless ones. */}
-        <Chip disabled={count === 0} onClick={onPlayNext} T={T}><IC.PlayNext />Play next</Chip>
-        <Chip disabled={count === 0} onClick={onBulkEdit} T={T}><IC.Edit />Edit</Chip>
+        <Chip disabled={count === 0} onClick={onPlayNext} T={T}><IC.PlayNext />{t("Play next")}</Chip>
+        <Chip disabled={count === 0} onClick={onBulkEdit} T={T}><IC.Edit />{t("Edit")}</Chip>
         {onRemoveFromPlaylist && (
           <Chip disabled={count === 0} onClick={onRemoveFromPlaylist} T={T}>
             <IC.MinusCircle />Remove from playlist

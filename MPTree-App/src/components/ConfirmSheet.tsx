@@ -1,4 +1,5 @@
 import { makeSH, type T } from "../themes";
+import { t } from "../i18n";
 import { IC } from "./Icons";
 
 type ConfirmSheetProps = {
@@ -32,7 +33,7 @@ export function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel, T
             onClick={onCancel}
             style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: 10 }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
         </div>
       </div>

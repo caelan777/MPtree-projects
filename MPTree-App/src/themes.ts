@@ -57,7 +57,7 @@ export function makeSH(T: T): Record<string, React.CSSProperties> {
 export const FILTER_OPTIONS: { id: FilterId; label: string }[] = [
   { id:"newest",       label:"Newest First" },
   { id:"oldest",       label:"Oldest First" },
-  { id:"alphabetical", label:"A–Z"          },
-  { id:"artist",       label:"Artist A–Z"   },
+  { id:"alphabetical", label:"A-Z"          },
+  { id:"artist",       label:"Artist A-Z"   },
   { id:"favorites",    label:"Favorites"    },
 ];

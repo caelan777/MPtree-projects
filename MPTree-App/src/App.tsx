@@ -22,7 +22,11 @@ import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
-import { SettingsSheet } from "./components/SettingsSheet";
+import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
+import { MixSheet } from "./components/MixSheet";
+import { WhatsNewSheet } from "./components/WhatsNewSheet";
+import { Switch } from "./components/Switch";
+import { applyLang, t, tn, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
@@ -47,8 +51,8 @@ import {
 } from "./storage";
 import type { BackupData } from "./storage";
 
-import { MusicScanner, AudioPlayer } from "./plugins";
-import { checkForUpdate, dismissUpdate, type UpdateInfo } from "./updateCheck";
+import { MusicScanner, AudioPlayer, System } from "./plugins";
+import { checkForUpdate, checkForPlayUpdate, dismissUpdate, NOTICES_KEY, type UpdateInfo } from "./updateCheck";
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -115,6 +119,18 @@ async function deleteFileAtUri(uri: string): Promise<boolean> {
 }
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
+
+// The Size setting. `text` multiplies the WebView's own text zoom, which
+// already carries the phone's font size, so Medium changes nothing and someone
+// who set large text on their phone keeps it. `row` is the list row height:
+// songs, playlist songs and the playlists list. The mini player stays one size;
+// its height is a fixed number the list padding and both floating buttons are
+// laid out against.
+const SIZE_TABLE: Record<UiSize, { text: number; row: number }> = {
+  small:  { text: 0.9,  row: 60 },
+  medium: { text: 1,    row: 68 },
+  large:  { text: 1.15, row: 78 },
+};
 
 export default function App() {
   const [songs,          setSongs]         = useState<Song[]>([]);
@@ -230,7 +246,8 @@ export default function App() {
   // A manual toggle wins over the scroll rule until you reach the top again —
   // otherwise tapping the logo to peek at the controls would be undone by the
   // very next scroll event. `null` means "no override, follow the scroll".
-  const [chromeOpen, setChromeOpen] = useState(true);
+  const [chromeOpen, setChromeOpenState] = useState(true);
+  const chromeOpenRef = useRef(true);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
@@ -266,7 +283,66 @@ export default function App() {
   }, []);
   // Animate the fold by default; suppressed for the scroll-to-top button, which
   // should just be there when you arrive.
-  const [chromeAnimate, setChromeAnimate] = useState(true);
+  const [chromeAnimate, setChromeAnimateState] = useState(true);
+  // Mirrored so setChromeOpen, below, knows in the same handler whether this
+  // particular fold is being animated.
+  const chromeAnimateRef = useRef(true);
+  const setChromeAnimate = useCallback((v: boolean) => {
+    chromeAnimateRef.current = v;
+    setChromeAnimateState(v);
+  }, []);
+
+  // ── The logo's flight, when the button has been moved ────────────────────
+  // With the button parked somewhere else, unfolding does not move the button.
+  // The mark flies out of it to the top left, and the card grows from there;
+  // folding runs it backwards: the card closes into the top left, then the mark
+  // flies back into the button. The button itself stays put and sits empty
+  // while the header is open.
+  //
+  //   "home"  the mark is on its way to the top left; the card waits, folded
+  //   "fold"  the card is closing into the top left, the mark still in it
+  //   "out"   the mark is on its way back to the button
+  //
+  // While "home" runs the card is drawn as folded even though the header is
+  // already open, so everything that moves with the card (the list padding, the
+  // player) waits with it and they still arrive together.
+  const LOGO_FLY_MS = 260;
+  const FOLD_MS     = 340;   // CHROME_MOTION's duration
+  const [logoFlight, setLogoFlight] = useState<null | "home" | "fold" | "out">(null);
+  const logoFlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoParkedRef   = useRef(false);
+  // Every open and fold goes through here, so the flight cannot be skipped by
+  // one of the several places that fold the header.
+  const setChromeOpen = useCallback((next: boolean) => {
+    const was = chromeOpenRef.current;
+    chromeOpenRef.current = next;
+    setChromeOpenState(next);
+    if (next === was) return;
+    if (logoFlightTimer.current) { clearTimeout(logoFlightTimer.current); logoFlightTimer.current = null; }
+    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!logoParkedRef.current || !chromeAnimateRef.current || reduced) { setLogoFlight(null); return; }
+    // A flight ends when its animation does (endLogoFlight, from the flying
+    // element's animationend). Timing it from here instead ended it early: the
+    // clock started at the tap, the animation only once React had drawn the
+    // element, and on a busy frame that is a tenth of a second later, so the
+    // mark vanished short of where it was going. The timers below are only a
+    // backstop for a tab that never finishes the animation (hidden, say).
+    const BACKSTOP = LOGO_FLY_MS + 400;
+    if (next) {
+      setLogoFlight("home");
+      logoFlightTimer.current = setTimeout(() => { logoFlightTimer.current = null; setLogoFlight(null); }, BACKSTOP);
+    } else {
+      setLogoFlight("fold");
+      logoFlightTimer.current = setTimeout(() => {
+        setLogoFlight("out");
+        logoFlightTimer.current = setTimeout(() => { logoFlightTimer.current = null; setLogoFlight(null); }, BACKSTOP);
+      }, FOLD_MS);
+    }
+  }, []);
+  const endLogoFlight = () => {
+    if (logoFlightTimer.current) { clearTimeout(logoFlightTimer.current); logoFlightTimer.current = null; }
+    setLogoFlight(null);
+  };
   // When off, only the logo toggles the chrome; scrolling leaves it alone.
   const [autoCollapse, setAutoCollapse] = useState(true);
   const autoCollapseRef = useRef(true);
@@ -340,10 +416,120 @@ export default function App() {
     if (!libraryReady) return;
     let cancelled = false;
     const t = setTimeout(() => {
-      checkForUpdate(__APP_VERSION__).then(info => { if (!cancelled) setUpdateInfo(info); });
+      const check = __DISTRIBUTION__ === "play"
+        ? checkForPlayUpdate(() => System.checkPlayUpdate())
+        : checkForUpdate(__APP_VERSION__);
+      check.then(info => { if (!cancelled) setUpdateInfo(info); });
     }, 4000);
     return () => { cancelled = true; clearTimeout(t); };
   }, [libraryReady]);
+
+  // ── Size, language, update notices, other apps ────────────────────────────
+  // All read in one go at start. Until they arrive the app shows the defaults
+  // (Medium, the phone's language, notices on, pausing for other apps), which
+  // is also what anyone who never opened Settings has.
+  const [uiSize, setUiSize]           = useState<UiSize>("medium");
+  const [langPref, setLangPref]       = useState<LangPref>("auto");
+  const [updateNotices, setUpdateNotices] = useState(true);
+  const [mixOthers, setMixOthers]     = useState(false);
+  const [duckOthers, setDuckOthers]   = useState(false);
+  const [isSamsung, setIsSamsung]     = useState(false);
+  const [mixSheetOpen, setMixSheetOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  // True until proven otherwise, so nothing can open the Bluetooth sheet before
+  // the stored answer has been read.
+  const mixPromptSeenRef = useRef(true);
+  useEffect(() => {
+    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others",
+                  "mptree_duck_others", "mptree_mix_prompt_seen", "mptree_last_seen_version",
+                  "mptree_onboarded_v2"];
+    Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
+      .then(([size, lang, notices, mix, duck, promptSeen, lastSeen, onboarded]) => {
+        if (size === "small" || size === "large") {
+          setUiSize(size);
+          System.setTextZoom({ factor: SIZE_TABLE[size].text }).catch(() => {});
+        }
+        if (lang === "en" || lang === "nl") { applyLang(lang); setLangPref(lang); }
+        if (notices === "0") setUpdateNotices(false);
+        setMixOthers(mix === "true");
+        setDuckOthers(mix === "true" && duck === "true");
+        mixPromptSeenRef.current = promptSeen === "1";
+        // What's new: only for someone who was already using MPTree. A first
+        // install has neither key and gets the tutorial instead. The key is
+        // new in 0.3.0, so an update from before it is recognised by having
+        // finished the tutorial.
+        if (lastSeen !== __APP_VERSION__) {
+          if (lastSeen || onboarded) setWhatsNewOpen(true);
+          Preferences.set({ key: "mptree_last_seen_version", value: __APP_VERSION__ }).catch(() => {});
+        }
+      });
+    System.getDeviceInfo()
+      .then(d => setIsSamsung(d.manufacturer.toLowerCase() === "samsung"))
+      .catch(() => {});
+  }, []);
+
+  const changeUiSize = (s: UiSize) => {
+    setUiSize(s);
+    System.setTextZoom({ factor: SIZE_TABLE[s].text }).catch(() => {});
+    Preferences.set({ key: "mptree_ui_size", value: s }).catch(() => {});
+  };
+  const changeLang = (l: LangPref) => {
+    // The module variable first, then the state: the state change is what
+    // re-renders everything, and by then t() already answers in the new one.
+    applyLang(l);
+    setLangPref(l);
+    if (l === "auto") Preferences.remove({ key: "mptree_lang" }).catch(() => {});
+    else Preferences.set({ key: "mptree_lang", value: l }).catch(() => {});
+  };
+  const changeUpdateNotices = (on: boolean) => {
+    setUpdateNotices(on);
+    if (!on) setUpdateInfo(null);
+    Preferences.set({ key: NOTICES_KEY, value: on ? "1" : "0" }).catch(() => {});
+  };
+  const changeMix = (mix: boolean, duck: boolean) => {
+    const d = mix && duck;
+    setMixOthers(mix);
+    setDuckOthers(d);
+    hapticImpact("light");
+    AudioPlayer.setMixMode({ mix, duck: d }).catch(() => {});
+    // Stored as the strings the native service reads straight out of the same
+    // preferences file, before the WebView is even up.
+    Preferences.set({ key: "mptree_mix_others",  value: mix ? "true" : "false" }).catch(() => {});
+    Preferences.set({ key: "mptree_duck_others", value: d   ? "true" : "false" }).catch(() => {});
+  };
+  // The first time music starts on a Bluetooth device, once per install.
+  const maybeAskAboutMix = () => {
+    if (mixPromptSeenRef.current) return;
+    AudioPlayer.getOutputRoute()
+      .then(({ route }) => {
+        if (route !== "bluetooth" || mixPromptSeenRef.current) return;
+        mixPromptSeenRef.current = true;
+        setMixSheetOpen(true);
+      })
+      .catch(() => {});
+  };
+  const closeMixSheet = () => {
+    setMixSheetOpen(false);
+    Preferences.set({ key: "mptree_mix_prompt_seen", value: "1" }).catch(() => {});
+  };
+  const openExternal = (url: string, failMsg: string) => {
+    System.openExternal({ url }).catch(() => showToast(failMsg));
+  };
+  const sendFeedback = () => {
+    System.getDeviceInfo()
+      .catch(() => ({ manufacturer: "", model: "", androidVersion: "", sdk: 0 }))
+      .then(d => {
+        // Filled in so the email is useful even when all it says is "it broke".
+        const body = [
+          "", "", "--",
+          `MPTree ${__APP_VERSION__} (${__DISTRIBUTION__})`,
+          `${d.manufacturer} ${d.model}`.trim(),
+          d.androidVersion ? `Android ${d.androidVersion}` : "",
+        ].filter((l, i) => i < 3 || l).join("\n");
+        const url = `mailto:caelanverycool@gmail.com?subject=${encodeURIComponent("MPTree feedback")}&body=${encodeURIComponent(body)}`;
+        openExternal(url, t("No email app found. Write to caelanverycool@gmail.com"));
+      });
+  };
 
   // ── Embedded album art for the now-playing surfaces ───────────────────────
   // Fetched from native (MediaMetadataRetriever) whenever the current song
@@ -540,7 +726,7 @@ export default function App() {
       if (/permission/i.test(msg) && /deni/i.test(msg)) {
         setPermissionDenied(true);
       } else {
-        showError("Scan failed: " + e);
+        showError(t("Scan failed: ") + e);
       }
       return [];
     }
@@ -718,7 +904,7 @@ export default function App() {
         setPlaying(false);
         setSleepUntil(null);
         sleepUntilRef.current = null;
-        showToast("Sleep timer: playback paused");
+        showToast(t("Sleep timer: playback paused"));
       }
     };
     const iv = setInterval(check, 1000);
@@ -730,19 +916,19 @@ export default function App() {
     if (minutes === null) {
       setSleepUntil(null); sleepUntilRef.current = null;
       setSleepEndOfTrack(false); sleepEndOfTrackRef.current = false;
-      showToast("Sleep timer off");
+      showToast(t("Sleep timer off"));
       return;
     }
     if (minutes === "endOfTrack") {
       setSleepEndOfTrack(true); sleepEndOfTrackRef.current = true;
       setSleepUntil(null); sleepUntilRef.current = null;
-      showToast("Will pause at end of track");
+      showToast(t("Will pause at end of track"));
       return;
     }
     const until = Date.now() + minutes * 60_000;
     setSleepUntil(until); sleepUntilRef.current = until;
     setSleepEndOfTrack(false); sleepEndOfTrackRef.current = false;
-    showToast(`Sleep timer set for ${minutes} min`);
+    showToast(t("Sleep timer set for {n} min", { n: minutes }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -965,7 +1151,7 @@ export default function App() {
       currentTimeRef.current = next.isCut ? (next.cutFrom ?? 0) : 0;
       setPlaying(false);
       loadedRef.current = true;
-      showToast("Sleep timer: playback paused");
+      showToast(t("Sleep timer: playback paused"));
       return;
     }
 
@@ -1068,6 +1254,7 @@ export default function App() {
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
       const artist = artistOverride ?? getMeta(s).customArtist ?? (s.artist && s.artist.toLowerCase() !== "<unknown>" ? s.artist : "Unknown");
       await AudioPlayer.play({ path: s.uri, title, artist });
+      maybeAskAboutMix();
       if (s.isCut && s.cutFrom && s.cutFrom > 0) {
         await AudioPlayer.seekTo({ milliseconds: s.cutFrom }); setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom;
       }
@@ -1077,7 +1264,7 @@ export default function App() {
         const cur = prev[s.id] || {};
         return { ...prev, [s.id]: { ...cur, lastPlayedAt: Date.now(), playCount: (cur.playCount ?? 0) + 1 } };
       });
-    } catch (e) { showError("Play failed: " + e); }
+    } catch (e) { showError(t("Play failed: ") + e); }
   };
 
   const togglePlay = async () => {
@@ -1090,8 +1277,8 @@ export default function App() {
         loadedRef.current = true; setPlaying(true); return;
       }
       if (isPlaying) { await AudioPlayer.pause(); setPlaying(false); }
-      else { await AudioPlayer.resume(); setPlaying(true); }
-    } catch (e) { showError("Player error: " + e); }
+      else { await AudioPlayer.resume(); setPlaying(true); maybeAskAboutMix(); }
+    } catch (e) { showError(t("Player error: ") + e); }
   };
 
   const seekTo = async (ms: number) => {
@@ -1135,7 +1322,7 @@ export default function App() {
       playSong(song, q);
       return;
     }
-    if (song.id === cur.id) { showToast("Already playing"); return; }
+    if (song.id === cur.id) { showToast(t("Already playing")); return; }
 
     const base = queueRef.current.length ? queueRef.current : displayListRef.current;
     // Drop any existing copy first so re-pinning moves it instead of duplicating.
@@ -1157,7 +1344,7 @@ export default function App() {
     }).catch(() => {});
 
     setPlayNextQueue(prev => mergePins(prev, [song.id]));
-    showToast(`"${dispName(song)}" plays next`);
+    showToast(t("\"{name}\" plays next", { name: dispName(song) }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
 
@@ -1178,7 +1365,7 @@ export default function App() {
     }
 
     const toPin = chosen.filter(s => s.id !== cur.id);
-    if (!toPin.length) { showToast("Already playing"); return; }
+    if (!toPin.length) { showToast(t("Already playing")); return; }
 
     const base = queueRef.current.length ? queueRef.current : displayListRef.current;
     const newQ = planPlayNext(base, cur.id, toPin, playNextQueueRef.current);
@@ -1190,7 +1377,7 @@ export default function App() {
     }).catch(() => {});
 
     setPlayNextQueue(prev => mergePins(prev, toPin.map(s => s.id)));
-    showToast(toPin.length === 1 ? `"${dispName(toPin[0])}" plays next` : `${toPin.length} songs play next`);
+    showToast(toPin.length === 1 ? t("\"{name}\" plays next", { name: dispName(toPin[0]) }) : t("{n} songs play next", { n: toPin.length }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
 
@@ -1228,15 +1415,15 @@ export default function App() {
   };
 
   // ── Shuffle FAB ───────────────────────────────────────────────────────────
-  const onShufflePressStart = () => { shufflePressTimer.current = setTimeout(() => { hapticImpact("medium"); setPlayMode(prev => { const next: PlayMode = prev === "repeat" ? "off" : "repeat"; showToast(next === "repeat" ? "Repeat on" : "Repeat off"); return next; }); }, 600); };
+  const onShufflePressStart = () => { shufflePressTimer.current = setTimeout(() => { hapticImpact("medium"); setPlayMode(prev => { const next: PlayMode = prev === "repeat" ? "off" : "repeat"; showToast(next === "repeat" ? t("Repeat on") : t("Repeat off")); return next; }); }, 600); };
   const onShufflePressEnd   = () => { if (shufflePressTimer.current) clearTimeout(shufflePressTimer.current); };
   const onShuffleClick = () => {
     hapticImpact("light");
-    if (playMode === "repeat") { setPlayMode("off"); showToast("Repeat off"); return; }
+    if (playMode === "repeat") { setPlayMode("off"); showToast(t("Repeat off")); return; }
     if (!displayList.length) return;
     openChrome();
     const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playSong(q[0], q);
-    showToast(isFavFilter ? "Shuffling favorites" : "Shuffling all songs");
+    showToast(isFavFilter ? t("Shuffling favorites") : t("Shuffling all songs"));
   };
 
   const toggleShuffleFromPlayer = () => {
@@ -1250,13 +1437,13 @@ export default function App() {
         setQueue(orderedQ);
         AudioPlayer.setQueue({ tracks: orderedQ.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
       }
-      showToast("Shuffle off, continuing in order"); return;
+      showToast(t("Shuffle off, continuing in order")); return;
     }
     if (!currentSong) return;
     const rest = buildShuffleQ(displayList.filter(s => s.id !== currentSong.id));
     const q = [currentSong, ...rest]; setPlayMode("shuffle"); setQueue(q);
     AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
-    showToast("Shuffle on");
+    showToast(t("Shuffle on"));
   };
 
   // Expanded-player mode button: cycles off → shuffle → repeat → off.
@@ -1267,11 +1454,11 @@ export default function App() {
       const rest = buildShuffleQ(displayList.filter(s => s.id !== currentSong.id));
       const q = [currentSong, ...rest]; setPlayMode("shuffle"); setQueue(q);
       AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
-      showToast("Shuffle on");
+      showToast(t("Shuffle on"));
     } else if (playMode === "shuffle") {
-      setPlayMode("repeat"); showToast("Repeat on");
+      setPlayMode("repeat"); showToast(t("Repeat on"));
     } else {
-      setPlayMode("off"); showToast("Repeat off");
+      setPlayMode("off"); showToast(t("Repeat off"));
     }
   };
 
@@ -1351,20 +1538,22 @@ export default function App() {
   };
 
   // ── EQ / Audio effects sheet ──────────────────────────────────────────────
-  const openEQSheet = useCallback(async () => {
+  // Not a useCallback: its one caller is Settings, which is not memoised, so
+  // there was nothing for the memo to save.
+  const openEQSheet = async () => {
     let info = eqInfo;
     if (!info) {
       try {
         info = await AudioPlayer.getEqualizerInfo();
         setEqInfo(info);
       } catch (e) {
-        showError("Could not load equalizer info: " + e);
+        showError(t("Could not load equalizer info: ") + e);
         return;
       }
     }
     setSettingsOpen(false);
     setEqOpen(true);
-  }, [eqInfo, showError]);
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // ── EXPORT FLOW ───────────────────────────────────────────────────────────
@@ -1451,7 +1640,7 @@ export default function App() {
 
       if (backupCancelRef.current) {
         setBackupSheet({ kind: "closed" });
-        showToast("Backup cancelled");
+        showToast(t("Backup cancelled"));
         return;
       }
 
@@ -1468,13 +1657,13 @@ export default function App() {
         exportJsonUriRef.current = e.jsonUri ?? "";
         setBackupSheet({
           kind:         "exportError",
-          message:      `Not enough storage space. Free up space and try again.`,
+          message:      t("Not enough storage space. Free up space and try again."),
           copiedCount:  e.copiedCount ?? 0,
         });
       } else {
         setBackupSheet({
           kind:         "exportError",
-          message:      `Export failed: ${e}`,
+          message:      t("Export failed: {error}", { error: String(e) }),
           copiedCount:  0,
         });
       }
@@ -1485,20 +1674,20 @@ export default function App() {
   /** Share the whole backup folder (JSON + music) as a zip via Android share sheet */
   const handleShareBackup = useCallback(async () => {
     const folderName = exportFolderNameRef.current;
-    if (!folderName) { showToast("Nothing to share"); return; }
+    if (!folderName) { showToast(t("Nothing to share")); return; }
 
     setBackupSheet({ kind: "sharing" });
     try {
       const { zipUri } = await zipBackupFolder(folderName);
       await Share.share({
-        title: "MPTree backup",
+        title: t("MPTree backup"),
         files: [zipUri],
-        dialogTitle: "Share backup",
+        dialogTitle: t("Share backup"),
       });
       // Restore the success sheet so the user can still tap "Done".
       setBackupSheet({ kind: "exportSuccess", folderName });
     } catch (e) {
-      showToast("Couldn't prepare backup for sharing");
+      showToast(t("Couldn't prepare backup for sharing"));
       setBackupSheet({ kind: "exportSuccess", folderName });
     }
   }, []);
@@ -1524,7 +1713,7 @@ export default function App() {
     if (importFileInputRef.current) importFileInputRef.current.value = "";
 
     // Move to progress state before parsing
-    setBackupSheet({ kind: "importProgress", phase: "Reading backup…" });
+    setBackupSheet({ kind: "importProgress", phase: t("Reading backup…") });
 
     const json = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -1534,7 +1723,7 @@ export default function App() {
     }).catch(() => null);
 
     if (!json) {
-      setBackupSheet({ kind: "importError", message: "File not recognized. Could not read the file." });
+      setBackupSheet({ kind: "importError", message: t("File not recognized. Could not read the file.") });
       return;
     }
 
@@ -1542,13 +1731,13 @@ export default function App() {
     try {
       data = parseBackup(json);
     } catch {
-      setBackupSheet({ kind: "importError", message: "File not recognized. This doesn't look like an MPTree backup." });
+      setBackupSheet({ kind: "importError", message: t("File not recognized. This doesn't look like an MPTree backup.") });
       return;
     }
 
     // Check version compatibility
     if (data.version > 1) {
-      setBackupSheet({ kind: "importError", message: "Backup is from a newer version of MPTree. Please update the app." });
+      setBackupSheet({ kind: "importError", message: t("Backup is from a newer version of MPTree. Please update the app.") });
       return;
     }
 
@@ -1556,7 +1745,7 @@ export default function App() {
       let pathRemap: Map<string, string> | undefined;
 
       if (data.includeMusic && data.musicDir) {
-        setBackupSheet({ kind: "importProgress", phase: "Indexing music…" });
+        setBackupSheet({ kind: "importProgress", phase: t("Indexing music…") });
 
         const { uri: musicAbsUri } = await Filesystem.getUri({
           directory: Directory.ExternalStorage,
@@ -1582,7 +1771,7 @@ export default function App() {
         await scanBackupFolder(musicAbsDir);
       }
 
-      setBackupSheet({ kind: "importProgress", phase: "Restoring playlists…" });
+      setBackupSheet({ kind: "importProgress", phase: t("Restoring playlists…") });
 
       const { playlists: pl, meta: m, removedSongs: rs, cutTracks: ct } =
         await importBackup(data, pathRemap);
@@ -1618,9 +1807,9 @@ export default function App() {
     } catch (e: any) {
       const msg = String(e);
       if (msg.includes("permission") || msg.includes("Permission")) {
-        setBackupSheet({ kind: "importError", message: "Storage permission needed. Please grant file access and try again." });
+        setBackupSheet({ kind: "importError", message: t("Storage permission needed. Please grant file access and try again.") });
       } else {
-        setBackupSheet({ kind: "importError", message: "Restore failed. The backup may be incomplete or corrupted." });
+        setBackupSheet({ kind: "importError", message: t("Restore failed. The backup may be incomplete or corrupted.") });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1801,7 +1990,7 @@ export default function App() {
       for (const id of ids) next[id] = { ...(next[id] || {}), liked: like };
       return next;
     });
-    showToast(like ? `${ids.length} liked` : `${ids.length} removed from favorites`);
+    showToast(like ? t("{n} liked", { n: ids.length }) : t("{n} removed from favorites", { n: ids.length }));
   }, []);
 
   const shuffleMany = useCallback((ids: string[]) => {
@@ -1846,7 +2035,7 @@ export default function App() {
         AudioPlayer.setTrackArt({ path: id, dataUrl: u.customPhoto ?? null }).catch(() => {});
       }
     }
-    showToast(`${ids.length} song${ids.length === 1 ? "" : "s"} updated`);
+    showToast(tn(ids.length, "{n} song updated", "{n} songs updated"));
   };
 
   // ── Lyrics ────────────────────────────────────────────────────────────────
@@ -1867,7 +2056,7 @@ export default function App() {
       return { ...prev, [s.id]: cur };
     });
     setLyricsSong(null);
-    showToast(lyrics === null ? "Lyrics removed" : "Lyrics saved");
+    showToast(lyrics === null ? t("Lyrics removed") : t("Lyrics saved"));
   };
 
 
@@ -1880,16 +2069,16 @@ export default function App() {
     try {
       const res = await MusicScanner.setAsRingtone({ path: s.uri });
       if (res.ok) {
-        showToast("Ringtone set");
+        showToast(t("Ringtone set"));
       } else if (res.needsPermission) {
-        showToast("Allow MPTree to change system settings, then try again");
+        showToast(t("Allow MPTree to change system settings, then try again"));
       } else if (res.reason === "notIndexed") {
-        showToast("This track is not in the device library yet");
+        showToast(t("This track is not in the device library yet"));
       } else {
-        showToast("Could not set that as a ringtone");
+        showToast(t("Could not set that as a ringtone"));
       }
     } catch (e) {
-      showError("Ringtone failed: " + e);
+      showError(t("Ringtone failed: ") + e);
     }
   };
 
@@ -1904,13 +2093,13 @@ export default function App() {
       else { const rl = displayList.filter(x => x.id !== s.id); const idx = displayList.findIndex(x => x.id === s.id); const nxt = rl[idx] ?? rl[idx - 1]; if (nxt) { setQueue(rl); playSong(nxt, rl); } else { setCurrent(null); setPlaying(false); } }
     }
     setRemoveSong(null); setMenuSong(null); setPlayerExpanded(false);
-    showToast("Moved to bin", { label: "Undo", onClick: () => restoreSongs([s]) });
+    showToast(t("Moved to bin"), { label: t("Undo"), onClick: () => restoreSongs([s]) });
     scanMusic(updated);
   };
 
   const doRestore = (s: Song) => {
     restoreSongs([s]);
-    showToast("Song restored");
+    showToast(t("Song restored"));
   };
 
   // ── Permanent delete (bin) ─────────────────────────────────────────────────
@@ -1919,7 +2108,7 @@ export default function App() {
     // system confirmation dialog; if the user declines, keep the song in the bin.
     const deleted = await deleteFileAtUri(s.uri);
     if (!deleted) {
-      showToast("Delete cancelled");
+      showToast(t("Delete cancelled"));
       return;
     }
     setRemovedSongs(prev => {
@@ -1933,7 +2122,7 @@ export default function App() {
       delete next[s.id];
       return next;
     });
-    showToast(`"${s.title}" deleted from device`);
+    showToast(t("\"{name}\" deleted from device", { name: s.title }));
   }, []);
 
   const handleEmptyBin = useCallback(async () => {
@@ -1954,8 +2143,8 @@ export default function App() {
       return next;
     });
     showToast(remaining.length === 0
-      ? "Bin emptied"
-      : `Deleted ${deletedIds.size}, ${remaining.length} kept`);
+      ? t("Bin emptied")
+      : t("Deleted {n}, {kept} kept", { n: deletedIds.size, kept: remaining.length }));
   }, []);
 
   // ── Cut track ─────────────────────────────────────────────────────────────
@@ -1977,7 +2166,7 @@ export default function App() {
     const start = Math.max(0, Math.round(startMs));
     const end   = Math.round(endMs);
     if (end - start < 1000) {
-      showError("Cut must be at least 1 second long.");
+      showError(t("Cut must be at least 1 second long."));
       return;
     }
     setCutSong(null);
@@ -1985,7 +2174,7 @@ export default function App() {
     // add it to the library as a normal song. If the source codec can't be
     // losslessly clipped, fall back to the in-app metadata-only "cut" (which
     // plays the original file between the two markers).
-    showToast(`Saving "${newName}"…`);
+    showToast(t("Saving \"{name}\"…", { name: newName }));
     try {
       const res = await MusicScanner.cutTrack({ path: song.uri, startMs: start, endMs: end, name: newName });
       // A real file now exists on the device. Add it as a normal (non-cut) song.
@@ -2003,7 +2192,7 @@ export default function App() {
         if (prev.some(s => s.uri === realSong.uri)) return prev;
         return [realSong, ...prev];
       });
-      showToast(`"${newName}" saved to your library`);
+      showToast(t("\"{name}\" saved to your library", { name: newName }));
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "");
       const code = String(e?.code ?? "");
@@ -2011,9 +2200,9 @@ export default function App() {
         // Fall back to the original in-app cut behaviour for this format.
         const cutVersion: Song = { ...song, title: newName, id: makeCutId(song.uri, startMs, endMs), dateAdded: Date.now(), isCut: true, cutFrom: startMs, cutTo: endMs };
         setSongs(prev => { const next = [cutVersion, ...prev]; saveCutTracksToStorage(next.filter(s => s.isCut)); return next; });
-        showToast(`"${newName}" saved (in-app cut — format can't be exported)`);
+        showToast(t("\"{name}\" saved in MPTree only. This format can't be exported.", { name: newName }));
       } else {
-        showError("Cut failed: " + msg);
+        showError(t("Cut failed: ") + msg);
       }
     }
   };
@@ -2025,11 +2214,11 @@ export default function App() {
       await Share.share({
         title: dispName(s),
         files: [toFileUri(s.uri)],
-        dialogTitle: "Share song",
+        dialogTitle: t("Share song"),
       });
     } catch (e: any) {
       const msg = String(e?.message ?? e);
-      if (!/cancel/i.test(msg)) showError("Share failed: " + msg); // negeer een simpele annulering
+      if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg); // negeer een simpele annulering
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta]);
@@ -2050,7 +2239,7 @@ export default function App() {
       );
       savePlaylists(updated);
       const target = updated.find(pl => pl.id === playlistId);
-      if (target) showToast(`Added to "${target.name}"`);
+      if (target) showToast(t("Added to \"{name}\"", { name: target.name }));
       return updated;
     });
     setMenuSong(null);
@@ -2068,7 +2257,7 @@ export default function App() {
       });
       savePlaylists(updated);
       const target = updated.find(pl => pl.id === playlistId);
-      if (target) showToast(`Added ${ids.length} to "${target.name}"`);
+      if (target) showToast(t("Added {n} to \"{name}\"", { n: ids.length, name: target.name }));
       return updated;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2082,7 +2271,7 @@ export default function App() {
       savePlaylists(updated);
       return updated;
     });
-    showToast(`Created "${name}" with ${ids.length} songs`);
+    showToast(t("Created \"{name}\" with {n} songs", { name, n: ids.length }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2099,7 +2288,7 @@ export default function App() {
       savePlaylists(updated);
       return updated;
     });
-    showToast(`Created "${name}"`);
+    showToast(t("Created \"{name}\"", { name }));
     setMenuSong(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2152,13 +2341,13 @@ export default function App() {
       .sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0))
       .slice(0, 50).map(s => s.id);
     return [
-      { id: "favorites",      name: "My Favorites",    songIds: favoriteIds },
-      { id: "recentlyPlayed", name: "Recently Played", songIds: recentlyPlayedIds },
-      { id: "mostPlayed",     name: "Most Played",     songIds: mostPlayedIds },
-      { id: "lastAdded",      name: "Last Added",      songIds: lastAddedIds },
+      { id: "favorites",      name: t("My Favorites"),    songIds: favoriteIds },
+      { id: "recentlyPlayed", name: t("Recently Played"), songIds: recentlyPlayedIds },
+      { id: "mostPlayed",     name: t("Most Played"),     songIds: mostPlayedIds },
+      { id: "lastAdded",      name: t("Last Added"),      songIds: lastAddedIds },
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [songs, likedKey, lastPlayedKey, playCountKey]);
+  }, [songs, likedKey, lastPlayedKey, playCountKey, langPref]);
 
   // ── Android hardware / gesture Back ───────────────────────────────────────
   // Without a handler, Back closes the whole app from anywhere, even with a
@@ -2225,7 +2414,8 @@ export default function App() {
   // Both tabs collapse — the Playlists grid runs off the bottom of the screen
   // just as readily as the song list does. Multi-select is the one exception:
   // it needs its own bar and the header's count visible.
-  const chromeCollapsed = !selectMode && !chromeOpen;
+  // Drawn folded while the logo is still on its way home: see setChromeOpen.
+  const chromeCollapsed = !selectMode && (!chromeOpen || logoFlight === "home");
 
   // ONE definition of how the fold moves, used by every piece that moves with
   // it: the header card, the mini-player, the list paddings, the two floating
@@ -2322,6 +2512,7 @@ export default function App() {
   const logoLongPressed  = useRef(false);
   const onLogoPressStart = () => {
     logoLongPressed.current = false;
+    setMenuFromBall(false);   // the parked button sets it back straight after
     logoPressTimer.current = setTimeout(() => {
       logoLongPressed.current = true;
       hapticImpact("medium");
@@ -2365,6 +2556,11 @@ export default function App() {
   const [logoPos,  setLogoPos]  = useState<{ fx: number; fy: number } | null>(null);
   const [logoDrag, setLogoDrag] = useState<{ x: number; y: number } | null>(null);
   const [overRemove, setOverRemove] = useState(false);
+  useEffect(() => { logoParkedRef.current = logoPos !== null; }, [logoPos]);
+  // Which button the options panel was opened from. With the button parked and
+  // the header open there are two logos on screen, and the panel belongs next
+  // to the one you held.
+  const [menuFromBall, setMenuFromBall] = useState(false);
   useEffect(() => {
     Preferences.get({ key: "mptree_logo_pos" })
       .then(({ value }) => {
@@ -2387,12 +2583,24 @@ export default function App() {
   const bandMaxY = Math.max(bandMinY, dims.vh - LOGO_SIZE - BAND_BOTTOM_GUARD);
   const parkedX  = logoPos ? bandMinX + logoPos.fx * (bandMaxX - bandMinX) : HOME_X;
   const parkedY  = logoPos ? bandMinY + logoPos.fy * (bandMaxY - bandMinY) : dims.cardTop;
-  // Where the free-floating button is drawn. Dragging wins over the stored spot,
-  // and an expanded header wins over both: it goes home and fades into the card.
+  // Where the free-floating button is drawn. Dragging wins over the stored spot.
+  // With the header open the button stays where it was left, but it is kept off
+  // the things the open header brings with it: below the card, and above the
+  // mini player and the two buttons that ride on top of it. Folding puts it back
+  // on its stored spot; the stored spot itself never changes for this.
   const logoFloating = logoPos !== null || logoDrag !== null;
   const logoDragging = logoDrag !== null;
-  const floatX = !chromeCollapsed ? HOME_X : logoDrag ? logoDrag.x : parkedX;
-  const floatY = !chromeCollapsed ? dims.cardTop : logoDrag ? logoDrag.y : parkedY;
+  const openCardBottom = dims.cardTop + (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 10;
+  const openBottomH    = (currentSong && !selectMode ? 113 : 0) + (selectMode ? 100 : 0);
+  const openMinY = openCardBottom;
+  const openMaxY = Math.max(openMinY, bandMaxY - openBottomH);
+  const yMin = chromeCollapsed ? bandMinY : openMinY;
+  const yMax = chromeCollapsed ? bandMaxY : openMaxY;
+  const floatX = logoDrag ? logoDrag.x : parkedX;
+  const floatY = logoDrag ? logoDrag.y : Math.min(yMax, Math.max(yMin, parkedY));
+  // The mark sits in the button only while it is folded and at rest. Open, or
+  // with the mark in flight, the button is an empty socket.
+  const ballHasMark = chromeCollapsed && logoFlight === null;
 
   // The remove target, centred at the bottom. Hit-tested against the finger
   // rather than the button, which is clamped short of it.
@@ -2427,7 +2635,9 @@ export default function App() {
 
   const logoGrabMove = (cx: number, cy: number) => {
     const g = logoGrab.current;
-    if (!g || !chromeCollapsed) return;
+    // From the docked spot it can only be pulled out while folded; once parked
+    // it moves in either state.
+    if (!g || (!chromeCollapsed && logoPos === null)) return;
     if (!g.moved) {
       // 14px rather than the usual 8: this button also answers a tap and a hold,
       // and a hold on a 54px target rolls a few pixels under the thumb.
@@ -2438,7 +2648,7 @@ export default function App() {
       hapticImpact("light");
     }
     g.x = Math.min(bandMaxX, Math.max(bandMinX, cx - g.dx));
-    g.y = Math.min(bandMaxY, Math.max(bandMinY, cy - g.dy));
+    g.y = Math.min(yMax, Math.max(yMin, cy - g.dy));
     g.over = nearPoint(cx, cy, removeCX, removeCY, 52);
     setLogoDrag({ x: g.x, y: g.y });
     setOverRemove(g.over);
@@ -2457,10 +2667,10 @@ export default function App() {
     window.setTimeout(() => { logoLongPressed.current = false; }, 0);
     setLogoDrag(null);
     setOverRemove(false);
-    // Playback can expand the chrome mid-drag (a crossfade into the next track
-    // calls openChrome), which sends the button home under your finger. Saving
-    // where it would have landed then means saving somewhere nobody chose.
-    if (!chromeCollapsed) return;
+    // Pulled out of the docked spot and then the header opened under it (a
+    // crossfade into the next track calls openChrome): the drag started from a
+    // button that no longer exists, so there is nothing sensible to save.
+    if (!chromeCollapsed && logoPos === null) return;
     if (g.over || nearPoint(g.x, g.y, HOME_X, dims.cardTop, DOCK_RADIUS)) { dockLogo(); return; }
     const next = {
       fx: bandMaxX > bandMinX ? (g.x - bandMinX) / (bandMaxX - bandMinX) : 0,
@@ -2483,15 +2693,16 @@ export default function App() {
   // the button, so they follow it rather than staying pinned to the top left.
   const LOGO_MENU_W = 268;
   const LOGO_MENU_H = 210;   // generous; the panel is clamped on screen either way
-  const anchored    = chromeCollapsed && logoFloating;
+  const anchored    = logoFloating && (chromeCollapsed || menuFromBall);
   const logoMenuLeft = anchored ? Math.max(12, Math.min(floatX, dims.vw - LOGO_MENU_W - 12)) : 12;
   const logoMenuTop  = anchored
     ? (floatY + LOGO_SIZE + 8 + LOGO_MENU_H <= dims.vh - 12
         ? floatY + LOGO_SIZE + 8
         : Math.max(12, floatY - LOGO_MENU_H - 8))
     : cardBottom;
-  const hintLeft = anchored ? Math.min(floatX + 62, Math.max(12, dims.vw - 250)) : 74;
-  const hintTop  = anchored ? floatY + 14 : dims.cardTop + 14;
+  const hintAtBall = chromeCollapsed && logoFloating;
+  const hintLeft = hintAtBall ? Math.min(floatX + 62, Math.max(12, dims.vw - 250)) : 74;
+  const hintTop  = hintAtBall ? floatY + 14 : dims.cardTop + 14;
 
   // Attached to both the docked layer and the floating button, so the gesture is
   // the same wherever the button happens to be.
@@ -2532,6 +2743,7 @@ export default function App() {
   const modeBg     = playMode === "shuffle" ? TH.violet : playMode === "repeat" ? TH.repeat : TH.dim;
   const modeShadow = playMode === "shuffle" ? "0 0 16px rgba(124,58,237,0.45)" : playMode === "repeat" ? "0 0 16px rgba(14,165,233,0.4)" : "none";
   const filterLabel = FILTER_OPTIONS.find((o: { id: FilterId; label: string }) => o.id === filter)?.label ?? "Sort";
+  const filterText = t(filterLabel);
   const selectedSongs = displayList.filter(s => selected.has(s.id));
   const allSelectedLiked = selectedSongs.length > 0 && selectedSongs.every(s => isLiked(s));
 
@@ -2569,7 +2781,13 @@ export default function App() {
   // is open (an expanded row has a different height, which would break the
   // uniform-height math — with a menu open we render everything, which is fine
   // because you can't scroll a large distance in that transient state).
-  const ROW_H = 64;               // uniform row height (8 + 48 art + 8 padding)
+  // Set by the Size setting. The row's height is written on the row itself
+  // (see the song row below), so this number is not a description of the row,
+  // it IS the row. It used to be a comment's arithmetic ("8 + 48 + 8") while the
+  // row actually had 10px padding and came out at 68px, so every row the
+  // virtual window skipped was 4px short and the list shuffled as it scrolled.
+  const ROW_H = SIZE_TABLE[uiSize].row;
+  const ART   = ROW_H - 20;       // 10px above and below
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
   const pullOffset = refreshing ? 46 : pullDist;
@@ -2650,6 +2868,7 @@ export default function App() {
         /* A row arriving at the top of a list. Used by the new-playlist field in
            PlaylistsView, which is a fresh mount and so has nothing to
            transition from. */
+        @keyframes mpFly { from { transform: translate3d(var(--fx0), var(--fy0), 0); } to { transform: translate3d(var(--fx1), var(--fy1), 0); } }
         @keyframes mpRowIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes mpFadeIn { from { opacity: 0; } to { opacity: 1; } }
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
@@ -2680,12 +2899,14 @@ export default function App() {
             height: chromeCollapsed ? 54 : (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2,
             borderRadius: chromeCollapsed ? "50%" : 22,
             // The card is the collapse button too, until the button is moved
-            // away: then there is nothing here at all, and the floating circle
-            // below is the whole of it. The card is still what expands, so it
-            // fades back in as it grows.
-            opacity:       chromeCollapsed && logoFloating ? 0 : 1,
+            // away: then, folded, there is nothing here at all. It shows while
+            // it closes, and appears the moment the flying mark lands in it.
+            // Deliberately not faded: at both of those moments the card's own
+            // mark and the flying one are the same size in the same place, so
+            // an instant swap is invisible and a fade would show two of them.
+            opacity:       chromeCollapsed && logoFloating && logoFlight !== "fold" ? 0 : 1,
             pointerEvents: chromeCollapsed && logoFloating ? "none" : "auto",
-            transition: move("width", "height", "border-radius", "opacity"),
+            transition: move("width", "height", "border-radius"),
           }}
         >
           {/* Full header. Kept mounted and at its natural width while collapsed
@@ -2711,7 +2932,7 @@ export default function App() {
               onClick={onLogoClick}
               onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
               onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
-              aria-label="Collapse header"
+              aria-label={t("Collapse header")}
               data-tour="logo"
               style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
             >
@@ -2730,7 +2951,7 @@ export default function App() {
                 transition: "background 0.2s, color 0.2s",
               }}
             >
-              Songs
+              {t("Songs")}
             </button>
             <button
               data-tour="playlists"
@@ -2743,7 +2964,7 @@ export default function App() {
                 transition: "background 0.2s, color 0.2s",
               }}
             >
-              Playlists
+              {t("Playlists")}
             </button>
           </div>
 
@@ -2756,7 +2977,7 @@ export default function App() {
             {selectMode && (
               <button
                 onClick={selected.size === 0 ? undefined : () => setRemoveMultiConfirm(true)}
-                aria-label="Remove selected songs"
+                aria-label={t("Remove selected songs")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   background: selected.size > 0 ? TH.binBg : "transparent",
@@ -2801,11 +3022,11 @@ export default function App() {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <div data-tour="search" style={{ flex: 1, display: "flex", alignItems: "center", background: TH.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${TH.border}` }}>
                   {IC.Search(TH.muted)}
-                  <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search songs or artists…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 15, minWidth: 0 }} />
+                  <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 15, minWidth: 0 }} />
                   {search.length > 0 && (
                     <button
                       onClick={() => { setSearch(""); hapticImpact("light"); }}
-                      aria-label="Clear search"
+                      aria-label={t("Clear search")}
                       tabIndex={page === "songs" ? undefined : -1}
                       style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0, color: TH.muted }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" fill={TH.dim} stroke="none"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -2815,14 +3036,14 @@ export default function App() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{displayList.length} songs</span>
+                  <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
                   {activeArtist && (
                     <button
                       onClick={() => setArtistFilter(null)}
-                      aria-label={"Show all artists, currently showing " + activeArtist}
+                      aria-label={t("Show all artists, currently showing {artist}", { artist: activeArtist })}
                       style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, maxWidth: 200, background: TH.violet + "22", color: TH.violet, border: "none", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
                     >
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeArtist}</span>
@@ -2835,7 +3056,7 @@ export default function App() {
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
                 <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" ? undefined : -1} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? TH.accent : TH.border}`, background: TH.surface, color: isFavFilter ? TH.accent : TH.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
-                  <span>{filterLabel}</span><IC.Chevron />
+                  <span>{filterText}</span><IC.Chevron />
                 </button>
               </div>
           </div>
@@ -2856,7 +3077,7 @@ export default function App() {
           >
             <button
               {...logoHandlers}
-              aria-label="Show search and player"
+              aria-label={t("Show search and player")}
               style={{
                 // Pinned left rather than centred: while the card is still wide,
                 // "centre" is far from where the header's own logo sits, so the
@@ -2883,7 +3104,9 @@ export default function App() {
         {logoFloating && (
           <button
             {...logoHandlers}
-            aria-label="Show search and player"
+            onTouchStart={e => { logoHandlers.onTouchStart(e); setMenuFromBall(true); }}
+            onMouseDown={e => { logoHandlers.onMouseDown(e); setMenuFromBall(true); }}
+            aria-label={chromeCollapsed ? t("Show search and player") : t("Hide search and player")}
             style={{
               position: "fixed", top: 0, left: 0,
               width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
@@ -2891,8 +3114,7 @@ export default function App() {
               ...CARD_SKIN,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: TH.text, cursor: "pointer", zIndex: 60, touchAction: "none",
-              opacity: !chromeCollapsed ? 0 : overRemove ? 0.4 : 1,
-              pointerEvents: chromeCollapsed ? "auto" : "none",
+              opacity: overRemove ? 0.4 : 1,
               // No transform easing while it is following a finger.
               transition: logoDragging
                 ? "opacity 0.15s ease"
@@ -2901,9 +3123,41 @@ export default function App() {
                   : "opacity 0.2s ease",
             }}
           >
-            <Logo size={30} color={TH.text} />
+            {ballHasMark
+              ? <Logo size={30} color={TH.text} />
+              // The socket: faint enough to read as "empty", present enough to
+              // read as a button rather than a stray disc.
+              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${TH.border}` }} />}
           </button>
         )}
+
+        {/* ── The mark in flight ────────────────────────────────────────────
+            Between the parked button and the top left. Its start and end points
+            are exactly where the two resting marks are drawn (the button's
+            centred one at +12, the folded card's left-pinned one at 12 + 1
+            border + 11 padding, both 12 down), so the hand-overs at either end
+            do not show. A keyframe rather than a transition, so it needs no
+            extra render to be placed at the start first. */}
+        {(logoFlight === "home" || logoFlight === "out") && (() => {
+          const ball = { x: floatX + 12, y: floatY + 12 };
+          const home = { x: HOME_X + 12, y: dims.cardTop + 12 };
+          const [a, b] = logoFlight === "home" ? [ball, home] : [home, ball];
+          return (
+            <div
+              key={logoFlight}
+              aria-hidden="true"
+              onAnimationEnd={endLogoFlight}
+              style={{
+                position: "fixed", top: 0, left: 0, zIndex: 61, pointerEvents: "none",
+                display: "flex", color: TH.text,
+                "--fx0": `${a.x}px`, "--fy0": `${a.y}px`, "--fx1": `${b.x}px`, "--fy1": `${b.y}px`,
+                animation: `mpFly ${LOGO_FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+              } as React.CSSProperties}
+            >
+              <Logo size={30} color={TH.text} />
+            </div>
+          );
+        })()}
 
         {/* ── Drop here to send it back ─────────────────────────────────────
             Only while dragging. Hit-tested against the finger, not the button,
@@ -2918,7 +3172,7 @@ export default function App() {
             }}
           >
             <div style={{ fontSize: 12, color: overRemove ? "#e8445a" : TH.muted, fontWeight: 600 }}>
-              Back to the top left
+              {t("Back to the top left")}
             </div>
             <div style={{
               width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
@@ -2956,7 +3210,7 @@ export default function App() {
             }}
           >
             <span style={{ display: "flex", transform: "rotate(180deg)", color: TH.muted }}><IC.ChevronR /></span>
-            Tap the logo to bring these back
+            {t("Tap the logo to bring these back")}
           </div>
         )}
 
@@ -2980,7 +3234,7 @@ export default function App() {
                 </svg>
               </span>
               <span style={{ fontSize: 15, fontWeight: 700, color: TH.text }}>
-                MPTree {updateInfo.version} is out
+                {updateInfo.play ? t("A new version of MPTree is ready") : t("MPTree {v} is out", { v: updateInfo.version })}
               </span>
             </div>
             {updateInfo.notes && updateInfo.notes.length > 0 && (
@@ -2993,18 +3247,19 @@ export default function App() {
                 onClick={() => { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); }}
                 style={{ flex: 1, padding: 11, background: TH.dim, color: TH.text, border: "none", borderRadius: 11, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
-                Later
+                {t("Later")}
               </button>
               <button
                 onClick={() => {
                   const info = updateInfo;
                   setUpdateInfo(null);
                   dismissUpdate(info.version);
-                  Browser.open({ url: info.url }).catch(() => {});
+                  if (info.play) System.startPlayUpdate().catch(() => {});
+                  else Browser.open({ url: info.url }).catch(() => {});
                 }}
                 style={{ flex: 1, padding: 11, background: TH.accent, color: TH.playBtnFg, border: "none", borderRadius: 11, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
-                Get it
+                {t("Get it")}
               </button>
             </div>
           </div>
@@ -3022,7 +3277,7 @@ export default function App() {
             <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
               {FILTER_OPTIONS.map((opt: { id: FilterId; label: string }) => (
                 <button key={opt.id} onClick={() => { setFilter(opt.id); setFilterOpen(false); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "13px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: filter === opt.id ? TH.text : TH.muted, fontSize: 14, cursor: "pointer", fontFamily: "inherit", fontWeight: filter === opt.id ? "700" : "400" }}>
-                  <span>{opt.label}</span>{filter === opt.id && IC.Check(TH.accent)}
+                  <span>{t(opt.label)}</span>{filter === opt.id && IC.Check(TH.accent)}
                 </button>
               ))}
 
@@ -3034,7 +3289,7 @@ export default function App() {
               {artistList.length > 0 && (
                 <>
                   <div style={{ padding: "10px 16px 6px", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: TH.muted, fontWeight: 700, borderBottom: `1px solid ${TH.dim}`, background: TH.dim }}>
-                    Artists
+                    {t("Artists")}
                   </div>
                   {activeArtist && (
                     <button onClick={() => { setArtistFilter(null); setFilterOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "11px 16px", background: "transparent", border: "none", borderBottom: `1px solid ${TH.dim}`, color: TH.violet, fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
@@ -3075,15 +3330,13 @@ export default function App() {
                   padding: "12px 12px 10px", color: TH.text, fontFamily: "inherit", fontSize: 15, textAlign: "left",
                 }}
               >
-                <span>Auto-collapse</span>
-                <span style={{ width: 46, height: 26, borderRadius: 13, background: autoCollapse ? TH.accent : TH.border, position: "relative", transition: "background 0.25s", flexShrink: 0 }}>
-                  <span style={{ position: "absolute", top: 3, left: autoCollapse ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
-                </span>
+                <span>{t("Auto-collapse")}</span>
+                <Switch on={autoCollapse} T={TH} />
               </button>
               <div style={{ padding: "0 12px", fontSize: 12, color: TH.muted, lineHeight: 1.5 }}>
                 {autoCollapse
-                  ? "The header and player fold away as you scroll down."
-                  : "They only fold when you tap the logo."}
+                  ? t("The header and player fold away as you scroll down.")
+                  : t("They only fold when you tap the logo.")}
               </div>
 
               {/* Only once the button has been moved. The X you drop it on is
@@ -3100,7 +3353,7 @@ export default function App() {
                   }}
                 >
                   <span style={{ display: "flex", color: TH.muted }}><IC.Close /></span>
-                  <span>Move the button back</span>
+                  <span>{t("Move the button back")}</span>
                 </button>
               )}
             </div>
@@ -3130,19 +3383,28 @@ export default function App() {
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
               onScroll={() => {
                 const top = scrollRef.current?.scrollTop ?? 0;
-                setListScrollTop(top);
+                // Only two things are drawn from the scroll position: which rows
+                // the virtual window holds, which changes once per row, and
+                // whether the scroll-to-top button shows. Storing every pixel
+                // re-rendered all of this component on every scroll event, some
+                // sixty times a second through a fling, to draw the same thing.
+                const base = pullOffset + songsInset;
+                const rowOf = (v: number) => Math.floor(Math.max(0, v - base) / ROW_H);
+                if (rowOf(top) !== rowOf(listScrollTop) || (top > songsInset) !== (listScrollTop > songsInset)) {
+                  setListScrollTop(top);
+                }
                 handleChromeScroll(top, lastScrollTopRef, "songs");
               }}
             >
               <div style={{ height: refreshing ? 46 : `${pullDist}px`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", transition: refreshing ? "height 0.2s ease" : "none" }}>
-                {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? "Refreshing…" : pullDist > 55 ? "Release to refresh" : "Pull to refresh"}</span>}
+                {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
               {displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
                   <IC.Heart filled={false} size={28} />
-                  <div style={{ marginTop: 12 }}>No songs found</div>
-                  <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{isFavFilter ? "Like songs by double-tapping them" : "Pull down to refresh"}</div>
+                  <div style={{ marginTop: 12 }}>{t("No songs found")}</div>
+                  <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{isFavFilter ? t("Like songs by double-tapping them") : t("Pull down to refresh")}</div>
                 </div>
               ) : (
                 <>
@@ -3167,7 +3429,8 @@ export default function App() {
                             onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
                             onClick={() => handleTap(song)}
                             style={{
-                              display: "flex", alignItems: "center", padding: "10px 16px", gap: 10, cursor: "pointer",
+                              display: "flex", alignItems: "center", padding: "0 16px", gap: 10, cursor: "pointer",
+                              height: ROW_H, boxSizing: "border-box",
                               background: isSelected ? TH.violet + "18" : isActive ? TH.card : "transparent",
                               transition: "background 0.15s",
                               // The playing row used to be marked only by a
@@ -3183,7 +3446,7 @@ export default function App() {
                                 {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                               </div>
                             )}
-                            <AlbumArt title={name} size={48} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
+                            <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ fontSize: 15, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
@@ -3193,12 +3456,12 @@ export default function App() {
                                 {/* Track number — hidden for now (kept for future use):
                                 <span style={{ fontSize: 12, fontWeight: "600", color: isActive ? TH.accent : TH.muted, flexShrink: 0 }}>{idx + 1}</span>
                                 */}
-                                <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist || "Unknown Artist"}</span>
+                                <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist || t("Unknown Artist")}</span>
                                 {song.duration != null && song.duration > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>}
                               </div>
                             </div>
                             {!selectMode && liked && (
-                              <button onClick={e => { e.stopPropagation(); hapticImpact("light"); setMeta(prev => ({ ...prev, [song.id]: { ...(prev[song.id] || {}), liked: false } })); showToast("Removed from favorites"); }} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6, display: "flex", flexShrink: 0, color: TH.accent }}>
+                              <button onClick={e => { e.stopPropagation(); hapticImpact("light"); setMeta(prev => ({ ...prev, [song.id]: { ...(prev[song.id] || {}), liked: false } })); showToast(t("Removed from favorites")); }} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6, display: "flex", flexShrink: 0, color: TH.accent }}>
                                 <IC.Heart filled={true} size={16} />
                               </button>
                             )}
@@ -3207,7 +3470,7 @@ export default function App() {
                                 onClick={e => { e.stopPropagation(); setMenuSong(song); }}
                                 onTouchStart={e => e.stopPropagation()}
                                 onMouseDown={e => e.stopPropagation()}
-                                aria-label={`More options for ${name}`}
+                                aria-label={t("More options for {name}", { name })}
                                 style={{ background: "transparent", border: "none", cursor: "pointer", padding: "6px 2px 6px 6px", display: "flex", flexShrink: 0, color: TH.muted }}
                               >
                                 <IC.Dots />
@@ -3260,7 +3523,7 @@ export default function App() {
                   scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
                   if (auto) window.setTimeout(() => setChromeAnimate(true), 600);
                 }}
-                aria-label="Scroll to top"
+                aria-label={t("Scroll to top")}
                 style={{ width: 46, height: 46, borderRadius: "50%", background: TH.surface, border: `1px solid ${TH.border}`, color: TH.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.4)" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
               </button>
@@ -3312,6 +3575,7 @@ export default function App() {
           >
             <PlaylistsView
               topInset={playlistsInset}
+              rowH={ROW_H}
               bottomInset={bottomH + 12}
               resetToListSignal={page === "songs"}
               backSignal={playlistBackSignal}
@@ -3324,7 +3588,7 @@ export default function App() {
               onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playSong(song, list); }}
               currentSongId={currentSong?.id ?? null}
               isPlaying={isPlaying}
-              onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
+              onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
               onPlayNext={handlePlayNext}
               onEditSong={(song) => { setEditFocusPhoto(false); setEditSong(song); }}
               onChangePhoto={(song) => { setEditFocusPhoto(true); setEditSong(song); }}
@@ -3379,7 +3643,7 @@ export default function App() {
                   animation. Tapping it also expands. */}
               <div
                 onClick={() => setPlayerExpanded(true)}
-                aria-label="Expand player"
+                aria-label={t("Expand player")}
                 style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 64, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               >
                 <div className="swipe-hint" style={{ width: 36, height: 4, borderRadius: 2, background: TH.dim }} />
@@ -3406,7 +3670,7 @@ export default function App() {
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
-                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1 }}>{dispArtist(currentSong) || "Unknown Artist"}</div>
+                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
@@ -3494,7 +3758,7 @@ export default function App() {
               setMeta(prev => {
                 const cur = prev[s.id] || {};
                 const nowLiked = !cur.liked;
-                showToast(nowLiked ? "Liked ❤️" : "Removed from favorites");
+                showToast(nowLiked ? t("Liked") : t("Removed from favorites"));
                 return { ...prev, [s.id]: { ...cur, liked: nowLiked } };
               });
               setMenuSong(null);
@@ -3506,8 +3770,8 @@ export default function App() {
           />
         )}
         {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} genre={dispGenre(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
-        {removeSong && <ConfirmSheet title="Remove song" body={`"${dispName(removeSong)}" will be moved to the bin. You can restore it from Settings.`} confirmLabel="Move to Bin" onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
-        {removeMultiConfirm && <ConfirmSheet title={`Remove ${selected.size} songs`} body={`${selected.size} songs will be moved to the bin. You can restore them from Settings.`} confirmLabel={`Move ${selected.size} to Bin`} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
+        {removeSong && <ConfirmSheet title={t("Remove song")} body={t("\"{name}\" will be moved to the bin. You can restore it from Settings.", { name: dispName(removeSong) })} confirmLabel={t("Move to bin")} onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
+        {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
           <SettingsSheet
@@ -3523,8 +3787,35 @@ export default function App() {
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
             onSetSleepTimer={setSleepTimer}
+            uiSize={uiSize} onSetUiSize={changeUiSize}
+            lang={langPref} onSetLang={changeLang}
+            updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
+            onSetUpdateNotices={changeUpdateNotices}
+            mixOthers={mixOthers} duckOthers={duckOthers} onSetMix={changeMix}
+            onFeedback={sendFeedback}
+            onRate={__DISTRIBUTION__ === "play"
+              ? () => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))
+              : undefined}
+            onPrivacy={() => { Browser.open({ url: "https://mp-tree.net/privacy.html" }).catch(() => {}); }}
             onClose={() => setSettingsOpen(false)}
             T={TH} />
+        )}
+
+        {mixSheetOpen && (
+          <MixSheet
+            mix={mixOthers} duck={duckOthers} onChange={changeMix}
+            isSamsung={isSamsung}
+            onOpenSoundSettings={() => { System.openSoundSettings().catch(() => {}); }}
+            onClose={closeMixSheet}
+            T={TH}
+          />
+        )}
+
+        {/* After an update, once. Held back while the loading screen or the
+            tutorial is up, so it is never the first thing fighting for the
+            screen. */}
+        {whatsNewOpen && !isInitializing && !showOnboarding && (
+          <WhatsNewSheet onClose={() => setWhatsNewOpen(false)} T={TH} />
         )}
 
         {binOpen && (
@@ -3591,7 +3882,7 @@ export default function App() {
               onSeek={ms => setCurrentTime(ms)}
               onSeekStart={() => setDragging(true)}
               onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
-              onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? "Liked ❤️" : "Removed from favorites"); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
+              onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
               onRemove={() => { setPlayerExpanded(false); setRemoveSong(currentSong); }}
               onShare={() => shareSong(currentSong)}
               lyrics={getMeta(currentSong).customLyrics}
@@ -3635,17 +3926,17 @@ export default function App() {
             <div style={{ width: 72, height: 72, borderRadius: 20, background: TH.surface, border: `1px solid ${TH.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
               <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={TH.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             </div>
-            <div style={{ fontSize: 21, fontWeight: 800, color: TH.text, marginBottom: 10 }}>Music access needed</div>
+            <div style={{ fontSize: 21, fontWeight: 800, color: TH.text, marginBottom: 10 }}>{t("Music access needed")}</div>
             <div style={{ fontSize: 15, color: TH.textSub, lineHeight: 1.55, maxWidth: 320, marginBottom: 28 }}>
-              MPTree plays the songs on your device, so it needs permission to read your audio files. It never uploads or shares anything. Everything stays on your phone.
+              {t("MPTree plays the songs on your device, so it needs permission to read your audio files. It never uploads or shares anything. Everything stays on your phone.")}
             </div>
             <button
               onClick={openAppSettings}
               style={{ width: "100%", maxWidth: 300, padding: 15, background: TH.playBtnBg, color: TH.playBtnFg, border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              Open app settings
+              {t("Open app settings")}
             </button>
             <div style={{ fontSize: 12.5, color: TH.muted, marginTop: 20, maxWidth: 300, lineHeight: 1.5 }}>
-              Tap "Open app settings", then Permissions → Music and audio → Allow.
+              {t("Tap \"Open app settings\", then Permissions > Music and audio > Allow.")}
             </div>
           </div>
         )}

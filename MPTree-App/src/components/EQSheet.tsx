@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import type { T } from "../themes";
+import { t } from "../i18n";
 
 interface EqInfo {
   available: boolean;
@@ -25,7 +26,7 @@ function fmtHz(hz: number): string {
 }
 
 function fmtCrossfade(ms: number): string {
-  if (ms === 0) return "Off";
+  if (ms === 0) return t("Off");
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1).replace(/\.0$/, "")}s`;
 }
@@ -155,16 +156,16 @@ export function EQSheet({
           <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 16px" }}>
-          <span style={{ fontSize: 17, fontWeight: "800", color: T.text }}>Audio Effects</span>
+          <span style={{ fontSize: 17, fontWeight: "800", color: T.text }}>{t("Audio Effects")}</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 22, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
         <div style={{ padding: "0 20px 32px", display: "flex", flexDirection: "column", gap: 28 }}>
 
           {/* Crossfade */}
-          <SheetSection label="Crossfade" T={T}>
+          <SheetSection label={t("Crossfade")} T={T}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <span style={{ fontSize: 13, color: T.textSub }}>Blend between tracks</span>
+              <span style={{ fontSize: 13, color: T.textSub }}>{t("Blend between tracks")}</span>
               <span style={{ fontSize: 13, fontWeight: "700", color: cfIndex === 0 ? T.muted : accent, minWidth: 36, textAlign: "right" }}>
                 {fmtCrossfade(stopFromIndex(cfIndex))}
               </span>
@@ -175,24 +176,24 @@ export function EQSheet({
               onMouseUp={commitCfChange} onTouchEnd={commitCfChange}
               style={{ width: "100%", accentColor: accent }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-              <span style={{ fontSize: 11, color: T.muted }}>Off</span>
+              <span style={{ fontSize: 11, color: T.muted }}>{t("Off")}</span>
               <span style={{ fontSize: 11, color: T.muted }}>8s</span>
             </div>
           </SheetSection>
 
           {/* Equalizer */}
           <SheetSection
-            label="Equalizer"
+            label={t("Equalizer")}
             headerRight={eqAvailable ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button onClick={resetEQ} style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: "600", cursor: "pointer", padding: "2px 0" }}>Reset</button>
+                <button onClick={resetEQ} style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: "600", cursor: "pointer", padding: "2px 0" }}>{t("Reset")}</button>
                 <EQToggle checked={eqEnabled} onChange={onToggleEnabled} accent={accent} T={T} />
               </div>
             ) : null}
             T={T}
           >
             {!eqAvailable ? (
-              <div style={{ fontSize: 13, color: T.muted, paddingTop: 4 }}>Not available on this device.</div>
+              <div style={{ fontSize: 13, color: T.muted, paddingTop: 4 }}>{t("Not available on this device.")}</div>
             ) : (
               <>
                 {/* Presets */}
@@ -214,7 +215,7 @@ export function EQSheet({
                           fontFamily: "inherit", transition: "all 0.15s",
                         }}
                       >
-                        {p.name}
+                        {t(p.name)}
                       </button>
                     );
                   })}
@@ -282,7 +283,7 @@ export function EQSheet({
 
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
                   <span style={{ fontSize: 10, color: T.muted }}>{(minMb / 100).toFixed(0)}dB</span>
-                  <span style={{ fontSize: 10, color: T.muted }}>0dB</span>
+                  <span style={{ fontSize: 10, color: T.muted }}>{t("0dB")}</span>
                   <span style={{ fontSize: 10, color: T.muted }}>+{(maxMb / 100).toFixed(0)}dB</span>
                 </div>
               </>

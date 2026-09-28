@@ -1,5 +1,6 @@
 import { useState, useRef, memo } from "react";
 import type { T } from "../themes";
+import { t } from "../i18n";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { SpinningDisc } from "./SpinningDisc";
@@ -327,7 +328,7 @@ export function PlayerExpandSheet({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px 0", flexShrink: 0 }}>
           <button
             onClick={onOpenMenu}
-            aria-label={`More options for ${dispName}`}
+            aria-label={t("More options for {name}", { name: dispName })}
             style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
             <IC.Dots />
           </button>
@@ -336,7 +337,7 @@ export function PlayerExpandSheet({
                 the sheet to add some, rather than showing an empty panel. */}
             <button
               onClick={toggleLyrics}
-              aria-label="Lyrics"
+              aria-label={t("Lyrics")}
               aria-pressed={lyricsOpen}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
@@ -347,10 +348,10 @@ export function PlayerExpandSheet({
               }}
             >
               <IC.Lyrics />
-              <span>Lyrics</span>
+              <span>{t("Lyrics")}</span>
             </button>
             <button onClick={animatedClose}
-              aria-label="Close player"
+              aria-label={t("Close player")}
               style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
               <IC.ChevronDown />
             </button>
@@ -391,7 +392,7 @@ export function PlayerExpandSheet({
                 }}>CUT</span>
               )}
               <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
-                {dispArtist || "Unknown Artist"}
+                {dispArtist || t("Unknown Artist")}
               </div>
             </div>
           </div>
@@ -413,7 +414,7 @@ export function PlayerExpandSheet({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
             <button
               onClick={onCycleMode}
-              title={playMode === "shuffle" ? "Shuffle on, tap for repeat" : playMode === "repeat" ? "Repeat on, tap to turn off" : "Tap to shuffle, again to repeat"}
+              title={playMode === "shuffle" ? t("Shuffle on, tap for repeat") : playMode === "repeat" ? t("Repeat on, tap to turn off") : t("Tap to shuffle, again to repeat")}
               style={{ background: "transparent", border: "none", color: playMode === "shuffle" ? T.violet : playMode === "repeat" ? T.repeat : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
             >
               {playMode === "repeat" ? <IC.Repeat /> : <IC.Shuffle />}
@@ -431,7 +432,7 @@ export function PlayerExpandSheet({
             <button onClick={() => onSkip(1)} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipF /></button>
             <button
               onClick={cycleSpeed}
-              title="Playback speed"
+              title={t("Playback speed")}
               style={{
                 background: playbackSpeed !== 1 ? T.dim : "transparent",
                 border: `1px solid ${playbackSpeed !== 1 ? T.accent : T.border}`,
@@ -454,10 +455,10 @@ export function PlayerExpandSheet({
         <div style={{ padding: "14px 16px 0", display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
           <button className="chip" onClick={onToggleLike}>
             <IC.Heart filled={isLiked} size={15} />
-            {isLiked ? "Unlike" : "Like"}
+            {isLiked ? t("Unlike") : t("Like")}
           </button>
-          <button className="chip" onClick={onShare}><IC.Share /> Share</button>
-          <button className="chip red" onClick={onRemove}><IC.Trash /> Remove</button>
+          <button className="chip" onClick={onShare}><IC.Share /> {t("Share")}</button>
+          <button className="chip red" onClick={onRemove}><IC.Trash /> {t("Remove")}</button>
         </div>
 
         {/* ── Up Next panel ────────────────────────────────────────────────── */}
@@ -465,7 +466,7 @@ export function PlayerExpandSheet({
           <div style={{ margin: "16px 16px 0", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: "700", color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                Up Next
+                {t("Up Next")}
               </span>
               <span style={{ fontSize: 11, color: T.muted }}>
                 {pinnedSongs.filter(Boolean).length + (normalNext ? 1 : 0)} songs
@@ -519,7 +520,7 @@ export function PlayerExpandSheet({
                         {name}
                       </div>
                       <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {artist || "Unknown Artist"}
+                        {artist || t("Unknown Artist")}
                       </div>
                     </div>
                     <span style={{
@@ -527,11 +528,11 @@ export function PlayerExpandSheet({
                       background: T.dim, borderRadius: 4, padding: "2px 6px",
                       whiteSpace: "nowrap", flexShrink: 0, letterSpacing: "0.04em",
                     }}>
-                      NEXT
+                      {t("NEXT")}
                     </span>
                     <button
                       onClick={() => handleRemovePinned(i)}
-                      title="Remove from queue"
+                      title={t("Remove from queue")}
                       style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}
                     >
                       <IC.Close />
@@ -561,13 +562,13 @@ export function PlayerExpandSheet({
                         {name}
                       </div>
                       <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {artist || "Unknown Artist"}
+                        {artist || t("Unknown Artist")}
                       </div>
                     </div>
                     {/* Skip button with label */}
                     <button
                       onClick={onSkipCurrentUpNext}
-                      title="Skip this song"
+                      title={t("Skip this song")}
                       style={{
                         background: "transparent", border: "none", color: T.muted,
                         cursor: "pointer", padding: "4px 6px", display: "flex",
@@ -576,7 +577,7 @@ export function PlayerExpandSheet({
                       }}
                     >
                       <IC.SkipF />
-                      Skip
+                      {t("Skip")}
                     </button>
                   </div>
                 );
@@ -609,13 +610,13 @@ function LyricsPanel({ text, size, onEdit, T }: {
         padding: "10px 14px 6px", flexShrink: 0,
       }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
-          Lyrics
+          {t("Lyrics")}
         </span>
         <button
           onClick={onEdit}
           style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2 }}
         >
-          Edit
+          {t("Edit")}
         </button>
       </div>
       <div style={{

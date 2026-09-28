@@ -1,15 +1,16 @@
 {
   "name": "mptree",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/licences.mjs && tsc -b && vite build",
     "lint": "eslint .",
+    "licences": "node scripts/licences.mjs",
     "preview": "vite preview",
-    "build:demo": "tsc -b && vite build --mode demo --base=./ --outDir=../Website/demo --emptyOutDir",
-    "build:play": "tsc -b && vite build --mode play",
+    "build:demo": "node scripts/licences.mjs && tsc -b && vite build --mode demo --base=./ --outDir=../Website/demo --emptyOutDir",
+    "build:play": "node scripts/licences.mjs && tsc -b && vite build --mode play",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -7,6 +7,7 @@ import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar } from "./MultiSelectBar";
 import { IC } from "./Icons";
 import type { T } from "../themes";
+import { t as tr, tn } from "../i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,8 @@ type View = "list" | "detail" | "smartDetail" | "addSongs";
 interface Props {
   /** Height of the floating header card above — content starts below it. */
   topInset?:          number;
+  /** Row height from the Size setting. Album art is this minus 20. */
+  rowH?:              number;
   playlists:          Playlist[];
   /** Built-in, auto-generated playlists (Favorites, Recently Played, Most Played, Last Added).
    *  Computed live by App from songs+meta — read-only here, never passed through onPlaylistsChange. */
@@ -110,7 +113,7 @@ type AddSortId = "newest" | "oldest" | "alphabetical" | "artist" | "favorites";
 const ADD_SORTS: { id: AddSortId; label: string }[] = [
   { id: "newest",       label: "Newest"    },
   { id: "oldest",       label: "Oldest"    },
-  { id: "alphabetical", label: "A–Z"       },
+  { id: "alphabetical", label: "A-Z"       },
   { id: "artist",       label: "Artist"    },
   { id: "favorites",    label: "Favorites" },
 ];
@@ -178,6 +181,7 @@ const FALLBACK_SMART_STYLE: SmartCardStyle = {
 
 export const PlaylistsView: React.FC<Props> = ({
   topInset = 0,
+  rowH = 68,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
@@ -375,7 +379,8 @@ export const PlaylistsView: React.FC<Props> = ({
         onMouseLeave={endPress}
         style={{
           display: "flex", alignItems: "center",
-          padding: "10px 16px", gap: 10, cursor: "pointer",
+          padding: "0 16px", gap: 10, cursor: "pointer",
+          height: rowH, boxSizing: "border-box",
           background: isSelected ? t.violet + "18" : isCurrent ? t.card : "transparent",
           transition: "background 0.15s",
           borderLeft: isCurrent && !isSelected ? `3px solid ${t.accent}` : "3px solid transparent",
@@ -391,7 +396,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {isSelected && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
           </div>
         )}
-        <AlbumArt title={dispName(song)} size={48} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} albumId={song.albumId} T={t} />
+        <AlbumArt title={dispName(song)} size={rowH - 20} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} albumId={song.albumId} T={t} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
@@ -401,7 +406,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {/* Track number — hidden for now (kept for future use):
             <span style={{ fontSize: 12, fontWeight: 600, color: isCurrent ? t.accent : t.muted, flexShrink: 0 }}>{idx + 1}</span>
             */}
-            <span style={{ flex: 1, fontSize: 13, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song) || "Unknown Artist"}</span>
+            <span style={{ flex: 1, fontSize: 13, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song) || tr("Unknown Artist")}</span>
             {song.duration != null && song.duration > 0 && (
               <span style={{ fontSize: 12, color: t.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>
             )}
@@ -420,7 +425,7 @@ export const PlaylistsView: React.FC<Props> = ({
             onClick={e => { e.stopPropagation(); setMenuSong({ song, inPlaylist }); }}
             onTouchStart={e => e.stopPropagation()}
             onMouseDown={e => e.stopPropagation()}
-            aria-label={`More options for ${dispName(song)}`}
+            aria-label={tr("More options for {name}", { name: dispName(song) })}
             style={{ background: "transparent", border: "none", cursor: "pointer", padding: "6px 2px 6px 6px", display: "flex", flexShrink: 0, color: t.muted }}
           >
             <IC.Dots />
@@ -708,9 +713,9 @@ export const PlaylistsView: React.FC<Props> = ({
               style={{ flex: 1, fontSize: 18, fontWeight: 700 }}
               onClick={view === "detail" && activePlaylist ? () => { setRenamingId(activeId); setRenameDraft(activePlaylist.name); } : undefined}
             >
-              {view === "addSongs"  ? "Add Songs"
-               : view === "smartDetail" ? activeSmartPlaylist?.name ?? "Playlist"
-               : activePlaylist?.name ?? "Playlist"}
+              {view === "addSongs"  ? tr("Add songs")
+               : view === "smartDetail" ? activeSmartPlaylist?.name ?? tr("Playlist")
+               : activePlaylist?.name ?? tr("Playlist")}
             </span>
           )}
 
@@ -721,7 +726,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 onClick={() => { setSelectedAdd(new Set()); setAddSearch(""); setView("addSongs"); }}
                 style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: "4px 8px", fontSize: 13, fontWeight: 600 }}
               >
-                + Add
+                {tr("+ Add")}
               </button>
               <button
                 onClick={() => setConfirmDeleteId(activeId)}
@@ -746,12 +751,12 @@ export const PlaylistsView: React.FC<Props> = ({
                 flexShrink: 0, transition: "background 0.15s",
               }}
             >
-              {selectedAdd.size > 0 ? `Add ${selectedAdd.size}` : "Add"}
+              {selectedAdd.size > 0 ? tr("Add {n}", { n: selectedAdd.size }) : tr("Add")}
             </button>
           )}
           {view === "smartDetail" && (
             <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
-              Auto
+              {tr("Auto")}
             </span>
           )}
         </div>
@@ -766,7 +771,7 @@ export const PlaylistsView: React.FC<Props> = ({
               autoFocus
               value={addSearch}
               onChange={e => setAddSearch(e.target.value)}
-              placeholder="Search songs or artists…"
+              placeholder={tr("Search songs or artists…")}
               style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: t.text, fontSize: 14 }}
             />
             {addSearch && (
@@ -793,7 +798,7 @@ export const PlaylistsView: React.FC<Props> = ({
                     fontFamily: "inherit", whiteSpace: "nowrap",
                   }}
                 >
-                  {opt.label}
+                  {tr(opt.label)}
                 </button>
               );
             })}
@@ -801,7 +806,7 @@ export const PlaylistsView: React.FC<Props> = ({
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
             <span style={{ fontSize: 12, color: selectedAdd.size > 0 ? t.accent : t.muted, fontWeight: 600 }}>
-              {selectedAdd.size > 0 ? `${selectedAdd.size} selected` : `${filteredAddSongs.length} songs`}
+              {selectedAdd.size > 0 ? tr("{n} selected", { n: selectedAdd.size }) : tn(filteredAddSongs.length, "{n} song", "{n} songs")}
             </span>
             <button
               onClick={() => setSelectedAdd(allAddSelected ? new Set() : new Set(addSelectableIds))}
@@ -814,7 +819,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 opacity: addSelectableIds.length === 0 ? 0.5 : 1,
               }}
             >
-              {allAddSelected ? "Deselect all" : "Select all"}
+              {allAddSelected ? tr("Deselect all") : tr("Select all")}
             </button>
           </div>
         </div>
@@ -854,11 +859,11 @@ export const PlaylistsView: React.FC<Props> = ({
               value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") createPlaylist(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
-              placeholder="Playlist name…"
+              placeholder={tr("Playlist name…")}
               style={{ flex: 1, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "9px 12px", color: t.text, fontSize: 15, outline: "none" }}
             />
             <button onClick={createPlaylist} style={{ background: t.accent, border: "none", borderRadius: 8, color: t.playBtnFg, padding: "9px 16px", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-              Create
+              {tr("Create")}
             </button>
             <button onClick={() => { setCreating(false); setNewName(""); }} style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: 8, fontSize: 18 }}>
               ✕
@@ -886,14 +891,14 @@ export const PlaylistsView: React.FC<Props> = ({
                   </svg>
                 </button>
                 <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                  Auto playlists
+                  {tr("Auto playlists")}
                 </span>
               </div>
               <button
                 onClick={() => { setCreating(true); setNewName(""); }}
                 style={{ background: t.accent, border: "none", borderRadius: 20, color: t.playBtnFg, padding: "6px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
               >
-                + New
+                {tr("+ New")}
               </button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "4px 16px 8px" }}>
@@ -922,7 +927,7 @@ export const PlaylistsView: React.FC<Props> = ({
                       {sp.name}
                     </div>
                     <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: t.muted }}>
-                      {count} {count === 1 ? "song" : "songs"}
+                      {tn(count, "{n} song", "{n} songs")}
                     </div>
                   </div>
                 );
@@ -931,12 +936,12 @@ export const PlaylistsView: React.FC<Props> = ({
 
             {/* User playlists */}
             <div style={{ padding: "18px 16px 4px", fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              My playlists ({playlists.length})
+              {tr("My playlists ({n})", { n: playlists.length })}
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>No playlists yet</div>
-                <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>Tap "+ New" to create your first one</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
+                <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New\" to create your first one")}</div>
               </div>
             ) : (
               playlists.map(pl => {
@@ -952,12 +957,12 @@ export const PlaylistsView: React.FC<Props> = ({
                       cursor: "pointer",
                     }}
                   >
-                    <PlaylistArt photo={pl.coverPhoto} size={52} T={t} />
+                    <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} T={t} />
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pl.name}</div>
                       <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
-                        {count} {count === 1 ? "song" : "songs"}
+                        {tn(count, "{n} song", "{n} songs")}
                       </div>
                     </div>
 
@@ -1013,21 +1018,21 @@ export const PlaylistsView: React.FC<Props> = ({
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: t.muted, marginBottom: 6 }}>
-                  {playlistSongs.length} {playlistSongs.length === 1 ? "song" : "songs"}
+                  {tn(playlistSongs.length, "{n} song", "{n} songs")}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={pickCoverPhoto}
                     style={{ fontSize: 12, color: t.text, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}
                   >
-                    {activePlaylist.coverPhoto ? "Change photo" : "Add photo"}
+                    {activePlaylist.coverPhoto ? tr("Change photo") : tr("Add photo")}
                   </button>
                   {activePlaylist.coverPhoto && (
                     <button
                       onClick={removeCoverPhoto}
                       style={{ fontSize: 12, color: t.muted, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600 }}
                     >
-                      Remove
+                      {tr("Remove")}
                     </button>
                   )}
                 </div>
@@ -1048,7 +1053,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Play All
+                {tr("Play All")}
               </button>
               <button
                 onClick={() => { onPlayPlaylist(playlistSongs, true); }}
@@ -1065,14 +1070,14 @@ export const PlaylistsView: React.FC<Props> = ({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
                 </svg>
-                Shuffle
+                {tr("Shuffle")}
               </button>
             </div>
 
             {playlistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>No songs yet</div>
-                <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>Tap "+ Add" at the top to add songs</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No songs yet")}</div>
+                <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ Add\" at the top to add songs")}</div>
               </div>
             ) : (
               playlistSongs.map((song, idx) => (
@@ -1090,10 +1095,10 @@ export const PlaylistsView: React.FC<Props> = ({
               <PlaylistArt size={84} iconSize={32} T={t} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: t.muted }}>
-                  {smartPlaylistSongs.length} {smartPlaylistSongs.length === 1 ? "song" : "songs"}
+                  {tn(smartPlaylistSongs.length, "{n} song", "{n} songs")}
                 </div>
                 <div style={{ fontSize: 12, color: t.muted, opacity: 0.7, marginTop: 4 }}>
-                  Updates automatically — can't be edited or deleted
+                  {tr("Updates by itself, so it can't be edited or deleted")}
                 </div>
               </div>
             </div>
@@ -1111,7 +1116,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Play All
+                {tr("Play All")}
               </button>
               <button
                 onClick={() => { onPlayPlaylist(smartPlaylistSongs, true); }}
@@ -1128,18 +1133,18 @@ export const PlaylistsView: React.FC<Props> = ({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
                 </svg>
-                Shuffle
+                {tr("Shuffle")}
               </button>
             </div>
 
             {smartPlaylistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Nothing here yet</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("Nothing here yet")}</div>
                 <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>
-                  {activeSmartPlaylist.id === "favorites"      && "Double-tap a song to like it"}
-                  {activeSmartPlaylist.id === "recentlyPlayed" && "Play a song and it'll show up here"}
-                  {activeSmartPlaylist.id === "mostPlayed"     && "Play a song and it'll show up here"}
-                  {activeSmartPlaylist.id === "lastAdded"      && "New songs will show up here"}
+                  {activeSmartPlaylist.id === "favorites"      && tr("Double-tap a song to like it")}
+                  {activeSmartPlaylist.id === "recentlyPlayed" && tr("Play a song and it'll show up here")}
+                  {activeSmartPlaylist.id === "mostPlayed"     && tr("Play a song and it'll show up here")}
+                  {activeSmartPlaylist.id === "lastAdded"      && tr("New songs will show up here")}
                 </div>
               </div>
             ) : (
@@ -1155,8 +1160,8 @@ export const PlaylistsView: React.FC<Props> = ({
         {view === "addSongs" && <>
           {filteredAddSongs.length === 0 && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>No songs found</div>
-              <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>Try a different search</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No songs found")}</div>
+              <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>{tr("Try a different search")}</div>
             </div>
           )}
           {filteredAddSongs.map(song => {
@@ -1194,10 +1199,10 @@ export const PlaylistsView: React.FC<Props> = ({
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: t.text }}>{dispName(song)}</div>
-                  <div style={{ fontSize: 12, color: t.muted, marginTop: 1 }}>{dispArtist(song) || "Unknown Artist"}</div>
+                  <div style={{ fontSize: 12, color: t.muted, marginTop: 1 }}>{dispArtist(song) || tr("Unknown Artist")}</div>
                 </div>
 
-                {alreadyIn && <span style={{ fontSize: 11, color: t.muted, flexShrink: 0 }}>In playlist</span>}
+                {alreadyIn && <span style={{ fontSize: 11, color: t.muted, flexShrink: 0 }}>{tr("In playlist")}</span>}
               </div>
             );
           })}
@@ -1282,22 +1287,22 @@ export const PlaylistsView: React.FC<Props> = ({
       {confirmDeleteId && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 10 }}>
           <div style={{ background: t.sheetBg, borderRadius: 16, padding: "24px 20px", width: "100%", maxWidth: 320 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Delete playlist?</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{tr("Delete playlist?")}</div>
             <div style={{ fontSize: 14, color: t.muted, marginBottom: 20, lineHeight: 1.5 }}>
-              "{playlists.find(p => p.id === confirmDeleteId)?.name}" will be deleted permanently. Your songs won't be affected.
+              {tr("\"{name}\" will be deleted permanently. Your songs won't be affected.", { name: playlists.find(p => p.id === confirmDeleteId)?.name ?? "" })}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 onClick={() => setConfirmDeleteId(null)}
                 style={{ flex: 1, padding: 11, background: t.border, border: "none", borderRadius: 10, color: t.text, fontWeight: 600, cursor: "pointer", fontSize: 14 }}
               >
-                Cancel
+                {tr("Cancel")}
               </button>
               <button
                 onClick={() => deletePlaylist(confirmDeleteId)}
                 style={{ flex: 1, padding: 11, background: "#e8445a", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14 }}
               >
-                Delete
+                {tr("Delete")}
               </button>
             </div>
           </div>

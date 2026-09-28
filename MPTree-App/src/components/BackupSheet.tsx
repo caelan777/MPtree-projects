@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { T } from "../themes";
+import { t } from "../i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,19 +133,19 @@ function ExportInfoSheet({
     <SheetOverlay onClose={onClose} T={T}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
         <div style={{ color: T.text }}><BackupIcon /></div>
-        <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>Create backup</div>
+        <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>{t("Create backup")}</div>
       </div>
 
       <div style={{
         background: T.dim, borderRadius: 12, padding: "12px 14px",
         marginBottom: 16, fontSize: 13, color: T.muted, lineHeight: 1.6,
       }}>
-        Your music and playlists will be saved to your Downloads folder. You can share this folder with friends or use it to restore on a new device.
+        {t("Your music and playlists will be saved to your Downloads folder. You can share this folder with friends or use it to restore on a new device.")}
       </div>
 
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: "600", color: T.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Backup name
+          {t("Backup name")}
         </div>
         <input
           value={name}
@@ -181,7 +182,7 @@ function ExportInfoSheet({
           fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
         }}
       >
-        Start backup
+        {t("Start backup")}
       </button>
       <button
         onClick={onClose}
@@ -191,7 +192,7 @@ function ExportInfoSheet({
           fontSize: 14, cursor: "pointer", marginTop: 6, fontFamily: "inherit",
         }}
       >
-        Cancel
+        {t("Cancel")}
       </button>
     </SheetOverlay>
   );
@@ -213,10 +214,10 @@ function ExportProgressSheet({
     <SheetOverlay T={T}>
       <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
         <div style={{ fontSize: 17, fontWeight: "700", color: T.text, marginBottom: 6 }}>
-          Creating backup…
+          {t("Creating backup…")}
         </div>
         <div style={{ fontSize: 13, color: T.muted, marginBottom: 24 }}>
-          Copying your music library
+          {t("Copying your music library")}
         </div>
 
         {/* Progress bar */}
@@ -242,7 +243,7 @@ function ExportProgressSheet({
             cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </SheetOverlay>
@@ -267,7 +268,7 @@ function ExportSuccessSheet({
       <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
         <div style={{ color: T.text, marginBottom: 10 }}><CheckCircleIcon /></div>
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text, marginBottom: 6 }}>
-          Backup saved!
+          {t("Backup saved!")}
         </div>
 
         <div style={{
@@ -306,7 +307,7 @@ function ExportSuccessSheet({
             background: T.dim, borderRadius: 10, padding: "10px 14px",
             marginBottom: 16, fontSize: 12, color: T.muted, textAlign: "left", lineHeight: 1.6,
           }}>
-            Some files could not be copied, possibly because they were deleted or moved. The backup JSON is complete and your playlists and metadata are fully saved.
+            {t("Some files could not be copied, possibly because they were deleted or moved. The backup JSON is complete and your playlists and metadata are fully saved.")}
           </div>
         )}
 
@@ -330,7 +331,7 @@ function ExportSuccessSheet({
             fontSize: 15, fontWeight: "600", cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          Done
+          {t("Done")}
         </button>
       </div>
     </SheetOverlay>
@@ -352,7 +353,7 @@ function ExportErrorSheet({
       <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
         <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
         <div style={{ fontSize: 17, fontWeight: "700", color: T.text, marginBottom: 8 }}>
-          Backup failed
+          {t("Backup failed")}
         </div>
         <div style={{ fontSize: 14, color: T.muted, marginBottom: 16, lineHeight: 1.6 }}>
           {message}
@@ -373,7 +374,7 @@ function ExportErrorSheet({
             fontWeight: "600", cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          Close
+          {t("Close")}
         </button>
       </div>
     </SheetOverlay>
@@ -393,14 +394,14 @@ function ImportInfoSheet({
     <SheetOverlay onClose={onClose} T={T}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
         <div style={{ color: T.text }}><RestoreIcon /></div>
-        <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>Restore backup</div>
+        <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>{t("Restore backup")}</div>
       </div>
 
       <div style={{
         background: T.dim, borderRadius: 12, padding: "12px 14px",
         marginBottom: 16, fontSize: 13, color: T.muted, lineHeight: 1.6,
       }}>
-        This will replace your current playlists, likes, and edits with the backup. Your music files won't be deleted.
+        {t("This will replace your current playlists, likes, and edits with the backup. Your music files won't be deleted.")}
       </div>
 
       {/* Visual hint showing folder structure */}
@@ -412,7 +413,7 @@ function ImportInfoSheet({
         <div style={{ color: T.text, fontWeight: "600", marginBottom: 4 }}>📁 MPTree_Backup_...</div>
         <div style={{ paddingLeft: 16 }}>
           <span style={{ color: T.text }}>📄 mptree_backup_....json</span>
-          <span style={{ color: T.muted }}> ← select this</span>
+          <span style={{ color: T.muted }}> {t("← select this")}</span>
         </div>
         <div style={{ paddingLeft: 16 }}>📁 music/</div>
         <div style={{ paddingLeft: 32, opacity: 0.7 }}>🎵 song1.mp3</div>
@@ -427,7 +428,7 @@ function ImportInfoSheet({
           fontWeight: "700", cursor: "pointer", marginBottom: 10, fontFamily: "inherit",
         }}
       >
-        Select backup file
+        {t("Select backup file")}
       </button>
       <button
         onClick={onClose}
@@ -437,7 +438,7 @@ function ImportInfoSheet({
           fontSize: 14, cursor: "pointer", fontFamily: "inherit",
         }}
       >
-        Cancel
+        {t("Cancel")}
       </button>
     </SheetOverlay>
   );
@@ -458,10 +459,10 @@ function SharingSheet({ T }: { T: T }) {
           </svg>
         </div>
         <div style={{ fontSize: 16, fontWeight: "600", color: T.text, marginBottom: 6 }}>
-          Preparing backup to share…
+          {t("Preparing backup to share…")}
         </div>
         <div style={{ fontSize: 13, color: T.muted }}>
-          Zipping your music and playlists — this can take a moment for large libraries.
+          {t("Zipping your music and playlists. This can take a moment for large libraries.")}
         </div>
       </div>
     </SheetOverlay>
@@ -483,7 +484,7 @@ function ImportProgressSheet({ phase, T }: { phase: string; T: T }) {
           </svg>
         </div>
         <div style={{ fontSize: 16, fontWeight: "600", color: T.text, marginBottom: 6 }}>
-          Restoring your music library…
+          {t("Restoring your music library…")}
         </div>
         <div style={{ fontSize: 13, color: T.muted }}>{phase}</div>
       </div>
@@ -506,7 +507,7 @@ function ImportSuccessSheet({
       <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
         <div style={{ color: T.text, marginBottom: 10 }}><CheckCircleIcon /></div>
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text, marginBottom: 8 }}>
-          Backup restored!
+          {t("Backup restored!")}
         </div>
         <div style={{
           display: "flex", justifyContent: "center", gap: 20,
@@ -530,7 +531,7 @@ function ImportSuccessSheet({
             fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          Done
+          {t("Done")}
         </button>
       </div>
     </SheetOverlay>
@@ -545,7 +546,7 @@ function ImportErrorSheet({ message, onClose, T }: { message: string; onClose: (
       <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
         <div style={{ fontSize: 40, marginBottom: 10 }}>❌</div>
         <div style={{ fontSize: 17, fontWeight: "700", color: T.text, marginBottom: 8 }}>
-          Restore failed
+          {t("Restore failed")}
         </div>
         <div style={{ fontSize: 14, color: T.muted, marginBottom: 24, lineHeight: 1.6 }}>
           {message}
@@ -558,7 +559,7 @@ function ImportErrorSheet({ message, onClose, T }: { message: string; onClose: (
             fontWeight: "600", cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          Close
+          {t("Close")}
         </button>
       </div>
     </SheetOverlay>

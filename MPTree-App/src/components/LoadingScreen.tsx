@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Theme } from "../types";
 import { DARK, LIGHT } from "../themes";
+import { t } from "../i18n";
 import { Logo } from "./Logo";
 
 // ─── LoadingScreen ───────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ const MIN_VISIBLE_MS = 1200;
 export function LoadingScreen({
   theme,
   visible,
-  label = "Loading your music…",
+  label = t("Loading your music…"),
   minVisibleMs = MIN_VISIBLE_MS,
   onHidden,
 }: LoadingScreenProps) {
@@ -139,7 +140,7 @@ export function LoadingScreen({
       <div style={{ position: "absolute", bottom: 40, textAlign: "center", opacity: settled ? 1 : 0, transition: "opacity 0.35s ease" }}>
         <div style={{ fontSize: 12, color: TH.muted }}>by Verkuijl</div>
         <div style={{ fontSize: 11, color: TH.muted, opacity: 0.65, marginTop: 4, letterSpacing: "0.06em" }}>
-          your music · zero ads
+          {t("your music · zero ads")}
         </div>
       </div>
     </div>
