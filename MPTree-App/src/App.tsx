@@ -413,8 +413,6 @@ export default function App() {
   const musicAccess: MusicAccess = !musicAsked ? "unasked"
     : permissionDenied ? "denied"
     : libraryReady ? "allowed" : "asking";
-  // The tutorial that follows the welcome page skips its own welcome card.
-  const [tourFromWelcome, setTourFromWelcome] = useState(false);
   useEffect(() => {
     // Key is versioned: v2 = the spotlight tour. Bumping the key makes the new
     // tour show once even for users who completed the old card-based one.
@@ -436,7 +434,6 @@ export default function App() {
   }, []);
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
-    setTourFromWelcome(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
   }, []);
 
@@ -583,6 +580,15 @@ export default function App() {
   // Playlist picker opened from the multi-select bar.
   const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // The tour points at the Songs page: its header, search box, a song row, the
+  // shuffle button. Started from Playlists it spotlit things that were not on
+  // screen, so it always goes to Songs with the header open first, and waits
+  // for that to have finished moving before measuring anything.
+  const startTutorial = (delayMs: number) => {
+    setPage("songs");
+    openChrome();
+    window.setTimeout(() => setShowOnboarding(true), delayMs);
+  };
   // The search field used to unmount when you left the Songs tab, which took the
   // Android keyboard with it. It stays mounted now (see the header card), so the
   // keyboard has to be dismissed by hand or it sits over the playlists.
@@ -3796,7 +3802,11 @@ export default function App() {
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
             onViewBin={() => { setSettingsOpen(false); setBinOpen(true); }}
             onOpenAudioEffects={openEQSheet}
-            onShowTutorial={() => { setSettingsOpen(false); setShowOnboarding(true); }}
+            onShowTutorial={() => {
+              setSettingsOpen(false);
+              // Long enough for the page slide and the header unfolding.
+              startTutorial(page === "songs" && chromeOpen ? 250 : 500);
+            }}
             onExport={handleExportOpen}
             onImportOpen={handleImportOpen}
             onSupport={() => { Browser.open({ url: "https://paypal.me/MPTreeApp" }).catch(() => {}); }}
@@ -3827,12 +3837,10 @@ export default function App() {
             updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
             songCount={songs.length}
-            onEnter={() => {
-              setWelcome("entering");
-              // Skipped Allow: ask now, since nothing works without it.
-              if (!musicAsked) { holdScanRef.current = false; setMusicAsked(true); runLibraryScanRef.current?.(); }
-            }}
-            onEntered={() => { setWelcome(null); setTourFromWelcome(true); setShowOnboarding(true); }}
+            onEnter={() => setWelcome("entering")}
+            // A beat with the library on its own before the tour starts talking
+            // over it: straight after the opening it read as one rushed motion.
+            onEntered={() => { setWelcome(null); startTutorial(900); }}
             T={TH}
           />
         )}
@@ -3933,7 +3941,7 @@ export default function App() {
 
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
         {!isInitializing && libraryReady && showOnboarding && !welcome && (
-          <OnboardingOverlay onDone={finishOnboarding} startAtTips={tourFromWelcome} T={TH} />
+          <OnboardingOverlay onDone={finishOnboarding} T={TH} />
         )}
 
         {/* ═══ LOADING SCREEN ══════════════════════════════════════════════

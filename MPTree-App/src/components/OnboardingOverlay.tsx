@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { T } from "../themes";
 import { t } from "../i18n";
-import { Logo } from "./Logo";
 
 // ─── ONBOARDING OVERLAY ──────────────────────────────────────────────────────
 // First-launch guide with REAL on-screen indicators: each step spotlights the
@@ -12,9 +11,6 @@ import { Logo } from "./Logo";
 
 interface Props {
   onDone: () => void;
-  /** Straight to the first tip. After the first-launch welcome page, a second
-   *  "Welcome to MPTree" card would be the same greeting twice. */
-  startAtTips?: boolean;
   T: T;
 }
 
@@ -67,17 +63,20 @@ const STEPS: Step[] = [
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-export function OnboardingOverlay({ onDone, startAtTips, T }: Props) {
-  const [step, setStep] = useState(startAtTips ? 1 : 0); // 0 = welcome, 1..STEPS.length = tips
+export function OnboardingOverlay({ onDone, T }: Props) {
+  // Straight into the first tip. There used to be a "Welcome to MPTree" card in
+  // front of it, which after the first-launch welcome page was the same
+  // greeting twice, and from Settings was a step between asking for the
+  // tutorial and getting it.
+  const [step, setStep] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
 
   // The spotlight ring sits on a scrim that is dark in BOTH themes, so it is
   // always white rather than T.accent (which would be black in light mode and
   // vanish against the scrim).
   const spotlight = "#FFFFFF";
-  const isWelcome = step === 0;
-  const tipIndex = step - 1;
-  const current = isWelcome ? null : STEPS[tipIndex];
+  const tipIndex = step;
+  const current = STEPS[tipIndex];
   const isLast = tipIndex === STEPS.length - 1;
 
   // Measure the current step's target. Re-measures on resize/orientation.
@@ -214,45 +213,7 @@ export function OnboardingOverlay({ onDone, startAtTips, T }: Props) {
       {/* Click-catcher so taps don't reach the app underneath. */}
       <div style={{ position: "fixed", inset: 0 }} onClick={() => { /* absorb */ }} />
 
-      {isWelcome ? (
-        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{
-            background: T.sheetBg, border: `1px solid ${T.border}`,
-            borderRadius: 22, width: "100%", maxWidth: 350,
-            padding: "32px 26px 22px", textAlign: "center",
-          }}>
-            <div style={{ margin: "0 auto 18px", width: 84 }}>
-              <Logo size={84} color={T.text} />
-            </div>
-            <div style={{ fontSize: 23, fontWeight: 800, color: T.text }}>{t("Welcome to MPTree")}</div>
-            <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>by Verkuijl</div>
-            <div style={{ fontSize: 15, color: T.textSub, marginTop: 16, lineHeight: 1.55 }}>
-              {t("Your music. Zero ads.")}<br />{t("Let me show you around. It takes 20 seconds.")}
-            </div>
-            <button
-              onClick={() => setStep(1)}
-              style={{
-                width: "100%", marginTop: 24, padding: 14,
-                background: T.playBtnBg, color: T.playBtnFg,
-                border: "none", borderRadius: 12,
-                fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              {t("Show me")}
-            </button>
-            <button
-              onClick={onDone}
-              style={{
-                width: "100%", marginTop: 10, padding: 10,
-                background: "transparent", color: T.muted,
-                border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              {t("Skip")}
-            </button>
-          </div>
-        </div>
-      ) : (
+      {(
         <div ref={cardRef} style={{ ...cardStyle, zIndex: 601 }}>
           <div style={{
             background: T.sheetBg, border: `1px solid ${T.border}`,
