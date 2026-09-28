@@ -24,7 +24,6 @@ import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
-import { WhatsNewSheet } from "./components/WhatsNewSheet";
 import { Switch } from "./components/Switch";
 import { applyLang, t, tn, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
@@ -395,14 +394,20 @@ export default function App() {
   // it from ever appearing again.
   const [showOnboarding, setShowOnboarding] = useState(false);
   // ── First launch: the welcome page ────────────────────────────────────────
-  // Someone who has never finished the tutorial gets the welcome page first
-  // (language, music access, update notices), then the library opening out of
-  // their tap, then the tutorial. Until they tap Allow there, the library scan
-  // is held back, because the scan is what makes Android ask for media access.
-  //   firstRunRef: null until known, then whether this is a first launch
-  //   welcome:     "open" while the page is up, "entering" while it opens away
-  const firstRunRef = useRef<boolean | null>(null);
-  const holdScanRef = useRef(false);
+  // Shown when the tutorial has never been finished OR MPTree cannot read
+  // music yet. The second half is what catches a reinstall: Android restores
+  // the preferences (tutorial seen and all) from the Google backup, but never
+  // the permission, so a reinstall used to skip straight to a cold permission
+  // prompt. Then: the library opening out of their tap, then the tutorial.
+  // Until they tap Allow, the library scan is held back, because the scan is
+  // what makes Android ask for media access.
+  //   firstRunRef:  null until known, then whether the welcome page is due
+  //   welcome:      "open" while the page is up, "entering" while it opens away
+  const firstRunRef      = useRef<boolean | null>(null);
+  const holdScanRef      = useRef(false);
+  const grantedAtStart   = useRef(false);
+  // The loading screen finished before the answer above came back.
+  const hiddenBeforeKnown = useRef(false);
   const [welcome, setWelcome] = useState<null | "open" | "entering">(null);
   const [musicAsked, setMusicAsked] = useState(false);
   const musicAccess: MusicAccess = !musicAsked ? "unasked"
@@ -413,12 +418,21 @@ export default function App() {
   useEffect(() => {
     // Key is versioned: v2 = the spotlight tour. Bumping the key makes the new
     // tour show once even for users who completed the old card-based one.
-    Preferences.get({ key: "mptree_onboarded_v2" })
-      .then(({ value }) => {
-        firstRunRef.current = !value;
-        if (!value) { holdScanRef.current = true; setWelcome("open"); }
-      })
-      .catch(() => { firstRunRef.current = false; });
+    Promise.all([
+      Preferences.get({ key: "mptree_onboarded_v2" }).then(r => r.value).catch(() => "1"),
+      MusicScanner.hasAccess().then(r => r.granted).catch(() => true),
+    ]).then(([onboarded, granted]) => {
+      const due = !onboarded || !granted;
+      firstRunRef.current = due;
+      grantedAtStart.current = granted;
+      if (due) {
+        setWelcome("open");
+        // Already allowed (a tutorial never finished): nothing to ask, so the
+        // library can load behind the page and the row shows as allowed.
+        if (granted) setMusicAsked(true); else holdScanRef.current = true;
+      }
+      if (hiddenBeforeKnown.current && (!due || granted)) runLibraryScanRef.current?.();
+    });
   }, []);
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
@@ -453,12 +467,10 @@ export default function App() {
   const [updateNotices, setUpdateNotices] = useState(true);
   const [mixOthers, setMixOthers]     = useState(false);
   const [duckOthers, setDuckOthers]   = useState(false);
-  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   useEffect(() => {
-    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others",
-                  "mptree_duck_others", "mptree_last_seen_version", "mptree_onboarded_v2"];
+    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others", "mptree_duck_others"];
     Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
-      .then(([size, lang, notices, mix, duck, lastSeen, onboarded]) => {
+      .then(([size, lang, notices, mix, duck]) => {
         if (size === "small" || size === "large") {
           setUiSize(size);
           System.setTextZoom({ factor: SIZE_TABLE[size].text }).catch(() => {});
@@ -467,14 +479,6 @@ export default function App() {
         if (notices === "0") setUpdateNotices(false);
         setMixOthers(mix === "true");
         setDuckOthers(mix === "true" && duck === "true");
-        // What's new: only for someone who was already using MPTree. A first
-        // install has neither key and gets the tutorial instead. The key is
-        // new in 0.3.0, so an update from before it is recognised by having
-        // finished the tutorial.
-        if (lastSeen !== __APP_VERSION__) {
-          if (lastSeen || onboarded) setWhatsNewOpen(true);
-          Preferences.set({ key: "mptree_last_seen_version", value: __APP_VERSION__ }).catch(() => {});
-        }
       });
   }, []);
 
@@ -3833,13 +3837,6 @@ export default function App() {
           />
         )}
 
-        {/* After an update, once. Held back while the loading screen or the
-            tutorial is up, so it is never the first thing fighting for the
-            screen. */}
-        {whatsNewOpen && !isInitializing && !showOnboarding && !welcome && (
-          <WhatsNewSheet onClose={() => setWhatsNewOpen(false)} T={TH} />
-        )}
-
         {binOpen && (
           <BinView
             removedSongs={removedSongs}
@@ -3943,7 +3940,10 @@ export default function App() {
             Overlays everything above while initialize() is still running,
             so the empty/incomplete list never flashes on screen. Fades out
             and unmounts itself once isInitializing becomes false. */}
-        <LoadingScreen theme={theme} visible={isInitializing} onHidden={() => { if (!firstRunRef.current) runLibraryScanRef.current?.(); }} />
+        <LoadingScreen theme={theme} visible={isInitializing} onHidden={() => {
+          if (firstRunRef.current === null) { hiddenBeforeKnown.current = true; return; }
+          if (!firstRunRef.current || grantedAtStart.current) runLibraryScanRef.current?.();
+        }} />
 
         {permissionDenied && !isInitializing && !welcome && (
           <div style={{ position: "fixed", inset: 0, zIndex: 850, background: TH.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 28px", textAlign: "center" }}>

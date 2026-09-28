@@ -19,6 +19,8 @@ import { MusicScannerWeb } from "./web/MusicScannerWeb";
 
 export type MusicScannerPlugin = {
   scan(): Promise<{ songs: Song[] }>;
+  /** Whether reading audio files is already allowed. Never prompts. */
+  hasAccess(): Promise<{ granted: boolean }>;
   scanFolder(options: { path: string }): Promise<void>;
   // Permanently deletes an audio file from the device via MediaStore.
   // Resolves { deleted: true } on success, { deleted: false } if the user

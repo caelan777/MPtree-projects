@@ -57,6 +57,20 @@ public class MusicScannerPlugin extends Plugin {
         return Build.VERSION.SDK_INT >= 33 ? "audio33" : "audioLegacy";
     }
 
+    // ── hasAccess ─────────────────────────────────────────────────────────
+    // Whether MPTree may read audio files right now, without asking. The
+    // first-launch welcome page keys off this as well as the "tutorial seen"
+    // flag, because that flag lives in preferences Android restores from a
+    // Google backup on reinstall, while the permission itself is never
+    // restored: a reinstall came back looking like an old user with no access.
+
+    @PluginMethod
+    public void hasAccess(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("granted", getPermissionState(currentAlias()) == PermissionState.GRANTED);
+        call.resolve(ret);
+    }
+
     // ── scan ──────────────────────────────────────────────────────────────
 
     @PluginMethod
