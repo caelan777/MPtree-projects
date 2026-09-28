@@ -23,7 +23,7 @@ import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
-import { MixSheet } from "./components/MixSheet";
+import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { WhatsNewSheet } from "./components/WhatsNewSheet";
 import { Switch } from "./components/Switch";
 import { applyLang, t, tn, type LangPref } from "./i18n";
@@ -394,15 +394,35 @@ export default function App() {
   // Shown once, after the loading screen. A "seen" flag in Preferences keeps
   // it from ever appearing again.
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // ── First launch: the welcome page ────────────────────────────────────────
+  // Someone who has never finished the tutorial gets the welcome page first
+  // (language, music access, update notices), then the library opening out of
+  // their tap, then the tutorial. Until they tap Allow there, the library scan
+  // is held back, because the scan is what makes Android ask for media access.
+  //   firstRunRef: null until known, then whether this is a first launch
+  //   welcome:     "open" while the page is up, "entering" while it opens away
+  const firstRunRef = useRef<boolean | null>(null);
+  const holdScanRef = useRef(false);
+  const [welcome, setWelcome] = useState<null | "open" | "entering">(null);
+  const [musicAsked, setMusicAsked] = useState(false);
+  const musicAccess: MusicAccess = !musicAsked ? "unasked"
+    : permissionDenied ? "denied"
+    : libraryReady ? "allowed" : "asking";
+  // The tutorial that follows the welcome page skips its own welcome card.
+  const [tourFromWelcome, setTourFromWelcome] = useState(false);
   useEffect(() => {
     // Key is versioned: v2 = the spotlight tour. Bumping the key makes the new
     // tour show once even for users who completed the old card-based one.
     Preferences.get({ key: "mptree_onboarded_v2" })
-      .then(({ value }) => { if (!value) setShowOnboarding(true); })
-      .catch(() => {});
+      .then(({ value }) => {
+        firstRunRef.current = !value;
+        if (!value) { holdScanRef.current = true; setWelcome("open"); }
+      })
+      .catch(() => { firstRunRef.current = false; });
   }, []);
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
+    setTourFromWelcome(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
   }, []);
 
@@ -433,18 +453,12 @@ export default function App() {
   const [updateNotices, setUpdateNotices] = useState(true);
   const [mixOthers, setMixOthers]     = useState(false);
   const [duckOthers, setDuckOthers]   = useState(false);
-  const [isSamsung, setIsSamsung]     = useState(false);
-  const [mixSheetOpen, setMixSheetOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
-  // True until proven otherwise, so nothing can open the Bluetooth sheet before
-  // the stored answer has been read.
-  const mixPromptSeenRef = useRef(true);
   useEffect(() => {
     const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others",
-                  "mptree_duck_others", "mptree_mix_prompt_seen", "mptree_last_seen_version",
-                  "mptree_onboarded_v2"];
+                  "mptree_duck_others", "mptree_last_seen_version", "mptree_onboarded_v2"];
     Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
-      .then(([size, lang, notices, mix, duck, promptSeen, lastSeen, onboarded]) => {
+      .then(([size, lang, notices, mix, duck, lastSeen, onboarded]) => {
         if (size === "small" || size === "large") {
           setUiSize(size);
           System.setTextZoom({ factor: SIZE_TABLE[size].text }).catch(() => {});
@@ -453,7 +467,6 @@ export default function App() {
         if (notices === "0") setUpdateNotices(false);
         setMixOthers(mix === "true");
         setDuckOthers(mix === "true" && duck === "true");
-        mixPromptSeenRef.current = promptSeen === "1";
         // What's new: only for someone who was already using MPTree. A first
         // install has neither key and gets the tutorial instead. The key is
         // new in 0.3.0, so an update from before it is recognised by having
@@ -463,9 +476,6 @@ export default function App() {
           Preferences.set({ key: "mptree_last_seen_version", value: __APP_VERSION__ }).catch(() => {});
         }
       });
-    System.getDeviceInfo()
-      .then(d => setIsSamsung(d.manufacturer.toLowerCase() === "samsung"))
-      .catch(() => {});
   }, []);
 
   const changeUiSize = (s: UiSize) => {
@@ -496,21 +506,6 @@ export default function App() {
     // preferences file, before the WebView is even up.
     Preferences.set({ key: "mptree_mix_others",  value: mix ? "true" : "false" }).catch(() => {});
     Preferences.set({ key: "mptree_duck_others", value: d   ? "true" : "false" }).catch(() => {});
-  };
-  // The first time music starts on a Bluetooth device, once per install.
-  const maybeAskAboutMix = () => {
-    if (mixPromptSeenRef.current) return;
-    AudioPlayer.getOutputRoute()
-      .then(({ route }) => {
-        if (route !== "bluetooth" || mixPromptSeenRef.current) return;
-        mixPromptSeenRef.current = true;
-        setMixSheetOpen(true);
-      })
-      .catch(() => {});
-  };
-  const closeMixSheet = () => {
-    setMixSheetOpen(false);
-    Preferences.set({ key: "mptree_mix_prompt_seen", value: "1" }).catch(() => {});
   };
   const openExternal = (url: string, failMsg: string) => {
     System.openExternal({ url }).catch(() => showToast(failMsg));
@@ -846,7 +841,10 @@ export default function App() {
       // transition, so returning to the app never lands on a stale menu for a
       // song you have since scrolled away from.
       setMenuSong(null);
-      if (isActive) {
+      // Coming back to the app during the welcome page, before Allow was
+      // tapped, must not scan: that would put up the permission prompt with
+      // nobody having asked for it.
+      if (isActive && !holdScanRef.current) {
         scanMusic().then(fs => resyncFromNative(fs).then(ok => {
           if (!ok) Promise.all([AudioPlayer.getCurrentPosition(), AudioPlayer.getDuration()])
             .then(([{ position }, { duration: dur }]) => { setCurrentTime(position); currentTimeRef.current = position; if (dur > 0) setDuration(dur); })
@@ -1254,7 +1252,6 @@ export default function App() {
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
       const artist = artistOverride ?? getMeta(s).customArtist ?? (s.artist && s.artist.toLowerCase() !== "<unknown>" ? s.artist : "Unknown");
       await AudioPlayer.play({ path: s.uri, title, artist });
-      maybeAskAboutMix();
       if (s.isCut && s.cutFrom && s.cutFrom > 0) {
         await AudioPlayer.seekTo({ milliseconds: s.cutFrom }); setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom;
       }
@@ -1277,7 +1274,7 @@ export default function App() {
         loadedRef.current = true; setPlaying(true); return;
       }
       if (isPlaying) { await AudioPlayer.pause(); setPlaying(false); }
-      else { await AudioPlayer.resume(); setPlaying(true); maybeAskAboutMix(); }
+      else { await AudioPlayer.resume(); setPlaying(true); }
     } catch (e) { showError(t("Player error: ") + e); }
   };
 
@@ -1551,7 +1548,7 @@ export default function App() {
         return;
       }
     }
-    setSettingsOpen(false);
+    // Settings stays open underneath, so closing Audio Effects goes back to it.
     setEqOpen(true);
   };
 
@@ -2414,8 +2411,7 @@ export default function App() {
   // Both tabs collapse — the Playlists grid runs off the bottom of the screen
   // just as readily as the song list does. Multi-select is the one exception:
   // it needs its own bar and the header's count visible.
-  // Drawn folded while the logo is still on its way home: see setChromeOpen.
-  const chromeCollapsed = !selectMode && (!chromeOpen || logoFlight === "home");
+  const chromeCollapsed = !selectMode && !chromeOpen;
 
   // ONE definition of how the fold moves, used by every piece that moves with
   // it: the header card, the mini-player, the list paddings, the two floating
@@ -2868,7 +2864,9 @@ export default function App() {
         /* A row arriving at the top of a list. Used by the new-playlist field in
            PlaylistsView, which is a fresh mount and so has nothing to
            transition from. */
-        @keyframes mpFly { from { transform: translate3d(var(--fx0), var(--fy0), 0); } to { transform: translate3d(var(--fx1), var(--fy1), 0); } }
+        @keyframes mpFly { from { transform: translate3d(var(--fx0), var(--fy0), 0) scale(var(--fs0)); } to { transform: translate3d(var(--fx1), var(--fy1), 0) scale(var(--fs1)); } }
+        @property --mpr { syntax: "<length>"; inherits: false; initial-value: 0px; }
+        @keyframes mpReveal { from { --mpr: 0px; } to { --mpr: 150vmax; } }
         @keyframes mpRowIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes mpFadeIn { from { opacity: 0; } to { opacity: 1; } }
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
@@ -2934,7 +2932,8 @@ export default function App() {
               onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label={t("Collapse header")}
               data-tour="logo"
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text }}
+              // Hidden while the mark flies in to take its place.
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text, opacity: logoFlight === "home" ? 0 : 1 }}
             >
               <Logo size={48} color={TH.text} />
             </button>
@@ -3070,7 +3069,11 @@ export default function App() {
           <div
             style={{
               position: "absolute", inset: 0,
-              opacity: chromeCollapsed ? 1 : 0,
+              // With the button parked elsewhere this layer only shows while the
+              // card folds; at rest the parked button carries the mark, and on
+              // the way open the mark is in flight, so a second one here would
+              // show as a ghost while the card grows.
+              opacity: chromeCollapsed && (!logoFloating || logoFlight === "fold") ? 1 : 0,
               pointerEvents: chromeCollapsed ? "auto" : "none",
               transition: chromeAnimate ? "opacity 0.15s ease" : "none",
             }}
@@ -3115,6 +3118,9 @@ export default function App() {
               display: "flex", alignItems: "center", justifyContent: "center",
               color: TH.text, cursor: "pointer", zIndex: 60, touchAction: "none",
               opacity: overRemove ? 0.4 : 1,
+              // Empty, it goes grey: the card's near-black on a black list was
+              // all but invisible.
+              ...(ballHasMark ? null : { background: TH.dim, borderColor: TH.muted + "66" }),
               // No transform easing while it is following a finger.
               transition: logoDragging
                 ? "opacity 0.15s ease"
@@ -3127,7 +3133,7 @@ export default function App() {
               ? <Logo size={30} color={TH.text} />
               // The socket: faint enough to read as "empty", present enough to
               // read as a button rather than a stray disc.
-              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${TH.border}` }} />}
+              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${TH.muted}` }} />}
           </button>
         )}
 
@@ -3139,9 +3145,15 @@ export default function App() {
             do not show. A keyframe rather than a transition, so it needs no
             extra render to be placed at the start first. */}
         {(logoFlight === "home" || logoFlight === "out") && (() => {
-          const ball = { x: floatX + 12, y: floatY + 12 };
-          const home = { x: HOME_X + 12, y: dims.cardTop + 12 };
-          const [a, b] = logoFlight === "home" ? [ball, home] : [home, ball];
+          // From the parked spot, not the drawn one: opening moves the button
+          // off the card's path while the mark is already on its way.
+          const ball = { x: parkedX + 12, y: parkedY + 12, s: 1 };
+          // Going out it leaves the folded card's 30px mark. Coming home the
+          // card is already growing, so it lands on the open header's 48px logo
+          // instead and grows to its size on the way.
+          const folded = { x: HOME_X + 12, y: dims.cardTop + 12, s: 1 };
+          const open   = { x: HOME_X + 15, y: dims.cardTop + 9, s: 48 / 30 };
+          const [a, b] = logoFlight === "home" ? [ball, open] : [folded, ball];
           return (
             <div
               key={logoFlight}
@@ -3151,6 +3163,7 @@ export default function App() {
                 position: "fixed", top: 0, left: 0, zIndex: 61, pointerEvents: "none",
                 display: "flex", color: TH.text,
                 "--fx0": `${a.x}px`, "--fy0": `${a.y}px`, "--fx1": `${b.x}px`, "--fy1": `${b.y}px`,
+                "--fs0": a.s, "--fs1": b.s, transformOrigin: "0 0",
                 animation: `mpFly ${LOGO_FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
               } as React.CSSProperties}
             >
@@ -3801,12 +3814,21 @@ export default function App() {
             T={TH} />
         )}
 
-        {mixSheetOpen && (
-          <MixSheet
-            mix={mixOthers} duck={duckOthers} onChange={changeMix}
-            isSamsung={isSamsung}
-            onOpenSoundSettings={() => { System.openSoundSettings().catch(() => {}); }}
-            onClose={closeMixSheet}
+        {welcome && (
+          <WelcomeScreen
+            lang={langPref} onPickLang={changeLang}
+            music={musicAccess}
+            onAllowMusic={() => { holdScanRef.current = false; setMusicAsked(true); runLibraryScanRef.current?.(); }}
+            onOpenAppSettings={openAppSettings}
+            updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
+            onSetUpdateNotices={changeUpdateNotices}
+            songCount={songs.length}
+            onEnter={() => {
+              setWelcome("entering");
+              // Skipped Allow: ask now, since nothing works without it.
+              if (!musicAsked) { holdScanRef.current = false; setMusicAsked(true); runLibraryScanRef.current?.(); }
+            }}
+            onEntered={() => { setWelcome(null); setTourFromWelcome(true); setShowOnboarding(true); }}
             T={TH}
           />
         )}
@@ -3814,7 +3836,7 @@ export default function App() {
         {/* After an update, once. Held back while the loading screen or the
             tutorial is up, so it is never the first thing fighting for the
             screen. */}
-        {whatsNewOpen && !isInitializing && !showOnboarding && (
+        {whatsNewOpen && !isInitializing && !showOnboarding && !welcome && (
           <WhatsNewSheet onClose={() => setWhatsNewOpen(false)} T={TH} />
         )}
 
@@ -3913,15 +3935,17 @@ export default function App() {
         )}
 
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
-        {!isInitializing && libraryReady && showOnboarding && <OnboardingOverlay onDone={finishOnboarding} T={TH} />}
+        {!isInitializing && libraryReady && showOnboarding && !welcome && (
+          <OnboardingOverlay onDone={finishOnboarding} startAtTips={tourFromWelcome} T={TH} />
+        )}
 
         {/* ═══ LOADING SCREEN ══════════════════════════════════════════════
             Overlays everything above while initialize() is still running,
             so the empty/incomplete list never flashes on screen. Fades out
             and unmounts itself once isInitializing becomes false. */}
-        <LoadingScreen theme={theme} visible={isInitializing} onHidden={() => runLibraryScanRef.current?.()} />
+        <LoadingScreen theme={theme} visible={isInitializing} onHidden={() => { if (!firstRunRef.current) runLibraryScanRef.current?.(); }} />
 
-        {permissionDenied && !isInitializing && (
+        {permissionDenied && !isInitializing && !welcome && (
           <div style={{ position: "fixed", inset: 0, zIndex: 850, background: TH.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 28px", textAlign: "center" }}>
             <div style={{ width: 72, height: 72, borderRadius: 20, background: TH.surface, border: `1px solid ${TH.border}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
               <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={TH.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>

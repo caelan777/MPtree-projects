@@ -50,7 +50,9 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
 
   return (
     <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 300, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px 12px", borderBottom: `1px solid ${T.border}` }}>
+      {/* The app draws edge to edge, so a full-screen page has to step over the
+          status bar itself. Without this the close button sat under the clock. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px", borderBottom: `1px solid ${T.border}` }}>
         <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, padding: 4 }}>
           <IC.Close />
         </button>
@@ -75,7 +77,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
           <div style={{ fontSize: 13 }}>{t("Removed songs appear here")}</div>
         </div>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div style={{ padding: "10px 16px 6px", fontSize: 12, color: T.muted }}>
             {t("These songs won't be re-added when you scan. Tap Restore to bring them back, or use the trash icon to delete a song permanently.")}
           </div>

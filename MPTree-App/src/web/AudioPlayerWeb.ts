@@ -140,14 +140,6 @@ export class AudioPlayerWeb extends WebPlugin {
     return;
   }
 
-  /** A browser cannot see where its audio goes. "speaker" unless the dev
-   *  override is set, so the Bluetooth popup can be tried on the dev server:
-   *  localStorage.mptree_dev_route = "bluetooth". */
-  async getOutputRoute(): Promise<{ route: "bluetooth" | "wired" | "speaker" }> {
-    let r: string | null = null;
-    try { r = localStorage.getItem("mptree_dev_route"); } catch { /* private mode */ }
-    return { route: r === "bluetooth" || r === "wired" ? r : "speaker" };
-  }
 
   /** No embedded art in the fixture; the app falls back to its own artwork. */
   async getAlbumArt(): Promise<{ art: string }> {

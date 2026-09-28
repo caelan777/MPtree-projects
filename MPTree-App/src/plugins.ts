@@ -73,7 +73,6 @@ export type AudioPlayerPlugin = {
   /** mix: keep playing when another app starts sound. duck: also ask Android to
    *  lower that app, until it asks for the sound back. */
   setMixMode(options: { mix: boolean; duck: boolean }): Promise<void>;
-  getOutputRoute(): Promise<{ route: "bluetooth" | "wired" | "speaker" }>;
 };
 
 export type SystemPlugin = {
@@ -83,7 +82,6 @@ export type SystemPlugin = {
   /** mailto:, market: or https:. Rejects with code NO_HANDLER when nothing on
    *  the phone can open it. */
   openExternal(options: { url: string }): Promise<void>;
-  openSoundSettings(): Promise<void>;
   checkPlayUpdate(): Promise<{ available: boolean; versionCode?: number }>;
   startPlayUpdate(): Promise<void>;
 };
@@ -95,7 +93,6 @@ const SystemWeb: SystemPlugin = {
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
-  openSoundSettings: async () => {},
   checkPlayUpdate:   async () => ({ available: false }),
   startPlayUpdate:   async () => {},
 };

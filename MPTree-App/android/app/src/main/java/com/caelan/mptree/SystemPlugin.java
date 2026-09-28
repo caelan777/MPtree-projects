@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.provider.Settings;
 import android.webkit.WebSettings;
 
 import com.getcapacitor.JSObject;
@@ -93,22 +92,6 @@ public class SystemPlugin extends Plugin {
                 } catch (ActivityNotFoundException ignored) { /* fall through */ }
             }
             call.reject("No app can open this", "NO_HANDLER");
-        }
-    }
-
-    /**
-     * Android's sound settings. On a Samsung that is where "Separate app sound"
-     * lives. Samsung's own screen for it has no documented entry point, so this
-     * stops one level short of it and the app spells out the rest of the path.
-     */
-    @PluginMethod
-    public void openSoundSettings(PluginCall call) {
-        try {
-            getContext().startActivity(new Intent(Settings.ACTION_SOUND_SETTINGS)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            call.resolve();
-        } catch (ActivityNotFoundException e) {
-            call.reject("No sound settings screen", "NO_HANDLER");
         }
     }
 

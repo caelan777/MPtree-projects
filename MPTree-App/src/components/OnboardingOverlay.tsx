@@ -12,6 +12,9 @@ import { Logo } from "./Logo";
 
 interface Props {
   onDone: () => void;
+  /** Straight to the first tip. After the first-launch welcome page, a second
+   *  "Welcome to MPTree" card would be the same greeting twice. */
+  startAtTips?: boolean;
   T: T;
 }
 
@@ -64,8 +67,8 @@ const STEPS: Step[] = [
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-export function OnboardingOverlay({ onDone, T }: Props) {
-  const [step, setStep] = useState(0); // 0 = welcome, 1..STEPS.length = tips
+export function OnboardingOverlay({ onDone, startAtTips, T }: Props) {
+  const [step, setStep] = useState(startAtTips ? 1 : 0); // 0 = welcome, 1..STEPS.length = tips
   const [rect, setRect] = useState<Rect | null>(null);
 
   // The spotlight ring sits on a scrim that is dark in BOTH themes, so it is
@@ -224,7 +227,7 @@ export function OnboardingOverlay({ onDone, T }: Props) {
             <div style={{ fontSize: 23, fontWeight: 800, color: T.text }}>{t("Welcome to MPTree")}</div>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 6 }}>by Verkuijl</div>
             <div style={{ fontSize: 15, color: T.textSub, marginTop: 16, lineHeight: 1.55 }}>
-              Your music. Zero ads.<br />Let me show you around. It takes 20 seconds.
+              {t("Your music. Zero ads.")}<br />{t("Let me show you around. It takes 20 seconds.")}
             </div>
             <button
               onClick={() => setStep(1)}

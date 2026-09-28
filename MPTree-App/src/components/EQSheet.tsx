@@ -143,12 +143,14 @@ export function EQSheet({
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300 }} />
+      {/* Above Settings (400), which stays open underneath: closing this
+          lands you back in Settings, like every other sheet opened from there. */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 430 }} />
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: T.sheetBg, borderRadius: "20px 20px 0 0",
         border: `1px solid ${T.border}`, borderBottom: "none",
-        zIndex: 301, maxHeight: "92vh", overflowY: "auto",
+        zIndex: 431, maxHeight: "92vh", overflowY: "auto",
         WebkitOverflowScrolling: "touch",
         paddingBottom: "env(safe-area-inset-bottom, 24px)",
       }}>

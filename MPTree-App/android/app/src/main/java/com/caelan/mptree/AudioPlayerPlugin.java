@@ -304,37 +304,6 @@ public class AudioPlayerPlugin extends Plugin {
     }
 
     /**
-     * Where media audio is going right now: "bluetooth", "wired" or "speaker".
-     * Read from the connected outputs rather than from the player, so it works
-     * before the first track has started. Needs no Bluetooth permission.
-     */
-    @PluginMethod
-    public void getOutputRoute(PluginCall call) {
-        String route = "speaker";
-        android.media.AudioManager am =
-                (android.media.AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
-        if (am != null) {
-            for (android.media.AudioDeviceInfo d : am.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)) {
-                int type = d.getType();
-                // 26 and 27 are TYPE_BLE_HEADSET and TYPE_BLE_SPEAKER (API 31),
-                // written as numbers so this still compiles against older APIs.
-                if (type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || type == 26 || type == 27) {
-                    route = "bluetooth";
-                    break;
-                }
-                if (type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES
-                        || type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
-                        || type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET) {
-                    route = "wired";
-                }
-            }
-        }
-        JSObject ret = new JSObject();
-        ret.put("route", route);
-        call.resolve(ret);
-    }
-
-    /**
      * Returns embedded cover art for the given file path as a base64 string
      * ({ art: "<base64>" }), or empty string when none. The decode runs on a
      * background executor so neither the main thread nor the Capacitor bridge
