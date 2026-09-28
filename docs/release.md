@@ -98,7 +98,9 @@ Two values must be kept in step, both in `android/app/build.gradle`:
   Android refuses to install an update whose `versionCode` is not higher than the installed
   one. This is the most common release mistake.
 
-Current: `versionName "0.1.0"`, `versionCode 1`.
+Current: `versionName "1.0.0"`: `versionCode 17` on Play, `18` on the website. The
+gradle file holds whichever was built last (18), so the next release, on either channel,
+starts at 19.
 
 ## Publishing
 
@@ -127,6 +129,14 @@ export a backup from the old app and restore it in the new one.
 - `0.1.x` are **betas, published on this website only**. Every fix bumps the patch:
   0.1.1, 0.1.2, and so on.
 - `0.2.0` is where those betas are gathered up and sent to the Google Play Store.
+- `0.3.0` was the last beta, tested on the website first.
+- `1.0.0` is out of beta: the same release on Play and the website. In versions.js it is
+  `channel: "release"`, which the versions page shows as "Play Store and website".
+
+Releasing on both channels means two builds of one version, each with its own
+`versionCode`: set it, `npm run build:play` + `bundleRelease` for Play; bump it by one,
+`npm run build` + `assembleRelease` for the website. The website build goes last, so
+`dist/` and the Android assets are left in their default state.
 
 `versionCode` is a single counter that keeps rising across **both** channels. It must
 never be reused or go backwards: Android refuses to install a lower `versionCode` over a
