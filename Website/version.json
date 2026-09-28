@@ -1,13 +1,13 @@
 {
   "_comment": "Read by the app (see MPTree-App/src/updateCheck.ts) to tell people on an older build that a newer one exists. Keep it in step with the top entry of assets/versions.js, which is what the website itself renders. Only the build handed out by this website checks this file; the Play Store build never does.",
-  "latest": "0.2.1",
-  "date": "2026-09-27",
+  "latest": "0.3.0",
+  "date": "2026-09-28",
   "url": "https://mp-tree.net/download.html",
   "notes": [
-    "Swapping between Songs and Playlists no longer nudges the list you were reading.",
-    "The collapse button can be dragged anywhere you like while the header is folded.",
-    "Naming a new playlist works. The box used to open behind the header card.",
-    "Everything that folds away now folds at the same rate.",
-    "The equaliser shows a level either side of zero instead of five white blocks."
+    "Keep your music playing while another app plays sound.",
+    "Music pauses when your headphones or Bluetooth speaker disconnect.",
+    "MPTree now speaks Dutch.",
+    "A size setting for text and rows.",
+    "A Help section, and a moved logo button that stays put."
   ]
 }

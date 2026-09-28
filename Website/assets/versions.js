@@ -31,6 +31,23 @@ window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
   {
+    version: "0.3.0",
+    date:    "2026-09-28",
+    channel: "beta",
+    tag:     "v0.3.0",
+    notes: [
+      "Your music can keep playing while another app plays sound, a video in another app for instance. Turn it on under Settings > Audio. The first time you play over Bluetooth, MPTree asks.",
+      "An experimental switch turns the other app down while your music plays. Most apps turn themselves back up on their next video, so it helps less than it sounds.",
+      "Music now pauses when your headphones or Bluetooth speaker disconnect, instead of carrying on out of the phone's speaker.",
+      "MPTree speaks Dutch. It follows your phone's language, or pick one under Settings > General.",
+      "A Size setting makes text and rows Small, Medium or Large.",
+      "A Help section: questions and answers, feedback by email, the privacy policy and the open source licences.",
+      "A moved logo button stays where you put it. Unfolding, the logo flies to the top left and the header grows from there.",
+      "Scrolling through long lists is smoother, and rows no longer shift a few pixels as you scroll.",
+      "After an update, a short list of what changed shows once.",
+    ],
+  },
+  {
     version: "0.2.1",
     date:    "2026-09-27",
     channel: "beta",
