@@ -36,7 +36,7 @@ window.MPTREE_VERSIONS = [
     channel: "beta",
     tag:     "v0.3.0",
     notes: [
-      "Your music can keep playing while another app plays sound, a video in another app for instance. Turn it on under Settings > Audio. The first time you play over Bluetooth, MPTree asks.",
+      "Your music can keep playing while another app plays sound, a video in another app for instance. Turn it on under Settings > Audio.",
       "An experimental switch turns the other app down while your music plays. Most apps turn themselves back up on their next video, so it helps less than it sounds.",
       "Music now pauses when your headphones or Bluetooth speaker disconnect, instead of carrying on out of the phone's speaker.",
       "MPTree speaks Dutch. It follows your phone's language, or pick one under Settings > General.",
@@ -45,6 +45,8 @@ window.MPTREE_VERSIONS = [
       "A moved logo button stays where you put it. Unfolding, the logo flies to the top left and the header grows from there.",
       "Scrolling through long lists is smoother, and rows no longer shift a few pixels as you scroll.",
       "After an update, a short list of what changed shows once.",
+      "A welcome page on first launch: pick a language and allow music access yourself, then the library opens out from where you tap.",
+      "Audio Effects opens on top of Settings, and the Removed songs page no longer sits under the status bar.",
     ],
   },
   {
