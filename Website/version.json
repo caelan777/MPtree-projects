@@ -1,13 +1,11 @@
 {
   "_comment": "Read by the app (see MPTree-App/src/updateCheck.ts) to tell people on an older build that a newer one exists. Keep it in step with the top entry of assets/versions.js, which is what the website itself renders. Only the build handed out by this website checks this file; the Play Store build never does.",
-  "latest": "0.3.0",
+  "latest": "1.0.0",
   "date": "2026-09-28",
   "url": "https://mp-tree.net/download.html",
   "notes": [
-    "Keep your music playing while another app plays sound.",
-    "Music pauses when your headphones or Bluetooth speaker disconnect.",
-    "MPTree now speaks Dutch.",
-    "A size setting for text and rows.",
-    "A Help section, and a moved logo button that stays put."
+    "MPTree is out of beta.",
+    "The tutorial starts straight away, on the Songs page.",
+    "The welcome page asks for music access before you go on."
   ]
 }

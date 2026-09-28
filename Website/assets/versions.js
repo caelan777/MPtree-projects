@@ -7,6 +7,13 @@
  * Versioning, as used here:
  *   0.1.x  beta, released on this website only. Every fix bumps the patch.
  *   0.2.0  the point those betas are gathered up into a Play Store release.
+ *   0.3.0  the last beta, tried here before going to Play.
+ *   1.0.0  out of beta: the same release on Google Play and on this website.
+ *          From here on, `channel: "release"` marks a version that is on both.
+ *
+ * The two channels are separate builds (the website one checks version.json,
+ * the Play one cannot), so they carry separate versionCodes: 1.0.0 is 17 on
+ * Play and 18 here. See docs/release.md.
  *
  * Each release must exist on GitHub under `tag` and carry TWO copies of the
  * same APK:
@@ -30,6 +37,18 @@
 window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
+  {
+    version: "1.0.0",
+    date:    "2026-09-28",
+    channel: "release",
+    tag:     "v1.0.0",
+    notes: [
+      "MPTree is out of beta. The same version is on Google Play and here.",
+      "Everything from 0.3.0: the welcome page, Dutch, the Size setting, the Help section, and playing alongside other apps.",
+      "The tutorial starts straight away from Settings, and always on the Songs page.",
+      "Without music access, Next on the welcome page asks for it before you go on.",
+    ],
+  },
   {
     version: "0.3.0",
     date:    "2026-09-28",

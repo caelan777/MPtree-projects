@@ -73,7 +73,9 @@
     }
     var ch = document.createElement("span");
     ch.className = "rel-tag";
-    ch.textContent = rel.channel === "beta" ? "Beta, website only" : "Play Store";
+    ch.textContent = rel.channel === "beta"    ? "Beta, website only"
+                   : rel.channel === "release" ? "Play Store and website"
+                   : "Play Store";
     tags.appendChild(ch);
     head.appendChild(tags);
     li.appendChild(head);
