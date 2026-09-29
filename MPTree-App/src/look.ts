@@ -11,7 +11,7 @@ import { Preferences } from "@capacitor/preferences";
 // and its own header card, so switching modes switches the whole look.
 
 export type VinylSkin  = "classic" | "white" | "smoke" | "marble";
-export type DarkShade  = "classic" | "amoled" | "graphite" | "purple";
+export type DarkShade  = "classic" | "amoled" | "graphite" | "purple" | "pink";
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
 export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
 /** The header card follows the app ("default") or wears any shade of either
@@ -40,17 +40,22 @@ export const FREE = { vinyl: "classic", dark: "classic", light: "classic", card:
 
 const KEY = "mptree_look";
 
+// The saved look, and while the Personalise sheet is open, a preview of what is
+// being tried. Without Pro anything can be tried; the preview is dropped when
+// the sheet closes, unless Pro is bought first.
 let look: Look = DEFAULT_LOOK;
+let preview: Look | null = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach(l => l());
-const snapshot = () => look;
+const snapshot = () => preview ?? look;
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 
 export function useLook(): Look {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-export function getLook(): Look { return look; }
+export function getLook(): Look { return preview ?? look; }
+export function isPreviewing(): boolean { return preview !== null; }
 
 export async function loadLook(): Promise<Look> {
   try {
@@ -72,13 +77,37 @@ export async function loadLook(): Promise<Look> {
 
 export function saveLook(patch: Partial<Look>): Look {
   look = { ...look, ...patch };
+  // Something kept while trying other things stays part of the preview too.
+  if (preview) preview = { ...preview, ...patch };
   Preferences.set({ key: KEY, value: JSON.stringify(look) }).catch(() => {});
   emit();
   return look;
 }
 
+/** Shows a change without keeping it. */
+export function previewLook(patch: Partial<Look>): void {
+  preview = { ...(preview ?? look), ...patch };
+  emit();
+}
+
+/** Keeps what is being previewed, once it may be kept (Pro was bought). */
+export function keepPreview(): void {
+  if (!preview) return;
+  const kept = preview;
+  preview = null;
+  saveLook(kept);
+}
+
+/** Drops what was being tried. */
+export function endPreview(): void {
+  if (!preview) return;
+  preview = null;
+  emit();
+}
+
 /** Losing Pro (a refund, or locking a test build again) puts the free look
  *  back. The picture disc tap is free, so it stays as it was. */
 export function resetLook(): void {
+  preview = null;
   saveLook({ ...DEFAULT_LOOK, photoDisc: look.photoDisc });
 }

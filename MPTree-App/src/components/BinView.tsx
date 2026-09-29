@@ -49,7 +49,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
   const [confirmEmpty,  setConfirmEmpty]  = useState(false);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 300, display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 410, display: "flex", flexDirection: "column" }}>
       {/* The app draws edge to edge, so a full-screen page has to step over the
           status bar itself. Without this the close button sat under the clock. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px", borderBottom: `1px solid ${T.border}` }}>

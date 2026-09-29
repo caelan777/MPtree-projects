@@ -53,13 +53,24 @@ const DARK_SHADES: Record<DarkShade, Partial<T>> = {
     inputBg:"#2d2e33", chipBg:"#222327", chipBorder:"#35363c", chipColor:"#d2d3d8",
     sliderBg:"#35363c", overlayBg:"rgba(10,10,12,0.72)",
   },
-  // Deep purple. Violet still means shuffle and selection here, so it is
-  // lifted a step to stay visible on a purple ground.
+  // Plum: near black with a violet cast, and a pale lavender where the
+  // others have white. The tint stays in the shadows so it never floods the
+  // screen. Violet still means shuffle and selection, lifted a step so it
+  // shows on this ground.
   purple: {
-    bg:"#120a1f", surface:"#1c1230", card:"#190f2b", playerBg:"#170e28", sheetBg:"#1f1433",
-    muted:"#9a8cb5", textSub:"#9a8cb5", dim:"#2a1d42", border:"#34254f",
-    inputBg:"#2a1d42", chipBg:"#1f1433", chipBorder:"#34254f", chipColor:"#ddd3f0",
-    sliderBg:"#34254f", overlayBg:"rgba(8,4,16,0.78)", violet:"#a78bfa",
+    accent:"#d9c8ff", text:"#f4f0fb", playBtnBg:"#d9c8ff", playBtnFg:"#140f1c",
+    bg:"#0e0b12", surface:"#16121c", card:"#141019", playerBg:"#130f18", sheetBg:"#19141f",
+    muted:"#8e86a0", textSub:"#8e86a0", dim:"#231d2b", border:"#2c2536",
+    inputBg:"#231d2b", chipBg:"#19141f", chipBorder:"#2c2536", chipColor:"#ddd6ea",
+    sliderBg:"#2c2536", overlayBg:"rgba(6,4,10,0.78)", violet:"#a78bfa",
+  },
+  // Dark with a soft light pink: the same idea with rose in the shadows.
+  pink: {
+    accent:"#f7c6d6", text:"#fbf1f4", playBtnBg:"#f7c6d6", playBtnFg:"#1a0f14",
+    bg:"#110c0e", surface:"#1a1316", card:"#171114", playerBg:"#150f12", sheetBg:"#1c1418",
+    muted:"#a08690", textSub:"#a08690", dim:"#271c21", border:"#33252b",
+    inputBg:"#271c21", chipBg:"#1c1418", chipBorder:"#33252b", chipColor:"#f0dde4",
+    sliderBg:"#33252b", overlayBg:"rgba(8,4,6,0.78)",
   },
 };
 

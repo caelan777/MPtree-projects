@@ -80,6 +80,9 @@ function Section({ title, children, T }: { title: string; children: ReactNode; T
 
 type SettingsSheetProps = {
   theme: Theme;
+  /** Kept open but out of sight while Personalise is up: that sheet needs the
+   *  header card visible and undimmed, and closing it comes back here. */
+  hidden?: boolean;
   // ── Pro ──
   pro: boolean;
   onOpenPro: () => void;
@@ -129,7 +132,7 @@ type SettingsSheetProps = {
 };
 
 export function SettingsSheet({
-  theme, binCount,
+  theme, hidden, binCount,
   pro, onOpenPro, onOpenLook, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen, onSupport,
@@ -202,7 +205,9 @@ export function SettingsSheet({
     : lang === "nl" ? "Nederlands" : "English";
 
   return (
-    <div style={sh.overlay} onClick={onClose}>
+    // Everything opened from here opens on top of it, and closing that comes
+    // back here, the same way the questions and language sheets always did.
+    <div style={{ ...sh.overlay, visibility: hidden ? "hidden" : undefined }} onClick={onClose}>
       <div
         style={{
           ...sh.sheet, paddingBottom: 0, maxHeight: "75vh", display: "flex", flexDirection: "column",
@@ -261,7 +266,7 @@ export function SettingsSheet({
             right={<Switch on={theme === "light"} T={T} />}
           />
           <Row T={T}
-            onClick={() => { onClose(); onOpenLook(); }}
+            onClick={onOpenLook}
             icon={<BrushIcon />}
             label={t("Personalise")}
             sub={t("Shades, header card, record and app icon.")}
@@ -388,7 +393,7 @@ export function SettingsSheet({
         <Section T={T} title={t("Library")}>
           <Row T={T}
             first
-            onClick={() => { onClose(); onViewBin(); }}
+            onClick={onViewBin}
             icon={<IC.Bin />}
             label={t("Removed songs")}
             right={
@@ -403,7 +408,7 @@ export function SettingsSheet({
             }
           />
           <Row T={T}
-            onClick={() => { onClose(); onOpenCleanup(); }}
+            onClick={onOpenCleanup}
             icon={<BroomIcon />}
             label={t("Clean up non-songs")}
             sub={cleanupCount > 0
@@ -414,8 +419,8 @@ export function SettingsSheet({
         </Section>
 
         <Section T={T} title={t("Backup & Restore")}>
-          <Row T={T} first onClick={() => { onClose(); onExport(); }} icon={<DownloadIcon />} label={t("Export backup")} />
-          <Row T={T} onClick={() => { onClose(); onImportOpen(); }} icon={<UploadIcon />} label={t("Restore backup")} />
+          <Row T={T} first onClick={onExport} icon={<DownloadIcon />} label={t("Export backup")} />
+          <Row T={T} onClick={onImportOpen} icon={<UploadIcon />} label={t("Restore backup")} />
         </Section>
 
         <Section T={T} title={t("Help")}>

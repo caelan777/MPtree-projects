@@ -34,7 +34,7 @@ import { ProSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { findSuspects } from "./cleanup";
-import { useLook, loadLook } from "./look";
+import { useLook, loadLook, endPreview } from "./look";
 import { usePro, loadPro } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -2427,7 +2427,10 @@ export default function App() {
         return;
       }
       if (showOnboarding)      { finishOnboarding(); return; }
+      if (proOpen)             { setProOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
+      if (lookOpen)            { endPreview(); setLookOpen(false); return; }
+      if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
       if (cutSong)             { setCutSong(null); return; }
@@ -3854,12 +3857,13 @@ export default function App() {
           <SettingsSheet
             theme={theme} binCount={removedSongs.length}
             pro={pro}
-            onOpenPro={() => { setSettingsOpen(false); setProOpen(true); }}
+            hidden={lookOpen}
+            onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
-            onViewBin={() => { setSettingsOpen(false); setBinOpen(true); }}
+            onViewBin={() => setBinOpen(true)}
             onOpenAudioEffects={openEQSheet}
             onShowTutorial={() => {
               setSettingsOpen(false);
@@ -3890,6 +3894,7 @@ export default function App() {
         {lookOpen && (
           <LookSheet
             theme={theme} onSetTheme={setTheme}
+            topGap={cardBottom + 10}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
             onClose={() => setLookOpen(false)}

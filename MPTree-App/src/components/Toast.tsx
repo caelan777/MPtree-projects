@@ -40,12 +40,13 @@ export function Toast({
   return (
     <div style={{
       position: "fixed", bottom: 170, left: "50%", transform: "translateX(-50%)",
-      background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 22,
+      background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20,
       padding: action ? "8px 8px 8px 22px" : "10px 22px", color: T.text, fontSize: 13, fontWeight: "600",
-      zIndex: 500, whiteSpace: "nowrap", boxShadow: "0 6px 28px rgba(0,0,0,0.3)",
-      display: "flex", alignItems: "center", gap: 14, maxWidth: "90vw",
+      zIndex: 500, boxShadow: "0 6px 28px rgba(0,0,0,0.3)",
+      display: "flex", alignItems: "center", gap: 14, maxWidth: "90vw", width: "max-content",
     }}>
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{msg}</span>
+      {/* A long message wraps to a second line rather than being cut off. */}
+      <span style={{ lineHeight: 1.4, textAlign: action ? "left" : "center" }}>{msg}</span>
       {action && (
         <button
           onClick={() => { action.onClick(); onDoneRef.current(); }}
