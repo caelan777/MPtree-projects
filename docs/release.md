@@ -77,14 +77,6 @@ grep -c "mp-tree.net/version.json" MPTree-App/dist/assets/index-*.js
 `npx cap sync android` if you built for Play and now want the website APK, since both
 scripts write to the same `dist/`.
 
-**The ad SDK follows the channel too.** The Pro day pass shows one rewarded ad, and its
-code lives in the `android/ads` module. The web build writes `dist/channel.txt`; Gradle reads
-the copy that `npx cap sync android` puts in the Android project and adds the module only for
-`play` and `test`. So the website APK comes out without any ad code (about 4.6 MB instead of
-8.2) as long as `npm run build` and `npx cap sync android` ran first. Gradle prints which it
-chose (`MPTree: web build for ..., with/without the ad SDK`); `-Pads=true` or `-Pads=false`
-overrides it.
-
 ## Verify before publishing
 
 ```bash

@@ -88,8 +88,7 @@ npx cap open android # open android/ in Android Studio to build/run the APK
   callbacks/intervals read the latest value. If you add state used in a callback, mirror it.
 - **Native is authoritative** for playback. Don't reintroduce JS-side track advancement.
 - **The brand is black and white.** See [Branding/README.md](Branding/README.md). Violet is
-  allowed **only** for shuffle state and selection; anywhere else is a regression. Gold
-  (`gold()` in `src/themes.ts`) is allowed **only** for MPTree Pro: the word "Pro" (`GoldPro.tsx`) and the Pro page itself. Primary
+  allowed **only** for shuffle state and selection; anywhere else is a regression. Primary
   actions use the accent, which inverts with the ground (`TH.accent` / `TH.playBtnFg`).
 - **The logo is `src/components/Logo.tsx`**, generated from `Branding/source/mptree-mark.svg`.
   Don't add raster logos; the PNGs it replaced were 2.2 MB.

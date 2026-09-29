@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
-import { Ads, Billing, System } from "./plugins";
+import { Billing, System } from "./plugins";
 import { resetLook } from "./look";
 import { t } from "./i18n";
 
@@ -23,8 +23,9 @@ import { t } from "./i18n";
 // person who paid must keep Pro on a plane; Play is asked again whenever it
 // can be reached, and only a definite "not owned" from Play takes it away.
 //
-// The day pass is the other way in: one rewarded ad, then all of Pro for 24
-// hours. It is offered wherever there is an ad unit to show (see AD_UNIT).
+// Every build also has a free week: all of Pro for seven days, once, started
+// from the Pro page. No payment details are asked, so nothing is ever charged;
+// it simply stops. It is kept on the phone, so a reinstall starts afresh.
 
 export const PRODUCT_ID = "mptree_pro";
 
@@ -37,27 +38,32 @@ export const PRO_MODE: ProMode =
 type Stored = { owned: boolean; via: "play" | "free"; since: number };
 const KEY = "mptree_pro";
 
+/** The free week: not started, running until `until`, or over. `notice` is
+ *  true once it has ended and the "your week is over" note has not been seen. */
+export type Trial =
+  | { state: "unused" }
+  | { state: "live"; from: number; until: number }
+  | { state: "over"; notice: boolean };
+
 let owned = false;
-/** When the day pass ends; 0 without one. */
-let passUntil = 0;
+let trial: Trial = { state: "unused" };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach(l => l());
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
-const snapshot = () => owned || passUntil > 0;
-const passSnapshot = () => (owned ? 0 : passUntil);
+const snapshot = () => owned || trial.state === "live";
 const ownedSnapshot = () => owned;
+const trialSnapshot = () => trial;
 
-/** Pro is on: bought, or a day pass running. */
+/** Pro is on: bought, or the free week running. */
 export function usePro(): boolean {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
-/** Bought, as opposed to a day pass. */
+/** Bought, as opposed to the free week. */
 export function useOwnsPro(): boolean {
   return useSyncExternalStore(subscribe, ownedSnapshot, ownedSnapshot);
 }
-/** When the day pass ends, or 0 when there is none (or Pro is bought). */
-export function useDayPass(): number {
-  return useSyncExternalStore(subscribe, passSnapshot, passSnapshot);
+export function useTrial(): Trial {
+  return useSyncExternalStore(subscribe, trialSnapshot, trialSnapshot);
 }
 export function hasPro(): boolean { return snapshot(); }
 
@@ -75,91 +81,83 @@ function setOwned(next: boolean, via: Stored["via"]) {
     Preferences.set({ key: KEY, value: JSON.stringify({ owned: true, via, since: Date.now() } satisfies Stored) }).catch(() => {});
   } else {
     Preferences.remove({ key: KEY }).catch(() => {});
-    if (was && !passUntil) dropProLook();
+    if (was && trial.state !== "live") dropProLook();
   }
   if (was !== next) emit();
 }
 
-// ─── DAY PASS ────────────────────────────────────────────────────────────────
+// ─── FREE WEEK ───────────────────────────────────────────────────────────────
 
-const PASS_KEY = "mptree_daypass";
-const DAY = 24 * 60 * 60 * 1000;
-type StoredPass = { from: number; until: number };
+const TRIAL_KEY = "mptree_trial";
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+type StoredTrial = { from: number; until: number; noticed?: boolean };
 
-// Google's test unit: always a test ad, never paid, safe to tap. Real ad units
-// must never be used for testing, or AdMob closes the account.
-const TEST_REWARDED = "ca-app-pub-3940256099942544/5224354917";
-// MPTree's own rewarded unit ("Dagpas" in AdMob). Real ads, real money: only
-// the Play build uses it, and nobody on the team may tap its ads.
-const PLAY_REWARDED = "ca-app-pub-3909703327280410/3472642383";
-const AD_UNIT = PRO_MODE === "free" ? TEST_REWARDED : PRO_MODE === "play" ? PLAY_REWARDED : "";
-export const PASS_OFFERED = AD_UNIT !== "";
+let trialTimer: ReturnType<typeof setTimeout> | undefined;
 
-let passFrom = 0;
-let passTimer: ReturnType<typeof setTimeout> | undefined;
-
-/** Ends the pass once its time is up. A clock turned back past the start
- *  ends it too, or winding the clock would make it last forever. */
-function checkPass() {
-  if (!passUntil) return;
-  const now = Date.now();
-  if (now < passUntil && now >= passFrom) return;
-  endPass();
+function saveTrial(s: StoredTrial) {
+  Preferences.set({ key: TRIAL_KEY, value: JSON.stringify(s) }).catch(() => {});
 }
 
-function endPass() {
-  clearTimeout(passTimer);
-  if (!passUntil) return;
-  passUntil = 0;
-  Preferences.remove({ key: PASS_KEY }).catch(() => {});
+function runTrial(from: number, until: number) {
+  trial = { state: "live", from, until };
+  clearTimeout(trialTimer);
+  // setTimeout cannot wait a whole week (it overflows past about 24 days, but
+  // a frozen app never gets there anyway); checking hourly and on every return
+  // to the app is enough.
+  trialTimer = setTimeout(checkTrial, Math.min(until - Date.now() + 500, 60 * 60 * 1000));
+  emit();
+}
+
+/** Ends the week once its time is up. A clock turned back past the start ends
+ *  it too, or winding the clock would make it last forever. */
+function checkTrial() {
+  if (trial.state !== "live") return;
+  const now = Date.now();
+  if (now < trial.until && now >= trial.from) { runTrial(trial.from, trial.until); return; }
+  endTrial(true);
+}
+
+function endTrial(notice: boolean) {
+  clearTimeout(trialTimer);
+  if (trial.state !== "live") return;
+  saveTrial({ from: trial.from, until: Math.min(trial.until, Date.now()), noticed: !notice });
+  trial = { state: "over", notice };
   if (!owned) dropProLook();
   emit();
 }
 
-function startPass(from: number, until: number) {
-  passFrom = from;
-  passUntil = until;
-  clearTimeout(passTimer);
-  passTimer = setTimeout(checkPass, until - Date.now() + 500);
+// Android freezes the app in the background and its timers with it, so the
+// week is also checked whenever MPTree comes back.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkTrial(); });
+}
+
+/** Starts the free week. Once only. */
+export function startTrial(): boolean {
+  if (trial.state !== "unused") return false;
+  const now = Date.now();
+  saveTrial({ from: now, until: now + WEEK });
+  runTrial(now, now + WEEK);
+  return true;
+}
+
+/** The "your free week is over" note has been seen. */
+export function dismissTrialNotice(): void {
+  if (trial.state !== "over" || !trial.notice) return;
+  trial = { state: "over", notice: false };
+  Preferences.get({ key: TRIAL_KEY }).then(({ value }) => {
+    if (value) saveTrial({ ...(JSON.parse(value) as StoredTrial), noticed: true });
+  }).catch(() => {});
   emit();
 }
 
-// Android freezes the app in the background and its timers with it, so the
-// pass is also checked whenever MPTree comes back.
-if (typeof document !== "undefined") {
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkPass(); });
-}
-
-/** "14 h" or "35 min": what is left of a day pass. */
-export function passTimeLeft(until: number): string {
-  const ms = until - Date.now();
-  return ms >= 3_600_000 ? t("{n} h", { n: Math.ceil(ms / 3_600_000) }) : t("{n} min", { n: Math.max(1, Math.ceil(ms / 60_000)) });
-}
-
-/** What to tell someone after the ad. */
-export function passMessage(r: PassResult): string {
-  return r === "granted" ? t("Pro is on for the next 24 hours")
-    : r === "closed" ? t("The day pass needs the whole ad")
-    : r === "offline" ? t("The ad needs an internet connection")
-    : r === "nofill" ? t("No ad right now. Try again later.")
-    : t("The ad could not load. Try again later.");
-}
-
-export type PassResult = "granted" | "closed" | "consent" | "nofill" | "offline" | "error";
-
-/** Shows the ad; a watched one starts 24 hours of Pro. */
-export async function watchAdForPass(): Promise<PassResult> {
-  if (!PASS_OFFERED) return "error";
-  try {
-    const r = await Ads.showRewarded({ adUnitId: AD_UNIT });
-    if (!r.rewarded) return r.reason ?? "error";
-    const now = Date.now();
-    Preferences.set({ key: PASS_KEY, value: JSON.stringify({ from: now, until: now + DAY } satisfies StoredPass) }).catch(() => {});
-    startPass(now, now + DAY);
-    return "granted";
-  } catch {
-    return "error";
-  }
+/** "6 d 23 h", "5 h 12 min" or "12 min": what is left of the free week. */
+export function trialTimeLeft(until: number): string {
+  const min = Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+  const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
+  return d > 0 ? t("{d} d {h} h", { d, h })
+    : h > 0 ? t("{h} h {m} min", { h, m })
+    : t("{n} min", { n: m });
 }
 
 /** Reads what this phone remembers, then, on Play, asks Play. */
@@ -172,12 +170,19 @@ export async function loadPro(): Promise<void> {
     if (s?.owned && s.via === (PRO_MODE === "play" ? "play" : "free")) { owned = true; emit(); }
   } catch { /* nothing stored */ }
   try {
-    const { value } = await Preferences.get({ key: PASS_KEY });
-    const p = value ? (JSON.parse(value) as StoredPass) : null;
-    const now = Date.now();
-    if (p && now < p.until && now >= p.from) startPass(p.from, p.until);
-    else if (p) Preferences.remove({ key: PASS_KEY }).catch(() => {});
-  } catch { /* no pass */ }
+    const { value } = await Preferences.get({ key: TRIAL_KEY });
+    const s = value ? (JSON.parse(value) as StoredTrial) : null;
+    if (s) {
+      const now = Date.now();
+      if (now < s.until && now >= s.from) runTrial(s.from, s.until);
+      else {
+        // Ended while MPTree was closed: the look goes back now.
+        trial = { state: "live", from: s.from, until: s.until };
+        if (s.noticed) { trial = { state: "over", notice: false }; emit(); }
+        else endTrial(true);
+      }
+    }
+  } catch { /* no trial */ }
   if (PRO_MODE === "play") restorePro().catch(() => {});
 }
 
@@ -223,6 +228,19 @@ export async function proPrice(): Promise<string | null> {
 /** Test builds only: back to free, to try the locked side again. */
 export function lockProForTesting(): void {
   if (PRO_MODE !== "free") return;
-  endPass();
   setOwned(false, "free");
+}
+
+/** Test builds only: the free week ends now, note and all. */
+export function endTrialForTesting(): void {
+  if (PRO_MODE === "free") endTrial(true);
+}
+
+/** Test builds only: the free week can be started again. */
+export function resetTrialForTesting(): void {
+  if (PRO_MODE !== "free") return;
+  clearTimeout(trialTimer);
+  Preferences.remove({ key: TRIAL_KEY }).catch(() => {});
+  trial = { state: "unused" };
+  emit();
 }

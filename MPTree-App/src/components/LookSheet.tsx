@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { makeSH, cardPalette, SHADE_PREVIEW, type T } from "../themes";
-import { GoldPro } from "./GoldPro";
 import type { Theme } from "../types";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { MARK_PATH } from "./Logo";
 import { SpinningDisc } from "./SpinningDisc";
-import { usePro, PASS_OFFERED } from "../pro";
+import { usePro } from "../pro";
 import {
   useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, FREE,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type AppIcon,
@@ -29,8 +28,6 @@ type LookSheetProps = {
   /** Where the header card ends, so the sheet can start below it. */
   topGap: number;
   onNeedPro: () => void;
-  /** Shows the day pass ad; resolves once it is over. */
-  onWatchAd: () => Promise<void>;
   onToast: (msg: string) => void;
   onClose: () => void;
   T: T;
@@ -196,10 +193,8 @@ function squareIcon(file: File): Promise<string> {
   });
 }
 
-export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onWatchAd, onToast, onClose, T }: LookSheetProps) {
+export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
-  const [adBusy, setAdBusy] = useState(false);
-  const watchAd = async () => { setAdBusy(true); await onWatchAd(); setAdBusy(false); };
   const pro = usePro();
   const look = useLook();
   const previewing = isPreviewing();
@@ -371,20 +366,13 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onWatchAd, onT
             onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
         </div>
 
-        {/* Only while a locked option is showing: one ad keeps it for a day.
-            Where there is no ad to show, the way to buy Pro instead. */}
+        {/* Only while a locked option is showing: the way to keep it. The
+            Pro page has the free week too. */}
         {previewing && !pro && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
-            {PASS_OFFERED ? (
-              <button onClick={watchAd} disabled={adBusy}
-                style={{ ...sh.saveBtn, opacity: adBusy ? 0.7 : 1 }}>
-                {adBusy ? t("Loading the ad…") : <GoldPro T={T} on={T.accent} text={t("Watch 1 ad, get Pro free for a day")} />}
-              </button>
-            ) : (
-              <button onClick={onNeedPro} style={sh.saveBtn}>
-                <GoldPro T={T} on={T.accent} text={t("Get Pro")} />
-              </button>
-            )}
+            <button onClick={onNeedPro} style={sh.saveBtn}>
+              {t("Keep it with Pro")}
+            </button>
           </div>
         )}
       </div>

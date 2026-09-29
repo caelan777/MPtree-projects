@@ -30,12 +30,12 @@ import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { ProSheet } from "./components/ProSheet";
+import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview } from "./look";
-import { usePro, loadPro, watchAdForPass, passMessage } from "./pro";
+import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
@@ -646,6 +646,7 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
+  const trial = useTrial();
   const [proOpen,     setProOpen]     = useState(false);
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
@@ -1289,16 +1290,6 @@ export default function App() {
       if (isPlaying) { await AudioPlayer.pause(); setPlaying(false); }
       else { await AudioPlayer.resume(); setPlaying(true); }
     } catch (e) { showError(t("Player error: ") + e); }
-  };
-
-  /** The day pass: one ad for 24 hours of Pro. The ad has sound of its own,
-   *  so the music waits and then goes on. */
-  const watchAd = async () => {
-    const was = isPlayingRef.current;
-    if (was) { await AudioPlayer.pause().catch(() => {}); setPlaying(false); }
-    const r = await watchAdForPass();
-    if (was) AudioPlayer.resume().then(() => setPlaying(true)).catch(() => {});
-    showToast(passMessage(r));
   };
 
   const seekTo = async (ms: number) => {
@@ -3869,7 +3860,6 @@ export default function App() {
             pro={pro}
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
-            onWatchAd={watchAd}
             onOpenLook={() => setLookOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
@@ -3907,7 +3897,6 @@ export default function App() {
             theme={theme} onSetTheme={setTheme}
             topGap={cardBottom + 10}
             onNeedPro={() => setProOpen(true)}
-            onWatchAd={watchAd}
             onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
@@ -3929,7 +3918,15 @@ export default function App() {
             onClose={() => setProOpen(false)}
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
-            onWatchAd={watchAd}
+            T={TH} />
+        )}
+
+        {/* Once, when the free week has run out (also if it ran out while
+            MPTree was closed). Not for someone who bought Pro meanwhile. */}
+        {trial.state === "over" && trial.notice && !pro && !proOpen && (
+          <TrialOverSheet
+            onGetPro={() => { dismissTrialNotice(); setProOpen(true); }}
+            onClose={dismissTrialNotice}
             T={TH} />
         )}
 

@@ -7,7 +7,6 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.Plugin;
 
 public class MainActivity extends BridgeActivity {
 
@@ -18,11 +17,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AudioPlayerPlugin.class);
         registerPlugin(SystemPlugin.class);
         registerPlugin(BillingPlugin.class);
-        // The day pass ad lives in the :ads module, which the website APK
-        // leaves out. JS never asks for it there, so its absence is fine.
-        try {
-            registerPlugin(Class.forName("com.caelan.mptree.AdsPlugin").asSubclass(Plugin.class));
-        } catch (ClassNotFoundException noAds) { /* website build */ }
         super.onCreate(savedInstanceState);
     }
 

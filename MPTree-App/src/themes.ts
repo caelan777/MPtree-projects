@@ -116,31 +116,6 @@ export function cardPalette(shade: CardShade, app: T): T {
     : { ...LIGHT, ...LIGHT_SHADES[name as LightShade] };
 }
 
-// ─── GOLD (Pro) ──────────────────────────────────────────────────────────────
-// The one colour Pro wears, so it reads as Pro wherever it shows. A brighter
-// gold on dark grounds and a deeper one on light, so it holds its contrast.
-
-const isDark = (T: T) => {
-  const n = parseInt(T.bg.slice(1), 16);
-  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 < 128;
-};
-
-export function gold(T: T) {
-  const dark = isDark(T);
-  return {
-    /** For a badge or a button: gold with dark text on it. */
-    fill: "linear-gradient(135deg, #f7e08f 0%, #e2b851 55%, #c4922e 100%)",
-    ink: "#2a1d00",
-    /** Gold as a text or icon colour on this ground. */
-    text: dark ? "#e8c35a" : "#9a6d10",
-    /** For gold text drawn with the gradient (background-clip: text). */
-    textFill: dark
-      ? "linear-gradient(135deg, #f7e08f 0%, #d9a93e 100%)"
-      : "linear-gradient(135deg, #c28f1c 0%, #8a6010 100%)",
-    glow: dark ? "rgba(226,184,81,0.16)" : "rgba(196,146,46,0.14)",
-  };
-}
-
 /** For the swatches in the Personalise sheet. */
 export const SHADE_PREVIEW = {
   dark:  (d: DarkShade)  => ({ ...DARK,  ...DARK_SHADES[d] }),

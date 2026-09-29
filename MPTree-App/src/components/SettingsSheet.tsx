@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
-import { makeSH, gold, type T } from "../themes";
-import { GoldPro } from "./GoldPro";
-import { Preferences } from "@capacitor/preferences";
+import { makeSH, type T } from "../themes";
 import type { Theme } from "../types";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
@@ -9,8 +7,7 @@ import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, type LangPref } from "../i18n";
-import { useDayPass, passTimeLeft, PASS_OFFERED } from "../pro";
-import { Ads } from "../plugins";
+import { useTrial, useOwnsPro, trialTimeLeft } from "../pro";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -66,50 +63,10 @@ function Row({ icon, label, sub, right, onClick, first, T }: {
 }
 
 function ProTag({ T }: { T: T }) {
-  // The tag as it was; only the letters are gold.
-  const G = gold({ ...T, bg: T.accent });
   return (
-    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: G.text, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
+    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: T.playBtnFg, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
       PRO
     </span>
-  );
-}
-
-const HINT_KEY = "mptree_pass_hint";
-
-/** Floats just above the Settings sheet: Pro free for a day, for one ad.
- *  The X puts it away for good. */
-function PassHint({ T, onWatch, onClose }: { T: T; onWatch: () => Promise<void>; onClose: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const el = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    el.current?.animate?.(
-      [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }],
-      { duration: 260, easing: "ease-out" },
-    );
-  }, []);
-  const watch = async () => { if (busy) return; setBusy(true); await onWatch(); setBusy(false); };
-  return (
-    <div ref={el} role="status" style={{
-      position: "absolute", left: 12, right: 12, bottom: "calc(100% + 10px)",
-      display: "flex", alignItems: "center", gap: 12, padding: "11px 8px 11px 12px",
-      background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 16,
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-    }}>
-      <span style={{ width: 36, height: 36, borderRadius: 18, background: T.accent, color: T.playBtnFg, display: "grid", placeItems: "center", flexShrink: 0 }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>
-      </span>
-      <button onClick={watch} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: T.text }}>
-        <span style={{ display: "block", fontSize: 14.5, fontWeight: 800 }}><GoldPro T={T} text={t("Get Pro free for a day")} /></span>
-        <span style={{ display: "block", fontSize: 12.5, color: T.textSub, marginTop: 1 }}>
-          {busy ? t("Loading the ad…") : t("Watch one ad. Tap here.")}
-        </span>
-      </button>
-      <button onClick={onClose} aria-label={t("Close")}
-        style={{ width: 32, height: 32, flexShrink: 0, display: "grid", placeItems: "center", background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 0 }}>
-        <IC.Close />
-      </button>
-    </div>
   );
 }
 
@@ -130,8 +87,6 @@ type SettingsSheetProps = {
   // ── Pro ──
   pro: boolean;
   onOpenPro: () => void;
-  /** Shows the day pass ad; resolves once it is over. */
-  onWatchAd: () => Promise<void>;
   onOpenLook: () => void;
   onOpenCleanup: () => void;
   /** How many probable non-songs the library holds, shown on the row. */
@@ -181,7 +136,7 @@ type SettingsSheetProps = {
 
 export function SettingsSheet({
   theme, hidden, binCount,
-  pro, onOpenPro, onWatchAd, onOpenLook, onOpenCleanup, cleanupCount,
+  pro, onOpenPro, onOpenLook, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen, onSupport,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
@@ -191,23 +146,15 @@ export function SettingsSheet({
   onClose, T,
 }: SettingsSheetProps) {
   const sh = makeSH(T);
-  const passUntil = useDayPass();
-  // null until read, so the hint does not flash for someone who closed it.
-  const [hintClosed, setHintClosed] = useState<boolean | null>(null);
+  const trial = useTrial();
+  const ownsPro = useOwnsPro();
+  // The countdown on the Pro card moves while Settings is open.
+  const [, tick] = useState(0);
   useEffect(() => {
-    Preferences.get({ key: HINT_KEY }).then(r => setHintClosed(r.value === "closed")).catch(() => setHintClosed(false));
-  }, []);
-  const closeHint = () => {
-    setHintClosed(true);
-    Preferences.set({ key: HINT_KEY, value: "closed" }).catch(() => {});
-  };
-  // Only where the law asks for it (EU, UK), and only once the consent form
-  // has been through: before the first ad there is nothing to change.
-  const [adPrivacy, setAdPrivacy] = useState(false);
-  useEffect(() => {
-    if (!PASS_OFFERED) return;
-    Ads.privacyOptions().then(r => setAdPrivacy(r.required)).catch(() => {});
-  }, [passUntil]);
+    if (trial.state !== "live") return;
+    const id = setInterval(() => tick(n => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, [trial.state]);
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
   const [sub, setSub] = useState<null | "faq" | "licences" | "language">(null);
@@ -281,9 +228,6 @@ export function SettingsSheet({
         }}
         onClick={e => e.stopPropagation()}
       >
-        {PASS_OFFERED && !pro && hintClosed === false && (
-          <PassHint T={T} onWatch={onWatchAd} onClose={closeHint} />
-        )}
         {/* Handle + header act as the drag-to-dismiss grip. */}
         <div
           onTouchStart={onDragStart}
@@ -315,12 +259,12 @@ export function SettingsSheet({
           >
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
-                <GoldPro T={T} on={pro ? T.dim : T.accent} text={pro ? t("MPTree Pro is on") : t("Get MPTree Pro")} />
+                {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
-                {passUntil ? t("Day pass, {time} left.", { time: passTimeLeft(passUntil) })
+                {trial.state === "live" && !ownsPro ? t("Free week, {time} left.", { time: trialTimeLeft(trial.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : PASS_OFFERED ? t("Records, shades, icons and more. Try a day free.")
+                  : trial.state === "unused" ? t("Records, shades, icons and more. Try it free for a week.")
                   : t("Records, shades, icons and more. Pay once.")}
               </span>
             </span>
@@ -390,15 +334,6 @@ export function SettingsSheet({
               label={t("Update notices")}
               sub={t("Tell me when a new version of MPTree is out.")}
               right={<Switch on={updateNotices} T={T} />}
-            />
-          )}
-          {adPrivacy && (
-            <Row T={T}
-              onClick={() => { Ads.showPrivacyOptions().catch(() => {}); }}
-              icon={<ShieldIcon />}
-              label={t("Ad privacy")}
-              sub={t("What the day pass ad may use.")}
-              right={<IC.ChevronR />}
             />
           )}
         </Section>

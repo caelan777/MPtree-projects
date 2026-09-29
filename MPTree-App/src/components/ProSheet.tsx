@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { makeSH, gold, type T } from "../themes";
+import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
-  usePro, useOwnsPro, useDayPass, buyPro, restorePro, proPrice, lockProForTesting,
-  PRO_MODE, PASS_OFFERED, passTimeLeft,
+  useOwnsPro, useTrial, buyPro, restorePro, proPrice, lockProForTesting,
+  startTrial, trialTimeLeft, endTrialForTesting, resetTrialForTesting, PRO_MODE,
 } from "../pro";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
@@ -28,19 +28,15 @@ type ProSheetProps = {
   onToast: (msg: string) => void;
   /** Opens a store link. The sideloaded build uses it to point at Play. */
   onOpenStore: () => void;
-  /** Shows the day pass ad; resolves once it is over. */
-  onWatchAd: () => Promise<void>;
   T: T;
 };
 
-export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProSheetProps) {
+export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
   const sh = makeSH(T);
-  const G = gold(T);
-  const pro = usePro();
   const owns = useOwnsPro();
-  const passUntil = useDayPass();
+  const trial = useTrial();
   const [price, setPrice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "buy" | "restore" | "ad">(null);
+  const [busy, setBusy] = useState<null | "buy" | "restore">(null);
 
   useEffect(() => {
     let live = true;
@@ -64,12 +60,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
       : r ? t("Pro restored") : t("No Pro purchase found on this Google account"));
   };
 
-  const watchAd = async () => {
-    setBusy("ad");
-    await onWatchAd();
-    setBusy(null);
-  };
-
   const features: { icon: ReactNode; title: string; body: string }[] = [
     { icon: <RecordIcon />, title: t("Records"),      body: t("White, smoke and marble records for the player.") },
     { icon: <ShadeIcon />,  title: t("Shades"),       body: t("AMOLED and graphite for dark mode. Paper, stone, pink and sage for light.") },
@@ -80,12 +70,32 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
 
   const priceLabel = price ?? "€2,99";
 
+  const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
+  // Once only, and nothing to pay: it stops by itself after the week.
+  const trialButton = trial.state === "unused" && (
+    <>
+      <button onClick={() => { if (startTrial()) onToast(t("Pro is on for 7 days")); }}
+        style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: PRO_MODE === "none" ? 0 : 8 }}>
+        {t("Try it free for 7 days")}
+      </button>
+      <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7 }}>
+        {t("No payment. It stops by itself after the week.")}
+      </div>
+    </>
+  );
+  const trialTest = PRO_MODE === "free" && (
+    trial.state === "live" ? (
+      <button onClick={endTrialForTesting} style={link}>{t("End the free week (test build)")}</button>
+    ) : trial.state === "over" ? (
+      <button onClick={() => { resetTrialForTesting(); onToast(t("The free week can be started again")); }} style={link}>
+        {t("Reset the free week (test build)")}
+      </button>
+    ) : null
+  );
+
   return (
     <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
-      <div style={{
-        ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column",
-        background: `radial-gradient(120% 45% at 50% 0%, ${G.glow}, transparent 70%), ${T.sheetBg}`,
-      }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
         <div style={sh.handle} />
         <div style={{ ...sh.hdr, paddingBottom: 4 }}>
           <span />
@@ -97,12 +107,12 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Logo size={40} color={T.text} />
               <span style={{ fontSize: 26, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>
-                MPTree <span style={{ fontWeight: 800, background: G.fill, color: G.ink, borderRadius: 7, padding: "1px 7px", fontSize: 20, verticalAlign: "3px" }}>Pro</span>
+                MPTree <span style={{ fontWeight: 800, background: T.accent, color: T.playBtnFg, borderRadius: 7, padding: "1px 7px", fontSize: 20, verticalAlign: "3px" }}>Pro</span>
               </span>
             </div>
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
               {owns ? t("You have Pro. Thank you for supporting MPTree.")
-                : passUntil ? t("Day pass: Pro for {time} more.", { time: passTimeLeft(passUntil) })
+                : trial.state === "live" ? t("Free week: {time} left.", { time: trialTimeLeft(trial.until) })
                 : t("Pay once, keep it forever. No subscription.")}
             </div>
           </div>
@@ -110,7 +120,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
           <div style={{ marginTop: 18 }}>
             {features.map(f => (
               <div key={f.title} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "11px 2px", borderTop: `1px solid ${T.dim}` }}>
-                <span style={{ display: "flex", color: G.text, marginTop: 1, flexShrink: 0 }}>{f.icon}</span>
+                <span style={{ display: "flex", color: T.text, marginTop: 1, flexShrink: 0 }}>{f.icon}</span>
                 <span>
                   <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: T.text }}>{f.title}</span>
                   <span style={{ display: "block", fontSize: 13, color: T.textSub, lineHeight: 1.45, marginTop: 2 }}>{f.body}</span>
@@ -133,7 +143,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
             )
           ) : PRO_MODE === "none" ? (
             <>
-              <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+              {trialButton}
+              <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, margin: "14px 0 12px", textAlign: "center" }}>
                 {t("Pro is sold through Google Play. This copy of MPTree came from the website, so it cannot buy it.")}
               </div>
               <button onClick={onOpenStore} style={sh.saveBtn}>{t("Open Google Play")}</button>
@@ -141,23 +152,13 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
           ) : (
             <>
               <button onClick={buy} disabled={busy !== null}
-                style={{ ...sh.saveBtn, background: G.fill, color: G.ink, opacity: busy ? 0.6 : 1 }}>
+                style={{ ...sh.saveBtn, opacity: busy ? 0.6 : 1 }}>
                 {PRO_MODE === "free"
                   ? t("Unlock Pro for free (test build)")
                   : busy === "buy" ? t("Opening Google Play…") : t("Get Pro for {price}", { price: priceLabel })}
               </button>
-              {PASS_OFFERED && !pro && (
-                <button onClick={watchAd} disabled={busy !== null}
-                  style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: 8, opacity: busy && busy !== "ad" ? 0.6 : 1 }}>
-                  {busy === "ad" ? t("Loading the ad…") : t("Watch an ad, get a free day")}
-                </button>
-              )}
-              {PRO_MODE === "free" && passUntil > 0 && (
-                <button onClick={() => { lockProForTesting(); onToast(t("Pro locked again")); }}
-                  style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
-                  {t("End the day pass (test build)")}
-                </button>
-              )}
+              {trialButton}
+              {trialTest}
               {PRO_MODE === "play" && (
                 <button onClick={restore} disabled={busy !== null}
                   style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
@@ -166,6 +167,31 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
               )}
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Shown once, when the free week has run out. */
+export function TrialOverSheet({ onGetPro, onClose, T }: { onGetPro: () => void; onClose: () => void; T: T }) {
+  const sh = makeSH(T);
+  return (
+    <div style={{ ...sh.overlay, zIndex: 460 }} onClick={onClose}>
+      <div style={{ ...sh.sheet, paddingBottom: 28 }} onClick={e => e.stopPropagation()}>
+        <div style={sh.handle} />
+        <div style={{ padding: "18px 24px 0", textAlign: "center" }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{t("Your free week is over")}</div>
+          <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.5, marginTop: 8 }}>
+            {t("Everything is back to how it was. Pro can be yours for good, with one payment.")}
+          </div>
+          <button onClick={onGetPro} style={{ ...sh.saveBtn, marginTop: 20 }}>
+            {t("Get Pro")}
+          </button>
+          <button onClick={onClose}
+            style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
+            {t("Not now")}
+          </button>
         </div>
       </div>
     </div>
