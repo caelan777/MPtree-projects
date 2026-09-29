@@ -445,9 +445,8 @@ export const NL: Record<string, string> = {
   "Saved in your Downloads folder.": "Wordt opgeslagen in je map Downloads.",
   "All {n}": "Alle {n}",
   "Likes and covers": "Likes en hoezen",
-  "Plum": "Pruim",
   "Dark": "Donker",
   "Colour": "Kleur",
   "Preview. Keep it with Pro.": "Voorbeeld. Houden kan met Pro.",
-  "Plum, pink, AMOLED and graphite for dark mode. Pink, sage, paper and stone for light.": "Pruim, roze, AMOLED en grafiet voor donker. Roze, salie, papier en steen voor licht.",
+  "AMOLED and graphite for dark mode. Paper, stone, pink and sage for light.": "AMOLED en grafiet voor donker. Papier, steen, roze en salie voor licht.",
 };

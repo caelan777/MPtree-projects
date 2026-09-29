@@ -11,7 +11,7 @@ import { Preferences } from "@capacitor/preferences";
 // and its own header card, so switching modes switches the whole look.
 
 export type VinylSkin  = "classic" | "white" | "smoke" | "marble";
-export type DarkShade  = "classic" | "amoled" | "graphite" | "purple" | "pink";
+export type DarkShade  = "classic" | "amoled" | "graphite";
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
 export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
 /** The header card follows the app ("default") or wears any shade of either
@@ -66,6 +66,11 @@ export async function loadLook(): Promise<Look> {
       // Picture disc used to be one of the records; it is the tap now.
       if ((look.vinyl as string) === "picture") look = { ...look, vinyl: "classic", photoDisc: true };
       if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look.vinyl)) look = { ...look, vinyl: "classic" };
+      // Test builds 2 and 3 had plum and pink for dark mode.
+      if (!(["classic", "amoled", "graphite"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
+      for (const k of ["cardDark", "cardLight"] as const) {
+        if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
+      }
       // The first test build had one card skin (glass, line...) for both modes.
       if (typeof look.cardDark !== "string" || !/^(default|dark:|light:)/.test(look.cardDark)) look = { ...look, cardDark: "default" };
       if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };

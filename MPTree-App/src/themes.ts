@@ -53,25 +53,6 @@ const DARK_SHADES: Record<DarkShade, Partial<T>> = {
     inputBg:"#2d2e33", chipBg:"#222327", chipBorder:"#35363c", chipColor:"#d2d3d8",
     sliderBg:"#35363c", overlayBg:"rgba(10,10,12,0.72)",
   },
-  // Plum: near black with a violet cast, and a pale lavender where the
-  // others have white. The tint stays in the shadows so it never floods the
-  // screen. Violet still means shuffle and selection, lifted a step so it
-  // shows on this ground.
-  purple: {
-    accent:"#d9c8ff", text:"#f4f0fb", playBtnBg:"#d9c8ff", playBtnFg:"#140f1c",
-    bg:"#0e0b12", surface:"#16121c", card:"#141019", playerBg:"#130f18", sheetBg:"#19141f",
-    muted:"#8e86a0", textSub:"#8e86a0", dim:"#231d2b", border:"#2c2536",
-    inputBg:"#231d2b", chipBg:"#19141f", chipBorder:"#2c2536", chipColor:"#ddd6ea",
-    sliderBg:"#2c2536", overlayBg:"rgba(6,4,10,0.78)", violet:"#a78bfa",
-  },
-  // Dark with a soft light pink: the same idea with rose in the shadows.
-  pink: {
-    accent:"#f7c6d6", text:"#fbf1f4", playBtnBg:"#f7c6d6", playBtnFg:"#1a0f14",
-    bg:"#110c0e", surface:"#1a1316", card:"#171114", playerBg:"#150f12", sheetBg:"#1c1418",
-    muted:"#a08690", textSub:"#a08690", dim:"#271c21", border:"#33252b",
-    inputBg:"#271c21", chipBg:"#1c1418", chipBorder:"#33252b", chipColor:"#f0dde4",
-    sliderBg:"#33252b", overlayBg:"rgba(8,4,6,0.78)",
-  },
 };
 
 const LIGHT_SHADES: Record<LightShade, Partial<T>> = {
@@ -84,29 +65,29 @@ const LIGHT_SHADES: Record<LightShade, Partial<T>> = {
     chipBg:"#ece5d6", chipBorder:"#d8cdb8", chipColor:"#3a342a",
     playBtnBg:"#1d1a15", playBtnFg:"#f7f2e8", sliderBg:"#d0c5ae",
   },
-  // Cool grey, a light mode that is not a white page.
+  // The others are paper with a different hue: every colour keeps paper's
+  // lightness and strength of tint, so they sit as quietly as it does. Built
+  // in OKLCH; stone carries about half the tint, a cool grey rather than blue.
   stone: {
-    accent:"#121417", surface:"#dfe1e4", card:"#dcdee2", bg:"#e9ebee",
-    muted:"#7b8089", dim:"#d2d5da", border:"#c6cad0", text:"#121417", textSub:"#5d626b",
-    sheetBg:"#f2f3f5", playerBg:"#e4e6e9", inputBg:"#d5d8dd",
-    chipBg:"#dfe1e4", chipBorder:"#c6cad0", chipColor:"#2b2f35",
-    playBtnBg:"#121417", playBtnFg:"#e9ebee", sliderBg:"#c1c5cc",
+    accent:"#181b1d", surface:"#e3e9f0", card:"#dee5ec", bg:"#eff3f8",
+    muted:"#7b828a", dim:"#d5dde5", border:"#c6cfd9", text:"#181b1d", textSub:"#5d646b",
+    sheetBg:"#f4f8fc", playerBg:"#e9eef4", inputBg:"#d9e0e7",
+    chipBg:"#e0e6ed", chipBorder:"#c6cfd9", chipColor:"#31353a",
+    playBtnBg:"#181b1d", playBtnFg:"#eff3f8", sliderBg:"#bdc7d2",
   },
-  // Soft pink.
   pink: {
-    accent:"#2a141b", surface:"#f8e4ea", card:"#f6dfe6", bg:"#fdf1f4",
-    muted:"#a07886", dim:"#f1d5de", border:"#eac4d0", text:"#2a141b", textSub:"#7a5561",
-    sheetBg:"#fff7f9", playerBg:"#fbeaf0", inputBg:"#f3d9e1",
-    chipBg:"#f8e4ea", chipBorder:"#eac4d0", chipColor:"#4a2a35",
-    playBtnBg:"#2a141b", playBtnFg:"#fdf1f4", sliderBg:"#e2b8c6",
+    accent:"#1f181a", surface:"#f5e3e8", card:"#f2dee3", bg:"#fbeff2",
+    muted:"#907b81", dim:"#ebd5db", border:"#e1c6cd", text:"#1f181a", textSub:"#705d63",
+    sheetBg:"#fff4f7", playerBg:"#f8e9ed", inputBg:"#edd9de",
+    chipBg:"#f3e0e5", chipBorder:"#e1c6cd", chipColor:"#3e3134",
+    playBtnBg:"#1f181a", playBtnFg:"#fbeff2", sliderBg:"#dabec5",
   },
-  // Sage green, the deeper of the light shades.
   sage: {
-    accent:"#14200f", surface:"#d9e4d6", card:"#d5e0d2", bg:"#e6ede4",
-    muted:"#6f8168", dim:"#cbd8c7", border:"#bccdb7", text:"#14200f", textSub:"#4f6049",
-    sheetBg:"#eef3ec", playerBg:"#dfe8dc", inputBg:"#cfdccb",
-    chipBg:"#d9e4d6", chipBorder:"#bccdb7", chipColor:"#243222",
-    playBtnBg:"#14200f", playBtnFg:"#e6ede4", sliderBg:"#b3c6ad",
+    accent:"#181c17", surface:"#e2ece0", card:"#dce8d9", bg:"#eef5ec",
+    muted:"#798676", dim:"#d4e0d1", border:"#c4d4c1", text:"#181c17", textSub:"#5c6759",
+    sheetBg:"#f4f9f2", playerBg:"#e8f1e6", inputBg:"#d7e3d4",
+    chipBg:"#dee9dc", chipBorder:"#c4d4c1", chipColor:"#30372e",
+    playBtnBg:"#181c17", playBtnFg:"#eef5ec", sliderBg:"#bbccb7",
   },
 };
 

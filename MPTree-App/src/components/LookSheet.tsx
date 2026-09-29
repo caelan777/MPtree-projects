@@ -13,9 +13,10 @@ import {
 import { System } from "../plugins";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
-// Colour, header card, record and app icon, for dark mode and light mode
-// separately (the switch at the top). The sheet stops short of the header card
-// and does not dim it, so a change to the card shows on the real one.
+// Colour, header card, record and app icon. The small switch next to Colour
+// picks which mode the colour is for; the rest is one choice for both. The
+// sheet stops short of the header card and does not dim it, so a change to the
+// card shows on the real one.
 //
 // Without Pro a locked option can still be tapped: it shows everywhere as a
 // preview and goes back when the sheet closes. Only the app icon cannot be
@@ -119,10 +120,13 @@ function Tile({ selected, onClick, label, children, T, locked }: {
   );
 }
 
-function Row({ title, children, T }: { title: string; children: ReactNode; T: T }) {
+function Row({ title, aside, children, T }: { title: string; aside?: ReactNode; children: ReactNode; T: T }) {
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ padding: "0 20px", ...makeSH(T).lbl, marginTop: 0 }}>{title}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", marginBottom: 7 }}>
+        <span style={{ ...makeSH(T).lbl, margin: 0 }}>{title}</span>
+        {aside}
+      </div>
       {/* Scrolls sideways on a narrow phone rather than wrapping into a grid
           that pushes the last row off the sheet. */}
       <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 16px 4px", scrollbarWidth: "none" }}>
@@ -205,7 +209,6 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
 
   const DARKS: { id: DarkShade; label: string }[] = [
     { id: "classic", label: t("Black") }, { id: "amoled", label: "AMOLED" }, { id: "graphite", label: t("Graphite") },
-    { id: "purple", label: t("Plum") }, { id: "pink", label: t("Pink") },
   ];
   const LIGHTS: { id: LightShade; label: string }[] = [
     { id: "classic", label: t("White") }, { id: "paper", label: t("Paper") }, { id: "stone", label: t("Stone") },
@@ -224,8 +227,33 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
     { id: "vinyl", label: t("Record") }, { id: "stamp", label: t("Stamp") },
   ];
 
+  // The mode switch is for the colour only, so the card is one choice for
+  // both modes (Default still follows whichever mode is on).
   const card = dark ? look.cardDark : look.cardLight;
-  const setCard = (c: CardShade) => pick(c === FREE.card, dark ? { cardDark: c } : { cardLight: c });
+  const setCard = (c: CardShade) => pick(c === FREE.card, { cardDark: c, cardLight: c });
+
+  const modeSwitch = (
+    <div role="radiogroup" aria-label={t("Mode")} style={{ display: "flex", gap: 2, background: T.surface, borderRadius: 15, padding: 2, border: `1px solid ${T.border}` }}>
+      {(["dark", "light"] as Theme[]).map(m => (
+        <button
+          key={m}
+          role="radio"
+          aria-checked={theme === m}
+          aria-label={m === "dark" ? t("Dark") : t("Light")}
+          onClick={() => onSetTheme(m)}
+          style={{
+            width: 34, height: 26, display: "grid", placeItems: "center",
+            borderRadius: 13, border: "none", cursor: "pointer", padding: 0,
+            background: theme === m ? T.accent : "transparent",
+            color: theme === m ? T.playBtnFg : T.muted,
+            transition: "background 0.2s, color 0.2s",
+          }}
+        >
+          <span style={{ display: "grid", transform: "scale(0.78)" }}>{m === "dark" ? <IC.Moon /> : <IC.Sun />}</span>
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     // No dimming: the header card above the sheet is part of what is being
@@ -244,32 +272,8 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
           <button onClick={close} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
-        <div style={{ padding: "0 20px" }}>
-          <div role="radiogroup" aria-label={t("Mode")} style={{ display: "flex", gap: 4, background: T.surface, borderRadius: 12, padding: 3, border: `1px solid ${T.border}` }}>
-            {(["dark", "light"] as Theme[]).map(m => (
-              <button
-                key={m}
-                role="radio"
-                aria-checked={theme === m}
-                onClick={() => onSetTheme(m)}
-                style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                  padding: "8px 0", borderRadius: 9, border: "none", cursor: "pointer",
-                  fontFamily: "inherit", fontWeight: 700, fontSize: 14,
-                  background: theme === m ? T.accent : "transparent",
-                  color: theme === m ? T.playBtnFg : T.muted,
-                  transition: "background 0.2s, color 0.2s",
-                }}
-              >
-                {m === "dark" ? <IC.Moon /> : <IC.Sun />}
-                {m === "dark" ? t("Dark") : t("Light")}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
-          <Row T={T} title={t("Colour")}>
+          <Row T={T} title={t("Colour")} aside={modeSwitch}>
             {dark
               ? DARKS.map(d => (
                 <Tile key={d.id} T={T} label={d.label} selected={look.dark === d.id} locked={!pro && d.id !== FREE.dark}
