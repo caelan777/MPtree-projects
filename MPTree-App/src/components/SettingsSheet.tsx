@@ -147,7 +147,9 @@ type SettingsSheetProps = {
   /** Opens the pre-import info sheet */
   onImportOpen: () => void;
   /** Opens the support/tip page in the browser. */
-  onSupport: () => void;
+  /** A tip jar outside Play. Left out of the Play build: Play does not allow
+   *  payments that go around its own billing. */
+  onSupport?: () => void;
   // ── Sleep timer ──
   /** Absolute epoch-ms deadline for a fixed-clock sleep timer, or null. */
   sleepUntil: number | null;
@@ -510,13 +512,15 @@ export function SettingsSheet({
           <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
         </Section>
 
-        <div style={{ padding: "0 20px" }}>
-          <div style={sh.lbl}>{t("Support")}</div>
-          <Row T={T} first onClick={onSupport} icon={<CupIcon />} label={t("Buy me a coffee")} />
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
-            {t("MPTree is free. If it is useful to you, you can chip in.")}
+        {onSupport && (
+          <div style={{ padding: "0 20px" }}>
+            <div style={sh.lbl}>{t("Support")}</div>
+            <Row T={T} first onClick={onSupport} icon={<CupIcon />} label={t("Buy me a coffee")} />
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
+              {t("MPTree is free. If it is useful to you, you can chip in.")}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Version comes from package.json via Vite, so it always matches the
             build rather than whatever was last typed here. */}

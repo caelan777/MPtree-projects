@@ -30,9 +30,10 @@ android {
         // Keep versionName in step with package.json. versionCode must increase
         // by at least 1 for every release you hand out, or Android will refuse
         // to install the update over an existing copy.
-        // 19 is the MPTree Pro test build handed out on mp-tree.net/test.html.
-        versionCode 19
-        versionName "1.0.0"
+        // 19 was the MPTree Pro test build on mp-tree.net/test.html; 20 is 1.1.0
+        // for Google Play, the first release with Pro.
+        versionCode 20
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

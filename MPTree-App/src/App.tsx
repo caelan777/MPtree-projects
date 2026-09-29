@@ -3883,7 +3883,7 @@ export default function App() {
             }}
             onExport={handleExportOpen}
             onImportOpen={handleImportOpen}
-            onSupport={() => { Browser.open({ url: "https://paypal.me/MPTreeApp" }).catch(() => {}); }}
+            onSupport={__DISTRIBUTION__ === "play" ? undefined : () => { Browser.open({ url: "https://paypal.me/MPTreeApp" }).catch(() => {}); }}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
