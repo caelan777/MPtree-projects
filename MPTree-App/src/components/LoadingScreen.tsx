@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Theme } from "../types";
-import { DARK, LIGHT } from "../themes";
+import { DARK, LIGHT, type T } from "../themes";
 import { t } from "../i18n";
 import { Logo } from "./Logo";
 
@@ -25,6 +25,10 @@ import { Logo } from "./Logo";
 interface LoadingScreenProps {
   /** Current app theme, so the loading screen matches light/dark mode. */
   theme: Theme;
+  /** The app's palette, Pro shade included, so the screen you come in
+   *  through is already the colour the app is. Falls back to plain dark or
+   *  light. */
+  palette?: T;
   /** Pass `isInitializing` here. While true, the screen is shown at full opacity. */
   visible: boolean;
   /** Optional status text shown under the equalizer bars. */
@@ -42,6 +46,7 @@ const MIN_VISIBLE_MS = 1200;
 
 export function LoadingScreen({
   theme,
+  palette,
   visible,
   label = t("Loading your music…"),
   minVisibleMs = MIN_VISIBLE_MS,
@@ -94,7 +99,7 @@ export function LoadingScreen({
 
   if (!mounted) return null;
 
-  const TH = theme === "dark" ? DARK : LIGHT;
+  const TH = palette ?? (theme === "dark" ? DARK : LIGHT);
 
   return (
     <div

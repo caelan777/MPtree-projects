@@ -10,7 +10,7 @@ import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
-import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardSkinStyle } from "./themes";
+import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
@@ -41,7 +41,7 @@ import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { BackupSheet }      from "./components/BackupSheet";
-import type { BackupSheetState } from "./components/BackupSheet";
+import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
 import type { Playlist, SmartPlaylist } from "./types";
 import { useMultiSelect } from "./hooks/useMultiSelect";
 import { usePageSwipe } from "./hooks/usePageSwipe";
@@ -52,7 +52,7 @@ import {
   loadSession, saveSession,
   loadMeta, saveMeta, saveMetaNow,
   loadPlaylists, savePlaylists,
-  exportBackup, parseBackup, importBackup, scanBackupFolder, zipBackupFolder,
+  exportBackup, parseBackup, importBackup, scanBackupFolder, zipBackupFolder, collectSettings,
 } from "./storage";
 import type { BackupData } from "./storage";
 
@@ -66,23 +66,6 @@ function makeDateTag(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
-}
-
-function estimateMB(songs: Song[]): number {
-  // Estimate from each track's known duration assuming a ~256 kbps average
-  // (256_000 bits/s ÷ 8 = 32_000 bytes/s). This is far closer than the old
-  // flat 4 MB/song guess for both short clips and long FLAC/live tracks.
-  // Songs with no known duration fall back to the 4 MB heuristic.
-  const BYTES_PER_SEC = 32_000;
-  let totalBytes = 0;
-  for (const s of songs) {
-    if (s.duration && s.duration > 0) {
-      totalBytes += (s.duration / 1000) * BYTES_PER_SEC;
-    } else {
-      totalBytes += 4 * 1024 * 1024;
-    }
-  }
-  return Math.max(1, Math.round(totalBytes / (1024 * 1024)));
 }
 
 // MusicScanner returns raw absolute paths (no scheme). Filesystem and Share
@@ -1588,28 +1571,40 @@ export default function App() {
 
   /** Called when user taps "Export backup" in SettingsSheet */
   const handleExportOpen = useCallback(() => {
-    const allSongs = [...songs, ...removedSongs];
-    setBackupSheet({
-      kind:        "exportInfo",
-      songCount:   allSongs.length,
-      estimatedMB: estimateMB(allSongs),
-    });
-  }, [songs, removedSongs]);
+    setBackupSheet({ kind: "exportInfo" });
+  }, []);
 
   /** Called when user taps "Start backup" in ExportInfoSheet */
-  const doExport = useCallback(async (backupName: string) => {
+  const doExport = useCallback(async (backupName: string, opts: BackupOptions) => {
     backupCancelRef.current = false;
 
     const now = Date.now();
 
+    // Song details and covers live in the same store, so each is cut out of
+    // it when it is not wanted.
+    const metaOut: Record<string, SongMeta> = {};
+    if (opts.details || opts.covers) {
+      for (const [id, m] of Object.entries(metaRef.current)) {
+        const { customPhoto, ...rest } = m;
+        const entry: SongMeta = opts.details ? { ...rest } : {};
+        if (opts.covers && customPhoto) entry.customPhoto = customPhoto;
+        if (Object.keys(entry).length) metaOut[id] = entry;
+      }
+    }
+
     const backupData: BackupData = {
-      version:    1,
+      version:    2,
       exportedAt: now,
-      playlists: playlists.map(pl => ({
+      parts: {
+        playlists: opts.playlists, covers: opts.covers, details: opts.details,
+        bin: opts.bin, settings: opts.settings,
+      },
+      settings: opts.settings ? await collectSettings() : undefined,
+      playlists: !opts.playlists ? [] : playlists.map(pl => ({
         id:         pl.id,
         name:       pl.name,
         createdAt:  pl.createdAt,
-        coverPhoto: pl.coverPhoto,
+        coverPhoto: opts.covers ? pl.coverPhoto : undefined,
         songs:      pl.songIds
           .map(id => songs.find(s => s.id === id))
           .filter((s): s is Song => s != null)
@@ -1621,15 +1616,15 @@ export default function App() {
             duration: s.duration,
           })),
       })),
-      meta: metaRef.current,
-      removedSongs: removedSongs.map(s => ({
+      meta: metaOut,
+      removedSongs: !opts.bin ? [] : removedSongs.map(s => ({
         id:        s.id,
         title:     s.title,
         artist:    s.artist,
         path:      s.uri,
         dateAdded: s.dateAdded,
       })),
-      cutTracks: songs
+      cutTracks: !opts.details ? [] : songs
         .filter(s => s.isCut)
         .map(s => ({
           id:      s.id,
@@ -1639,14 +1634,17 @@ export default function App() {
           cutFrom: s.cutFrom,
           cutTo:   s.cutTo,
         })),
-      liked: songs
+      liked: !opts.details ? [] : songs
         .filter(s => metaRef.current[s.id]?.liked)
         .map(s => s.uri),
     };
 
+    const picked = new Set(opts.songIds);
     const allPathSet = new Set<string>();
-    for (const s of songs)        allPathSet.add(s.uri);
-    for (const s of removedSongs) allPathSet.add(s.uri);
+    for (const s of songs) {
+      if (opts.songs === "all" || (opts.songs === "some" && picked.has(s.id))) allPathSet.add(s.uri);
+    }
+    if (opts.bin) for (const s of removedSongs) allPathSet.add(s.uri);
     const songPaths = [...allPathSet];
     const total     = songPaths.length;
 
@@ -1763,7 +1761,7 @@ export default function App() {
     }
 
     // Check version compatibility
-    if (data.version > 1) {
+    if (data.version > 2) {
       setBackupSheet({ kind: "importError", message: t("Backup is from a newer version of MPTree. Please update the app.") });
       return;
     }
@@ -1788,7 +1786,12 @@ export default function App() {
         for (const p  of data.liked)                                     allBackupPaths.add(p);
         for (const key of Object.keys(data.meta))                        allBackupPaths.add(key);
 
+        // Version 2 says which files it copied; only those point at the
+        // backup's folder. A song left out of the backup is still wherever
+        // it was.
+        const copied = data.musicFiles ? new Set(data.musicFiles) : null;
         for (const origPath of allBackupPaths) {
+          if (copied && !copied.has(origPath)) continue;
           const filename = origPath.split("/").pop();
           if (filename) {
             pathRemap.set(origPath, `${musicAbsDir}/${filename}`);
@@ -1801,7 +1804,10 @@ export default function App() {
       setBackupSheet({ kind: "importProgress", phase: t("Restoring playlists…") });
 
       const { playlists: pl, meta: m, removedSongs: rs, cutTracks: ct } =
-        await importBackup(data, pathRemap);
+        await importBackup(data, pathRemap, {
+          playlists, meta: metaRef.current, removedSongs: removedRef.current,
+          cutTracks: songs.filter(s => s.isCut),
+        });
 
       setPlaylists(pl);
       setMeta(m);
@@ -1826,6 +1832,7 @@ export default function App() {
         ...rs.map(s => s.id),
       ]).size;
 
+      if (data.settings) reloadAfterRestoreRef.current = true;
       setBackupSheet({
         kind:          "importSuccess",
         playlistCount: pl.length,
@@ -1842,13 +1849,18 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanMusic]);
 
+  // Restored settings (theme, size, language, look) are read once at start,
+  // so a restore that brought some starts the app again on Done.
+  const reloadAfterRestoreRef = useRef(false);
   const closeBackupSheet = useCallback(() => {
     backupCancelRef.current = true;
     setBackupSheet({ kind: "closed" });
+    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
   }, []);
 
   const doneBackupSheet = useCallback(() => {
     setBackupSheet({ kind: "closed" });
+    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
   }, []);
 
   // ── Hooks ─────────────────────────────────────────────────────────────────
@@ -2727,9 +2739,15 @@ export default function App() {
 
   // The card's own surface, shared with the floating button so the two are the
   // same object wherever it is sitting.
-  // Paint only: the Pro card skins never touch a dimension. See cardSkinStyle.
-  const cardTint = currentSong && nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
-  const CARD_SKIN: React.CSSProperties = cardSkinStyle(look.card, TH, theme === "dark", cardTint);
+  // The header card's own palette: the app's, or a Pro shade picked for the
+  // card alone. Everything inside the card and the folded logo button is drawn
+  // with CT rather than TH. Paint only, never a dimension. See cardPalette.
+  const CT = cardPalette(theme === "dark" ? look.cardDark : look.cardLight, TH);
+  const CARD_SKIN: React.CSSProperties = {
+    background: CT.playerBg,
+    border: `1px solid ${CT.border}`,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+  };
 
   // Where the logo's own options panel and the collapse hint go. Both belong to
   // the button, so they follow it rather than staying pinned to the top left.
@@ -2979,20 +2997,20 @@ export default function App() {
               aria-label={t("Collapse header")}
               data-tour="logo"
               // Hidden while the mark flies in to take its place.
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: TH.text, opacity: logoFlight === "home" ? 0 : 1 }}
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: CT.text, opacity: logoFlight === "home" ? 0 : 1 }}
             >
-              <Logo size={48} color={TH.text} />
+              <Logo size={48} color={CT.text} />
             </button>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 2, background: TH.surface, borderRadius: 20, padding: 3, border: `1px solid ${TH.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
             <button
               onClick={() => setPage("songs")}
               style={{
                 padding: "6px 14px", borderRadius: 17, border: "none", cursor: "pointer",
                 fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                background: page === "songs" ? TH.accent : "transparent",
-                color: page === "songs" ? TH.playBtnFg : TH.muted,
+                background: page === "songs" ? CT.accent : "transparent",
+                color: page === "songs" ? CT.playBtnFg : CT.muted,
                 transition: "background 0.2s, color 0.2s",
               }}
             >
@@ -3004,8 +3022,8 @@ export default function App() {
               style={{
                 padding: "6px 14px", borderRadius: 17, border: "none", cursor: "pointer",
                 fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                background: page === "playlists" ? TH.accent : "transparent",
-                color: page === "playlists" ? TH.playBtnFg : TH.muted,
+                background: page === "playlists" ? CT.accent : "transparent",
+                color: page === "playlists" ? CT.playBtnFg : CT.muted,
                 transition: "background 0.2s, color 0.2s",
               }}
             >
@@ -3025,9 +3043,9 @@ export default function App() {
                 aria-label={t("Remove selected songs")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
-                  background: selected.size > 0 ? TH.binBg : "transparent",
-                  border: "1px solid " + (selected.size > 0 ? TH.binBorder : TH.border),
-                  color: selected.size > 0 ? "#e8445a" : TH.muted,
+                  background: selected.size > 0 ? CT.binBg : "transparent",
+                  border: "1px solid " + (selected.size > 0 ? CT.binBorder : CT.border),
+                  color: selected.size > 0 ? "#e8445a" : CT.muted,
                   borderRadius: 20, padding: "6px 12px",
                   fontSize: 13, fontWeight: 700, fontFamily: "inherit",
                   cursor: selected.size > 0 ? "pointer" : "default",
@@ -3037,7 +3055,7 @@ export default function App() {
                 <IC.Trash />Remove
               </button>
             )}
-            <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: TH.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
+            <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
           </div>
@@ -3065,23 +3083,23 @@ export default function App() {
             }}
           >
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div data-tour="search" style={{ flex: 1, display: "flex", alignItems: "center", background: TH.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${TH.border}` }}>
-                  {IC.Search(TH.muted)}
-                  <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 15, minWidth: 0 }} />
+                <div data-tour="search" style={{ flex: 1, display: "flex", alignItems: "center", background: CT.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${CT.border}` }}>
+                  {IC.Search(CT.muted)}
+                  <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: CT.text, fontSize: 15, minWidth: 0 }} />
                   {search.length > 0 && (
                     <button
                       onClick={() => { setSearch(""); hapticImpact("light"); }}
                       aria-label={t("Clear search")}
                       tabIndex={page === "songs" ? undefined : -1}
-                      style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0, color: TH.muted }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" fill={TH.dim} stroke="none"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                      style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0, color: CT.muted }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" fill={CT.dim} stroke="none"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                     </button>
                   )}
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{tn(displayList.length, "{n} song", "{n} songs")}</span>
+                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
@@ -3089,7 +3107,7 @@ export default function App() {
                     <button
                       onClick={() => setArtistFilter(null)}
                       aria-label={t("Show all artists, currently showing {artist}", { artist: activeArtist })}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, maxWidth: 200, background: TH.violet + "22", color: TH.violet, border: "none", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, maxWidth: 200, background: CT.violet + "22", color: CT.violet, border: "none", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
                     >
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeArtist}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" style={{ flexShrink: 0 }}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -3100,7 +3118,7 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
-                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" ? undefined : -1} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? TH.accent : TH.border}`, background: TH.surface, color: isFavFilter ? TH.accent : TH.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" ? undefined : -1} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
               </div>
@@ -3135,10 +3153,10 @@ export default function App() {
                 width: "100%", height: "100%", display: "flex", alignItems: "center",
                 justifyContent: "flex-start", paddingLeft: 11,
                 background: "transparent", border: "none", cursor: "pointer",
-                color: TH.text, touchAction: "none",
+                color: CT.text, touchAction: "none",
               }}
             >
-              <Logo size={30} color={TH.text} />
+              <Logo size={30} color={CT.text} />
             </button>
           </div>
         </div>
@@ -3162,11 +3180,11 @@ export default function App() {
               transform: `translate3d(${floatX}px, ${floatY}px, 0)`,
               ...CARD_SKIN,
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: TH.text, cursor: "pointer", zIndex: 60, touchAction: "none",
+              color: CT.text, cursor: "pointer", zIndex: 60, touchAction: "none",
               opacity: overRemove ? 0.4 : 1,
               // Empty, it goes grey: the card's near-black on a black list was
               // all but invisible.
-              ...(ballHasMark ? null : { background: TH.dim, borderColor: TH.muted + "66" }),
+              ...(ballHasMark ? null : { background: CT.dim, borderColor: CT.muted + "66" }),
               // No transform easing while it is following a finger.
               transition: logoDragging
                 ? "opacity 0.15s ease"
@@ -3176,10 +3194,10 @@ export default function App() {
             }}
           >
             {ballHasMark
-              ? <Logo size={30} color={TH.text} />
+              ? <Logo size={30} color={CT.text} />
               // The socket: faint enough to read as "empty", present enough to
               // read as a button rather than a stray disc.
-              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${TH.muted}` }} />}
+              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${CT.muted}` }} />}
           </button>
         )}
 
@@ -3207,13 +3225,13 @@ export default function App() {
               onAnimationEnd={endLogoFlight}
               style={{
                 position: "fixed", top: 0, left: 0, zIndex: 61, pointerEvents: "none",
-                display: "flex", color: TH.text,
+                display: "flex", color: CT.text,
                 "--fx0": `${a.x}px`, "--fy0": `${a.y}px`, "--fx1": `${b.x}px`, "--fy1": `${b.y}px`,
                 "--fs0": a.s, "--fs1": b.s, transformOrigin: "0 0",
                 animation: `mpFly ${LOGO_FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
               } as React.CSSProperties}
             >
-              <Logo size={30} color={TH.text} />
+              <Logo size={30} color={CT.text} />
             </div>
           );
         })()}
@@ -3872,8 +3890,6 @@ export default function App() {
         {lookOpen && (
           <LookSheet
             theme={theme} onSetTheme={setTheme}
-            tint={cardTint}
-            cover={currentSong ? nowPlayingPhoto(currentSong) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
             onClose={() => setLookOpen(false)}
@@ -3884,6 +3900,10 @@ export default function App() {
             suspects={cleanupSuspects}
             meta={meta}
             onBin={ids => { setCleanupOpen(false); removeMany(ids); }}
+            onPlay={(song, list) => { setPlayMode("off"); playSong(song, list); }}
+            onTogglePlay={togglePlay}
+            currentSongId={currentSong?.id ?? null}
+            isPlaying={isPlaying}
             onClose={() => setCleanupOpen(false)}
             T={TH} />
         )}
@@ -3930,6 +3950,8 @@ export default function App() {
 
         {/* ═══ BACKUP SHEET ════════════════════════════════════════════════ */}
         <BackupSheet
+          songs={songs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
+          binSongs={removedSongs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
           state={backupSheet}
           defaultBackupName={defaultBackupName}
           onStartBackup={doExport}
@@ -3953,6 +3975,7 @@ export default function App() {
         {(playerExpanded || expandDrag !== null) && currentSong && (() => {
           return (
             <PlayerExpandSheet
+              onNoCover={() => showToast(t("This song has no cover. Add one with Edit."))}
               song={currentSong}
               dispName={dispName(currentSong)}
               dispArtist={dispArtist(currentSong)}
@@ -4015,7 +4038,7 @@ export default function App() {
             Overlays everything above while initialize() is still running,
             so the empty/incomplete list never flashes on screen. Fades out
             and unmounts itself once isInitializing becomes false. */}
-        <LoadingScreen theme={theme} visible={isInitializing} onHidden={() => {
+        <LoadingScreen theme={theme} palette={TH} visible={isInitializing} onHidden={() => {
           if (firstRunRef.current === null) { hiddenBeforeKnown.current = true; return; }
           if (!firstRunRef.current || grantedAtStart.current) runLibraryScanRef.current?.();
         }} />

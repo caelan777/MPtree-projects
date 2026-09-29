@@ -185,9 +185,71 @@ export interface BackupData {
   removedSongs: BackupRemovedSong[];
   cutTracks:    BackupCutTrack[];
   liked:        string[];
-  // Music file backup fields (v1 extension — present when includeMusic=true)
+  // Music file backup fields (v1 extension: present when includeMusic=true)
   includeMusic?: boolean;
   musicDir?:     string; // e.g. "Download/MPTree_Backup_1234567890"
+  /** Version 2: which parts this backup holds. A part that is not in it is
+   *  left alone on restore, so a backup of only the playlists does not wipe
+   *  anyone's likes. Absent (version 1) means everything is in it. */
+  parts?: BackupParts;
+  /** Version 2: the original paths of the audio files that were copied. Only
+   *  these are pointed at the backup's music folder on restore. */
+  musicFiles?: string[];
+  /** Version 2: the settings, as the Preferences entries they are stored in. */
+  settings?: Record<string, string>;
+}
+
+export interface BackupParts {
+  playlists: boolean;
+  /** Song covers and playlist covers. */
+  covers:    boolean;
+  /** Names, artists, lyrics, genres, likes, play counts, cut tracks. */
+  details:   boolean;
+  /** The list of songs in the bin (their audio is in musicFiles). */
+  bin:       boolean;
+  settings:  boolean;
+}
+
+// ── Settings in a backup ──────────────────────────────────────────────────────
+// Everything a person set, and nothing about what was playing: restoring on
+// another phone should look and sound the same, not resume a stranger's queue.
+// Pro is not in here: that belongs to the Google account, not the backup.
+const SETTINGS_KEYS = [
+  "mptree_ui_size", "mptree_lang", "mptree_update_notices",
+  "mptree_mix_others", "mptree_duck_others", "mptree_auto_collapse",
+  "mptree_logo_pos", "mptree_look",
+];
+const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
+
+function pickSession(from: Partial<Session>): Partial<Session> {
+  const kept: Partial<Session> = {};
+  for (const k of SESSION_SETTINGS) if (from[k] !== undefined) (kept as Record<string, unknown>)[k] = from[k];
+  return kept;
+}
+
+export async function collectSettings(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const key of SETTINGS_KEYS) {
+    const { value } = await Preferences.get({ key }).catch(() => ({ value: null }));
+    if (value !== null) out[key] = value;
+  }
+  out[KEY_SESSION] = JSON.stringify(pickSession(await loadSession()));
+  return out;
+}
+
+/** Writes restored settings. The app reloads afterwards to pick them up. */
+export async function restoreSettings(settings: Record<string, string>): Promise<void> {
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === KEY_SESSION) {
+      // Merged into the current session rather than replacing it, so what is
+      // playing on this phone keeps playing.
+      let incoming: Partial<Session> = {};
+      try { incoming = JSON.parse(value); } catch { /* skip */ }
+      await saveSession({ ...(await loadSession()), ...pickSession(incoming) });
+    } else if (SETTINGS_KEYS.includes(key)) {
+      await Preferences.set({ key, value }).catch(() => {});
+    }
+  }
 }
 
 // ── Export result ─────────────────────────────────────────────────────────────
@@ -259,21 +321,26 @@ export async function exportBackup(
 ): Promise<ExportResult> {
   const backupFolder = `Download/${backupName}`;
   const musicSubdir  = `${backupFolder}/music`;
+  const withMusic    = songPaths.length > 0;
 
-  // Create the music subdirectory by writing a sentinel file.
-  await Filesystem.writeFile({
-    path:      `${musicSubdir}/.nomedia`,
-    data:      "",
-    directory: Directory.ExternalStorage,
-    encoding:  Encoding.UTF8,
-    recursive: true,
-  });
+  // Create the music subdirectory by writing a sentinel file. A backup of
+  // only playlists and settings has no music folder at all.
+  if (withMusic) {
+    await Filesystem.writeFile({
+      path:      `${musicSubdir}/.nomedia`,
+      data:      "",
+      directory: Directory.ExternalStorage,
+      encoding:  Encoding.UTF8,
+      recursive: true,
+    });
+  }
 
   // Write JSON first so partial backups are recoverable.
   const ts = data.exportedAt;
   const jsonFilename = `mptree_backup_${ts}.json`;
-  data.includeMusic = true;
-  data.musicDir     = backupFolder;
+  data.includeMusic = withMusic;
+  data.musicDir     = withMusic ? backupFolder : undefined;
+  data.musicFiles   = withMusic ? songPaths : undefined;
 
   await Filesystem.writeFile({
     path:      `${backupFolder}/${jsonFilename}`,
@@ -393,7 +460,8 @@ export function parseBackup(json: string): BackupData {
 
 export async function importBackup(
   data: BackupData,
-  pathRemap?: Map<string, string>,
+  pathRemap: Map<string, string> | undefined,
+  current: { playlists: Playlist[]; meta: SongMetaStore; removedSongs: Song[]; cutTracks: Song[] },
 ): Promise<{
   playlists:    Playlist[];
   meta:         SongMetaStore;
@@ -401,47 +469,56 @@ export async function importBackup(
   cutTracks:    Song[];
 }> {
   const remap = (p: string) => pathRemap?.get(p) ?? p;
+  // Version 1 backups hold everything but settings.
+  const parts: BackupParts = data.parts ?? { playlists: true, covers: true, details: true, bin: true, settings: false };
 
-  const playlists: Playlist[] = data.playlists.map(pl => ({
-    id:         pl.id,
-    name:       pl.name,
-    songIds:    pl.songs.map(s => remap(s.path)),
-    createdAt:  pl.createdAt,
-    coverPhoto: pl.coverPhoto,
-  }));
+  const playlists: Playlist[] = parts.playlists
+    ? (data.playlists ?? []).map(pl => ({
+        id:         pl.id,
+        name:       pl.name,
+        songIds:    pl.songs.map(s => remap(s.path)),
+        createdAt:  pl.createdAt,
+        coverPhoto: pl.coverPhoto,
+      }))
+    : current.playlists;
 
-  let metaOut: SongMetaStore = { ...data.meta };
-  if (pathRemap && pathRemap.size > 0) {
-    metaOut = {};
-    for (const [oldKey, value] of Object.entries(data.meta)) {
-      const newKey = remap(oldKey);
-      metaOut[newKey] = value;
+  // Song details are merged per song: what the backup says wins, and a song
+  // it says nothing about keeps what it has. So restoring covers alone adds
+  // covers without touching anyone's likes.
+  const metaOut: SongMetaStore = { ...current.meta };
+  for (const [oldKey, value] of Object.entries(data.meta ?? {})) {
+    const key = remap(oldKey);
+    metaOut[key] = { ...(metaOut[key] ?? {}), ...value };
+  }
+  if (parts.details) {
+    for (const origPath of data.liked ?? []) {
+      const key = remap(origPath);
+      metaOut[key] = { ...(metaOut[key] ?? {}), liked: true };
     }
   }
 
-  for (const origPath of data.liked) {
-    const key = remap(origPath);
-    metaOut[key] = { ...(metaOut[key] ?? {}), liked: true };
-  }
+  const removedSongs: Song[] = parts.bin
+    ? (data.removedSongs ?? []).map(s => ({
+        id:        remap(s.path),
+        title:     s.title,
+        artist:    s.artist,
+        uri:       remap(s.path),
+        dateAdded: s.dateAdded ?? 0,
+      }))
+    : current.removedSongs;
 
-  const removedSongs: Song[] = data.removedSongs.map(s => ({
-    id:        remap(s.path),
-    title:     s.title,
-    artist:    s.artist,
-    uri:       remap(s.path),
-    dateAdded: s.dateAdded ?? 0,
-  }));
-
-  const cutTracks: Song[] = data.cutTracks.map(s => ({
-    id:        remap(s.path),
-    title:     s.title,
-    artist:    s.artist,
-    uri:       remap(s.path),
-    dateAdded: Date.now(),
-    isCut:     true as const,
-    cutFrom:   s.cutFrom,
-    cutTo:     s.cutTo,
-  }));
+  const cutTracks: Song[] = parts.details
+    ? (data.cutTracks ?? []).map(s => ({
+        id:        remap(s.path),
+        title:     s.title,
+        artist:    s.artist,
+        uri:       remap(s.path),
+        dateAdded: Date.now(),
+        isCut:     true as const,
+        cutFrom:   s.cutFrom,
+        cutTo:     s.cutTo,
+      }))
+    : current.cutTracks;
 
   await Promise.all([
     savePlaylists(playlists),
@@ -449,6 +526,7 @@ export async function importBackup(
     saveRemovedTracksToStorage(removedSongs),
     saveCutTracksToStorage(cutTracks),
   ]);
+  if (data.settings) await restoreSettings(data.settings);
 
   return { playlists, meta: metaOut, removedSongs, cutTracks };
 }

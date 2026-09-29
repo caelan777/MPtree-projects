@@ -2,89 +2,83 @@ import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
 
 // ─── LOOK ────────────────────────────────────────────────────────────────────
-// The Pro personalisation: which record, which header card, which shade of dark
-// and of light, which app icon. One small store rather than five useStates in
-// App.tsx, because the record lives three components down (PlayerExpandSheet,
-// SpinningDisc) and threading five props through for it is how App.tsx got to
-// four thousand lines.
+// The Pro personalisation: which shade of dark and of light, what colour the
+// header card is in each, which record, which app icon. One small store rather
+// than a row of useStates in App.tsx, because the record lives three components
+// down (PlayerExpandSheet, SpinningDisc) and the loading screen reads it too.
 //
-// There is a saved look and, while the Personalise sheet is open, a preview.
-// Everyone can try everything; without Pro the preview is dropped when the
-// sheet closes, so trying is free and keeping is what Pro buys.
+// Dark mode and light mode are personalised separately: each has its own shade
+// and its own header card, so switching modes switches the whole look.
 
-export type VinylSkin = "classic" | "white" | "smoke" | "marble" | "picture";
-export type CardSkin  = "solid" | "glass" | "line" | "float" | "cover";
-export type DarkShade = "classic" | "amoled" | "graphite";
-export type LightShade = "classic" | "paper" | "stone";
-export type AppIcon   = "classic" | "light" | "vinyl" | "stamp";
+export type VinylSkin  = "classic" | "white" | "smoke" | "marble";
+export type DarkShade  = "classic" | "amoled" | "graphite" | "purple";
+export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
+export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
+/** The header card follows the app ("default") or wears any shade of either
+ *  mode, so a light card on a dark app is allowed. */
+export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
 
 export type Look = {
   vinyl: VinylSkin;
-  card: CardSkin;
   dark: DarkShade;
   light: LightShade;
+  cardDark: CardShade;
+  cardLight: CardShade;
   icon: AppIcon;
+  /** Tapping the record in the player turns it into a picture disc of the
+   *  cover. Free, and remembered. */
+  photoDisc: boolean;
 };
 
-export const DEFAULT_LOOK: Look = { vinyl: "classic", card: "solid", dark: "classic", light: "classic", icon: "classic" };
+export const DEFAULT_LOOK: Look = {
+  vinyl: "classic", dark: "classic", light: "classic",
+  cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
+};
+
+/** What anyone gets without Pro. */
+export const FREE = { vinyl: "classic", dark: "classic", light: "classic", card: "default", icon: "classic" } as const;
 
 const KEY = "mptree_look";
 
-let saved: Look = DEFAULT_LOOK;
-let preview: Look | null = null;
+let look: Look = DEFAULT_LOOK;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach(l => l());
+const snapshot = () => look;
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 
-function current(): Look { return preview ?? saved; }
-
-function subscribe(l: () => void) {
-  listeners.add(l);
-  return () => { listeners.delete(l); };
-}
-
-/** The look to draw with: the preview while one is open, else the saved one. */
 export function useLook(): Look {
-  return useSyncExternalStore(subscribe, current, current);
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-export function getLook(): Look { return current(); }
-export function getSavedLook(): Look { return saved; }
+export function getLook(): Look { return look; }
 
 export async function loadLook(): Promise<Look> {
   try {
     const { value } = await Preferences.get({ key: KEY });
-    if (value) saved = { ...DEFAULT_LOOK, ...JSON.parse(value) };
+    if (value) {
+      const stored = JSON.parse(value);
+      look = { ...DEFAULT_LOOK, ...stored };
+      // Picture disc used to be one of the records; it is the tap now.
+      if ((look.vinyl as string) === "picture") look = { ...look, vinyl: "classic", photoDisc: true };
+      if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look.vinyl)) look = { ...look, vinyl: "classic" };
+      // The first test build had one card skin (glass, line...) for both modes.
+      if (typeof look.cardDark !== "string" || !/^(default|dark:|light:)/.test(look.cardDark)) look = { ...look, cardDark: "default" };
+      if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };
+    }
   } catch { /* a broken entry just means the default look */ }
   emit();
-  return saved;
+  return look;
 }
 
-/** Keeps a change for good. Only called when the person has Pro. */
 export function saveLook(patch: Partial<Look>): Look {
-  saved = { ...saved, ...patch };
-  preview = null;
-  Preferences.set({ key: KEY, value: JSON.stringify(saved) }).catch(() => {});
+  look = { ...look, ...patch };
+  Preferences.set({ key: KEY, value: JSON.stringify(look) }).catch(() => {});
   emit();
-  return saved;
+  return look;
 }
 
-/** Shows a change without keeping it. */
-export function previewLook(patch: Partial<Look>): void {
-  preview = { ...current(), ...patch };
-  emit();
-}
-
-/** Drops whatever was being tried and goes back to the saved look. */
-export function endPreview(): void {
-  if (preview === null) return;
-  preview = null;
-  emit();
-}
-
-/** Losing Pro (a refund, or locking a test build again) puts the free look back. */
+/** Losing Pro (a refund, or locking a test build again) puts the free look
+ *  back. The picture disc tap is free, so it stays as it was. */
 export function resetLook(): void {
-  saved = DEFAULT_LOOK;
-  preview = null;
-  Preferences.remove({ key: KEY }).catch(() => {});
-  emit();
+  saveLook({ ...DEFAULT_LOOK, photoDisc: look.photoDisc });
 }

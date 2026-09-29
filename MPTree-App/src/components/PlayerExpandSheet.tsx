@@ -90,6 +90,8 @@ type PlayerExpandSheetProps = {
    *  chips below cover the common actions; the menu adds Play next and Add to
    *  playlist, which have nowhere else to live once you are in the player. */
   onOpenMenu: () => void;
+  /** A tap on the record of a song without a cover. */
+  onNoCover?: () => void;
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -108,7 +110,7 @@ export function PlayerExpandSheet({
   onTogglePlay, onSkip, onCycleMode,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
-  onPlayNextReorder, onSkipCurrentUpNext, lyrics, onAddLyrics, onOpenMenu, onClose,
+  onPlayNextReorder, onSkipCurrentUpNext, lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
@@ -379,6 +381,8 @@ export function PlayerExpandSheet({
                 spinning={isPlaying}
                 title={dispName}
                 customPhoto={customPhoto}
+                tappable
+                onNoCover={onNoCover}
               />
             )}
             <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>

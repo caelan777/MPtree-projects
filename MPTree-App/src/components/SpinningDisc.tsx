@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Logo } from "./Logo";
-import { useLook, type VinylSkin } from "../look";
+import { t } from "../i18n";
+import { useLook, saveLook, type VinylSkin } from "../look";
 
 // ─── SPINNING DISC ───────────────────────────────────────────────────────────
 // The record for the expanded player: the real vinyl.webp turning on its
@@ -44,6 +45,10 @@ type SpinningDiscProps = {
   customPhoto?: string;
   /** Overrides the saved record, for the previews in the Personalise sheet. */
   skin?: VinylSkin;
+  /** In the player: a tap turns the record into a picture disc of the cover
+   *  and back. onNoCover is called instead when there is no cover to use. */
+  tappable?: boolean;
+  onNoCover?: () => void;
 };
 
 // ─── Record skins (Pro) ──────────────────────────────────────────────────────
@@ -74,12 +79,18 @@ const SHEEN =
   "rgba(255,255,255,0) 180deg, rgba(255,255,255,0.11) 205deg, rgba(255,255,255,0) 235deg, rgba(255,255,255,0) 360deg)";
 
 export const SpinningDisc = memo(function SpinningDisc({
-  size, spinning = false, title = "", customPhoto, skin: forced,
+  size, spinning = false, title = "", customPhoto, skin: forced, tappable = false, onNoCover,
 }: SpinningDiscProps) {
-  const saved = useLook().vinyl;
-  let skin = forced ?? saved;
-  // A picture disc needs a picture. Without one it is the classic record.
-  if (skin === "picture" && !customPhoto) skin = "classic";
+  const look = useLook();
+  // The picture disc is not a record you pick but a tap on the record, so it
+  // is only ever shown for real, never in a preview, and only with a cover.
+  const picture = !forced && look.photoDisc && !!customPhoto;
+  const skin: VinylSkin | "picture" = picture ? "picture" : (forced ?? look.vinyl);
+
+  const onTap = tappable ? () => {
+    if (!customPhoto) { onNoCover?.(); return; }
+    saveLook({ photoDisc: !look.photoDisc });
+  } : undefined;
 
   const label = Math.round(size * 0.24);
   const mark = Math.round(label * 0.5);
@@ -99,9 +110,14 @@ export const SpinningDisc = memo(function SpinningDisc({
   const labelPhoto = skin === "picture" ? undefined : customPhoto;
 
   return (
-    <div style={{
+    <div
+      onClick={onTap}
+      role={tappable ? "button" : undefined}
+      aria-label={tappable ? t("Switch between the record and the cover") : undefined}
+      style={{
       width: size, height: size, flexShrink: 0, display: "grid", placeItems: "center",
-      position: "relative", borderRadius: "50%",
+      position: "relative", borderRadius: "50%", cursor: tappable ? "pointer" : undefined,
+      WebkitTapHighlightColor: "transparent",
       // Static: the shadow stays put while the record turns.
       boxShadow: skin === "smoke" ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
       // Nothing inside affects layout outside, so a spinning frame cannot make

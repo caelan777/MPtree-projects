@@ -1,6 +1,6 @@
 import React from "react";
 import type { FilterId, Theme } from "./types";
-import type { DarkShade, LightShade, CardSkin } from "./look";
+import type { DarkShade, LightShade, CardShade } from "./look";
 
 // ─── THEMES ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,14 @@ const DARK_SHADES: Record<DarkShade, Partial<T>> = {
     inputBg:"#2d2e33", chipBg:"#222327", chipBorder:"#35363c", chipColor:"#d2d3d8",
     sliderBg:"#35363c", overlayBg:"rgba(10,10,12,0.72)",
   },
+  // Deep purple. Violet still means shuffle and selection here, so it is
+  // lifted a step to stay visible on a purple ground.
+  purple: {
+    bg:"#120a1f", surface:"#1c1230", card:"#190f2b", playerBg:"#170e28", sheetBg:"#1f1433",
+    muted:"#9a8cb5", textSub:"#9a8cb5", dim:"#2a1d42", border:"#34254f",
+    inputBg:"#2a1d42", chipBg:"#1f1433", chipBorder:"#34254f", chipColor:"#ddd3f0",
+    sliderBg:"#34254f", overlayBg:"rgba(8,4,16,0.78)", violet:"#a78bfa",
+  },
 };
 
 const LIGHT_SHADES: Record<LightShade, Partial<T>> = {
@@ -73,6 +81,22 @@ const LIGHT_SHADES: Record<LightShade, Partial<T>> = {
     chipBg:"#dfe1e4", chipBorder:"#c6cad0", chipColor:"#2b2f35",
     playBtnBg:"#121417", playBtnFg:"#e9ebee", sliderBg:"#c1c5cc",
   },
+  // Soft pink.
+  pink: {
+    accent:"#2a141b", surface:"#f8e4ea", card:"#f6dfe6", bg:"#fdf1f4",
+    muted:"#a07886", dim:"#f1d5de", border:"#eac4d0", text:"#2a141b", textSub:"#7a5561",
+    sheetBg:"#fff7f9", playerBg:"#fbeaf0", inputBg:"#f3d9e1",
+    chipBg:"#f8e4ea", chipBorder:"#eac4d0", chipColor:"#4a2a35",
+    playBtnBg:"#2a141b", playBtnFg:"#fdf1f4", sliderBg:"#e2b8c6",
+  },
+  // Sage green, the deeper of the light shades.
+  sage: {
+    accent:"#14200f", surface:"#d9e4d6", card:"#d5e0d2", bg:"#e6ede4",
+    muted:"#6f8168", dim:"#cbd8c7", border:"#bccdb7", text:"#14200f", textSub:"#4f6049",
+    sheetBg:"#eef3ec", playerBg:"#dfe8dc", inputBg:"#cfdccb",
+    chipBg:"#d9e4d6", chipBorder:"#bccdb7", chipColor:"#243222",
+    playBtnBg:"#14200f", playBtnFg:"#e6ede4", sliderBg:"#b3c6ad",
+  },
 };
 
 /** The palette for a ground and the shades picked for it. */
@@ -82,57 +106,20 @@ export function paletteFor(theme: Theme, dark: DarkShade, light: LightShade): T 
     : { ...LIGHT, ...LIGHT_SHADES[light] };
 }
 
-// ─── HEADER CARD SKINS (Pro) ─────────────────────────────────────────────────
-// Only paint: background, border colour, shadow. Never size, padding or border
-// width. The header card animates between heights it measures from itself, and
-// its inset maths counts exactly one pixel of border top and bottom, so a skin
-// that changed any dimension would make the list jump under it.
+// ─── HEADER CARD (Pro) ───────────────────────────────────────────────────────
+// The card at the top can wear any shade of either mode, whatever the app is
+// in. Everything drawn inside it then takes its colours from that palette, so
+// a light card on a dark app has dark text. Paint only: the card's size, padding
+// and one-pixel border never change, because it animates between heights it
+// measures from itself.
 
-/** "#rrggbb" or "rgb(r, g, b)" to [r, g, b]. */
-function rgbOf(c: string): [number, number, number] {
-  if (c.startsWith("#") && c.length === 7) {
-    return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-  }
-  const m = c.match(/(\d+)\D+(\d+)\D+(\d+)/);
-  return m ? [+m[1], +m[2], +m[3]] : [0, 0, 0];
-}
-const alpha = (c: string, a: number) => { const [r, g, b] = rgbOf(c); return `rgba(${r}, ${g}, ${b}, ${a})`; };
-const mix = (a: string, b: string, w: number) => {
-  const [r1, g1, b1] = rgbOf(a), [r2, g2, b2] = rgbOf(b);
-  const m = (x: number, y: number) => Math.round(x * w + y * (1 - w));
-  return `rgb(${m(r1, r2)}, ${m(g1, g2)}, ${m(b1, b2)})`;
-};
-
-/** tint: the colour of what is playing, for the "cover" skin; null without. */
-export function cardSkinStyle(skin: CardSkin, T: T, dark: boolean, tint: string | null): React.CSSProperties {
-  switch (skin) {
-    case "glass":
-      return {
-        background: alpha(T.playerBg, dark ? 0.66 : 0.7),
-        backdropFilter: "blur(18px) saturate(1.3)",
-        WebkitBackdropFilter: "blur(18px) saturate(1.3)",
-        border: `1px solid ${alpha(T.text, dark ? 0.12 : 0.1)}`,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-      };
-    case "line":
-      return { background: T.bg, border: `1px solid ${alpha(T.text, 0.55)}`, boxShadow: "none" };
-    case "float":
-      return {
-        background: T.surface, border: "1px solid transparent",
-        boxShadow: dark ? "0 18px 48px rgba(0,0,0,0.75)" : "0 14px 40px rgba(0,0,0,0.16)",
-      };
-    case "cover":
-      if (tint) {
-        return {
-          background: mix(tint, T.playerBg, dark ? 0.32 : 0.22),
-          border: `1px solid ${mix(tint, T.border, 0.45)}`,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
-          transition: "background 0.6s ease, border-color 0.6s ease",
-        };
-      }
-      break;
-  }
-  return { background: T.playerBg, border: `1px solid ${T.border}`, boxShadow: "0 8px 32px rgba(0,0,0,0.45)" };
+/** The palette the header card is drawn with. */
+export function cardPalette(shade: CardShade, app: T): T {
+  if (shade === "default") return app;
+  const [ground, name] = shade.split(":") as ["dark" | "light", string];
+  return ground === "dark"
+    ? { ...DARK,  ...DARK_SHADES[name as DarkShade] }
+    : { ...LIGHT, ...LIGHT_SHADES[name as LightShade] };
 }
 
 /** For the swatches in the Personalise sheet. */

@@ -56,9 +56,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
   };
 
   const features: { icon: ReactNode; title: string; body: string }[] = [
-    { icon: <RecordIcon />, title: t("Records"),      body: t("A white record, smoke, marble, or your cover as a picture disc.") },
-    { icon: <ShadeIcon />,  title: t("Shades"),       body: t("AMOLED black and graphite for dark mode, paper and stone for light.") },
-    { icon: <CardIcon />,   title: t("Header card"),  body: t("Glass, line, floating, or tinted by what is playing.") },
+    { icon: <RecordIcon />, title: t("Records"),      body: t("White, smoke and marble records for the player.") },
+    { icon: <ShadeIcon />,  title: t("Shades"),       body: t("Purple, AMOLED black and graphite for dark mode. Pink, sage, paper and stone for light.") },
+    { icon: <CardIcon />,   title: t("Header card"),  body: t("Give the card at the top a colour of its own, from either mode.") },
     { icon: <IconIcon />,   title: t("App icon"),     body: t("Four icons for your home screen, or one with your own photo.") },
     { icon: <BroomIcon />,  title: t("Clean up"),     body: t("Finds voice notes, WhatsApp audio and clips under a minute, and bins them in one go.") },
   ];

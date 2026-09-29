@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { makeSH, type T } from "../themes";
-import type { SongMeta } from "../types";
+import type { Song, SongMeta } from "../types";
 import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 import type { Suspect } from "../cleanup";
@@ -16,6 +16,11 @@ type CleanupSheetProps = {
   suspects: Suspect[];
   meta: Record<string, SongMeta>;
   onBin: (ids: string[]) => void;
+  /** Plays one of them, with the list as the queue, to hear what it is. */
+  onPlay: (song: Song, list: Song[]) => void;
+  onTogglePlay: () => void;
+  currentSongId: string | null;
+  isPlaying: boolean;
   onClose: () => void;
   T: T;
 };
@@ -26,7 +31,7 @@ const fmt = (ms?: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function CleanupSheet({ suspects, meta, onBin, onClose, T }: CleanupSheetProps) {
+export function CleanupSheet({ suspects, meta, onBin, onPlay, onTogglePlay, currentSongId, isPlaying, onClose, T }: CleanupSheetProps) {
   const sh = makeSH(T);
   // Everything starts ticked: the list is what the person asked to find, and
   // unticking the odd real song is less work than ticking forty voice notes.
@@ -78,9 +83,12 @@ export function CleanupSheet({ suspects, meta, onBin, onClose, T }: CleanupSheet
                 const on = picked.has(song.id);
                 const m = meta[song.id] || {};
                 const folder = song.uri.split("/").slice(-2, -1)[0] || "";
+                const current = song.id === currentSongId;
                 return (
-                  <button
+                  <div
                     key={song.id}
+                    role="checkbox"
+                    aria-checked={on}
                     onClick={() => toggle(song.id)}
                     style={{
                       display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
@@ -105,7 +113,26 @@ export function CleanupSheet({ suspects, meta, onBin, onClose, T }: CleanupSheet
                       </span>
                     </span>
                     <span style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>
-                  </button>
+                    {/* Hear it before deciding. The list itself is the queue,
+                        so next goes to the next suspect, not into the library. */}
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (current) onTogglePlay();
+                        else onPlay(song, suspects.map(x => x.song));
+                      }}
+                      aria-label={current && isPlaying ? t("Pause") : t("Play")}
+                      style={{
+                        width: 34, height: 34, borderRadius: 17, flexShrink: 0, display: "grid", placeItems: "center",
+                        background: current ? T.accent : T.dim, color: current ? T.playBtnFg : T.text,
+                        border: "none", cursor: "pointer", padding: 0,
+                      }}
+                    >
+                      {current && isPlaying
+                        ? <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1"/><rect x="14" y="4" width="5" height="16" rx="1"/></svg>
+                        : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>}
+                    </button>
+                  </div>
                 );
               })}
             </div>

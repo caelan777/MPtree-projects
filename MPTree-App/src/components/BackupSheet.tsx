@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import type { T } from "../themes";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
+import { Switch } from "./Switch";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type BackupSheetState =
   | { kind: "closed" }
-  | { kind: "exportInfo"; songCount: number; estimatedMB: number }
+  | { kind: "exportInfo" }
   | { kind: "exportProgress"; done: number; total: number; cancelled: boolean }
   | { kind: "exportSuccess"; folderName: string; jsonUri?: string; failedCount?: number }
   | { kind: "sharing" }
@@ -18,7 +19,10 @@ export type BackupSheetState =
 
 type BackupSheetProps = {
   state: BackupSheetState;
-  onStartBackup: (name: string) => void;
+  onStartBackup: (name: string, options: BackupOptions) => void;
+  /** The library and the bin, for the song picker and the size estimate. */
+  songs: PickSong[];
+  binSongs: PickSong[];
   onCancelBackup: () => void;
   onShare: () => void;
   onDone: () => void;
@@ -116,18 +120,126 @@ function SheetOverlay({
 }
 
 // ─── Export Info Sheet ────────────────────────────────────────────────────────
+// What goes into the backup. "Everything" is on unless the person turns it
+// off; then each part can be picked, and the songs one by one.
+
+/** A song as the backup picker shows it. */
+export type PickSong = { id: string; title: string; artist: string; duration?: number };
+
+export type BackupOptions = {
+  songs: "all" | "some" | "none";
+  /** The picked songs, when songs is "some". */
+  songIds: string[];
+  /** The songs in the bin, audio and all. */
+  bin: boolean;
+  playlists: boolean;
+  covers: boolean;
+  /** Names, lyrics, likes, play counts, cut tracks. */
+  details: boolean;
+  settings: boolean;
+};
+
+const EVERYTHING: BackupOptions = {
+  songs: "all", songIds: [], bin: true, playlists: true, covers: true, details: true, settings: true,
+};
+
+// About 256 kbps, the same guess the old sheet made; 4 MB for a song of no
+// known length.
+const mbOf = (list: PickSong[]) =>
+  Math.max(0, Math.round(list.reduce((b, s) => b + (s.duration ? s.duration / 1000 * 32_000 : 4 * 1024 * 1024), 0) / 1048576));
+
+function Check({ on, T }: { on: boolean; T: T }) {
+  return (
+    <span style={{
+      width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: "grid", placeItems: "center",
+      // Violet is the selection colour, and this is a selection.
+      background: on ? T.violet : "transparent", border: `2px solid ${on ? T.violet : T.muted}`,
+    }}>
+      {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+    </span>
+  );
+}
+
+function OptionRow({ label, sub, on, onToggle, T }: { label: string; sub?: string; on: boolean; onToggle: () => void; T: T }) {
+  return (
+    <button onClick={onToggle} style={{
+      display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+      background: "transparent", border: "none", borderTop: `1px solid ${T.border}`,
+      padding: "12px 2px", cursor: "pointer", fontFamily: "inherit",
+    }}>
+      <Check on={on} T={T} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 15, color: T.text }}>{label}</span>
+        {sub && <span style={{ display: "block", fontSize: 12, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>{sub}</span>}
+      </span>
+    </button>
+  );
+}
+
+function SongPicker({ songs, picked, onChange, onBack, T }: {
+  songs: PickSong[]; picked: Set<string>; onChange: (next: Set<string>) => void; onBack: () => void; T: T;
+}) {
+  const all = picked.size === songs.length && songs.length > 0;
+  return (
+    <SheetOverlay T={T}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <button onClick={onBack} aria-label={t("Back")} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 4, display: "flex" }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, flex: 1 }}>{t("Choose songs")}</div>
+        <span style={{ fontSize: 13, color: T.muted }}>{t("{n} of {total}", { n: picked.size, total: songs.length })}</span>
+      </div>
+      <OptionRow T={T} label={t("All songs")} on={all}
+        onToggle={() => onChange(all ? new Set() : new Set(songs.map(s => s.id)))} />
+      {songs.map(s => (
+        <OptionRow key={s.id} T={T} label={s.title} sub={s.artist || undefined} on={picked.has(s.id)}
+          onToggle={() => { const next = new Set(picked); if (next.has(s.id)) next.delete(s.id); else next.add(s.id); onChange(next); }} />
+      ))}
+      <button onClick={onBack} style={{
+        position: "sticky", bottom: 0, display: "block", width: "100%", marginTop: 14,
+        background: T.accent, color: T.playBtnFg, border: "none", borderRadius: 14, padding: "15px",
+        fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+      }}>
+        {t("Done")}
+      </button>
+    </SheetOverlay>
+  );
+}
 
 function ExportInfoSheet({
-  songCount, estimatedMB, defaultName, onStart, onClose, T,
+  songs, binSongs, defaultName, onStart, onClose, T,
 }: {
-  songCount: number;
-  estimatedMB: number;
+  songs: PickSong[];
+  binSongs: PickSong[];
   defaultName: string;
-  onStart: (name: string) => void;
+  onStart: (name: string, options: BackupOptions) => void;
   onClose: () => void;
   T: T;
 }) {
   const [name, setName] = useState(defaultName);
+  const [everything, setEverything] = useState(true);
+  const [opts, setOpts] = useState<BackupOptions>(EVERYTHING);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(songs.map(s => s.id)));
+  const [picking, setPicking] = useState(false);
+
+  const o = everything ? EVERYTHING : opts;
+  const set = (patch: Partial<BackupOptions>) => setOpts(prev => ({ ...prev, ...patch }));
+  const chosen = o.songs === "all" ? songs : o.songs === "some" ? songs.filter(s => picked.has(s.id)) : [];
+  const files = chosen.length + (o.bin ? binSongs.length : 0);
+  const mb = mbOf(chosen) + (o.bin ? mbOf(binSongs) : 0);
+  const anything = files > 0 || o.playlists || o.covers || o.details || o.settings;
+
+  if (picking) {
+    return <SongPicker songs={songs} picked={picked} onChange={setPicked} onBack={() => setPicking(false)} T={T} />;
+  }
+
+  const seg = (id: BackupOptions["songs"], label: string) => (
+    <button key={id} onClick={() => set({ songs: id })} style={{
+      flex: 1, padding: "9px 0", borderRadius: 9, border: "none", cursor: "pointer",
+      fontFamily: "inherit", fontWeight: 700, fontSize: 13.5,
+      background: o.songs === id ? T.accent : "transparent", color: o.songs === id ? T.playBtnFg : T.muted,
+    }}>{label}</button>
+  );
 
   return (
     <SheetOverlay onClose={onClose} T={T}>
@@ -136,14 +248,11 @@ function ExportInfoSheet({
         <div style={{ fontSize: 18, fontWeight: "700", color: T.text }}>{t("Create backup")}</div>
       </div>
 
-      <div style={{
-        background: T.dim, borderRadius: 12, padding: "12px 14px",
-        marginBottom: 16, fontSize: 13, color: T.muted, lineHeight: 1.6,
-      }}>
-        {t("Your music and playlists will be saved to your Downloads folder. You can share this folder with friends or use it to restore on a new device.")}
+      <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.6, marginBottom: 14 }}>
+        {t("Saved to your Downloads folder. You can share it, or use it to restore on a new phone.")}
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, fontWeight: "600", color: T.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           {t("Backup name")}
         </div>
@@ -162,24 +271,67 @@ function ExportInfoSheet({
         />
       </div>
 
+      <button onClick={() => setEverything(v => !v)} style={{
+        display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+        background: T.dim, border: "none", borderRadius: 12, padding: "13px 14px",
+        cursor: "pointer", fontFamily: "inherit", marginBottom: everything ? 14 : 6,
+      }}>
+        <span style={{ flex: 1 }}>
+          <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: T.text }}>{t("Save everything")}</span>
+          <span style={{ display: "block", fontSize: 12, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>
+            {everything ? t("All songs, the bin, playlists, covers and settings.") : t("Pick what goes in below.")}
+          </span>
+        </span>
+        <Switch on={everything} T={T} />
+      </button>
+
+      {!everything && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, margin: "10px 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            {t("Songs")}
+          </div>
+          <div role="radiogroup" style={{ display: "flex", gap: 4, background: T.dim, borderRadius: 12, padding: 3 }}>
+            {seg("all", t("All"))}{seg("some", t("Choose"))}{seg("none", t("None"))}
+          </div>
+          {o.songs === "some" && (
+            <button onClick={() => setPicking(true)} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+              background: "transparent", border: `1px solid ${T.border}`, borderRadius: 12,
+              padding: "12px 14px", marginTop: 8, cursor: "pointer", fontFamily: "inherit", color: T.text, fontSize: 14.5,
+            }}>
+              <span>{t("Choose songs")}</span>
+              <span style={{ color: T.muted, fontSize: 13 }}>{t("{n} of {total}", { n: picked.size, total: songs.length })} ›</span>
+            </button>
+          )}
+          <div style={{ marginTop: 10 }}>
+            <OptionRow T={T} label={t("Songs in the bin")} sub={tn(binSongs.length, "{n} song", "{n} songs")} on={o.bin} onToggle={() => set({ bin: !o.bin })} />
+            <OptionRow T={T} label={t("Playlists")} on={o.playlists} onToggle={() => set({ playlists: !o.playlists })} />
+            <OptionRow T={T} label={t("Album covers")} sub={t("Covers you set on songs and playlists.")} on={o.covers} onToggle={() => set({ covers: !o.covers })} />
+            <OptionRow T={T} label={t("Likes and song details")} sub={t("Likes, lyrics, play counts, names you changed, cut tracks.")} on={o.details} onToggle={() => set({ details: !o.details })} />
+            <OptionRow T={T} label={t("Settings")} sub={t("Theme, size, language, audio effects and your look.")} on={o.settings} onToggle={() => set({ settings: !o.settings })} />
+          </div>
+        </div>
+      )}
+
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        padding: "10px 14px", background: T.dim, borderRadius: 10, marginBottom: 24,
+        padding: "10px 14px", background: T.dim, borderRadius: 10, marginBottom: 20,
       }}>
-        <span style={{ fontSize: 20 }}>🎵</span>
         <span style={{ fontSize: 14, color: T.text, fontWeight: "600" }}>
-          {songCount} song{songCount !== 1 ? "s" : ""}
+          {tn(files, "{n} audio file", "{n} audio files")}
         </span>
         <span style={{ color: T.border }}>·</span>
-        <span style={{ fontSize: 14, color: T.muted }}>~{estimatedMB} MB</span>
+        <span style={{ fontSize: 14, color: T.muted }}>~{mb} MB</span>
       </div>
 
       <button
-        onClick={() => onStart(name.trim() || defaultName)}
+        disabled={!anything}
+        onClick={() => onStart(name.trim() || defaultName, { ...o, songIds: o.songs === "some" ? [...picked] : [] })}
         style={{
           display: "block", width: "100%", background: T.accent, color: T.playBtnFg,
           border: "none", borderRadius: 14, padding: "16px", fontSize: 16,
-          fontWeight: "700", cursor: "pointer", fontFamily: "inherit",
+          fontWeight: "700", cursor: anything ? "pointer" : "default", fontFamily: "inherit",
+          opacity: anything ? 1 : 0.5,
         }}
       >
         {t("Start backup")}
@@ -571,6 +723,8 @@ function ImportErrorSheet({ message, onClose, T }: { message: string; onClose: (
 export function BackupSheet({
   state,
   onStartBackup,
+  songs,
+  binSongs,
   onCancelBackup,
   onShare,
   onDone,
@@ -585,8 +739,8 @@ export function BackupSheet({
     case "exportInfo":
       return (
         <ExportInfoSheet
-          songCount={state.songCount}
-          estimatedMB={state.estimatedMB}
+          songs={songs}
+          binSongs={binSongs}
           defaultName={defaultBackupName}
           onStart={onStartBackup}
           onClose={onClose}
