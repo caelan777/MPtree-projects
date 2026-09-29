@@ -89,9 +89,9 @@ type StoredPass = { from: number; until: number };
 // Google's test unit: always a test ad, never paid, safe to tap. Real ad units
 // must never be used for testing, or AdMob closes the account.
 const TEST_REWARDED = "ca-app-pub-3940256099942544/5224354917";
-// MPTree's own rewarded unit, from AdMob. Empty until that account exists, and
-// until then the Play build does not offer the day pass.
-const PLAY_REWARDED = "";
+// MPTree's own rewarded unit ("Dagpas" in AdMob). Real ads, real money: only
+// the Play build uses it, and nobody on the team may tap its ads.
+const PLAY_REWARDED = "ca-app-pub-3909703327280410/3472642383";
 const AD_UNIT = PRO_MODE === "free" ? TEST_REWARDED : PRO_MODE === "play" ? PLAY_REWARDED : "";
 export const PASS_OFFERED = AD_UNIT !== "";
 

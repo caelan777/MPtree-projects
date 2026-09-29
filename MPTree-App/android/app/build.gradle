@@ -24,10 +24,10 @@ android {
         versionCode 19
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // The AdMob app id, for the Pro day pass. Until MPTree has its own it is
-        // Google's sample id, which only ever serves test ads. Set admobAppId
-        // in gradle.properties once the AdMob account exists.
-        manifestPlaceholders = [admobAppId: (project.findProperty("admobAppId") ?: "ca-app-pub-3940256099942544~3347511713")]
+        // MPTree's AdMob app id, for the Pro day pass. Not a secret: it ships
+        // inside every APK. Every build carries it, the test build too; which
+        // ads show is decided by the ad unit in src/pro.ts.
+        manifestPlaceholders = [admobAppId: "ca-app-pub-3909703327280410~7778718905"]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
