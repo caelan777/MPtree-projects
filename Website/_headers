@@ -32,7 +32,3 @@
 /version.json
   Cache-Control: public, max-age=0, must-revalidate
   Access-Control-Allow-Origin: *
-
-# AdMob reads this to check who may sell ads in MPTree. Keep it fresh.
-/app-ads.txt
-  Cache-Control: public, max-age=0, must-revalidate
