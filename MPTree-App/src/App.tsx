@@ -35,7 +35,7 @@ import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview } from "./look";
-import { usePro, loadPro } from "./pro";
+import { usePro, loadPro, watchAdForPass, passMessage } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
@@ -1291,12 +1291,14 @@ export default function App() {
     } catch (e) { showError(t("Player error: ") + e); }
   };
 
-  /** The day pass ad has sound of its own: the music waits, then goes on. */
-  const pauseForAd = async () => {
-    if (!isPlayingRef.current) return () => {};
-    await AudioPlayer.pause().catch(() => {});
-    setPlaying(false);
-    return () => { AudioPlayer.resume().then(() => setPlaying(true)).catch(() => {}); };
+  /** The day pass: one ad for 24 hours of Pro. The ad has sound of its own,
+   *  so the music waits and then goes on. */
+  const watchAd = async () => {
+    const was = isPlayingRef.current;
+    if (was) { await AudioPlayer.pause().catch(() => {}); setPlaying(false); }
+    const r = await watchAdForPass();
+    if (was) AudioPlayer.resume().then(() => setPlaying(true)).catch(() => {});
+    showToast(passMessage(r));
   };
 
   const seekTo = async (ms: number) => {
@@ -3867,6 +3869,7 @@ export default function App() {
             pro={pro}
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
+            onWatchAd={watchAd}
             onOpenLook={() => setLookOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
@@ -3904,6 +3907,7 @@ export default function App() {
             theme={theme} onSetTheme={setTheme}
             topGap={cardBottom + 10}
             onNeedPro={() => setProOpen(true)}
+            onWatchAd={watchAd}
             onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
@@ -3925,7 +3929,7 @@ export default function App() {
             onClose={() => setProOpen(false)}
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
-            onBeforeAd={pauseForAd}
+            onWatchAd={watchAd}
             T={TH} />
         )}
 

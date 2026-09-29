@@ -136,6 +136,15 @@ export function passTimeLeft(until: number): string {
   return ms >= 3_600_000 ? t("{n} h", { n: Math.ceil(ms / 3_600_000) }) : t("{n} min", { n: Math.max(1, Math.ceil(ms / 60_000)) });
 }
 
+/** What to tell someone after the ad. */
+export function passMessage(r: PassResult): string {
+  return r === "granted" ? t("Pro is on for the next 24 hours")
+    : r === "closed" ? t("The day pass needs the whole ad")
+    : r === "offline" ? t("The ad needs an internet connection")
+    : r === "nofill" ? t("No ad right now. Try again later.")
+    : t("The ad could not load. Try again later.");
+}
+
 export type PassResult = "granted" | "closed" | "consent" | "nofill" | "offline" | "error";
 
 /** Shows the ad; a watched one starts 24 hours of Pro. */

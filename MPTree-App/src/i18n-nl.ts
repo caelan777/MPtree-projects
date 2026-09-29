@@ -365,6 +365,9 @@ export const NL: Record<string, string> = {
   "A few things to set up before you start listening.": "Nog even een paar dingen instellen, dan kun je luisteren.",
 
   // ── MPTree Pro ──
+  "Watch 1 ad, get Pro free for a day": "Kijk 1 advertentie, krijg een dag gratis Pro",
+  "Get Pro free for a day": "Een dag gratis Pro",
+  "Watch one ad. Tap here.": "Kijk een advertentie. Tik hier.",
   "More": "Meer",
   "Pro is on for the next 24 hours": "Pro staat 24 uur aan",
   "The day pass needs the whole ad": "Voor de dagpas moet je de hele advertentie kijken",
@@ -463,6 +466,5 @@ export const NL: Record<string, string> = {
   "Likes and covers": "Likes en hoezen",
   "Dark": "Donker",
   "Colour": "Kleur",
-  "Preview. Keep it with Pro.": "Voorbeeld. Houden kan met Pro.",
   "AMOLED and graphite for dark mode. Paper, stone, pink and sage for light.": "AMOLED en grafiet voor donker. Papier, steen, roze en salie voor licht.",
 };

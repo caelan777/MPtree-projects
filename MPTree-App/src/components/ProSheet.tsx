@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { makeSH, type T } from "../themes";
+import { makeSH, gold, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
-  usePro, useOwnsPro, useDayPass, buyPro, restorePro, proPrice, lockProForTesting, watchAdForPass,
+  usePro, useOwnsPro, useDayPass, buyPro, restorePro, proPrice, lockProForTesting,
   PRO_MODE, PASS_OFFERED, passTimeLeft,
 } from "../pro";
 
@@ -28,13 +28,14 @@ type ProSheetProps = {
   onToast: (msg: string) => void;
   /** Opens a store link. The sideloaded build uses it to point at Play. */
   onOpenStore: () => void;
-  /** Pauses the music for the ad; the function it returns plays it again. */
-  onBeforeAd: () => Promise<() => void>;
+  /** Shows the day pass ad; resolves once it is over. */
+  onWatchAd: () => Promise<void>;
   T: T;
 };
 
-export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSheetProps) {
+export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProSheetProps) {
   const sh = makeSH(T);
+  const G = gold(T);
   const pro = usePro();
   const owns = useOwnsPro();
   const passUntil = useDayPass();
@@ -65,15 +66,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSh
 
   const watchAd = async () => {
     setBusy("ad");
-    const resume = await onBeforeAd();
-    const r = await watchAdForPass();
-    resume();
+    await onWatchAd();
     setBusy(null);
-    if (r === "granted") onToast(t("Pro is on for the next 24 hours"));
-    else if (r === "closed") onToast(t("The day pass needs the whole ad"));
-    else if (r === "offline") onToast(t("The ad needs an internet connection"));
-    else if (r === "nofill") onToast(t("No ad right now. Try again later."));
-    else onToast(t("The ad could not load. Try again later."));
   };
 
   const features: { icon: ReactNode; title: string; body: string }[] = [
@@ -88,7 +82,10 @@ export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSh
 
   return (
     <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+      <div style={{
+        ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column",
+        background: `radial-gradient(120% 45% at 50% 0%, ${G.glow}, transparent 70%), ${T.sheetBg}`,
+      }} onClick={e => e.stopPropagation()}>
         <div style={sh.handle} />
         <div style={{ ...sh.hdr, paddingBottom: 4 }}>
           <span />
@@ -100,7 +97,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSh
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Logo size={40} color={T.text} />
               <span style={{ fontSize: 26, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>
-                MPTree <span style={{ fontWeight: 800, background: T.accent, color: T.playBtnFg, borderRadius: 7, padding: "1px 7px", fontSize: 20, verticalAlign: "3px" }}>Pro</span>
+                MPTree <span style={{ fontWeight: 800, background: G.fill, color: G.ink, borderRadius: 7, padding: "1px 7px", fontSize: 20, verticalAlign: "3px" }}>Pro</span>
               </span>
             </div>
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
@@ -113,7 +110,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSh
           <div style={{ marginTop: 18 }}>
             {features.map(f => (
               <div key={f.title} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "11px 2px", borderTop: `1px solid ${T.dim}` }}>
-                <span style={{ display: "flex", color: T.text, marginTop: 1, flexShrink: 0 }}>{f.icon}</span>
+                <span style={{ display: "flex", color: G.text, marginTop: 1, flexShrink: 0 }}>{f.icon}</span>
                 <span>
                   <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: T.text }}>{f.title}</span>
                   <span style={{ display: "block", fontSize: 13, color: T.textSub, lineHeight: 1.45, marginTop: 2 }}>{f.body}</span>
@@ -147,7 +144,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSh
           ) : (
             <>
               <button onClick={buy} disabled={busy !== null}
-                style={{ ...sh.saveBtn, opacity: busy ? 0.6 : 1 }}>
+                style={{ ...sh.saveBtn, background: G.fill, color: G.ink, opacity: busy ? 0.6 : 1 }}>
                 {PRO_MODE === "free"
                   ? t("Unlock Pro for free (test build)")
                   : busy === "buy" ? t("Opening Google Play…") : t("Get Pro for {price}", { price: priceLabel })}

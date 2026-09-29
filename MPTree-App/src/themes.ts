@@ -75,12 +75,14 @@ const LIGHT_SHADES: Record<LightShade, Partial<T>> = {
     chipBg:"#e0e6ed", chipBorder:"#c6cfd9", chipColor:"#31353a",
     playBtnBg:"#181b1d", playBtnFg:"#eff3f8", sliderBg:"#bdc7d2",
   },
+  // Pastel pink, the one exception: the same lightness as paper but about
+  // two and a half times the tint on the light surfaces, asked for by name.
   pink: {
-    accent:"#1f181a", surface:"#f5e3e8", card:"#f2dee3", bg:"#fbeff2",
-    muted:"#907b81", dim:"#ebd5db", border:"#e1c6cd", text:"#1f181a", textSub:"#705d63",
-    sheetBg:"#fff4f7", playerBg:"#f8e9ed", inputBg:"#edd9de",
-    chipBg:"#f3e0e5", chipBorder:"#e1c6cd", chipColor:"#3e3134",
-    playBtnBg:"#1f181a", playBtnFg:"#fbeff2", sliderBg:"#dabec5",
+    accent:"#20181b", surface:"#ffdcea", card:"#ffd5e6", bg:"#ffeaf4",
+    muted:"#a27183", dim:"#fdccde", border:"#f7bbd1", text:"#20181b", textSub:"#735c64",
+    sheetBg:"#fff0f8", playerBg:"#ffe3ef", inputBg:"#fed0e1",
+    chipBg:"#ffd8e7", chipBorder:"#f7bbd1", chipColor:"#403035",
+    playBtnBg:"#20181b", playBtnFg:"#ffeaf4", sliderBg:"#f1b1c9",
   },
   sage: {
     accent:"#181c17", surface:"#e2ece0", card:"#dce8d9", bg:"#eef5ec",
@@ -112,6 +114,31 @@ export function cardPalette(shade: CardShade, app: T): T {
   return ground === "dark"
     ? { ...DARK,  ...DARK_SHADES[name as DarkShade] }
     : { ...LIGHT, ...LIGHT_SHADES[name as LightShade] };
+}
+
+// ─── GOLD (Pro) ──────────────────────────────────────────────────────────────
+// The one colour Pro wears, so it reads as Pro wherever it shows. A brighter
+// gold on dark grounds and a deeper one on light, so it holds its contrast.
+
+const isDark = (T: T) => {
+  const n = parseInt(T.bg.slice(1), 16);
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 < 128;
+};
+
+export function gold(T: T) {
+  const dark = isDark(T);
+  return {
+    /** For a badge or a button: gold with dark text on it. */
+    fill: "linear-gradient(135deg, #f7e08f 0%, #e2b851 55%, #c4922e 100%)",
+    ink: "#2a1d00",
+    /** Gold as a text or icon colour on this ground. */
+    text: dark ? "#e8c35a" : "#9a6d10",
+    /** For gold text drawn with the gradient (background-clip: text). */
+    textFill: dark
+      ? "linear-gradient(135deg, #f7e08f 0%, #d9a93e 100%)"
+      : "linear-gradient(135deg, #c28f1c 0%, #8a6010 100%)",
+    glow: dark ? "rgba(226,184,81,0.16)" : "rgba(196,146,46,0.14)",
+  };
 }
 
 /** For the swatches in the Personalise sheet. */
