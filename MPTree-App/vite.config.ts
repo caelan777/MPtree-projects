@@ -8,7 +8,20 @@ import pkg from './package.json' with { type: 'json' }
 // Website/assets/versions.js and Website/version.json in step for every release.
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // dist/channel.txt: which channel this build is for. cap sync copies it
+    // into the Android project, where build.gradle reads it to decide whether
+    // the ad SDK goes in. Only Play and the Pro test build have the day pass
+    // ad; the website APK must carry no ad code at all.
+    {
+      name: 'mptree-channel',
+      generateBundle() {
+        const channel = mode === 'test' ? 'test' : mode === 'play' || mode === 'demo' ? mode : 'web'
+        this.emitFile({ type: 'asset', fileName: 'channel.txt', source: channel + '\n' })
+      },
+    },
+  ],
   define: {
     // The test build says so in Settings, so a screenshot of it is never
     // mistaken for a release.

@@ -4,6 +4,16 @@ apply plugin: 'com.android.application'
 // gitignored and must never be committed. When that file is absent (a fresh
 // clone, or CI without secrets) the release build simply falls back to unsigned
 // output rather than failing, so the project still builds for anyone.
+// The ad SDK (the :ads module, for the Pro day pass) goes into the Play build
+// and the Pro test build only. The website APK carries no ad code at all. Which
+// one this is comes from the web build that cap sync copied in (vite.config.ts
+// writes channel.txt), so the usual commands do the right thing on their own.
+// -Pads=true or -Pads=false overrides it.
+def channelFile = file("src/main/assets/public/channel.txt")
+def channel = channelFile.exists() ? channelFile.text.trim() : "web"
+def withAds = project.hasProperty("ads") ? project.property("ads").toString() == "true" : channel in ["play", "test"]
+logger.lifecycle("MPTree: web build for '${channel}', ${withAds ? 'with' : 'without'} the ad SDK")
+
 def keystorePropsFile = rootProject.file("keystore.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
@@ -24,10 +34,6 @@ android {
         versionCode 19
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // MPTree's AdMob app id, for the Pro day pass. Not a secret: it ships
-        // inside every APK. Every build carries it, the test build too; which
-        // ads show is decided by the ad unit in src/pro.ts.
-        manifestPlaceholders = [admobAppId: "ca-app-pub-3909703327280410~7778718905"]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -74,10 +80,8 @@ dependencies {
     // Google Play Billing, for MPTree Pro (a one-time purchase). Talks to the
     // Play Store app on the phone; see BillingPlugin.java.
     implementation "com.android.billingclient:billing:8.0.0"
-    // Google Mobile Ads and Google's consent form, for the one rewarded ad
-    // behind the Pro day pass; see AdsPlugin.java.
-    implementation "com.google.android.gms:play-services-ads:25.5.0"
-    implementation "com.google.android.ump:user-messaging-platform:4.0.0"
+    // The Pro day pass ad, Play and test builds only (see withAds above).
+    if (withAds) implementation project(':ads')
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

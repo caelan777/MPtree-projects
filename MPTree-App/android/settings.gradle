@@ -1,4 +1,6 @@
 include ':app'
+// The Pro day pass ad. Only Play and test builds use it; see app/build.gradle.
+include ':ads'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
