@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Logo } from "./Logo";
 import { t } from "../i18n";
-import { useLook, saveLook, type VinylSkin } from "../look";
+import { useLook, useVinyl, saveLook, type VinylSkin } from "../look";
 
 // ─── SPINNING DISC ───────────────────────────────────────────────────────────
 // The record for the expanded player: the real vinyl.webp turning on its
@@ -82,10 +82,11 @@ export const SpinningDisc = memo(function SpinningDisc({
   size, spinning = false, title = "", customPhoto, skin: forced, tappable = false, onNoCover,
 }: SpinningDiscProps) {
   const look = useLook();
+  const vinyl = useVinyl();
   // The picture disc is not a record you pick but a tap on the record, so it
   // is only ever shown for real, never in a preview, and only with a cover.
   const picture = !forced && look.photoDisc && !!customPhoto;
-  const skin: VinylSkin | "picture" = picture ? "picture" : (forced ?? look.vinyl);
+  const skin: VinylSkin | "picture" = picture ? "picture" : (forced ?? vinyl);
 
   const onTap = tappable ? () => {
     if (!customPhoto) { onNoCover?.(); return; }

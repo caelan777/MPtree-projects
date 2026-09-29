@@ -7,8 +7,9 @@ import { Preferences } from "@capacitor/preferences";
 // than a row of useStates in App.tsx, because the record lives three components
 // down (PlayerExpandSheet, SpinningDisc) and the loading screen reads it too.
 //
-// Dark mode and light mode are personalised separately: each has its own shade
-// and its own header card, so switching modes switches the whole look.
+// Dark mode and light mode are personalised separately: each has its own shade,
+// its own header card and its own record, so switching modes switches the
+// whole look. The app icon is one for both.
 
 export type VinylSkin  = "classic" | "white" | "smoke" | "marble";
 export type DarkShade  = "classic" | "amoled" | "graphite";
@@ -19,7 +20,8 @@ export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
 
 export type Look = {
-  vinyl: VinylSkin;
+  vinylDark: VinylSkin;
+  vinylLight: VinylSkin;
   dark: DarkShade;
   light: LightShade;
   cardDark: CardShade;
@@ -31,7 +33,7 @@ export type Look = {
 };
 
 export const DEFAULT_LOOK: Look = {
-  vinyl: "classic", dark: "classic", light: "classic",
+  vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
 };
 
@@ -55,6 +57,21 @@ export function useLook(): Look {
 }
 
 export function getLook(): Look { return preview ?? look; }
+
+// Which mode the app is in, so the record can follow it. App.tsx keeps it set.
+let mode: "dark" | "light" = "dark";
+const modeSnapshot = () => mode;
+export function setLookMode(next: "dark" | "light"): void {
+  if (next === mode) return;
+  mode = next;
+  emit();
+}
+/** The record for the mode the app is in. */
+export function useVinyl(): VinylSkin {
+  const l = useLook();
+  const m = useSyncExternalStore(subscribe, modeSnapshot, modeSnapshot);
+  return m === "dark" ? l.vinylDark : l.vinylLight;
+}
 export function isPreviewing(): boolean { return preview !== null; }
 
 export async function loadLook(): Promise<Look> {
@@ -63,9 +80,14 @@ export async function loadLook(): Promise<Look> {
     if (value) {
       const stored = JSON.parse(value);
       look = { ...DEFAULT_LOOK, ...stored };
+      // Test builds before 10 had one record for both modes.
+      if (typeof stored.vinyl === "string" && !stored.vinylDark) look = { ...look, vinylDark: stored.vinyl, vinylLight: stored.vinyl };
       // Picture disc used to be one of the records; it is the tap now.
-      if ((look.vinyl as string) === "picture") look = { ...look, vinyl: "classic", photoDisc: true };
-      if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look.vinyl)) look = { ...look, vinyl: "classic" };
+      if ((stored.vinyl as string) === "picture") look = { ...look, photoDisc: true };
+      for (const k of ["vinylDark", "vinylLight"] as const) {
+        if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k])) look = { ...look, [k]: "classic" };
+      }
+      delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode.
       if (!(["classic", "amoled", "graphite"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
       for (const k of ["cardDark", "cardLight"] as const) {

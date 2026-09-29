@@ -13,10 +13,11 @@ import {
 import { System } from "../plugins";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
-// Colour, header card, record and app icon. The small switch next to Colour
-// picks which mode the colour is for; the rest is one choice for both. The
-// sheet stops short of the header card and does not dim it, so a change to the
-// card shows on the real one.
+// Colour, header card and record belong to a mode: they sit in one frame with
+// the Dark/Light switch on its top edge, and each mode keeps its own three. The
+// app icon, below the frame, is one for both. The sheet stops short of the
+// header card and does not dim it, so a change to the card shows on the real
+// one.
 //
 // Without Pro a locked option can still be tapped: it shows everywhere as a
 // preview and goes back when the sheet closes. Only the app icon cannot be
@@ -120,7 +121,7 @@ function Tile({ selected, onClick, label, children, T, locked }: {
   );
 }
 
-function Row({ title, aside, children, T }: { title: string; aside?: ReactNode; children: ReactNode; T: T }) {
+function Row({ title, aside, children, T, framed }: { title: string; aside?: ReactNode; children: ReactNode; T: T; framed?: boolean }) {
   const scroller = useRef<HTMLDivElement>(null);
   // Whether there is more to the right. A cut-off tile alone is easy to miss,
   // so the edge fades and carries an arrow until the end is reached.
@@ -137,7 +138,7 @@ function Row({ title, aside, children, T }: { title: string; aside?: ReactNode; 
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", marginBottom: 7 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: framed ? "0 14px" : "0 20px", marginBottom: 7 }}>
         <span style={{ ...makeSH(T).lbl, margin: 0 }}>{title}</span>
         {aside}
       </div>
@@ -145,7 +146,7 @@ function Row({ title, aside, children, T }: { title: string; aside?: ReactNode; 
         {/* Scrolls sideways on a narrow phone rather than wrapping into a grid
             that pushes the last row off the sheet. */}
         <div ref={scroller} onScroll={measure}
-          style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 16px 4px", scrollbarWidth: "none" }}>
+          style={{ display: "flex", gap: 8, overflowX: "auto", padding: framed ? "2px 10px 4px" : "2px 16px 4px", scrollbarWidth: "none" }}>
           {children}
         </div>
         <div aria-hidden style={{
@@ -263,13 +264,14 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
     { id: "vinyl", label: t("Record") }, { id: "stamp", label: t("Stamp") },
   ];
 
-  // The mode switch is for the colour only, so the card is one choice for
-  // both modes (Default still follows whichever mode is on).
+  // Card and record, like the colour, are the ones of the mode that is on.
   const card = dark ? look.cardDark : look.cardLight;
-  const setCard = (c: CardShade) => pick(c === FREE.card, { cardDark: c, cardLight: c });
+  const setCard = (c: CardShade) => pick(c === FREE.card, dark ? { cardDark: c } : { cardLight: c });
+  const vinyl = dark ? look.vinylDark : look.vinylLight;
+  const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, dark ? { vinylDark: v } : { vinylLight: v });
 
   const modeSwitch = (
-    <div role="radiogroup" aria-label={t("Mode")} style={{ display: "flex", gap: 2, background: T.surface, borderRadius: 15, padding: 2, border: `1px solid ${T.border}` }}>
+    <div role="radiogroup" aria-label={t("Mode")} style={{ display: "flex", gap: 2, background: T.surface, borderRadius: 17, padding: 2, border: `1px solid ${T.border}` }}>
       {(["dark", "light"] as Theme[]).map(m => (
         <button
           key={m}
@@ -278,14 +280,16 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
           aria-label={m === "dark" ? t("Dark") : t("Light")}
           onClick={() => onSetTheme(m)}
           style={{
-            width: 34, height: 26, display: "grid", placeItems: "center",
-            borderRadius: 13, border: "none", cursor: "pointer", padding: 0,
+            height: 30, display: "flex", alignItems: "center", gap: 6, padding: "0 13px",
+            borderRadius: 15, border: "none", cursor: "pointer", fontFamily: "inherit",
+            fontSize: 13, fontWeight: 700,
             background: theme === m ? T.accent : "transparent",
             color: theme === m ? T.playBtnFg : T.muted,
             transition: "background 0.2s, color 0.2s",
           }}
         >
-          <span style={{ display: "grid", transform: "scale(0.78)" }}>{m === "dark" ? <IC.Moon /> : <IC.Sun />}</span>
+          <span style={{ display: "grid", transform: "scale(0.78)", margin: "0 -2px" }}>{m === "dark" ? <IC.Moon /> : <IC.Sun />}</span>
+          {m === "dark" ? t("Dark") : t("Light")}
         </button>
       ))}
     </div>
@@ -309,7 +313,11 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
-          <Row T={T} title={t("Colour")} aside={modeSwitch}>
+          <div style={{ position: "relative", margin: "24px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, padding: "10px 0 12px" }}>
+          <div style={{ position: "absolute", top: -18, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
+            <div style={{ background: T.sheetBg, padding: "0 8px" }}>{modeSwitch}</div>
+          </div>
+          <Row T={T} framed title={t("Colour")}>
             {dark
               ? DARKS.map(d => (
                 <Tile key={d.id} T={T} label={d.label} selected={look.dark === d.id} locked={!pro && d.id !== FREE.dark}
@@ -325,7 +333,7 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
               ))}
           </Row>
 
-          <Row T={T} title={t("Header card")}>
+          <Row T={T} framed title={t("Header card")}>
             {/* Default follows the app's colour; every other card is its own. */}
             <Tile T={T} label={t("Default")} selected={card === "default"} onClick={() => setCard("default")}>
               <Card p={T} />
@@ -337,16 +345,17 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
             ))}
           </Row>
 
-          <Row T={T} title={t("Record")}>
+          <Row T={T} framed title={t("Record")}>
             {VINYLS.map(v => (
-              <Tile key={v.id} T={T} label={v.label} selected={look.vinyl === v.id} locked={!pro && v.id !== FREE.vinyl}
-                onClick={() => pick(v.id === FREE.vinyl, { vinyl: v.id })}>
+              <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && v.id !== FREE.vinyl}
+                onClick={() => setVinyl(v.id)}>
                 <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
                   <SpinningDisc size={60} skin={v.id} />
                 </div>
               </Tile>
             ))}
           </Row>
+          </div>
 
           <Row T={T} title={t("App icon")}>
             {ICONS.map(i => (

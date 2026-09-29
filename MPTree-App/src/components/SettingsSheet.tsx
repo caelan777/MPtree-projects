@@ -33,7 +33,6 @@ const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8
 const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
 const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
 const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
-const CupIcon      = () => <Svg><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></Svg>;
 
 // Every row in this sheet is the same shape: an icon and a label on the left,
 // something on the right, the whole row one button. Declared out here, not
@@ -102,9 +101,6 @@ type SettingsSheetProps = {
   /** Opens the pre-import info sheet */
   onImportOpen: () => void;
   /** Opens the support/tip page in the browser. */
-  /** A tip jar outside Play. Left out of the Play build: Play does not allow
-   *  payments that go around its own billing. */
-  onSupport?: () => void;
   // ── Sleep timer ──
   /** Absolute epoch-ms deadline for a fixed-clock sleep timer, or null. */
   sleepUntil: number | null;
@@ -138,7 +134,7 @@ export function SettingsSheet({
   theme, hidden, binCount,
   pro, onOpenPro, onOpenLook, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
-  onExport, onImportOpen, onSupport,
+  onExport, onImportOpen,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, duckOthers, onSetMix,
@@ -446,16 +442,6 @@ export function SettingsSheet({
           <Row T={T} onClick={onPrivacy} icon={<ShieldIcon />} label={t("Privacy policy")} />
           <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
         </Section>
-
-        {onSupport && (
-          <div style={{ padding: "0 20px" }}>
-            <div style={sh.lbl}>{t("Support")}</div>
-            <Row T={T} first onClick={onSupport} icon={<CupIcon />} label={t("Buy me a coffee")} />
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>
-              {t("MPTree is free. If it is useful to you, you can chip in.")}
-            </div>
-          </div>
-        )}
 
         {/* Version comes from package.json via Vite, so it always matches the
             build rather than whatever was last typed here. */}

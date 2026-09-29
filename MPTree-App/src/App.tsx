@@ -34,7 +34,7 @@ import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { findSuspects } from "./cleanup";
-import { useLook, loadLook, endPreview } from "./look";
+import { useLook, loadLook, endPreview, setLookMode } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -640,6 +640,7 @@ export default function App() {
   useEffect(() => { eqEnabledRef.current    = eqEnabled;    }, [eqEnabled]);
   useEffect(() => { eqBandLevelsRef.current = eqBandLevels; }, [eqBandLevels]);
   useEffect(() => { themeRef.current        = theme;        }, [theme]);
+  useEffect(() => { setLookMode(theme); }, [theme]);
 
   // ── Pro ───────────────────────────────────────────────────────────────────
   // What was bought and what was picked live in their own small stores (pro.ts,
@@ -3873,7 +3874,6 @@ export default function App() {
             }}
             onExport={handleExportOpen}
             onImportOpen={handleImportOpen}
-            onSupport={__DISTRIBUTION__ === "play" ? undefined : () => { Browser.open({ url: "https://paypal.me/MPTreeApp" }).catch(() => {}); }}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
