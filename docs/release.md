@@ -98,9 +98,9 @@ Two values must be kept in step, both in `android/app/build.gradle`:
   Android refuses to install an update whose `versionCode` is not higher than the installed
   one. This is the most common release mistake.
 
-Current: `versionName "1.0.0"`: `versionCode 17` on Play, `18` on the website. The
-gradle file holds whichever was built last (18), so the next release, on either channel,
-starts at 19.
+Current: `versionName "1.1.0"`: `versionCode 21` on Play, `22` on the website (19 and 20
+were the MPTree Pro test builds). The gradle file holds whichever was built last (22), so
+the next release, on either channel, starts at 23.
 
 ## Publishing
 

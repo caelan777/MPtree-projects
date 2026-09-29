@@ -20,9 +20,8 @@ android {
         // Keep versionName in step with package.json. versionCode must increase
         // by at least 1 for every release you hand out, or Android will refuse
         // to install the update over an existing copy.
-        // 19 and 20 are the MPTree Pro test builds on mp-tree.net/test.html, so
-        // the Play release of 1.1.0 needs 21 or more.
-        versionCode 20
+        // 1.1.0: 21 on Play, 22 on the website (19 and 20 were the Pro test builds).
+        versionCode 22
         versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
