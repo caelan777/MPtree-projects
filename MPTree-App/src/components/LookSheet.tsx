@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { makeSH, cardPalette, gold, SHADE_PREVIEW, type T } from "../themes";
+import { makeSH, cardPalette, SHADE_PREVIEW, type T } from "../themes";
+import { GoldPro } from "./GoldPro";
 import type { Theme } from "../types";
 import { t } from "../i18n";
 import { IC } from "./Icons";
@@ -197,7 +198,6 @@ function squareIcon(file: File): Promise<string> {
 
 export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onWatchAd, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
-  const G = gold(T);
   const [adBusy, setAdBusy] = useState(false);
   const watchAd = async () => { setAdBusy(true); await onWatchAd(); setAdBusy(false); };
   const pro = usePro();
@@ -377,12 +377,12 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onWatchAd, onT
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
             {PASS_OFFERED ? (
               <button onClick={watchAd} disabled={adBusy}
-                style={{ ...sh.saveBtn, background: G.fill, color: G.ink, opacity: adBusy ? 0.7 : 1 }}>
-                {adBusy ? t("Loading the ad…") : t("Watch 1 ad, get Pro free for a day")}
+                style={{ ...sh.saveBtn, opacity: adBusy ? 0.7 : 1 }}>
+                {adBusy ? t("Loading the ad…") : <GoldPro T={T} on={T.accent} text={t("Watch 1 ad, get Pro free for a day")} />}
               </button>
             ) : (
-              <button onClick={onNeedPro} style={{ ...sh.saveBtn, background: G.fill, color: G.ink }}>
-                {t("Get Pro")}
+              <button onClick={onNeedPro} style={sh.saveBtn}>
+                <GoldPro T={T} on={T.accent} text={t("Get Pro")} />
               </button>
             )}
           </div>

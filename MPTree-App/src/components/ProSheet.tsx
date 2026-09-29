@@ -119,9 +119,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onWatchAd, T }: ProShe
             ))}
           </div>
 
-          <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginTop: 6 }}>
-            {t("Everything that is free now stays free.")}
-          </div>
         </div>
 
         <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>

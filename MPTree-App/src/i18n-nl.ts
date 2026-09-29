@@ -398,7 +398,6 @@ export const NL: Record<string, string> = {
   "Finds voice notes, WhatsApp audio and clips under a minute, and bins them in one go.": "Vindt spraakberichten, WhatsApp-audio en fragmenten onder een minuut, en gooit ze in een keer in de prullenbak.",
   "You have Pro. Thank you for supporting MPTree.": "Je hebt Pro. Bedankt dat je MPTree steunt.",
   "Pay once, keep it forever. No subscription.": "Een keer betalen, voor altijd houden. Geen abonnement.",
-  "Everything that is free now stays free.": "Alles wat nu gratis is, blijft gratis.",
   "Pro locked again": "Pro staat weer op slot",
   "Lock Pro again (test build)": "Pro weer op slot (testversie)",
   "Pro is sold through Google Play. This copy of MPTree came from the website, so it cannot buy it.": "Pro koop je via Google Play. Deze MPTree komt van de website, dus hier kan het niet.",

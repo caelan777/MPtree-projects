@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { makeSH, gold, type T } from "../themes";
+import { GoldPro } from "./GoldPro";
 import { Preferences } from "@capacitor/preferences";
 import type { Theme } from "../types";
 import { IC } from "./Icons";
@@ -65,23 +66,12 @@ function Row({ icon, label, sub, right, onClick, first, T }: {
 }
 
 function ProTag({ T }: { T: T }) {
-  const G = gold(T);
+  // The tag as it was; only the letters are gold.
+  const G = gold({ ...T, bg: T.accent });
   return (
-    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: G.ink, background: G.fill, borderRadius: 5, padding: "2px 6px" }}>
+    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: G.text, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
       PRO
     </span>
-  );
-}
-
-/** The word Pro in gold, wherever it falls in the sentence. */
-function GoldPro({ text, T }: { text: string; T: T }) {
-  const G = gold(T);
-  return (
-    <>
-      {text.split(/\b(Pro)\b/).map((part, i) => part === "Pro"
-        ? <span key={i} style={{ backgroundImage: G.textFill, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: G.text }}>Pro</span>
-        : part)}
-    </>
   );
 }
 
@@ -90,7 +80,6 @@ const HINT_KEY = "mptree_pass_hint";
 /** Floats just above the Settings sheet: Pro free for a day, for one ad.
  *  The X puts it away for good. */
 function PassHint({ T, onWatch, onClose }: { T: T; onWatch: () => Promise<void>; onClose: () => void }) {
-  const G = gold(T);
   const [busy, setBusy] = useState(false);
   const el = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -107,7 +96,7 @@ function PassHint({ T, onWatch, onClose }: { T: T; onWatch: () => Promise<void>;
       background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 16,
       boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     }}>
-      <span style={{ width: 36, height: 36, borderRadius: 18, background: G.fill, color: G.ink, display: "grid", placeItems: "center", flexShrink: 0 }}>
+      <span style={{ width: 36, height: 36, borderRadius: 18, background: T.accent, color: T.playBtnFg, display: "grid", placeItems: "center", flexShrink: 0 }}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>
       </span>
       <button onClick={watch} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: T.text }}>
@@ -201,7 +190,6 @@ export function SettingsSheet({
 }: SettingsSheetProps) {
   const sh = makeSH(T);
   const passUntil = useDayPass();
-  const G = gold(T);
   // null until read, so the hint does not flash for someone who closed it.
   const [hintClosed, setHintClosed] = useState<boolean | null>(null);
   useEffect(() => {
@@ -318,14 +306,14 @@ export function SettingsSheet({
             onClick={onOpenPro}
             style={{
               display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
-              background: `radial-gradient(140% 120% at 0% 0%, ${G.glow}, transparent 60%), ${T.surface}`,
-              color: T.text, border: `1px solid ${G.text}66`, borderRadius: 14, padding: pro ? "13px 16px" : "15px 16px",
+              background: pro ? T.dim : T.accent, color: pro ? T.text : T.playBtnFg,
+              border: "none", borderRadius: 14, padding: pro ? "13px 16px" : "15px 16px",
               cursor: "pointer", fontFamily: "inherit",
             }}
           >
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
-                <GoldPro T={T} text={pro ? t("MPTree Pro is on") : t("Get MPTree Pro")} />
+                <GoldPro T={T} on={pro ? T.dim : T.accent} text={pro ? t("MPTree Pro is on") : t("Get MPTree Pro")} />
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {passUntil ? t("Day pass, {time} left.", { time: passTimeLeft(passUntil) })
