@@ -1,11 +1,11 @@
 {
   "_comment": "Read by the app (see MPTree-App/src/updateCheck.ts) to tell people on an older build that a newer one exists. Keep it in step with the top entry of assets/versions.js, which is what the website itself renders. Only the build handed out by this website checks this file; the Play Store build never does.",
-  "latest": "1.0.0",
-  "date": "2026-09-28",
+  "latest": "1.1.0",
+  "date": "2026-09-29",
   "url": "https://mp-tree.net/download.html",
   "notes": [
-    "MPTree is out of beta.",
-    "The tutorial starts straight away, on the Songs page.",
-    "The welcome page asks for music access before you go on."
+    "MPTree Pro, free to try for a week.",
+    "Dark and light mode each keep their own look.",
+    "Backups: pick what goes in."
   ]
 }

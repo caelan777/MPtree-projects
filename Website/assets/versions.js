@@ -32,11 +32,24 @@
  * Also update /version.json when you add an entry here. That file is what the
  * APK from this website reads to tell people on an older build that a new one
  * exists; if it lags behind, nobody finds out. (The Play Store build never
- * reads it — Play does not allow an app to point at another update channel.)
+ * reads it: Play does not allow an app to point at another update channel.)
  */
 window.MPTREE_REPO = "caelan777/MPtree-projects";
 
 window.MPTREE_VERSIONS = [
+  {
+    version: "1.1.0",
+    date:    "2026-09-29",
+    channel: "release",
+    tag:     "v1.1.0",
+    notes: [
+      "MPTree Pro: white, smoke and marble records, more colours for dark and light mode, a header card in a colour of its own, four app icons or your own photo, and Clean up for voice notes and short clips. One payment on Google Play, or try all of it free for a week. In the copy from this website Pro can be tried; buying it is on Google Play.",
+      "Dark mode and light mode each keep their own colour, header card and record.",
+      "Tap the record in the player to put the song's cover on it.",
+      "Backups: pick what goes in, from songs and the bin to playlists, likes and settings.",
+      "Pages opened from Settings open on top of it, and Back closes them one at a time.",
+    ],
+  },
   {
     version: "1.0.0",
     date:    "2026-09-28",
