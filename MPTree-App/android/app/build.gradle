@@ -24,6 +24,10 @@ android {
         versionCode 19
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // The AdMob app id, for the Pro day pass. Until MPTree has its own it is
+        // Google's sample id, which only ever serves test ads. Set admobAppId
+        // in gradle.properties once the AdMob account exists.
+        manifestPlaceholders = [admobAppId: (project.findProperty("admobAppId") ?: "ca-app-pub-3940256099942544~3347511713")]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -70,6 +74,10 @@ dependencies {
     // Google Play Billing, for MPTree Pro (a one-time purchase). Talks to the
     // Play Store app on the phone; see BillingPlugin.java.
     implementation "com.android.billingclient:billing:8.0.0"
+    // Google Mobile Ads and Google's consent form, for the one rewarded ad
+    // behind the Pro day pass; see AdsPlugin.java.
+    implementation "com.google.android.gms:play-services-ads:25.5.0"
+    implementation "com.google.android.ump:user-messaging-platform:4.0.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

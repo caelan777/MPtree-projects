@@ -121,16 +121,52 @@ function Tile({ selected, onClick, label, children, T, locked }: {
 }
 
 function Row({ title, aside, children, T }: { title: string; aside?: ReactNode; children: ReactNode; T: T }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  // Whether there is more to the right. A cut-off tile alone is easy to miss,
+  // so the edge fades and carries an arrow until the end is reached.
+  const [more, setMore] = useState(false);
+  const measure = () => {
+    const el = scroller.current;
+    if (el) setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
+
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", marginBottom: 7 }}>
         <span style={{ ...makeSH(T).lbl, margin: 0 }}>{title}</span>
         {aside}
       </div>
-      {/* Scrolls sideways on a narrow phone rather than wrapping into a grid
-          that pushes the last row off the sheet. */}
-      <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 16px 4px", scrollbarWidth: "none" }}>
-        {children}
+      <div style={{ position: "relative" }}>
+        {/* Scrolls sideways on a narrow phone rather than wrapping into a grid
+            that pushes the last row off the sheet. */}
+        <div ref={scroller} onScroll={measure}
+          style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 16px 4px", scrollbarWidth: "none" }}>
+          {children}
+        </div>
+        <div aria-hidden style={{
+          position: "absolute", top: 0, right: 0, bottom: 0, width: 56, pointerEvents: "none",
+          background: `linear-gradient(to right, transparent, ${T.sheetBg} 85%)`,
+          opacity: more ? 1 : 0, transition: "opacity 0.2s",
+        }} />
+        {more && (
+          <button
+            onClick={() => scroller.current?.scrollBy({ left: scroller.current.clientWidth * 0.7, behavior: "smooth" })}
+            aria-label={t("More")}
+            style={{
+              position: "absolute", right: 8, top: 23, width: 28, height: 28, borderRadius: 14,
+              display: "grid", placeItems: "center", padding: 0, cursor: "pointer",
+              background: T.surface, border: `1px solid ${T.border}`, color: T.text,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+            }}
+          >
+            <IC.ChevronR />
+          </button>
+        )}
       </div>
     </div>
   );

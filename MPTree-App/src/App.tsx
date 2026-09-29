@@ -1291,6 +1291,14 @@ export default function App() {
     } catch (e) { showError(t("Player error: ") + e); }
   };
 
+  /** The day pass ad has sound of its own: the music waits, then goes on. */
+  const pauseForAd = async () => {
+    if (!isPlayingRef.current) return () => {};
+    await AudioPlayer.pause().catch(() => {});
+    setPlaying(false);
+    return () => { AudioPlayer.resume().then(() => setPlaying(true)).catch(() => {}); };
+  };
+
   const seekTo = async (ms: number) => {
     if (!currentSong) return;
     try {
@@ -3917,6 +3925,7 @@ export default function App() {
             onClose={() => setProOpen(false)}
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
+            onBeforeAd={pauseForAd}
             T={TH} />
         )}
 

@@ -7,6 +7,8 @@ import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, type LangPref } from "../i18n";
+import { useDayPass, passTimeLeft, PASS_OFFERED } from "../pro";
+import { Ads } from "../plugins";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -143,6 +145,14 @@ export function SettingsSheet({
   onClose, T,
 }: SettingsSheetProps) {
   const sh = makeSH(T);
+  const passUntil = useDayPass();
+  // Only where the law asks for it (EU, UK), and only once the consent form
+  // has been through: before the first ad there is nothing to change.
+  const [adPrivacy, setAdPrivacy] = useState(false);
+  useEffect(() => {
+    if (!PASS_OFFERED) return;
+    Ads.privacyOptions().then(r => setAdPrivacy(r.required)).catch(() => {});
+  }, [passUntil]);
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
   const [sub, setSub] = useState<null | "faq" | "licences" | "language">(null);
@@ -250,7 +260,10 @@ export function SettingsSheet({
                 {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
-                {pro ? t("Thank you for supporting MPTree.") : t("Records, shades, icons and more. Pay once.")}
+                {passUntil ? t("Day pass, {time} left.", { time: passTimeLeft(passUntil) })
+                  : pro ? t("Thank you for supporting MPTree.")
+                  : PASS_OFFERED ? t("Records, shades, icons and more. Try a day free.")
+                  : t("Records, shades, icons and more. Pay once.")}
               </span>
             </span>
             <IC.ChevronR />
@@ -319,6 +332,15 @@ export function SettingsSheet({
               label={t("Update notices")}
               sub={t("Tell me when a new version of MPTree is out.")}
               right={<Switch on={updateNotices} T={T} />}
+            />
+          )}
+          {adPrivacy && (
+            <Row T={T}
+              onClick={() => { Ads.showPrivacyOptions().catch(() => {}); }}
+              icon={<ShieldIcon />}
+              label={t("Ad privacy")}
+              sub={t("What the day pass ad may use.")}
+              right={<IC.ChevronR />}
             />
           )}
         </Section>

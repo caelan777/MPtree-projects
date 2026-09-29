@@ -3,11 +3,15 @@ import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
-import { usePro, buyPro, restorePro, proPrice, lockProForTesting, PRO_MODE } from "../pro";
+import {
+  usePro, useOwnsPro, useDayPass, buyPro, restorePro, proPrice, lockProForTesting, watchAdForPass,
+  PRO_MODE, PASS_OFFERED, passTimeLeft,
+} from "../pro";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
 // What Pro is and the one button that buys it. Opened from Settings, and from
-// anything Pro that someone without it taps.
+// anything Pro that someone without it taps. Under the buy button, the day
+// pass: one ad for 24 hours of Pro.
 
 const Svg = ({ children }: { children: ReactNode }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -24,14 +28,18 @@ type ProSheetProps = {
   onToast: (msg: string) => void;
   /** Opens a store link. The sideloaded build uses it to point at Play. */
   onOpenStore: () => void;
+  /** Pauses the music for the ad; the function it returns plays it again. */
+  onBeforeAd: () => Promise<() => void>;
   T: T;
 };
 
-export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
+export function ProSheet({ onClose, onToast, onOpenStore, onBeforeAd, T }: ProSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
+  const owns = useOwnsPro();
+  const passUntil = useDayPass();
   const [price, setPrice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "buy" | "restore">(null);
+  const [busy, setBusy] = useState<null | "buy" | "restore" | "ad">(null);
 
   useEffect(() => {
     let live = true;
@@ -53,6 +61,19 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
     setBusy(null);
     onToast(r === null ? t("Google Play could not be reached. Try again in a moment.")
       : r ? t("Pro restored") : t("No Pro purchase found on this Google account"));
+  };
+
+  const watchAd = async () => {
+    setBusy("ad");
+    const resume = await onBeforeAd();
+    const r = await watchAdForPass();
+    resume();
+    setBusy(null);
+    if (r === "granted") onToast(t("Pro is on for the next 24 hours"));
+    else if (r === "closed") onToast(t("The day pass needs the whole ad"));
+    else if (r === "offline") onToast(t("The ad needs an internet connection"));
+    else if (r === "nofill") onToast(t("No ad right now. Try again later."));
+    else onToast(t("The ad could not load. Try again later."));
   };
 
   const features: { icon: ReactNode; title: string; body: string }[] = [
@@ -83,7 +104,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
               </span>
             </div>
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
-              {pro ? t("You have Pro. Thank you for supporting MPTree.") : t("Pay once, keep it forever. No subscription.")}
+              {owns ? t("You have Pro. Thank you for supporting MPTree.")
+                : passUntil ? t("Day pass: Pro for {time} more.", { time: passTimeLeft(passUntil) })
+                : t("Pay once, keep it forever. No subscription.")}
             </div>
           </div>
 
@@ -105,7 +128,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
         </div>
 
         <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>
-          {pro ? (
+          {owns ? (
             PRO_MODE === "free" ? (
               <button onClick={() => { lockProForTesting(); onToast(t("Pro locked again")); }}
                 style={{ ...sh.saveBtn, background: T.dim, color: T.text }}>
@@ -129,6 +152,18 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
                   ? t("Unlock Pro for free (test build)")
                   : busy === "buy" ? t("Opening Google Play…") : t("Get Pro for {price}", { price: priceLabel })}
               </button>
+              {PASS_OFFERED && !pro && (
+                <button onClick={watchAd} disabled={busy !== null}
+                  style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: 8, opacity: busy && busy !== "ad" ? 0.6 : 1 }}>
+                  {busy === "ad" ? t("Loading the ad…") : t("Watch an ad, get a free day")}
+                </button>
+              )}
+              {PRO_MODE === "free" && passUntil > 0 && (
+                <button onClick={() => { lockProForTesting(); onToast(t("Pro locked again")); }}
+                  style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
+                  {t("End the day pass (test build)")}
+                </button>
+              )}
               {PRO_MODE === "play" && (
                 <button onClick={restore} disabled={busy !== null}
                   style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>

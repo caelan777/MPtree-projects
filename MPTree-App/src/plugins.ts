@@ -107,6 +107,16 @@ export type BillingPlugin = {
   restore(options: { productId: string }): Promise<{ ok: boolean; owned: boolean }>;
 };
 
+/** One rewarded ad, for the Pro day pass. */
+export type AdsPlugin = {
+  /** Asks for consent where the law needs it, then loads and shows the ad.
+   *  rewarded is true only when the ad was watched to its reward. */
+  showRewarded(options: { adUnitId: string }): Promise<{ rewarded: boolean; reason?: "closed" | "consent" | "nofill" | "offline" | "error" }>;
+  /** Whether Settings must offer a way to change the ad consent (EU, UK). */
+  privacyOptions(): Promise<{ required: boolean }>;
+  showPrivacyOptions(): Promise<void>;
+};
+
 // The browser has none of this. The stand-in answers the way a phone with
 // nothing special about it would, so the demo and the dev server run the same
 // code paths.
@@ -127,6 +137,14 @@ const BillingWeb: BillingPlugin = {
   restore:    async () => ({ ok: false, owned: false }),
 };
 
+// In the browser the "ad" is a short wait, so the day pass can be tried in
+// the demo and on the dev server.
+const AdsWeb: AdsPlugin = {
+  showRewarded:       () => new Promise(ok => setTimeout(() => ok({ rewarded: true }), 1200)),
+  privacyOptions:     async () => ({ required: false }),
+  showPrivacyOptions: async () => {},
+};
+
 const isWeb = Capacitor.getPlatform() === "web";
 
 export const MusicScanner: MusicScannerPlugin = isWeb
@@ -144,3 +162,7 @@ export const System: SystemPlugin = isWeb
 export const Billing: BillingPlugin = isWeb
   ? BillingWeb
   : registerPlugin<BillingPlugin>("Billing");
+
+export const Ads: AdsPlugin = isWeb
+  ? AdsWeb
+  : registerPlugin<AdsPlugin>("Ads");
