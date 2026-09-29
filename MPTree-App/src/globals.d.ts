@@ -6,3 +6,8 @@ declare const __APP_VERSION__: string;
  * in-browser copy on the website. Only "web" checks for updates.
  */
 declare const __DISTRIBUTION__: "web" | "play" | "demo";
+/**
+ * True only in the test build (npm run build:test): Pro unlocks with a tap and
+ * can be locked again, so it can be tried before anything is on sale.
+ */
+declare const __PRO_TEST__: boolean;

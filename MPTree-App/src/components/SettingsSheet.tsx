@@ -6,7 +6,7 @@ import { Switch } from "./Switch";
 import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
-import { t, phoneLang, type LangPref } from "../i18n";
+import { t, tn, phoneLang, type LangPref } from "../i18n";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -30,6 +30,8 @@ const MailIcon     = () => <Svg><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 
 const StarIcon     = () => <Svg><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Svg>;
 const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Svg>;
 const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
+const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
+const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 const CupIcon      = () => <Svg><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></Svg>;
 
 // Every row in this sheet is the same shape: an icon and a label on the left,
@@ -59,6 +61,14 @@ function Row({ icon, label, sub, right, onClick, first, T }: {
   );
 }
 
+function ProTag({ T }: { T: T }) {
+  return (
+    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: T.playBtnFg, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
+      PRO
+    </span>
+  );
+}
+
 function Section({ title, children, T }: { title: string; children: ReactNode; T: T }) {
   return (
     <div style={{ padding: "0 20px" }}>
@@ -70,6 +80,13 @@ function Section({ title, children, T }: { title: string; children: ReactNode; T
 
 type SettingsSheetProps = {
   theme: Theme;
+  // ── Pro ──
+  pro: boolean;
+  onOpenPro: () => void;
+  onOpenLook: () => void;
+  onOpenCleanup: () => void;
+  /** How many probable non-songs the library holds, shown on the row. */
+  cleanupCount: number;
   binCount: number;
   onToggleTheme: () => void;
   onViewBin: () => void;
@@ -113,6 +130,7 @@ type SettingsSheetProps = {
 
 export function SettingsSheet({
   theme, binCount,
+  pro, onOpenPro, onOpenLook, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen, onSupport,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
@@ -210,6 +228,30 @@ export function SettingsSheet({
 
         <div style={{ overflowY: "auto", flex: 1, paddingBottom: 32, WebkitOverflowScrolling: "touch" }}>
 
+        {/* Pro: a card of its own at the top rather than a row among forty.
+            Once bought it stays, smaller, as a thank-you and a way back in. */}
+        <div style={{ padding: "0 20px 2px" }}>
+          <button
+            onClick={onOpenPro}
+            style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
+              background: pro ? T.dim : T.accent, color: pro ? T.text : T.playBtnFg,
+              border: "none", borderRadius: 14, padding: pro ? "13px 16px" : "15px 16px",
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
+                {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
+              </span>
+              <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
+                {pro ? t("Thank you for supporting MPTree.") : t("Records, shades, icons and more. Pay once.")}
+              </span>
+            </span>
+            <IC.ChevronR />
+          </button>
+        </div>
+
         <Section T={T} title={t("Appearance")}>
           <Row T={T}
             first
@@ -217,6 +259,13 @@ export function SettingsSheet({
             icon={theme === "dark" ? <IC.Moon /> : <IC.Sun />}
             label={theme === "dark" ? t("Dark mode") : t("Light mode")}
             right={<Switch on={theme === "light"} T={T} />}
+          />
+          <Row T={T}
+            onClick={() => { onClose(); onOpenLook(); }}
+            icon={<BrushIcon />}
+            label={t("Personalise")}
+            sub={t("Shades, header card, record and app icon.")}
+            right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
           {/* Size: text and rows together. One control rather than two: a
               bigger font in a row that stays the same height is a row that
@@ -352,6 +401,15 @@ export function SettingsSheet({
                 <IC.ChevronR />
               </span>
             }
+          />
+          <Row T={T}
+            onClick={() => { onClose(); onOpenCleanup(); }}
+            icon={<BroomIcon />}
+            label={t("Clean up non-songs")}
+            sub={cleanupCount > 0
+              ? tn(cleanupCount, "{n} voice note or clip found", "{n} voice notes or clips found")
+              : t("Voice notes, recordings and clips under a minute.")}
+            right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
         </Section>
 

@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "build:demo": "node scripts/licences.mjs && tsc -b && vite build --mode demo --base=./ --outDir=../Website/demo --emptyOutDir",
     "build:play": "node scripts/licences.mjs && tsc -b && vite build --mode play",
+    "build:test": "node scripts/licences.mjs && tsc -b && vite build --mode test",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -20,7 +20,8 @@ android {
         // Keep versionName in step with package.json. versionCode must increase
         // by at least 1 for every release you hand out, or Android will refuse
         // to install the update over an existing copy.
-        versionCode 18
+        // 19 is the MPTree Pro test build handed out on mp-tree.net/test.html.
+        versionCode 19
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -66,6 +67,9 @@ dependencies {
     // Google Play's own "a newer version is out" check, for the Play build only.
     // It talks to the Play Store app on the phone, not to the network itself.
     implementation "com.google.android.play:app-update:2.1.0"
+    // Google Play Billing, for MPTree Pro (a one-time purchase). Talks to the
+    // Play Store app on the phone; see BillingPlugin.java.
+    implementation "com.android.billingclient:billing:8.0.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

@@ -1,6 +1,15 @@
 package com.caelan.mptree;
 
 import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
+
+import androidx.core.content.pm.ShortcutInfoCompat;
+import androidx.core.content.pm.ShortcutManagerCompat;
+import androidx.core.graphics.drawable.IconCompat;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -133,6 +142,92 @@ public class SystemPlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("Could not start the update", e);
+        }
+    }
+
+    // ── App icon (MPTree Pro) ────────────────────────────────────────────────
+    // The launcher entry is not MainActivity itself but one of four
+    // activity-aliases in AndroidManifest.xml, each pointing at MainActivity
+    // with its own icon. Exactly one is enabled; switching enables the new one
+    // before disabling the old, so there is never a moment with no icon at all.
+
+    private static final String[] ICONS = { "classic", "light", "vinyl", "stamp" };
+
+    private ComponentName iconAlias(String icon) {
+        String cls = "Icon" + Character.toUpperCase(icon.charAt(0)) + icon.substring(1);
+        return new ComponentName(getContext(), getContext().getPackageName() + "." + cls);
+    }
+
+    @PluginMethod
+    public void getAppIcon(PluginCall call) {
+        PackageManager pm = getContext().getPackageManager();
+        String on = "classic";
+        for (String icon : ICONS) {
+            int state = pm.getComponentEnabledSetting(iconAlias(icon));
+            // "Default" means whatever the manifest says, and only classic is
+            // enabled there.
+            boolean enabled = state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    || (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT && icon.equals("classic"));
+            if (enabled && !icon.equals("classic")) { on = icon; break; }
+        }
+        JSObject ret = new JSObject();
+        ret.put("icon", on);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setAppIcon(PluginCall call) {
+        String icon = call.getString("icon", "classic");
+        boolean known = false;
+        for (String i : ICONS) known |= i.equals(icon);
+        if (!known) { call.reject("Unknown icon: " + icon); return; }
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            pm.setComponentEnabledSetting(iconAlias(icon),
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
+            for (String other : ICONS) {
+                if (other.equals(icon)) continue;
+                pm.setComponentEnabledSetting(iconAlias(other),
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Could not change the icon", e);
+        }
+    }
+
+    /** An extra home-screen shortcut with the person's own photo on it. */
+    @PluginMethod
+    public void pinPhotoShortcut(PluginCall call) {
+        String dataUrl = call.getString("dataUrl");
+        String label = call.getString("label", "MPTree");
+        if (dataUrl == null || !dataUrl.contains(",")) { call.reject("dataUrl is required"); return; }
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(getContext())) {
+            JSObject ret = new JSObject();
+            ret.put("supported", false);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            byte[] bytes = Base64.decode(dataUrl.substring(dataUrl.indexOf(',') + 1), Base64.DEFAULT);
+            Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            if (bmp == null) { call.reject("That image could not be read"); return; }
+            Intent open = new Intent(getContext(), MainActivity.class)
+                    .setAction(Intent.ACTION_MAIN)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            // A new id each time, so a second photo adds a second icon rather
+            // than silently replacing the picture on the first.
+            ShortcutInfoCompat info = new ShortcutInfoCompat.Builder(getContext(), "photo-" + System.currentTimeMillis())
+                    .setShortLabel(label)
+                    .setIcon(IconCompat.createWithAdaptiveBitmap(bmp))
+                    .setIntent(open)
+                    .build();
+            boolean asked = ShortcutManagerCompat.requestPinShortcut(getContext(), info, null);
+            JSObject ret = new JSObject();
+            ret.put("supported", asked);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Could not add the shortcut", e);
         }
     }
 }

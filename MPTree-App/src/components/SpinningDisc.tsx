@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Logo } from "./Logo";
+import { useLook, type VinylSkin } from "../look";
 
 // ─── SPINNING DISC ───────────────────────────────────────────────────────────
 // The record for the expanded player: the real vinyl.webp turning on its
@@ -41,20 +42,68 @@ type SpinningDiscProps = {
   title?: string;
   /** When set, the centre label shows this photo instead of the MPTree mark. */
   customPhoto?: string;
+  /** Overrides the saved record, for the previews in the Personalise sheet. */
+  skin?: VinylSkin;
 };
 
+// ─── Record skins (Pro) ──────────────────────────────────────────────────────
+// Only the record itself turns. Grooves and sheen on the drawn skins sit on a
+// layer above it that stays still: grooves are circles, so turning them shows
+// nothing, and a highlight is where the light is, which does not orbit.
+
+// White marble with grey veins, drawn once by the browser from an SVG. As an <img>
+// it is rasterised a single time and then turned as a texture, exactly like
+// vinyl.webp, so it costs the compositor nothing extra per frame.
+const MARBLE = "data:image/svg+xml," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'>" +
+  "<filter id='m' x='0' y='0' width='100%' height='100%'>" +
+  "<feTurbulence type='fractalNoise' baseFrequency='0.01 0.02' numOctaves='3' seed='11'/>" +
+  "<feColorMatrix type='saturate' values='0'/>" +
+  "<feComponentTransfer>" +
+  "<feFuncR type='table' tableValues='0.96 0.97 0.95 0.96 0.22 0.95 0.97 0.96 0.14 0.95'/>" +
+  "<feFuncG type='table' tableValues='0.96 0.97 0.95 0.96 0.22 0.95 0.97 0.96 0.14 0.95'/>" +
+  "<feFuncB type='table' tableValues='0.97 0.98 0.96 0.97 0.23 0.96 0.98 0.97 0.15 0.96'/>" +
+  "<feFuncA type='table' tableValues='1 1'/>" +
+  "</feComponentTransfer></filter>" +
+  "<rect width='400' height='400' filter='url(#m)'/></svg>");
+
+const GROOVES =
+  "repeating-radial-gradient(circle at center, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.22) 2.6px, rgba(0,0,0,0) 3.3px)";
+const SHEEN =
+  "conic-gradient(from 25deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,0.16) 22deg, rgba(255,255,255,0) 52deg, " +
+  "rgba(255,255,255,0) 180deg, rgba(255,255,255,0.11) 205deg, rgba(255,255,255,0) 235deg, rgba(255,255,255,0) 360deg)";
+
 export const SpinningDisc = memo(function SpinningDisc({
-  size, spinning = false, title = "", customPhoto,
+  size, spinning = false, title = "", customPhoto, skin: forced,
 }: SpinningDiscProps) {
+  const saved = useLook().vinyl;
+  let skin = forced ?? saved;
+  // A picture disc needs a picture. Without one it is the classic record.
+  if (skin === "picture" && !customPhoto) skin = "classic";
+
   const label = Math.round(size * 0.24);
   const mark = Math.round(label * 0.5);
+
+  const recordSrc = skin === "marble" ? MARBLE : skin === "picture" ? customPhoto! : "/vinyl.webp";
+  const recordFilter =
+    skin === "white" ? "invert(1) grayscale(1) brightness(1.08)"
+    : skin === "smoke" ? "grayscale(1) brightness(1.9) contrast(0.75)"
+    : undefined;
+  const drawn = skin === "marble" || skin === "picture";
+  // The pale records get a black label, the rest a white one.
+  const pale = skin === "white" || skin === "marble";
+  const labelBg = pale ? "#000" : "#fff";
+  const labelInk = pale ? "#fff" : "#000";
+  // On a picture disc the picture is the record, so the label goes back to
+  // the mark rather than showing the same picture twice.
+  const labelPhoto = skin === "picture" ? undefined : customPhoto;
 
   return (
     <div style={{
       width: size, height: size, flexShrink: 0, display: "grid", placeItems: "center",
       position: "relative", borderRadius: "50%",
       // Static: the shadow stays put while the record turns.
-      boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
+      boxShadow: skin === "smoke" ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
       // Nothing inside affects layout outside, so a spinning frame cannot make
       // the parent reflow.
       contain: "layout paint",
@@ -62,12 +111,14 @@ export const SpinningDisc = memo(function SpinningDisc({
       <style>{DISC_STYLE}</style>
       <img
         className="mp-vinyl"
-        src="/vinyl.webp"
+        src={recordSrc}
         alt=""
         draggable={false}
         style={{
           gridArea: "1 / 1", width: "100%", height: "100%", borderRadius: "50%",
           objectFit: "cover", display: "block", userSelect: "none",
+          filter: recordFilter,
+          opacity: skin === "smoke" ? 0.62 : 1,
           animation: "mpDiscSpin 7s linear infinite",
           animationPlayState: spinning ? "running" : "paused",
           // Its own compositor layer, so turning it is a transform the GPU
@@ -76,15 +127,23 @@ export const SpinningDisc = memo(function SpinningDisc({
           backfaceVisibility: "hidden",
         }}
       />
+      {drawn && (
+        <div aria-hidden="true" style={{
+          gridArea: "1 / 1", width: "100%", height: "100%", borderRadius: "50%",
+          background: `${SHEEN}, ${GROOVES}`,
+          boxShadow: `inset 0 0 0 ${Math.max(2, Math.round(size * 0.018))}px rgba(0,0,0,0.85)`,
+          pointerEvents: "none",
+        }} />
+      )}
       <div style={{
         gridArea: "1 / 1", width: label, height: label, borderRadius: "50%", overflow: "hidden",
-        background: "#fff", display: "grid", placeItems: "center", zIndex: 1,
+        background: labelBg, display: "grid", placeItems: "center", zIndex: 1,
         boxShadow: "0 1px 6px rgba(0,0,0,0.45)",
       }}>
-        {customPhoto ? (
-          <img src={customPhoto} alt={title} draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {labelPhoto ? (
+          <img src={labelPhoto} alt={title} draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <Logo size={mark} color="#000" />
+          <Logo size={mark} color={labelInk} />
         )}
       </div>
     </div>

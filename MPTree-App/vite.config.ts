@@ -10,7 +10,9 @@ import pkg from './package.json' with { type: 'json' }
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    // The test build says so in Settings, so a screenshot of it is never
+    // mistaken for a release.
+    __APP_VERSION__: JSON.stringify(mode === 'test' ? pkg.version + ' (Pro test)' : pkg.version),
     // Which channel this build is for. Only "web" — the APK handed out by
     // mp-tree.net — is allowed to tell the user about a newer version on the
     // website; Google Play forbids an app it distributes from steering users to
@@ -24,5 +26,8 @@ export default defineConfig(({ mode }) => ({
     // Driven by --mode rather than an environment variable so it works the same
     // in PowerShell, cmd and bash.
     __DISTRIBUTION__: JSON.stringify(mode === 'play' || mode === 'demo' ? mode : 'web'),
+    // The Pro test build (npm run build:test) is the website build with Pro
+    // free to unlock and lock again. See src/pro.ts.
+    __PRO_TEST__: JSON.stringify(mode === 'test'),
   },
 }))

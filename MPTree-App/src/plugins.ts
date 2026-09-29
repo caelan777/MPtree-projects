@@ -86,6 +86,25 @@ export type SystemPlugin = {
   openExternal(options: { url: string }): Promise<void>;
   checkPlayUpdate(): Promise<{ available: boolean; versionCode?: number }>;
   startPlayUpdate(): Promise<void>;
+  /** Which launcher icon is switched on: "classic", "light", "vinyl" or "stamp". */
+  getAppIcon(): Promise<{ icon: string }>;
+  /** Switches the launcher icon. Android may take a few seconds to redraw the
+   *  home screen, and some launchers move the icon to the app drawer. */
+  setAppIcon(options: { icon: string }): Promise<void>;
+  /** Asks the launcher to pin an extra MPTree shortcut with this picture on
+   *  it. Resolves supported:false when the launcher cannot pin shortcuts. The
+   *  launcher shows its own confirmation; this does not wait for it. */
+  pinPhotoShortcut(options: { dataUrl: string; label: string }): Promise<{ supported: boolean }>;
+};
+
+/** Google Play Billing, for MPTree Pro. Only works in a build Play installed. */
+export type BillingPlugin = {
+  /** price is Play's own formatted price in the person's currency. */
+  getProduct(options: { productId: string }): Promise<{ price: string }>;
+  /** Opens Play's purchase sheet. Resolves when the person has finished with it. */
+  purchase(options: { productId: string }): Promise<{ owned: boolean; pending?: boolean; cancelled?: boolean }>;
+  /** What this Google account already owns. ok:false means Play could not be reached. */
+  restore(options: { productId: string }): Promise<{ ok: boolean; owned: boolean }>;
 };
 
 // The browser has none of this. The stand-in answers the way a phone with
@@ -97,6 +116,15 @@ const SystemWeb: SystemPlugin = {
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
   checkPlayUpdate:   async () => ({ available: false }),
   startPlayUpdate:   async () => {},
+  getAppIcon:        async () => ({ icon: "classic" }),
+  setAppIcon:        async () => {},
+  pinPhotoShortcut:  async () => ({ supported: false }),
+};
+
+const BillingWeb: BillingPlugin = {
+  getProduct: async () => { throw new Error("Play Billing is not available here"); },
+  purchase:   async () => { throw new Error("Play Billing is not available here"); },
+  restore:    async () => ({ ok: false, owned: false }),
 };
 
 const isWeb = Capacitor.getPlatform() === "web";
@@ -112,3 +140,7 @@ export const AudioPlayer: AudioPlayerPlugin = isWeb
 export const System: SystemPlugin = isWeb
   ? SystemWeb
   : registerPlugin<SystemPlugin>("System");
+
+export const Billing: BillingPlugin = isWeb
+  ? BillingWeb
+  : registerPlugin<BillingPlugin>("Billing");

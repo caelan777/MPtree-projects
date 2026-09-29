@@ -10,7 +10,7 @@ import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
-import { DARK, LIGHT, FILTER_OPTIONS, CHROME_MOTION } from "./themes";
+import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardSkinStyle } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
@@ -30,6 +30,12 @@ import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
+import { ProSheet } from "./components/ProSheet";
+import { LookSheet } from "./components/LookSheet";
+import { CleanupSheet } from "./components/CleanupSheet";
+import { findSuspects } from "./cleanup";
+import { useLook, loadLook } from "./look";
+import { usePro, loadPro } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
@@ -652,17 +658,31 @@ export default function App() {
   useEffect(() => { eqBandLevelsRef.current = eqBandLevels; }, [eqBandLevels]);
   useEffect(() => { themeRef.current        = theme;        }, [theme]);
 
+  // ── Pro ───────────────────────────────────────────────────────────────────
+  // What was bought and what was picked live in their own small stores (pro.ts,
+  // look.ts); App only reads them and opens the sheets.
+  const look = useLook();
+  const pro  = usePro();
+  const [proOpen,     setProOpen]     = useState(false);
+  const [lookOpen,    setLookOpen]    = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  useEffect(() => { loadLook(); loadPro(); }, []);
+
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
   // off overlay and colour the bar to match the theme. No-ops on web.
+  // The bar takes the ground colour, which a Pro shade can change.
+  const TH = paletteFor(theme, look.dark, look.light);
+  const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
     StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
     StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
-    StatusBar.setBackgroundColor({ color: dark ? "#000000" : "#FFFFFF" }).catch(() => {});
-  }, [theme]);
+    StatusBar.setBackgroundColor({ color: statusBarColor }).catch(() => {});
+  }, [theme, statusBarColor]);
 
-  const TH = theme === "dark" ? DARK : LIGHT;
+  // What Clean up would offer. Counted even without Pro, for the Settings row.
+  const cleanupSuspects = React.useMemo(() => findSuspects(songs), [songs]);
 
   const getMeta    = (s: Song) => meta[s.id] || {};
   const dispName   = (s: Song) => getMeta(s).customName   || s.title;
@@ -2104,6 +2124,24 @@ export default function App() {
     scanMusic(updated);
   };
 
+  // Several at once, for Clean up. The same moves as doRemove, once.
+  const removeMany = (ids: string[]) => {
+    const drop = new Set(ids);
+    const gone = songs.filter(s => drop.has(s.id));
+    if (!gone.length) return;
+    const updated = [...gone, ...removedSongs];
+    setRemovedSongs(updated); saveRemovedTracksToStorage(updated);
+    setSongs(prev => { const next = prev.filter(x => !drop.has(x.id)); saveCutTracksToStorage(next.filter(x => x.isCut)); return next; });
+    if (currentSong && drop.has(currentSong.id)) {
+      const rl = displayList.filter(x => !drop.has(x.id));
+      const idx = displayList.findIndex(x => x.id === currentSong.id);
+      const nxt = rl[Math.min(idx, rl.length - 1)];
+      if (nxt) { setQueue(rl); playSong(nxt, rl); } else { setCurrent(null); setPlaying(false); }
+    }
+    showToast(tn(gone.length, "{n} moved to the bin", "{n} moved to the bin"), { label: t("Undo"), onClick: () => restoreSongs(gone) });
+    scanMusic(updated);
+  };
+
   const doRestore = (s: Song) => {
     restoreSongs([s]);
     showToast(t("Song restored"));
@@ -2689,11 +2727,9 @@ export default function App() {
 
   // The card's own surface, shared with the floating button so the two are the
   // same object wherever it is sitting.
-  const CARD_SKIN: React.CSSProperties = {
-    background: TH.playerBg,
-    border: `1px solid ${TH.border}`,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
-  };
+  // Paint only: the Pro card skins never touch a dimension. See cardSkinStyle.
+  const cardTint = currentSong && nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
+  const CARD_SKIN: React.CSSProperties = cardSkinStyle(look.card, TH, theme === "dark", cardTint);
 
   // Where the logo's own options panel and the collapse hint go. Both belong to
   // the button, so they follow it rather than staying pinned to the top left.
@@ -3799,6 +3835,11 @@ export default function App() {
         {settingsOpen && (
           <SettingsSheet
             theme={theme} binCount={removedSongs.length}
+            pro={pro}
+            onOpenPro={() => { setSettingsOpen(false); setProOpen(true); }}
+            onOpenLook={() => setLookOpen(true)}
+            onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
+            cleanupCount={cleanupSuspects.length}
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
             onViewBin={() => { setSettingsOpen(false); setBinOpen(true); }}
             onOpenAudioEffects={openEQSheet}
@@ -3825,6 +3866,32 @@ export default function App() {
               : undefined}
             onPrivacy={() => { Browser.open({ url: "https://mp-tree.net/privacy.html" }).catch(() => {}); }}
             onClose={() => setSettingsOpen(false)}
+            T={TH} />
+        )}
+
+        {lookOpen && (
+          <LookSheet
+            theme={theme} onSetTheme={setTheme}
+            tint={cardTint}
+            cover={currentSong ? nowPlayingPhoto(currentSong) : undefined}
+            onNeedPro={() => setProOpen(true)}
+            onToast={showToast}
+            onClose={() => setLookOpen(false)}
+            T={TH} />
+        )}
+        {cleanupOpen && (
+          <CleanupSheet
+            suspects={cleanupSuspects}
+            meta={meta}
+            onBin={ids => { setCleanupOpen(false); removeMany(ids); }}
+            onClose={() => setCleanupOpen(false)}
+            T={TH} />
+        )}
+        {proOpen && (
+          <ProSheet
+            onClose={() => setProOpen(false)}
+            onToast={showToast}
+            onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             T={TH} />
         )}
 
