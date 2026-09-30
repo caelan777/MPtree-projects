@@ -121,6 +121,9 @@ export type AccountPlugin = {
 export type SyncPlugin = {
   deviceId(): Promise<{ id: string }>;
   network(): Promise<{ online: boolean; unmetered: boolean }>;
+  /** Bytes free where songs go; -1 when unknown. */
+  freeSpace(): Promise<{ bytes: number }>;
+  keepScreenOn(options: { on: boolean }): Promise<void>;
   fingerprints(options: { paths: string[] }): Promise<{ items: { path: string; size: number; fp: string }[] }>;
   readChunk(options: { path: string; offset: number; length: number }): Promise<{ data: string; size: number }>;
   beginFile(options: { tid: string }): Promise<void>;
@@ -172,6 +175,8 @@ const SyncWeb: SyncPlugin = {
     return { id };
   },
   network:      async () => ({ online: navigator.onLine, unmetered: true }),
+  freeSpace:    async () => ({ bytes: -1 }),
+  keepScreenOn: async () => {},
   // The demo songs are the same in every tab, so a name is fingerprint enough.
   fingerprints: async ({ paths }) => ({ items: paths.map(p => ({ path: p, size: 0, fp: "web-" + p.split("/").pop() })) }),
   readChunk:    unavailable,

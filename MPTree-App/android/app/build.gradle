@@ -21,8 +21,8 @@ android {
         // by at least 1 for every release you hand out, or Android will refuse
         // to install the update over an existing copy.
         // 1.1.0: 21 on Play, 22 on the website (19 and 20 were the Pro test builds).
-        // 23: Pro test build 11, the MPTree account.
-        versionCode 23
+        // 23 and 24: Pro test builds 11 and 12, the MPTree account.
+        versionCode 24
         versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

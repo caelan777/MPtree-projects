@@ -22,8 +22,34 @@ the person's own Google Drive, reached with the `drive.appdata` scope only.
 
 Songs go straight across over WebRTC when both phones have MPTree open (Google
 STUN, no TURN). When that fails, or the other phone is closed, they wait in the
-app folder, at most 1 GB per phone at a time. Wifi only unless the person allows
-mobile data.
+app folder, at most 1 GB per phone at a time, and a month at most. Wifi only
+unless the person allows mobile data, and then 500 MB a day at most.
+
+## Rules for the awkward cases
+
+- **Joining an account that has things in it** asks three questions: send this
+  phone's new songs everywhere or keep them here; the account's look or this
+  phone's; add this phone's playlists and likes, or replace them with the
+  account's. Playlists with the same name become one. A song this phone has
+  stays in its list even if the account has it in the bin.
+- **Signing out** keeps the base, so signing in again carries on; it can also
+  delete the songs that came from other phones.
+- **Voice notes, recordings, clips under a minute** (cleanup.ts) and songs kept
+  "on this phone only" are never sent.
+- **Deleted outside MPTree:** a file that disappears is not fetched back.
+  "Get them back" on the account page undoes that.
+- **Deleted for good in the bin** marks the song `gone`; other phones offer
+  "Delete here too". Restoring it anywhere undoes it.
+- **Two versions of one song** (same title and artist, within 2 s) are not both
+  fetched.
+- **Room:** songs only come in while 500 MB stays free.
+- **Conflicts:** a change made on two phones goes to the later one (`at`
+  stamps, with the time of the edit kept across restarts).
+- **Reinstalling** keeps the phone's id (ANDROID_ID). A phone of the same name
+  unused for 30 days makes room by itself; same-model phones get "(2)".
+- **Emptied in Drive** (Delete hidden app data): phones stop and say so,
+  instead of filling it up again.
+- The screen stays on while a song is moving.
 
 ## Google Cloud setup (once)
 

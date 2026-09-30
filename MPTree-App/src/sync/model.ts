@@ -21,8 +21,9 @@ import type { Song, SongMeta, Playlist } from "../types";
 //
 // Merging is three-way. The base is what this phone and the account last
 // agreed on; anything that differs from it on one side is a change made there,
-// and a change made on both sides goes to this phone. Play counts are the
-// exception: plays on both phones add up.
+// and a change made on both sides goes to the side that made it later. Play
+// counts are the exception: plays on both phones add up. The first time a
+// phone joins there is no base, and the person chooses (JoinChoice).
 
 export type Key = string;
 
@@ -38,6 +39,9 @@ export type SongRec = {
   playCount?: number;
   /** In the bin, on every phone. */
   bin?: boolean;
+  /** Deleted for good on one phone. The others still have it in the bin, and
+   *  offer to delete it there too. */
+  gone?: boolean;
 };
 
 export type PlaylistRec = { name: string; createdAt: number; cover?: string; songs: Key[] };
@@ -51,6 +55,9 @@ export type LibDoc = {
   settings: Record<string, string>;
   /** Which covers covers.json holds, so a phone knows without fetching it. */
   covers?: string[];
+  /** When each thing last changed, by "s:" song, "c:" cut, "p:" playlist or
+   *  "set:" setting. Decides a change made on two phones. */
+  at?: Record<string, number>;
 };
 
 export const emptyDoc = (): LibDoc => ({ v: 1, songs: {}, playlists: {}, cuts: {}, settings: {} });
@@ -194,13 +201,14 @@ export function same(a: unknown, b: unknown): boolean {
   return ka.length === kb.length && ka.every(k => same((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
-function pick3<T>(b: T | undefined, l: T | undefined, r: T | undefined): T | undefined {
+/** Changed on one side: that side. Changed on both: the newer change. */
+function pick3<T>(b: T | undefined, l: T | undefined, r: T | undefined, localNewer: boolean): T | undefined {
   if (same(l, b)) return r;
   if (same(r, b)) return l;
-  return l;
+  return localNewer ? l : r;
 }
 
-function mergeSong(b: SongRec | undefined, l: SongRec | undefined, r: SongRec | undefined): SongRec | undefined {
+function mergeSong(b: SongRec | undefined, l: SongRec | undefined, r: SongRec | undefined, localNewer: boolean): SongRec | undefined {
   const bb = b ?? {}, ll = l ?? {}, rr = r ?? {};
   const out: SongRec = {};
   for (const f of META_FIELDS) {
@@ -212,25 +220,32 @@ function mergeSong(b: SongRec | undefined, l: SongRec | undefined, r: SongRec | 
       const t = Math.max(ll.lastPlayedAt ?? 0, rr.lastPlayedAt ?? 0);
       if (t > 0) out.lastPlayedAt = t;
     } else {
-      const v = pick3(bb[f], ll[f], rr[f]);
+      const v = pick3(bb[f], ll[f], rr[f], localNewer);
       if (v !== undefined) (out as Record<string, unknown>)[f] = v;
     }
   }
-  const bin = pick3(bb.bin, ll.bin, rr.bin);
-  if (bin) out.bin = true;
+  if (pick3(bb.bin, ll.bin, rr.bin, localNewer)) {
+    out.bin = true;
+    // Deleted for good on some phone. Taking it out of the bin anywhere
+    // brings it back, so "gone" only holds while it is in the bin.
+    if (pick3(bb.gone, ll.gone, rr.gone, localNewer)) out.gone = true;
+  }
   return clean(out);
 }
 
 /** The first time a phone joins an account there is no base. The account's
- *  side wins where both have something, lists are joined, counts kept. */
-function joinSong(l: SongRec | undefined, r: SongRec | undefined): SongRec | undefined {
-  if (!l || !r) return l ?? r;
-  return clean({
-    ...l, ...r,
-    liked: l.liked || r.liked,
-    playCount: Math.max(l.playCount ?? 0, r.playCount ?? 0),
-    lastPlayedAt: Math.max(l.lastPlayedAt ?? 0, r.lastPlayedAt ?? 0),
-  });
+ *  side wins where both have something, likes are joined, counts kept. A song
+ *  this phone has stays in its list or in its bin the way it is here: joining
+ *  should not make a song someone is playing disappear. */
+function joinSong(l: SongRec | undefined, r: SongRec | undefined, keepLocalBin: boolean): SongRec | undefined {
+  const out: SongRec = {
+    ...(l ?? {}), ...(r ?? {}),
+    liked: l?.liked || r?.liked,
+    playCount: Math.max(l?.playCount ?? 0, r?.playCount ?? 0),
+    lastPlayedAt: Math.max(l?.lastPlayedAt ?? 0, r?.lastPlayedAt ?? 0),
+  };
+  if (keepLocalBin) { out.bin = l?.bin; out.gone = l?.bin ? l.gone : undefined; }
+  return clean(out);
 }
 
 /** A list both sides changed: this phone's order, with what the other side
@@ -243,7 +258,7 @@ function mergeList(b: Key[], l: Key[], r: Key[]): Key[] {
   return out;
 }
 
-function mergePlaylist(b: PlaylistRec | undefined, l: PlaylistRec | undefined, r: PlaylistRec | undefined): PlaylistRec | undefined {
+function mergePlaylist(b: PlaylistRec | undefined, l: PlaylistRec | undefined, r: PlaylistRec | undefined, localNewer: boolean): PlaylistRec | undefined {
   if (same(l, b)) return r;
   if (same(r, b)) return l;
   // Changed on both sides. One side deleting it loses to the other editing it.
@@ -251,11 +266,11 @@ function mergePlaylist(b: PlaylistRec | undefined, l: PlaylistRec | undefined, r
   if (!r) return l;
   const bb = b ?? { name: "", createdAt: 0, songs: [] };
   const out: PlaylistRec = {
-    name: pick3(bb.name, l.name, r.name) ?? l.name,
-    createdAt: pick3(bb.createdAt, l.createdAt, r.createdAt) ?? l.createdAt,
+    name: pick3(bb.name, l.name, r.name, localNewer) ?? l.name,
+    createdAt: pick3(bb.createdAt, l.createdAt, r.createdAt, localNewer) ?? l.createdAt,
     songs: mergeList(bb.songs, l.songs, r.songs),
   };
-  const cover = pick3(bb.cover, l.cover, r.cover);
+  const cover = pick3(bb.cover, l.cover, r.cover, localNewer);
   if (cover) out.cover = cover;
   return out;
 }
@@ -266,48 +281,103 @@ const keysOf = (...objs: (object | undefined)[]) => {
   return s;
 };
 
+const normName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+/** What a phone chose when it first joined an account that already had things
+ *  in it. */
+export type JoinChoice = {
+  /** Whose look and settings: the account's, or this phone's. */
+  settings: "account" | "phone";
+  /** merge: this phone's playlists, likes and the rest join the account's.
+   *  account: this phone takes the account's and drops its own. */
+  library: "merge" | "account";
+};
+
+export const DEFAULT_JOIN: JoinChoice = { settings: "account", library: "merge" };
+
+export type MergeOptions = {
+  /** Keys that arrived on this phone since the base: it has no say about them
+   *  yet, only a file. */
+  fresh?: Set<Key>;
+  /** When this phone's changes were made. A change made on both sides goes to
+   *  whichever was made later, so a phone that was off for a week does not
+   *  win with what it changed before everyone else did. */
+  stamp?: number;
+  /** Only when base is null. */
+  join?: JoinChoice;
+};
+
 /**
  * @param base    What this phone and the account last agreed on, or null the
  *                first time this phone joins the account.
  * @param local   This phone now.
  * @param remote  The account now, or null when it has nothing yet.
- * @param fresh   Keys that arrived on this phone since the base: it has no say
- *                about them yet, only a file.
  */
-export function merge(base: LibDoc | null, local: LocalDoc, remote: LibDoc | null, fresh: Set<Key> = new Set()): LibDoc {
-  const L = local.doc;
+export function merge(base: LibDoc | null, local: LocalDoc, remote: LibDoc | null, opts: MergeOptions = {}): LibDoc {
+  const fresh = opts.fresh ?? new Set<Key>();
+  const stamp = opts.stamp ?? Date.now();
+  const join = opts.join ?? DEFAULT_JOIN;
+  const replace = !base && join.library === "account" && !!remote;
+  const L = replace ? { ...emptyDoc(), settings: local.doc.settings } : local.doc;
   const out = emptyDoc();
+  const at: Record<string, number> = {};
   const says = (k: Key) => local.speaks.has(k) && !fresh.has(k);
   // A key this phone has no say about: whatever the account holds.
   const theirs = <T,>(pick: (d: LibDoc) => Record<string, T>, k: string): T | undefined =>
     remote ? pick(remote)[k] : base ? pick(base)[k] : undefined;
+  const newer = (id: string) => stamp >= (remote?.at?.[id] ?? 0);
+  /** Stamps what this phone decided: its own time where it wrote something
+   *  new, the account's where it kept the account's. */
+  const stampIt = (id: string, v: unknown, r: unknown) => {
+    const t = !same(v, r) ? stamp : remote?.at?.[id];
+    if (t && v !== undefined) at[id] = t;
+  };
 
   for (const k of keysOf(base?.songs, L.songs, remote?.songs)) {
+    const r = remote?.songs[k];
     const v = !says(k) ? theirs(d => d.songs, k)
-      : !base ? joinSong(L.songs[k], remote?.songs[k])
-      : mergeSong(base.songs[k], L.songs[k], remote?.songs[k]);
-    if (v) out.songs[k] = v;
+      : !base ? joinSong(L.songs[k], r, !replace)
+      : mergeSong(base.songs[k], L.songs[k], r, newer("s:" + k));
+    if (v) { out.songs[k] = v; stampIt("s:" + k, v, r); }
   }
 
   for (const k of keysOf(base?.cuts, L.cuts, remote?.cuts)) {
     const v = !says(k) ? theirs(d => d.cuts, k)
       : !base ? (remote?.cuts[k] ?? L.cuts[k])
-      : pick3(base.cuts[k], L.cuts[k], remote?.cuts[k]);
-    if (v) out.cuts[k] = v;
+      : pick3(base.cuts[k], L.cuts[k], remote?.cuts[k], newer("c:" + k));
+    if (v) { out.cuts[k] = v; stampIt("c:" + k, v, remote?.cuts[k]); }
   }
 
   for (const id of keysOf(base?.playlists, L.playlists, remote?.playlists)) {
     const l = L.playlists[id], r = remote?.playlists[id];
     const v = !base
       ? (l && r ? { ...l, ...r, songs: mergeList([], r.songs, l.songs) } : (r ?? l))
-      : mergePlaylist(base.playlists[id], l, r);
-    if (v) out.playlists[id] = v;
+      : mergePlaylist(base.playlists[id], l, r, newer("p:" + id));
+    if (v) { out.playlists[id] = v; stampIt("p:" + id, v, r); }
+  }
+  // Joining: a playlist here with the same name as one in the account becomes
+  // one playlist, not two called "Favourites".
+  if (!base && remote) {
+    for (const [id, p] of Object.entries(out.playlists)) {
+      if (remote.playlists[id]) continue;
+      const twin = Object.entries(out.playlists).find(([oid, o]) => oid !== id && remote.playlists[oid] && normName(o.name) === normName(p.name));
+      if (!twin) continue;
+      const [tid, t] = twin;
+      out.playlists[tid] = { ...t, songs: mergeList([], t.songs, p.songs) };
+      at["p:" + tid] = stamp;
+      delete out.playlists[id];
+      delete at["p:" + id];
+    }
   }
 
   for (const k of keysOf(base?.settings, L.settings, remote?.settings)) {
-    const v = !base ? (remote?.settings[k] ?? L.settings[k]) : pick3(base.settings[k], L.settings[k], remote?.settings[k]);
-    if (v !== undefined) out.settings[k] = v;
+    const l = L.settings[k], r = remote?.settings[k];
+    const v = !base
+      ? (join.settings === "phone" ? (l ?? r) : (r ?? l))
+      : pick3(base.settings[k], l, r, newer("set:" + k));
+    if (v !== undefined) { out.settings[k] = v; stampIt("set:" + k, v, r); }
   }
+  out.at = at;
   return out;
 }
 
@@ -429,15 +499,56 @@ export function apply(doc: LibDoc, input: ApplyInput): Applied {
 
 // ── Songs to move ─────────────────────────────────────────────────────────────
 
-/** fp -> [size, file name]: the song files on one phone. */
-export type Inventory = Record<string, [number, string]>;
+/** fp -> [size, file name, title and artist, length in ms]: the song files one
+ *  phone shares. The last two tell two versions of one song apart from two
+ *  songs. */
+export type Inventory = Record<string, [number, string, string?, number?]>;
 
-/** What `mine` is missing that other phones have, leaving out the bin. */
-export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc): Inventory {
+/** Title and artist, the way two copies of one song would both have them. */
+export function songSig(title: string, artist: string): string | undefined {
+  const n = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const t = n(title || "");
+  if (!t || t === "unknown title") return undefined;
+  return `${t}|${n(artist || "")}`;
+}
+
+/** Title and artist to lengths, for the songs a phone has. */
+export function sigsOf(inv: Inventory): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  for (const [, , sig, ms] of Object.values(inv)) {
+    if (!sig || !ms) continue;
+    const list = out.get(sig) ?? [];
+    list.push(ms);
+    out.set(sig, list);
+  }
+  return out;
+}
+
+/** Another version of a song this phone already has: same title and artist,
+ *  and no more than two seconds longer or shorter. */
+function isCopy(entry: Inventory[string], sigs: Map<string, number[]>): boolean {
+  const [, , sig, ms] = entry;
+  if (!sig || !ms) return false;
+  return (sigs.get(sig) ?? []).some(d => Math.abs(d - ms) <= 2000);
+}
+
+export type MissingOptions = {
+  /** Songs this phone deleted and does not want back. */
+  skip?: Set<string>;
+  /** What this phone has, by title and artist (sigsOf). */
+  sigs?: Map<string, number[]>;
+};
+
+/** What `mine` is missing that other phones have: not what is in the bin or
+ *  deleted for good, not what this phone threw away itself, and not another
+ *  version of a song it already has. */
+export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc, opts: MissingOptions = {}): Inventory {
   const out: Inventory = {};
+  const sigs = opts.sigs ?? sigsOf(mine);
   for (const inv of others) {
     for (const [fp, v] of Object.entries(inv)) {
-      if (mine[fp] || out[fp] || doc.songs[fp]?.bin) continue;
+      if (mine[fp] || out[fp] || doc.songs[fp]?.bin || opts.skip?.has(fp)) continue;
+      if (isCopy(v, sigs)) continue;
       out[fp] = v;
     }
   }

@@ -34,7 +34,7 @@ import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
-import { initSync, syncChanged, type Host } from "./sync/engine";
+import { initSync, syncChanged, songsDeletedForGood, type Host } from "./sync/engine";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
@@ -1894,6 +1894,22 @@ export default function App() {
       if (a.changed.playlists) { playlistsRef.current = a.playlists; setPlaylists(a.playlists); await savePlaylists(a.playlists); }
     },
     rescan: async () => { await scanMusic(); },
+    // Songs whose files go: from the list, the bin and every playlist's view,
+    // with cut tracks made from them.
+    deleteFiles: async paths => {
+      const gone = new Set<string>();
+      for (const p of paths) if (await deleteFileAtUri(p)) gone.add(p);
+      if (!gone.size) return 0;
+      const keep = (x: Song) => !gone.has(x.uri);
+      const nextSongs = songsRef.current.filter(keep);
+      const nextRemoved = removedRef.current.filter(keep);
+      const nextMeta = { ...metaRef.current };
+      for (const id of Object.keys(nextMeta)) if (gone.has(id) || gone.has(id.split("__cut__")[0])) delete nextMeta[id];
+      songsRef.current = nextSongs; setSongs(nextSongs); await saveCutTracksToStorage(nextSongs.filter(x => x.isCut));
+      removedRef.current = nextRemoved; setRemovedSongs(nextRemoved); await saveRemovedTracksToStorage(nextRemoved);
+      metaRef.current = nextMeta; setMeta(nextMeta); await saveMetaNow(nextMeta);
+      return gone.size;
+    },
     settings: async () => {
       await loadPrefs();
       const session = await loadSession();
@@ -1917,6 +1933,7 @@ export default function App() {
       snapshot: () => syncHostRef.current!.snapshot(),
       apply: a => syncHostRef.current!.apply(a),
       rescan: () => syncHostRef.current!.rescan(),
+      deleteFiles: paths => syncHostRef.current!.deleteFiles(paths),
       settings: () => syncHostRef.current!.settings(),
     });
   }, [libraryReady]);
@@ -2243,6 +2260,7 @@ export default function App() {
       delete next[s.id];
       return next;
     });
+    if (!s.isCut) void songsDeletedForGood([s.uri]);
     showToast(t("\"{name}\" deleted from device", { name: s.title }));
   }, []);
 
@@ -2254,6 +2272,7 @@ export default function App() {
       toDelete.map(async s => ({ s, ok: await deleteFileAtUri(s.uri) }))
     );
     const deletedIds = new Set(results.filter(r => r.ok).map(r => r.s.id));
+    void songsDeletedForGood(results.filter(r => r.ok && !r.s.isCut).map(r => r.s.uri));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
     setRemovedSongs(remaining);

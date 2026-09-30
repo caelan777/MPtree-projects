@@ -4,6 +4,9 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.os.StatFs;
+import android.provider.Settings;
+import android.view.WindowManager;
 import android.util.Base64;
 import android.webkit.MimeTypeMap;
 
@@ -65,8 +68,11 @@ public class SyncPlugin extends Plugin {
     }
 
     // ── Which phone this is ─────────────────────────────────────────────────
-    // Kept in the no-backup folder on purpose: Android's own backup would
-    // otherwise carry it to a new phone, and two phones would then be one.
+    // Android's own id for this app on this phone. It stays the same when
+    // MPTree is uninstalled and installed again, so a reinstall does not use up
+    // one of the account's three places; a factory reset gives a new one. Kept
+    // in the no-backup folder too, so a phone that already had an id keeps it,
+    // and Android's backup never carries it to another phone.
     @PluginMethod
     public void deviceId(PluginCall call) {
         try {
@@ -74,7 +80,10 @@ public class SyncPlugin extends Plugin {
             String id = null;
             if (f.exists()) id = new String(readAll(new FileInputStream(f)), StandardCharsets.UTF_8).trim();
             if (id == null || id.isEmpty()) {
-                id = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                String android = Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+                id = android != null && android.length() >= 8
+                        ? android.toLowerCase()
+                        : UUID.randomUUID().toString().replace("-", "").substring(0, 16);
                 try (FileOutputStream os = new FileOutputStream(f)) { os.write(id.getBytes(StandardCharsets.UTF_8)); }
             }
             JSObject r = new JSObject();
@@ -104,6 +113,32 @@ public class SyncPlugin extends Plugin {
         r.put("online", online);
         r.put("unmetered", unmetered);
         call.resolve(r);
+    }
+
+    // ── Room ────────────────────────────────────────────────────────────────
+    /** Bytes free where songs go, so a phone is not filled to the brim. */
+    @PluginMethod
+    public void freeSpace(PluginCall call) {
+        JSObject r = new JSObject();
+        try {
+            StatFs st = new StatFs(android.os.Environment.getExternalStorageDirectory().getPath());
+            r.put("bytes", st.getAvailableBytes());
+        } catch (Exception e) {
+            r.put("bytes", -1);
+        }
+        call.resolve(r);
+    }
+
+    /** Keeps the screen on while songs move: with the screen off Android
+     *  pauses the app, and the song on its way with it. */
+    @PluginMethod
+    public void keepScreenOn(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        getActivity().runOnUiThread(() -> {
+            if (on) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            call.resolve();
+        });
     }
 
     // ── Fingerprints ────────────────────────────────────────────────────────

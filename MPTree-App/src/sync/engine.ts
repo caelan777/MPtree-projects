@@ -4,11 +4,12 @@ import { App as CapApp } from "@capacitor/app";
 import { Account, Sync, System } from "../plugins";
 import { collectSettings, restoreSettings } from "../storage";
 import { hasPro, subscribePro } from "../pro";
+import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
 import { openDrive, type Drive, type DriveFile } from "./drive";
 import {
-  buildLocal, merge, apply, missingFrom, coverRefs, same, fileOf,
-  type LibDoc, type Applied, type Inventory,
+  buildLocal, merge, apply, missingFrom, coverRefs, same, fileOf, songSig, sigsOf,
+  DEFAULT_JOIN, type LibDoc, type Applied, type Inventory, type JoinChoice,
 } from "./model";
 import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type Session } from "./rtc";
 
@@ -27,11 +28,15 @@ import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type
 //                          one that needs it takes it, and it is deleted from
 //                          Drive the moment it has arrived.
 //
+// Not every song travels. Voice notes, recordings and clips under a minute
+// (cleanup.ts) stay on the phone they are on, and so do songs someone chose to
+// keep on one phone, or deleted there themselves.
+//
 // Files in the app folder:
 //   devices.json          the phones on the account, three at most
 //   library.json          the account itself
 //   covers.json           cover pictures, by hash
-//   inv-<phone>.json      the song files on that phone
+//   inv-<phone>.json      the songs that phone shares, and the ones it threw out
 //   peer-<phone>.json     "I am open now", and the WebRTC offer or answer
 //   relay-<to>-<fp>       a song waiting for phone <to>
 //
@@ -45,30 +50,71 @@ const peer = (id: string) => `peer-${id}.json`;
 const relayPrefix = (to: string) => `relay-${to}-`;
 
 const KEY_ACCOUNT = "mptree_account";
+/** What this phone and the account last agreed on. Kept when signing out, so
+ *  signing in again carries on instead of starting over. */
 const KEY_BASE = "mptree_sync_base";
+/** Songs kept on this phone only. */
+const KEY_LOCAL = "mptree_sync_local";
+/** Songs deleted on this phone outside MPTree: not fetched again. */
+const KEY_SKIP = "mptree_sync_skip";
+/** Songs that came from other phones, for "remove them when signing out". */
+const KEY_RECEIVED = "mptree_sync_received";
+/** Songs deleted for good here that the account has not heard of yet. */
+const KEY_FORGOT = "mptree_sync_forgot";
+/** When the oldest change not yet in the account was made. */
+const KEY_DIRTY = "mptree_sync_dirty";
+/** The account signed in last, to notice a different one. */
+const KEY_LAST_EMAIL = "mptree_sync_last_email";
+/** Songs moved over mobile data today. */
+const KEY_MOBILE = "mptree_sync_mobile";
 
 /** A phone counts as open when it said so this recently. */
 const ONLINE_MS = 60_000;
 const HEARTBEAT_MS = 20_000;
+/** Every phone says "still here" at least this often, for "last used". */
+const ALIVE_MS = 6 * 60 * 60_000;
 const LIBRARY_EVERY = 60_000;
 const SONGS_EVERY = 5_000;
 /** How often to look when no other phone is open. */
 const SONGS_IDLE = 30_000;
 /** How much may wait in Drive for one phone at a time. */
 const RELAY_BUDGET = 1024 * 1024 * 1024;
+/** A song left in Drive this long is deleted from it, taken or not. */
+const RELAY_MAX_AGE = 30 * 24 * 60 * 60_000;
 /** After a direct connection fails, use Drive for this long. */
 const DIRECT_PAUSE = 10 * 60_000;
+/** Always left free on a phone. */
+const ROOM_MARGIN = 500 * 1024 * 1024;
+/** At most this much over mobile data a day, when that is allowed at all. */
+export const MOBILE_DAILY = 500 * 1024 * 1024;
+/** A phone of the same name not used for this long is replaced on joining. */
+const STALE_DEVICE = 30 * 24 * 60 * 60_000;
 
 // ── State, for the UI ─────────────────────────────────────────────────────────
 
-export type Device = { id: string; name: string; addedAt: number };
+export type Device = { id: string; name: string; addedAt: number; lastActive?: number };
 
 export type Moving = { dir: "in" | "out"; name: string; done: number; total: number; via: "direct" | "drive"; peer: string };
 
+/** What a phone about to join is asked. */
+export type JoinQuestion = {
+  email: string;
+  /** Songs here that the account's phones do not have. */
+  newSongs: number;
+  newBytes: number;
+  /** This phone has playlists, likes or names of its own. */
+  hasLibrary: boolean;
+  /** Another account was signed in on this phone before. */
+  otherAccount?: string;
+};
+
 export type SyncState = {
-  /** off: signed out. joining: signing in. limit: three phones already, pick one
-   *  to take off. on: signed in. removed: another phone took this one off. */
-  phase: "off" | "joining" | "limit" | "on" | "removed";
+  /** off: signed out. joining: signing in. choose: answer the join questions.
+   *  limit: three phones already, take one off. on: signed in. removed: taken
+   *  off the account from another phone, or the account was emptied. */
+  phase: "off" | "joining" | "choose" | "limit" | "on" | "removed";
+  removedWhy?: "phone" | "emptied";
+  join?: JoinQuestion;
   account?: { email: string; name: string; photo?: string };
   deviceId?: string;
   devices: Device[];
@@ -89,21 +135,43 @@ export type SyncState = {
     arrived: number;
     /** Phones that have songs this one needs but are not open right now. */
     waitingOn: string[];
-    note?: "wifi" | "drive-full" | "phone-full" | null;
+    note?: "wifi" | "drive-full" | "phone-full" | "mobile-limit" | null;
+    /** With note phone-full: what the missing songs need, and what is free. */
+    needBytes?: number;
+    freeBytes?: number;
+    /** Songs waiting in Drive, for any phone. */
+    inDrive: { count: number; bytes: number };
+    /** Kept on this phone only. */
+    localOnly: number;
+    /** Voice notes and short clips, which stay where they are. */
+    notShared: number;
+    /** Deleted here outside MPTree, so not fetched again. */
+    skipped: number;
+    /** Deleted for good on another phone, still in the bin here. */
+    goneHere: number;
+    /** Came from other phones; can go when signing out. */
+    received: number;
   };
   mobileData: boolean;
 };
 
-const initial: SyncState = {
-  phase: "off", devices: [], pausedNoPro: false, saving: false,
-  songs: { here: 0, missing: 0, theyMiss: 0, arrived: 0, waitingOn: [] },
-  mobileData: false,
+const initialSongs: SyncState["songs"] = {
+  here: 0, missing: 0, theyMiss: 0, arrived: 0, waitingOn: [],
+  inDrive: { count: 0, bytes: 0 }, localOnly: 0, notShared: 0, skipped: 0, goneHere: 0, received: 0,
 };
+const initial: SyncState = { phase: "off", devices: [], pausedNoPro: false, saving: false, songs: initialSongs, mobileData: false };
 
 let state: SyncState = initial;
 const listeners = new Set<() => void>();
 const set = (patch: Partial<SyncState>) => { state = { ...state, ...patch }; listeners.forEach(l => l()); };
-const setSongs = (patch: Partial<SyncState["songs"]>) => set({ songs: { ...state.songs, ...patch } });
+const setSongs = (patch: Partial<SyncState["songs"]>) => {
+  const was = !!state.songs.moving;
+  set({ songs: { ...state.songs, ...patch } });
+  // The screen stays on while a song is on its way: with it off, Android
+  // pauses the app and the song with it.
+  const now = !!state.songs.moving;
+  if (was !== now) Sync.keepScreenOn({ on: now }).catch(() => {});
+};
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const snap = () => state;
 
@@ -120,6 +188,9 @@ export type Host = {
   rescan(): Promise<void>;
   /** Settings came in from another phone and are stored: show them. */
   settings(): Promise<void>;
+  /** Deletes these files from the phone, and the songs from the library and
+   *  the bin. Resolves how many went. */
+  deleteFiles(paths: string[]): Promise<number>;
 };
 
 let host: Host | null = null;
@@ -127,15 +198,31 @@ let host: Host | null = null;
 // ── Stored on the phone ───────────────────────────────────────────────────────
 
 type StoredAccount = { email: string; name: string; photo?: string; since: number; mobileData?: boolean };
-type Base = { deviceId: string; email: string; doc: LibDoc; keys: string[]; inv?: string };
+type Base = { deviceId: string; email: string; doc: LibDoc; keys: string[]; inv?: string; files?: string[] };
 
 async function readJson<T>(key: string): Promise<T | null> {
   try { const { value } = await Preferences.get({ key }); return value ? JSON.parse(value) as T : null; } catch { return null; }
 }
 const writeJson = (key: string, v: unknown) => Preferences.set({ key, value: JSON.stringify(v) }).catch(() => {});
 
+/** A set of fingerprints kept in Preferences. */
+function storedSet(key: string) {
+  let cur = new Set<string>();
+  return {
+    async load() { cur = new Set(await readJson<string[]>(key) ?? []); return cur; },
+    get: () => cur,
+    async save(next: Set<string>) { cur = next; await writeJson(key, [...next]); },
+  };
+}
+const localOnly = storedSet(KEY_LOCAL);
+const skipped = storedSet(KEY_SKIP);
+const received = storedSet(KEY_RECEIVED);
+const forgot = storedSet(KEY_FORGOT);
+
 let stored: StoredAccount | null = null;
 let deviceId = "";
+/** When the oldest change not yet in the account was made; 0 when none. */
+let dirtySince = 0;
 
 // ── Drive, with tokens ────────────────────────────────────────────────────────
 
@@ -145,7 +232,7 @@ const isDev = () => token?.value === "dev";
 
 async function getToken(): Promise<string> {
   if (token && Date.now() - token.at < 40 * 60_000) return token.value;
-  const r = await Account.getToken({ email: stored?.email });
+  const r = await Account.getToken({ email: stored?.email ?? pendingJoin?.email });
   token = { value: r.token, at: Date.now() };
   return r.token;
 }
@@ -194,9 +281,19 @@ async function removeFile(name: string): Promise<void> {
   files.delete(name);
 }
 
+/** The phones on the account, each with when it was last used: the last time
+ *  it said anything in its peer file. */
 async function readDevices(): Promise<Device[]> {
-  return (await readFile<{ devices: Device[] }>(DEVICES))?.devices ?? [];
+  const list = (await readFile<{ devices: Device[] }>(DEVICES))?.devices ?? [];
+  return list.map(d => {
+    const f = files.get(peer(d.id));
+    return { ...d, lastActive: f ? Date.parse(f.modifiedTime) || d.addedAt : d.addedAt };
+  });
 }
+const saveDevices = (list: Device[]) =>
+  writeFile(DEVICES, { devices: list.map(d => ({ id: d.id, name: d.name, addedAt: d.addedAt })) });
+
+type InvFile = { fps: Inventory; skip?: string[] };
 
 // ── Starting up ───────────────────────────────────────────────────────────────
 
@@ -204,6 +301,8 @@ export async function initSync(h: Host): Promise<void> {
   host = h;
   deviceId = (await Sync.deviceId().catch(() => ({ id: "" }))).id;
   stored = await readJson<StoredAccount>(KEY_ACCOUNT);
+  await Promise.all([localOnly.load(), skipped.load(), received.load(), forgot.load()]);
+  dirtySince = (await readJson<number>(KEY_DIRTY)) ?? 0;
   if (stored) {
     set({
       phase: "on", deviceId,
@@ -211,12 +310,14 @@ export async function initSync(h: Host): Promise<void> {
       mobileData: !!stored.mobileData,
     });
     if (import.meta.env.DEV) try { if (localStorage.getItem("mptree_dev_account") === "1") token = { value: "dev", at: Date.now() }; } catch { /* no storage */ }
+  } else {
+    set({ deviceId });
   }
   subscribePro(() => { refreshPro(); });
-  keepChecking();
-  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mptreeSync = { state: () => state, run: () => libraryCycle() };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(1500); });
   CapApp.addListener("resume", () => kick(1500)).catch(() => {});
+  keepChecking();
+  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mptreeSync = { state: () => state, run: () => libraryCycle() };
   refreshPro();
 }
 
@@ -228,34 +329,92 @@ function refreshPro() {
 
 const active = () => state.phase === "on" && !state.pausedNoPro && !!host && document.visibilityState === "visible";
 
-// ── Signing in and out ────────────────────────────────────────────────────────
+// ── Signing in ────────────────────────────────────────────────────────────────
 
 let pendingJoin: StoredAccount | null = null;
 
-export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed"> {
+export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "choose" | "failed"> {
   if (!hasPro()) return "failed";
-  set({ phase: "joining", problem: null });
+  set({ phase: "joining", problem: null, removedWhy: undefined });
   try {
     const r = await Account.signIn();
     if (r.cancelled || !r.token) { set({ phase: "off" }); return "cancelled"; }
     token = { value: r.token, at: Date.now() };
     drive = null;
+    files = new Map();
+    cache.clear();
     const me = await connect().about();
-    stored = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
+    pendingJoin = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
     set({ account: { email: me.email, name: me.name, photo: me.photo }, deviceId });
-    await listFiles();
-    const devices = await readDevices();
-    set({ devices });
-    if (!devices.some(d => d.id === deviceId) && devices.length >= MAX_DEVICES) {
-      pendingJoin = stored;
-      set({ phase: "limit" });
-      return "limit";
-    }
-    return await finishJoin();
+    return await nextJoinStep();
   } catch {
+    pendingJoin = null;
     set({ phase: "off", problem: "signin" });
     return "failed";
   }
+}
+
+/** Room on the account, then the questions, then in. */
+async function nextJoinStep(): Promise<"ok" | "limit" | "choose" | "failed"> {
+  await listFiles();
+  let devices = await readDevices();
+  if (!devices.some(d => d.id === deviceId) && devices.length >= MAX_DEVICES) {
+    // This phone again, from before a factory reset or on an older build: a
+    // phone of the same name nobody has used for a month makes room itself.
+    const myName = await phoneName();
+    const stale = devices.find(d => baseName(d.name) === myName && Date.now() - (d.lastActive ?? d.addedAt) > STALE_DEVICE);
+    if (stale) {
+      devices = devices.filter(d => d.id !== stale.id);
+      await saveDevices(devices);
+      await forgetPhoneFiles(stale.id);
+    }
+  }
+  set({ devices });
+  if (!devices.some(d => d.id === deviceId) && devices.length >= MAX_DEVICES) {
+    set({ phase: "limit" });
+    return "limit";
+  }
+
+  // Signed in here with this account before: carry on where it left off.
+  const base = await readJson<Base>(KEY_BASE);
+  if (base && base.deviceId === deviceId && base.email === pendingJoin?.email) return finishJoin(DEFAULT_JOIN, "share");
+
+  const question = await joinQuestion();
+  if (!question) return finishJoin({ settings: "phone", library: "merge" }, "share");
+  set({ phase: "choose", join: question });
+  return "choose";
+}
+
+/** What to ask a phone joining an account that already has things in it, or
+ *  null when there is nothing to ask. */
+async function joinQuestion(): Promise<JoinQuestion | null> {
+  if (!host || !pendingJoin) return null;
+  const remote = await readFile<LibDoc>(LIB);
+  const devices = await readDevices();
+  const others = devices.filter(d => d.id !== deviceId);
+  const accountHasThings = !!remote && (Object.keys(remote.playlists).length > 0 || Object.keys(remote.songs).length > 0 || others.length > 0);
+  if (!accountHasThings) return null;
+
+  const snap = host.snapshot();
+  await fingerprint(snap.songs, snap.removed);
+  const theirs = new Set<string>();
+  for (const d of others) for (const fp of Object.keys((await readFile<InvFile>(inv(d.id)))?.fps ?? {})) theirs.add(fp);
+  const shared = sharedInventory(snap.songs);
+  let newSongs = 0, newBytes = 0;
+  for (const [fp, v] of Object.entries(shared)) if (!theirs.has(fp)) { newSongs++; newBytes += v[0]; }
+  const hasLibrary = snap.playlists.length > 0 || Object.keys(snap.meta).length > 0 || snap.removed.length > 0;
+  const last = await readJson<string>(KEY_LAST_EMAIL);
+  return {
+    email: pendingJoin.email, newSongs, newBytes, hasLibrary,
+    otherAccount: last && last !== pendingJoin.email ? last : undefined,
+  };
+}
+
+/** The answers to the join questions. songs: "share" sends this phone's songs
+ *  to the others, "local" keeps the ones they do not have on this phone. */
+export async function answerJoin(choice: JoinChoice, songs: "share" | "local"): Promise<void> {
+  set({ phase: "joining" });
+  try { await finishJoin(choice, songs); } catch { set({ phase: "off", problem: "drive" }); }
 }
 
 async function phoneName(): Promise<string> {
@@ -265,33 +424,65 @@ async function phoneName(): Promise<string> {
     return d.model.toLowerCase().startsWith(brand.toLowerCase()) ? d.model : `${brand} ${d.model}`.trim();
   } catch { return "Phone"; }
 }
+/** "Pixel 8 (2)" is a Pixel 8. */
+const baseName = (n: string) => n.replace(/ \(\d+\)$/, "");
 
-async function finishJoin(): Promise<"ok" | "failed"> {
+async function finishJoin(choice: JoinChoice, songs: "share" | "local"): Promise<"ok" | "failed"> {
   const acc = pendingJoin ?? stored;
-  pendingJoin = null;
   if (!acc) return "failed";
+  await listFiles();
   const devices = await readDevices();
   if (!devices.some(d => d.id === deviceId)) {
-    devices.push({ id: deviceId, name: await phoneName(), addedAt: Date.now() });
-    await writeFile(DEVICES, { devices });
+    // Two phones of the same model get told apart: "Pixel 8", "Pixel 8 (2)".
+    const name = await phoneName();
+    const taken = new Set(devices.map(d => d.name));
+    let unique = name;
+    for (let n = 2; taken.has(unique); n++) unique = `${name} (${n})`;
+    devices.push({ id: deviceId, name: unique, addedAt: Date.now() });
+    await saveDevices(devices);
   }
+  // A base from another account, or none: this is a first join.
+  const base = await readJson<Base>(KEY_BASE);
+  const again = !!base && base.deviceId === deviceId && base.email === acc.email;
+  if (!again) {
+    await Preferences.remove({ key: KEY_BASE }).catch(() => {});
+    await Promise.all([received.save(new Set()), forgot.save(new Set()), skipped.save(new Set())]);
+    // Keep on this phone only: what the account's phones do not have yet.
+    if (songs === "local" && host) {
+      const theirs = new Set<string>();
+      for (const d of devices) if (d.id !== deviceId) for (const fp of Object.keys((await readFile<InvFile>(inv(d.id)))?.fps ?? {})) theirs.add(fp);
+      const snap = host.snapshot();
+      await fingerprint(snap.songs, snap.removed);
+      await localOnly.save(new Set(Object.keys(myInv).filter(fp => !theirs.has(fp))));
+    } else {
+      await localOnly.save(new Set());
+    }
+  }
+  pendingJoin = null;
   stored = acc;
   await writeJson(KEY_ACCOUNT, acc);
-  // A base from an earlier sign-in, maybe to another account, says nothing.
-  await Preferences.remove({ key: KEY_BASE }).catch(() => {});
-  set({ phase: "on", devices, account: { email: acc.email, name: acc.name, photo: acc.photo } });
-  await libraryCycle();
+  await writeJson(KEY_LAST_EMAIL, acc.email);
+  set({ phase: "on", join: undefined, devices, account: { email: acc.email, name: acc.name, photo: acc.photo } });
+  await libraryCycle(again ? undefined : choice);
   return "ok";
+}
+
+export function cancelJoin(): void {
+  const email = pendingJoin?.email;
+  pendingJoin = null;
+  token = null; drive = null; files = new Map(); cache.clear();
+  void Account.signOut({ email }).catch(() => {});
+  set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
 }
 
 /** Takes a phone off the account. Its songs stay on it; it just stops syncing. */
 export async function removeDevice(id: string): Promise<void> {
   await listFiles();
   const devices = (await readDevices()).filter(d => d.id !== id);
-  await writeFile(DEVICES, { devices });
+  await saveDevices(devices);
   await forgetPhoneFiles(id);
   set({ devices });
-  if (state.phase === "limit" && devices.length < MAX_DEVICES) await finishJoin();
+  if (state.phase === "limit" && devices.length < MAX_DEVICES) await nextJoinStep();
 }
 
 async function forgetPhoneFiles(id: string) {
@@ -300,35 +491,39 @@ async function forgetPhoneFiles(id: string) {
   }
 }
 
+// ── Signing out ───────────────────────────────────────────────────────────────
+
 /** Signing out frees this phone's place on the account. Everything stays on
- *  the phone as it is. */
-export async function signOut(): Promise<void> {
+ *  the phone, unless removeReceived: then the songs that came from the other
+ *  phones go. What was agreed with the account is kept, so signing in again
+ *  carries on rather than bringing back what was deleted in between. */
+export async function signOut(removeReceived = false): Promise<number> {
   stopTransfers();
   const email = stored?.email;
+  let removed = 0;
+  if (removeReceived && host) {
+    const paths = [...received.get()].map(fp => pathByFp.get(fp)).filter((p): p is string => !!p);
+    removed = await host.deleteFiles(paths).catch(() => 0);
+    await received.save(new Set());
+  }
   try {
     if (state.phase === "on") {
       await listFiles();
       const devices = (await readDevices()).filter(d => d.id !== deviceId);
-      await writeFile(DEVICES, { devices });
+      await saveDevices(devices);
       await forgetPhoneFiles(deviceId);
     }
   } catch { /* offline: the place frees when another phone removes it */ }
   await Account.signOut({ email }).catch(() => {});
   await forget();
   set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
+  return removed;
 }
 
-export function cancelJoin(): void {
-  pendingJoin = null;
-  void Account.signOut({ email: stored?.email }).catch(() => {});
-  void forget();
-  set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
-}
-
+/** Forgets the sign-in. The base stays; it is tied to the account's email. */
 async function forget() {
   stored = null; token = null; drive = null; files = new Map(); cache.clear();
   await Preferences.remove({ key: KEY_ACCOUNT }).catch(() => {});
-  await Preferences.remove({ key: KEY_BASE }).catch(() => {});
 }
 
 export function dismissRemoved(): void {
@@ -339,6 +534,43 @@ export async function setMobileData(on: boolean): Promise<void> {
   set({ mobileData: on });
   if (stored) { stored = { ...stored, mobileData: on }; await writeJson(KEY_ACCOUNT, stored); }
   kick(500);
+}
+
+// ── Choices about songs, from the account page ────────────────────────────────
+
+/** Songs kept on this phone only go to the other phones after all. */
+export async function shareLocalOnly(): Promise<void> {
+  await localOnly.save(new Set());
+  setSongs({ localOnly: 0 });
+  kick(500);
+}
+
+/** Songs deleted here are fetched again. */
+export async function fetchSkippedAgain(): Promise<void> {
+  await skipped.save(new Set());
+  setSongs({ skipped: 0 });
+  kick(500);
+}
+
+/** Deletes from this phone the songs another phone deleted for good. */
+export async function deleteGoneHere(): Promise<number> {
+  if (!host || !doc) return 0;
+  const d = doc;
+  const paths = host.snapshot().removed
+    .filter(s => !s.isCut && d.songs[fpByPath.get(s.uri) ?? ""]?.gone)
+    .map(s => s.uri);
+  const n = await host.deleteFiles(paths);
+  kick(500);
+  return n;
+}
+
+/** The app calls this when songs are deleted for good from the bin here, so
+ *  the other phones can offer the same. */
+export async function songsDeletedForGood(paths: string[]): Promise<void> {
+  const next = new Set(forgot.get());
+  for (const p of paths) { const fp = fpByPath.get(p); if (fp) next.add(fp); }
+  await forgot.save(next);
+  syncChanged();
 }
 
 // ── Scheduling ────────────────────────────────────────────────────────────────
@@ -365,17 +597,36 @@ function keepChecking() {
 }
 
 /** The app calls this whenever something that is saved to the account changed. */
-export function syncChanged(): void { kick(6000); }
+export function syncChanged(): void {
+  // Remembered across restarts: a change made with no internet still counts
+  // from when it was made, not from when the phone got back online.
+  if (!dirtySince && state.phase === "on") { dirtySince = Date.now(); void writeJson(KEY_DIRTY, dirtySince); }
+  kick(6000);
+}
 
 // ── One round of the account ──────────────────────────────────────────────────
 
 let running = false, again = false;
 let fpByPath = new Map<string, string>();
 let pathByFp = new Map<string, string>();
+/** Every song file on this phone. */
 let myInv: Inventory = {};
 let doc: LibDoc | null = null;
 
-async function libraryCycle(): Promise<void> {
+/** The songs this phone offers the others: not the ones kept here, and not
+ *  voice notes, recordings or short clips. */
+let notSharedFps = new Set<string>();
+function sharedInventory(songs: Song[]): Inventory {
+  notSharedFps = new Set(findSuspects(songs).map(x => fpByPath.get(x.song.uri)).filter((x): x is string => !!x));
+  const out: Inventory = {};
+  for (const [fp, v] of Object.entries(myInv)) {
+    if (localOnly.get().has(fp) || notSharedFps.has(fp)) continue;
+    out[fp] = v;
+  }
+  return out;
+}
+
+async function libraryCycle(join?: JoinChoice): Promise<void> {
   if (!host || state.phase !== "on" || state.pausedNoPro) return;
   if (running) { again = true; return; }
   running = true;
@@ -385,15 +636,29 @@ async function libraryCycle(): Promise<void> {
     set({ saving: true });
     await listFiles();
 
-    const devices = await readDevices();
-    if (!devices.some(d => d.id === deviceId)) {
-      // Another phone took this one off the account.
+    // Emptied from Google Drive's settings: that is someone deleting their
+    // account data. Stop, rather than filling it straight up again.
+    if (!files.has(DEVICES)) {
       stopTransfers();
       await forget();
-      set({ ...initial, phase: "removed", deviceId, pausedNoPro: state.pausedNoPro });
+      await Preferences.remove({ key: KEY_BASE }).catch(() => {});
+      set({ ...initial, phase: "removed", removedWhy: "emptied", deviceId, pausedNoPro: state.pausedNoPro });
+      return;
+    }
+    const devices = await readDevices();
+    if (!devices.some(d => d.id === deviceId)) {
+      stopTransfers();
+      await forget();
+      set({ ...initial, phase: "removed", removedWhy: "phone", deviceId, pausedNoPro: state.pausedNoPro });
       return;
     }
     set({ devices });
+    // "Still here", now and then, for "last used" on the other phones.
+    const mine = files.get(peer(deviceId));
+    if (!mine || Date.now() - Date.parse(mine.modifiedTime) > ALIVE_MS) {
+      myNote = { ...myNote, seen: Date.now() };
+      await writeFile(peer(deviceId), myNote);
+    }
 
     const snapshot = host.snapshot();
     await fingerprint(snapshot.songs, snapshot.removed);
@@ -405,8 +670,29 @@ async function libraryCycle(): Promise<void> {
     const fresh = new Set<string>();
     if (usable) { const had = new Set(usable.keys); for (const k of local.speaks) if (!had.has(k)) fresh.add(k); }
 
+    // Songs deleted for good here: the account hears it, keeping what it knew.
     const remote = await readFile<LibDoc>(LIB);
-    const merged = merge(usable?.doc ?? null, local, remote, fresh);
+    for (const fp of forgot.get()) {
+      if (myInv[fp]) continue;
+      local.doc.songs[fp] = { ...(remote?.songs[fp] ?? usable?.doc.songs[fp] ?? {}), bin: true, gone: true };
+      local.speaks.add(fp);
+      fresh.delete(fp);
+    }
+
+    // A file that was here last round and is gone now, without MPTree deleting
+    // it: someone deleted it on purpose. It is not fetched back.
+    if (usable?.files) {
+      const next = new Set(skipped.get());
+      for (const fp of usable.files) if (!myInv[fp] && !forgot.get().has(fp)) next.add(fp);
+      for (const fp of next) if (myInv[fp]) next.delete(fp);
+      if (next.size !== skipped.get().size || [...next].some(x => !skipped.get().has(x))) await skipped.save(next);
+    }
+    const rec = new Set([...received.get()].filter(fp => myInv[fp]));
+    if (rec.size !== received.get().size) await received.save(rec);
+
+    const merged = merge(usable?.doc ?? null, local, remote, {
+      fresh, stamp: dirtySince || Date.now(), join: usable ? undefined : (join ?? DEFAULT_JOIN),
+    });
 
     // Covers: send up the ones the account lacks, fetch the ones this phone lacks.
     const refs = coverRefs(merged);
@@ -442,13 +728,26 @@ async function libraryCycle(): Promise<void> {
       });
       if (out.changed.songs || out.changed.removed || out.changed.meta || out.changed.playlists) await host.apply(out);
       if (out.settings) { await restoreSettings(out.settings); await host.settings(); }
-      const invHash = await sendInventory(usable?.inv);
-      await writeJson(KEY_BASE, { deviceId, email: stored!.email, doc: merged, keys: [...local.speaks], inv: invHash } satisfies Base);
+      const invHash = await sendInventory(snapshot.songs, usable?.inv);
+      await writeJson(KEY_BASE, {
+        deviceId, email: stored!.email, doc: merged, keys: [...local.speaks], inv: invHash, files: Object.keys(myInv),
+      } satisfies Base);
+      await forgot.save(new Set());
+      dirtySince = 0;
+      await Preferences.remove({ key: KEY_DIRTY }).catch(() => {});
     } else {
       again = true;
     }
     doc = merged;
-    setSongs({ here: Object.keys(myInv).filter(fp => !merged.songs[fp]?.bin).length });
+    const removedNow = host.snapshot().removed;
+    setSongs({
+      here: Object.keys(myInv).filter(fp => !merged.songs[fp]?.bin).length,
+      localOnly: [...localOnly.get()].filter(fp => myInv[fp]).length,
+      notShared: notSharedFps.size,
+      skipped: skipped.get().size,
+      received: received.get().size,
+      goneHere: removedNow.filter(s => !s.isCut && merged.songs[fpByPath.get(s.uri) ?? ""]?.gone).length,
+    });
     await songsCycle();
   } catch (e) {
     set({ problem: (e as { code?: string })?.code === "NEEDS_SIGN_IN" ? "signin" : "drive" });
@@ -460,25 +759,32 @@ async function libraryCycle(): Promise<void> {
 }
 
 async function fingerprint(songs: Song[], removed: Song[]) {
-  const paths = new Set<string>();
-  for (const s of [...songs, ...removed]) paths.add(s.uri);
-  const { items } = await Sync.fingerprints({ paths: [...paths] });
+  const byPath = new Map<string, Song>();
+  for (const s of [...songs, ...removed]) if (!s.isCut) byPath.set(s.uri, s);
+  // A cut track's file is its source; it has to be known for the cut's key.
+  for (const s of [...songs, ...removed]) if (s.isCut && !byPath.has(s.uri)) byPath.set(s.uri, s);
+  const { items } = await Sync.fingerprints({ paths: [...byPath.keys()] });
   fpByPath = new Map();
   pathByFp = new Map();
   myInv = {};
   for (const it of items) {
     fpByPath.set(it.path, it.fp);
     if (!pathByFp.has(it.fp)) pathByFp.set(it.fp, it.path);
-    myInv[it.fp] = [it.size, it.path.split("/").pop() ?? "song.mp3"];
+    const s = byPath.get(it.path);
+    const sig = s && !s.isCut ? songSig(s.title, s.artist) : undefined;
+    myInv[it.fp] = [it.size, it.path.split("/").pop() ?? "song.mp3", sig, s && !s.isCut ? s.duration : undefined];
   }
 }
 
-/** Writes this phone's song list when it changed. Resolves its hash. */
-async function sendInventory(last?: string): Promise<string> {
-  const keys = Object.keys(myInv).sort();
-  const h = keys.join(",");
-  const hash = `${keys.length}:${h.length}:${h.slice(0, 64)}:${h.slice(-64)}`;
-  if (hash !== last || !files.has(inv(deviceId))) await writeFile(inv(deviceId), { fps: myInv });
+/** Writes what this phone shares, and what it threw out, when that changed.
+ *  Resolves its hash. */
+async function sendInventory(songs: Song[], last?: string): Promise<string> {
+  const shared = sharedInventory(songs);
+  const keys = Object.keys(shared).sort();
+  const skip = [...skipped.get()].sort();
+  const h = keys.join(",") + "|" + skip.join(",");
+  const hash = `${keys.length}:${skip.length}:${h.length}:${h.slice(0, 64)}:${h.slice(-64)}`;
+  if (hash !== last || !files.has(inv(deviceId))) await writeFile(inv(deviceId), { fps: shared, skip } satisfies InvFile);
   return hash;
 }
 
@@ -495,8 +801,10 @@ let answeredSid = "";
 /** Set while a direct connection is being set up, before session exists. */
 let connecting = false;
 /** Songs on the other phones, from their lists: fp -> [size, name]. */
-const elsewhere = new Map<string, [number, string]>();
+const elsewhere = new Map<string, Inventory[string]>();
 let relaying = false;
+/** Room left for songs to come in this round. */
+let roomLeft = Infinity;
 
 function stopTransfers() {
   clearTimeout(songTimer);
@@ -511,10 +819,28 @@ function scheduleSongs(ms = SONGS_EVERY) {
 
 const nameOf = (id: string) => state.devices.find(d => d.id === id)?.name ?? "";
 
+// ── Mobile data, at most MOBILE_DAILY a day ──
+let onMobile = false;
+async function mobileUsed(): Promise<number> {
+  const m = await readJson<{ day: string; bytes: number }>(KEY_MOBILE);
+  return m && m.day === new Date().toDateString() ? m.bytes : 0;
+}
+async function countMobile(bytes: number) {
+  if (!onMobile || !bytes) return;
+  await writeJson(KEY_MOBILE, { day: new Date().toDateString(), bytes: (await mobileUsed()) + bytes });
+}
+
+/** Keeps songs coming in within the room there is. */
+function fits(size: number): boolean {
+  if (size > roomLeft) return false;
+  roomLeft -= size;
+  return true;
+}
+
 async function songsCycle(relist = false): Promise<void> {
   if (!active() || !doc || isDev()) return;
   const others = state.devices.filter(d => d.id !== deviceId);
-  if (!others.length) { setSongs({ missing: 0, theyMiss: 0, waitingOn: [], note: null }); return; }
+  if (!others.length) { setSongs({ missing: 0, theyMiss: 0, waitingOn: [], note: null, inDrive: { count: 0, bytes: 0 } }); return; }
   try {
     if (relist) {
       await listFiles();
@@ -522,31 +848,58 @@ async function songsCycle(relist = false): Promise<void> {
       const lib = files.get(LIB);
       if (lib && lib.modifiedTime !== cache.get(LIB)?.at) kick(500);
     }
-    const invs = new Map<string, Inventory>();
+    const invs = new Map<string, InvFile>();
     const notes = new Map<string, PeerNote>();
     for (const d of others) {
-      invs.set(d.id, (await readFile<{ fps: Inventory }>(inv(d.id)))?.fps ?? {});
+      invs.set(d.id, (await readFile<InvFile>(inv(d.id))) ?? { fps: {} });
       const n = await readFile<PeerNote>(peer(d.id));
       if (n) notes.set(d.id, n);
     }
-    for (const i of invs.values()) for (const [fp, v] of Object.entries(i)) elsewhere.set(fp, v);
+    for (const i of invs.values()) for (const [fp, v] of Object.entries(i.fps)) elsewhere.set(fp, v);
     const isOpen = (id: string) => (notes.get(id)?.seen ?? 0) > Date.now() - ONLINE_MS;
 
-    const need = missingFrom(myInv, [...invs.values()], doc);
+    // Songs a month or more old in Drive: whoever they were for, they go.
+    const relays = [...files.values()].filter(f => f.name.startsWith("relay-"));
+    for (const f of relays) {
+      if (Date.now() - Date.parse(f.modifiedTime) > RELAY_MAX_AGE) await removeFile(f.name).catch(() => {});
+    }
+    const waiting = [...files.values()].filter(f => f.name.startsWith("relay-"));
+    const inDrive = { count: waiting.length, bytes: waiting.reduce((n, f) => n + Number(f.size ?? 0), 0) };
+
+    const mySigs = sigsOf(myInv);
+    const need = missingFrom(myInv, [...invs.values()].map(i => i.fps), doc, { skip: skipped.get(), sigs: mySigs });
+    const shared = sharedInventory(host!.snapshot().songs);
     const theyNeed = new Map<string, Inventory>();
-    for (const d of others) theyNeed.set(d.id, missingFrom(invs.get(d.id)!, [myInv], doc));
+    for (const d of others) {
+      const theirs = invs.get(d.id)!;
+      // What they have includes what they keep to themselves, which they do
+      // not list; a song that is theirs already by title is skipped too.
+      theyNeed.set(d.id, missingFrom(theirs.fps, [shared], doc, { skip: new Set(theirs.skip ?? []) }));
+    }
     const theyMiss = new Set<string>();
     for (const m of theyNeed.values()) for (const fp of Object.keys(m)) theyMiss.add(fp);
 
+    // How much room, and how much of what is missing fits in it.
+    const needBytes = Object.values(need).reduce((n, v) => n + v[0], 0);
+    const free = (await Sync.freeSpace()).bytes;
+    roomLeft = free < 0 ? Infinity : Math.max(0, free - ROOM_MARGIN);
+    const full = needBytes > roomLeft;
+
     const net = await Sync.network();
-    const canMove = net.unmetered || state.mobileData;
-    const waitingOn = others.filter(d => !isOpen(d.id) && Object.keys(need).some(fp => invs.get(d.id)![fp])).map(d => d.name);
+    onMobile = !net.unmetered;
+    const mobileLeft = MOBILE_DAILY - (onMobile ? await mobileUsed() : 0);
+    const canMove = net.unmetered || (state.mobileData && mobileLeft > 0);
+    const waitingOn = others.filter(d => !isOpen(d.id) && Object.keys(need).some(fp => invs.get(d.id)!.fps[fp])).map(d => d.name);
+    const anything = Object.keys(need).length > 0 || theyMiss.size > 0;
     setSongs({
-      missing: Object.keys(need).length, theyMiss: theyMiss.size, waitingOn,
-      note: (Object.keys(need).length || theyMiss.size) && !canMove ? "wifi" : state.songs.note === "wifi" ? null : state.songs.note,
+      missing: Object.keys(need).length, theyMiss: theyMiss.size, waitingOn, inDrive,
+      note: full && Object.keys(need).length ? "phone-full"
+        : anything && !canMove ? (state.mobileData && onMobile ? "mobile-limit" : "wifi")
+        : state.songs.note === "drive-full" ? "drive-full" : null,
+      needBytes, freeBytes: free,
     });
 
-    const pending = Object.keys(need).length > 0 || theyMiss.size > 0 || [...files.keys()].some(n => n.startsWith(relayPrefix(deviceId)));
+    const pending = anything || waiting.some(f => f.name.startsWith(relayPrefix(deviceId)));
     if (!pending) { if (myNote.offer || myNote.answer) { myNote = { seen: Date.now() }; await writeFile(peer(deviceId), myNote); } return; }
 
     // "I am open", so the other phone knows to go direct.
@@ -559,8 +912,8 @@ async function songsCycle(relist = false): Promise<void> {
 
     // Direct. The phone with the lower id offers; the other answers any offer
     // meant for it, even if its own lists say there is nothing to swap: the
-    // other phone may know better.
-    const wantFrom = (id: string) => Object.keys(need).filter(fp => invs.get(id)![fp]);
+    // other phone may know better. What is asked for fits in the room there is.
+    const wantFrom = (id: string) => Object.keys(need).filter(fp => invs.get(id)!.fps[fp] && fits(need[fp][0]));
     if (!session && !connecting) {
       for (const d of others) {
         const note = notes.get(d.id);
@@ -572,7 +925,7 @@ async function songsCycle(relist = false): Promise<void> {
     }
     if (!session && !connecting) {
       for (const d of others) {
-        const swap = wantFrom(d.id).length > 0 || Object.keys(theyNeed.get(d.id)!).length > 0;
+        const swap = Object.keys(need).some(fp => invs.get(d.id)!.fps[fp]) || Object.keys(theyNeed.get(d.id)!).length > 0;
         if (!swap || !isOpen(d.id) || deviceId > d.id || (directPaused.get(d.id) ?? 0) > Date.now()) continue;
         void offer(d.id, wantFrom(d.id));
         break;
@@ -601,8 +954,19 @@ async function songsCycle(relist = false): Promise<void> {
 const find = (fp: string) => {
   const path = pathByFp.get(fp);
   const v = myInv[fp];
+  if (localOnly.get().has(fp) || notSharedFps.has(fp)) return null;
   return path && v ? { fp, path, size: v[0], name: v[1] } : null;
 };
+
+async function arrivedHere(fp: string, path: string | null, size: number, name: string) {
+  const v = elsewhere.get(fp);
+  myInv[fp] = [size, (path ?? name).split("/").pop() ?? name, v?.[2], v?.[3]];
+  if (path) pathByFp.set(fp, path);
+  const next = new Set(received.get()); next.add(fp);
+  await received.save(next);
+  await countMobile(size);
+  setSongs({ arrived: state.songs.arrived + 1, received: next.size });
+}
 
 function hooksFor(peerId: string, want: string[]) {
   let arrived = 0;
@@ -611,10 +975,8 @@ function hooksFor(peerId: string, want: string[]) {
     find,
     onSaved: (fp: string, path: string | null) => {
       arrived++;
-      // Known here at once, so the next round does not ask for it again.
       const v = elsewhere.get(fp);
-      if (path) { myInv[fp] = [v?.[0] ?? 0, path.split("/").pop() ?? "song.mp3"]; pathByFp.set(fp, path); }
-      setSongs({ arrived: state.songs.arrived + 1 });
+      void arrivedHere(fp, path, v?.[0] ?? 0, v?.[1] ?? "song.mp3");
     },
     onProgress: (p: { dir: "in" | "out"; name: string; done: number; total: number }) =>
       setSongs({ moving: { ...p, via: "direct", peer: nameOf(peerId) } }),
@@ -694,9 +1056,11 @@ async function takeRelayed() {
   for (const f of waiting) {
     if (!active()) break;
     const fp = f.appProperties?.fp ?? "";
-    if (!fp || myInv[fp]) { await removeFile(f.name).catch(() => {}); continue; }
+    // Here already, thrown out here, or in the bin: not wanted, so gone.
+    if (!fp || myInv[fp] || skipped.get().has(fp) || doc?.songs[fp]?.bin) { await removeFile(f.name).catch(() => {}); continue; }
     const name = f.appProperties?.name ?? "song.mp3";
     const size = Number(f.size ?? -1);
+    if (!fits(Math.max(0, size))) { setSongs({ note: "phone-full" }); continue; }
     const tid = "relay-" + fp;
     const from = nameOf(f.appProperties?.from ?? "");
     setSongs({ moving: { dir: "in", name, done: 0, total: size, via: "drive", peer: from } });
@@ -705,10 +1069,9 @@ async function takeRelayed() {
     });
     try {
       await Sync.driveDownload({ token: await getToken(), fileId: f.id, tid, size });
-      await Sync.finishFile({ tid, name, size });
-      myInv[fp] = [size, name];
+      const saved = await Sync.finishFile({ tid, name, size });
+      await arrivedHere(fp, saved.path, size, name);
       arrived++;
-      setSongs({ arrived: state.songs.arrived + 1 });
       await removeFile(f.name).catch(() => {});
     } catch (e) {
       if ((e as { code?: string })?.code === "FULL") { setSongs({ note: "phone-full" }); break; }
@@ -730,6 +1093,7 @@ async function leaveFor(to: string, theirs: Inventory) {
     if (already.has(fp)) continue;
     const song = find(fileOf(fp));
     if (!song || used + song.size > RELAY_BUDGET) continue;
+    if (onMobile && (await mobileUsed()) + song.size > MOBILE_DAILY) { setSongs({ note: "mobile-limit" }); break; }
     const tid = "up-" + fp;
     const to_ = nameOf(to);
     setSongs({ moving: { dir: "out", name: song.name, done: 0, total: song.size, via: "drive", peer: to_ } });
@@ -743,6 +1107,7 @@ async function leaveFor(to: string, theirs: Inventory) {
       });
       files.set(prefix + fp, { id, name: prefix + fp, modifiedTime: new Date().toISOString(), size: String(song.size), appProperties: { fp, name: song.name, from: deviceId } });
       used += song.size;
+      await countMobile(song.size);
     } catch (e) {
       if (/storageQuotaExceeded|quota/i.test(String((e as Error)?.message))) { setSongs({ note: "drive-full" }); break; }
     } finally {
@@ -751,3 +1116,4 @@ async function leaveFor(to: string, theirs: Inventory) {
   }
   setSongs({ moving: undefined });
 }
+
