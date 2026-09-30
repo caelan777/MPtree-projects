@@ -46,7 +46,7 @@ export type Tokens = {
 };
 
 export function openDrive(tokens: Tokens, dev: boolean): Drive {
-  return dev ? devDrive() : realDrive(tokens);
+  return import.meta.env.DEV && dev ? devDrive() : realDrive(tokens);
 }
 
 function realDrive(tokens: Tokens): Drive {

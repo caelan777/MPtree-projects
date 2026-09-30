@@ -8,6 +8,24 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.0 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.0.aab`
+(versionCode 33).
+
+```
+<en-GB>
+New with Pro: the MPTree account. Sign in with Google on up to three devices and they share one library: playlists, likes and settings. Your songs go from one device to the others by themselves, over wifi. Everything stays in your own Google Drive.
+Deleted a song for good? The bin now has a Permanently deleted tab, so you can get it back from your other devices.
+</en-GB>
+<nl-NL>
+Nieuw met Pro: het MPTree-account. Log in met Google op maximaal drie apparaten en ze delen één bibliotheek: afspeellijsten, likes en instellingen. Je nummers gaan vanzelf van het ene apparaat naar de andere, via wifi. Alles blijft in je eigen Google Drive.
+Een nummer voorgoed verwijderd? In de prullenbak staat nu Permanent verwijderd, zodat je het terughaalt van je andere apparaten.
+</nl-NL>
+```
+
+---
+
 ## Store listing text
 
 ### App name (max 30 characters)
@@ -32,9 +50,8 @@ A private, offline music player for the songs already on your phone.
 ### Full description (max 4000 characters)
 
 ```
-MPTree plays the music that is already on your phone. No streaming, no account, no
-subscription, and no internet needed. It is free, and nothing you listen to ever leaves
-your device.
+MPTree plays the music that is already on your phone. No streaming, no subscription,
+no ads, and no internet needed. It is free, and nothing you listen to is ever sent to us.
 
 Open MPTree, allow it to find your audio files, and your whole library is ready to play.
 That is the entire setup.
@@ -63,33 +80,77 @@ Backups
 Save your playlists, artwork, and music to a single file, and restore it later or on a
 new phone.
 
+MPTREE PRO
+
+One purchase, no subscription. Pro adds colours, a spinning record, a header card and
+other app icons, and never takes a free feature away. Try it free for a week first.
+
+With Pro you can also sign in with Google and use MPTree on up to three devices. Your
+playlists, likes and settings are the same on all of them, and your songs go from one
+device to the others by themselves. Everything is kept in your own Google Drive, not
+with us.
+
 PRIVATE BY DESIGN
 
-MPTree has no ads, no tracking, and no account. It does not collect any data about you.
-Your music and your listening stay on your device, because there is no server to send
-them to. See the full privacy policy at mp-tree.net/privacy.html.
+MPTree has no ads, no tracking, and no analytics. There is no server, so your music and
+your listening are never sent to us. Signing in is optional, and even then your library
+only goes to your own Google Drive and your own devices. See the full privacy policy at
+mp-tree.net/privacy.
 
 MADE FOR YOUR OWN MUSIC
 
 MPTree is a player for audio files you already have on your device. It is perfect if you
 keep your own music collection and want a fast, clean, private way to listen to it.
 
-Free, no ads, no catch. Just your music, on your device.
+Free, no ads, no catch. Just your music, on your devices.
 ```
 
 ---
 
 ## Data safety form (Play Console → App content → Data safety)
 
-Answer these as follows. All are accurate for MPTree today.
+Accurate from 1.2.0, the version with the MPTree account. (Up to 1.1.0 the answer was
+simply "No data collected".)
 
-- Does your app collect or share any of the required user data types? **No.**
-- Is all of the user data collected by your app encrypted in transit? **Not applicable, no data is collected.**
-- Do you provide a way for users to request that their data is deleted? **Not applicable, no data is collected.**
+Why anything counts as collected: Play calls data "collected" when the app sends it off
+the device, even to the user's own Google Drive. Signing in to an MPTree account sends
+the library to the Drive app folder and the songs to the user's other devices, so those
+types are declared. Nothing reaches us.
 
-Result: the store listing will show "No data collected" and "No data shared", which is
-true. If Google asks about the audio files permission, the honest framing is: audio is
-read on the device to play it and is never collected, transmitted, or shared.
+**Data collection and security**
+- Does your app collect or share any of the required user data types? **Yes.**
+- Is all of the user data collected by your app encrypted in transit? **Yes.** (Drive is
+  HTTPS; songs sent directly go over WebRTC, which is always encrypted.)
+- Which of the following methods of account creation does your app support? **OAuth**
+  (Sign in with Google). There is no username or password of our own.
+- Delete account URL: **https://mp-tree.net/privacy#account** (the "Stopping" part
+  explains how to delete everything the account holds).
+- Do you provide a way for users to request that their data is deleted? **Yes.**
+  (Delete hidden app data in Google Drive, see the same page.)
+
+**Data types.** Tick exactly these. For each one: **Collected: yes. Shared: no** (it only
+goes to the user's own Drive and own devices, at their request). **Processed
+ephemerally: no. Required or optional: optional** (only when signed in). **Purpose: App
+functionality.**
+
+| Category | Data type | What it is in MPTree |
+|---|---|---|
+| Audio | Music files | Songs moving between the user's devices, sometimes waiting in their Drive |
+| Photos and videos | Photos | Covers the user sets, saved in the library |
+| App activity | App interactions | Likes and play counts |
+| App activity | Other user-generated content | Playlists, song names, lyrics, the bin, settings |
+| Device or other IDs | Device or other IDs | A number per device in the list of devices, so they can tell each other apart |
+
+Not ticked, on purpose:
+- **Email address / Name:** MPTree reads them from Google only to show which account is
+  signed in. They are not sent anywhere.
+- **Purchase history:** Google Play handles Pro; MPTree only asks Play whether it is owned.
+- **Location, contacts, messages, health, financial info, web history, crash logs,
+  diagnostics:** none of it.
+
+If Google asks about the audio files permission: audio is read on the device to play it.
+It only leaves the device when the user signs in, and then only to their own devices
+and Drive.
 
 ---
 
@@ -103,9 +164,10 @@ utility). Then answer the questionnaire:
 - Language (profanity): No
 - Controlled substances: No
 - Gambling: No
-- User generated content or user to user communication: No
+- User generated content or user to user communication: No (the account only syncs
+  between the user's own devices; nobody can see or reach anyone else)
 - Shares user location: No
-- Digital purchases: No
+- Digital purchases: **Yes** (MPTree Pro, a one-time purchase through Google Play)
 
 Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
 
@@ -115,9 +177,11 @@ Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
 
 - Privacy policy: **https://mp-tree.net/privacy**
 - Ads: **No, this app does not contain ads.**
-- App access: all functionality is available without special access. No login is required,
-  so no test credentials are needed. (If a reviewer asks how to reach every feature, note
-  that granting the audio permission on first launch reveals the full library.)
+- App access: **All functionality is available without special access.** Nothing needs a
+  login of ours. Pro is a purchase, and it can be tried free for a week from Settings,
+  then MPTree Pro. The MPTree account (Settings, Account & sync, with Pro or the free
+  week) signs in with the reviewer's own Google account, so no test credentials are
+  needed. Granting the audio permission on first launch reveals the full library.
 - Content ratings: complete the questionnaire above.
 - Target audience and content: choose the age groups you want. MPTree is fine for all
   ages, but if you select an age group that includes children you take on extra Play
@@ -137,8 +201,10 @@ Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
   show media controls while the app is in the background or the screen is off. This is the
   standard, allowed use for a media player. If prompted, select the **Media playback** use
   case.
-- INTERNET: used only to open outward links the user taps (such as the support page) in
-  the system browser. No streaming, no background network use, no data sent to any server.
+- INTERNET: Google Play for Pro, and the MPTree account when the user signs in: their
+  own Google Drive app folder, and songs sent directly to their own other devices. No
+  streaming, no analytics, nothing sent to a server of ours (there is none).
+- ACCESS_NETWORK_STATE: to move songs on wifi only, unless the user allows mobile data.
 
 ---
 
