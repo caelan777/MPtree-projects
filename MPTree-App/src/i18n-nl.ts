@@ -540,7 +540,7 @@ export const NL: Record<string, string> = {
   "Its data was deleted in Google Drive, so this phone stopped syncing. Everything on this phone stays as it is. Sign in again to start a new account from this phone.": "De gegevens zijn in Google Drive verwijderd, dus deze telefoon synchroniseert niet meer. Alles op deze telefoon blijft zoals het is. Log opnieuw in om vanaf deze telefoon een nieuw account te beginnen.",
   "Paused": "Gepauzeerd",
   "Syncing is part of MPTree Pro, so it has stopped. Nothing is lost: your account keeps everything, and it carries on when Pro is back.": "Synchroniseren hoort bij MPTree Pro, dus het is gestopt. Er gaat niets verloren: je account bewaart alles en het gaat verder zodra je weer Pro hebt.",
-  "Sign out on this phone? Your account keeps what it has, and this phone stops syncing. Sign in again later and it carries on where it left off.": "Uitloggen op deze telefoon? Je account houdt wat het heeft en deze telefoon synchroniseert niet meer. Log je later weer in, dan gaat het verder waar het was.",
+  "Sign out on this phone? Your account keeps what it has, and this phone stops syncing. Sign in again later and this phone is made the same as your account again.": "Uitloggen op deze telefoon? Je account houdt wat het heeft en deze telefoon synchroniseert niet meer. Log je later weer in, dan wordt deze telefoon weer gelijk aan je account.",
   "Off: songs only move on wifi. On: at most {size} a day. Your account is always saved.": "Uit: nummers gaan alleen via wifi. Aan: maximaal {size} per dag. Je account wordt altijd opgeslagen.",
   "Send them to my other phones": "Stuur ze naar mijn andere telefoons",
   "Get them back": "Haal ze terug",

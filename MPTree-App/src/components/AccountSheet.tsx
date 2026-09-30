@@ -229,7 +229,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
         {confirmOut ? (
           <div style={{ ...card, marginTop: 0 }}>
             <div style={{ fontSize: 14, color: T.text, lineHeight: 1.5 }}>
-              {t("Sign out on this phone? Your account keeps what it has, and this phone stops syncing. Sign in again later and it carries on where it left off.")}
+              {t("Sign out on this phone? Your account keeps what it has, and this phone stops syncing. Sign in again later and this phone is made the same as your account again.")}
             </div>
             {s.songs.received > 0 && (
               <button onClick={() => setRemoveReceived(!removeReceived)}

@@ -32,8 +32,9 @@ unless the person allows mobile data, and then 500 MB a day at most.
   phone's; add this phone's playlists and likes, or replace them with the
   account's. Playlists with the same name become one. A song this phone has
   stays in its list even if the account has it in the bin.
-- **Signing out** keeps the base, so signing in again carries on; it can also
-  delete the songs that came from other phones.
+- **Signing out** drops the base: the account is the same everywhere, so what
+  was deleted on the phone while signed out comes back on the next sign-in.
+  Signing out can also delete the songs that came from other phones.
 - **Voice notes, recordings, clips under a minute** (cleanup.ts) and songs kept
   "on this phone only" are never sent.
 - **Deleted outside MPTree:** a file that disappears is not fetched back.

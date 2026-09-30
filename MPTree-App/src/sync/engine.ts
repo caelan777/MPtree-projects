@@ -50,8 +50,10 @@ const peer = (id: string) => `peer-${id}.json`;
 const relayPrefix = (to: string) => `relay-${to}-`;
 
 const KEY_ACCOUNT = "mptree_account";
-/** What this phone and the account last agreed on. Kept when signing out, so
- *  signing in again carries on instead of starting over. */
+/** What this phone and the account last agreed on. Dropped when signing out:
+ *  the account is the same everywhere, so what happened on this phone while it
+ *  was signed out does not count, and signing in again brings back what was
+ *  deleted meanwhile. */
 const KEY_BASE = "mptree_sync_base";
 /** Songs kept on this phone only. */
 const KEY_LOCAL = "mptree_sync_local";
@@ -375,7 +377,7 @@ async function nextJoinStep(): Promise<"ok" | "limit" | "choose" | "failed"> {
     return "limit";
   }
 
-  // Signed in here with this account before: carry on where it left off.
+  // A sign-in that broke off halfway, with this account: carry on.
   const base = await readJson<Base>(KEY_BASE);
   if (base && base.deviceId === deviceId && base.email === pendingJoin?.email) return finishJoin(DEFAULT_JOIN, "share");
 
@@ -495,8 +497,8 @@ async function forgetPhoneFiles(id: string) {
 
 /** Signing out frees this phone's place on the account. Everything stays on
  *  the phone, unless removeReceived: then the songs that came from the other
- *  phones go. What was agreed with the account is kept, so signing in again
- *  carries on rather than bringing back what was deleted in between. */
+ *  phones go. Signing in again later is a new join: the account wins, and
+ *  what was deleted here meanwhile comes back. */
 export async function signOut(removeReceived = false): Promise<number> {
   stopTransfers();
   const email = stored?.email;
@@ -520,10 +522,11 @@ export async function signOut(removeReceived = false): Promise<number> {
   return removed;
 }
 
-/** Forgets the sign-in. The base stays; it is tied to the account's email. */
+/** Forgets the sign-in, and what was agreed with the account. */
 async function forget() {
   stored = null; token = null; drive = null; files = new Map(); cache.clear();
   await Preferences.remove({ key: KEY_ACCOUNT }).catch(() => {});
+  await Preferences.remove({ key: KEY_BASE }).catch(() => {});
 }
 
 export function dismissRemoved(): void {
@@ -641,7 +644,6 @@ async function libraryCycle(join?: JoinChoice): Promise<void> {
     if (!files.has(DEVICES)) {
       stopTransfers();
       await forget();
-      await Preferences.remove({ key: KEY_BASE }).catch(() => {});
       set({ ...initial, phase: "removed", removedWhy: "emptied", deviceId, pausedNoPro: state.pausedNoPro });
       return;
     }
