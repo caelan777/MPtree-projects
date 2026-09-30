@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only to tell wifi from mobile data, so songs move between phones on
+         wifi unless the person allows mobile data. See SyncPlugin.network. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Needed only for "Set as ringtone". Android gates this behind a switch on
          a dedicated Settings screen rather than a normal permission dialog, so
          nothing is granted silently: see MusicScannerPlugin.setAsRingtone. -->

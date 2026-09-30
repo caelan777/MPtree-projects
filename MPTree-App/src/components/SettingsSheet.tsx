@@ -8,6 +8,8 @@ import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, type LangPref } from "../i18n";
 import { useTrial, useOwnsPro, trialTimeLeft } from "../pro";
+import { useSync } from "../sync/engine";
+import { CloudIcon } from "./AccountSheet";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -87,6 +89,7 @@ type SettingsSheetProps = {
   pro: boolean;
   onOpenPro: () => void;
   onOpenLook: () => void;
+  onOpenAccount: () => void;
   onOpenCleanup: () => void;
   /** How many probable non-songs the library holds, shown on the row. */
   cleanupCount: number;
@@ -132,7 +135,7 @@ type SettingsSheetProps = {
 
 export function SettingsSheet({
   theme, hidden, binCount,
-  pro, onOpenPro, onOpenLook, onOpenCleanup, cleanupCount,
+  pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
@@ -144,6 +147,7 @@ export function SettingsSheet({
   const sh = makeSH(T);
   const trial = useTrial();
   const ownsPro = useOwnsPro();
+  const sync = useSync();
   // The countdown on the Pro card moves while Settings is open.
   const [, tick] = useState(0);
   useEffect(() => {
@@ -267,6 +271,19 @@ export function SettingsSheet({
             <IC.ChevronR />
           </button>
         </div>
+
+        <Section T={T} title={t("Account")}>
+          <Row T={T}
+            first
+            onClick={onOpenAccount}
+            icon={<CloudIcon />}
+            label={t("Account & sync")}
+            sub={sync.phase === "on"
+              ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
+              : t("Save everything, and have your songs on every phone.")}
+            right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && sync.phase !== "on" && <ProTag T={T} />}<IC.ChevronR /></span>}
+          />
+        </Section>
 
         <Section T={T} title={t("Appearance")}>
           <Row T={T}

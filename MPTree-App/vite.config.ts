@@ -1,6 +1,31 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import pkg from './package.json' with { type: 'json' }
+import type { Plugin } from 'vite'
+
+// The dev server's stand-in for the Drive app folder of an MPTree account
+// (src/sync/drive.ts). Kept in the server's memory, so http://localhost and
+// http://127.0.0.1, which have separate storage, can play two phones on one
+// account. Only the dev server has it; no build contains it.
+function devDrive(): Plugin {
+  let store = "{}"
+  return {
+    name: 'mptree-dev-drive',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__dev_drive', (req, res) => {
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', c => { body += c })
+          req.on('end', () => { store = body || '{}'; res.end('ok') })
+          return
+        }
+        res.setHeader('Content-Type', 'application/json')
+        res.end(store)
+      })
+    },
+  }
+}
 
 // The version shown in Settings comes from package.json rather than being typed
 // into the UI, so it cannot drift from the release it was built in. Keep
@@ -8,7 +33,7 @@ import pkg from './package.json' with { type: 'json' }
 // Website/assets/versions.js and Website/version.json in step for every release.
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [react(), devDrive()],
   define: {
     // The test build says so in Settings, so a screenshot of it is never
     // mistaken for a release.

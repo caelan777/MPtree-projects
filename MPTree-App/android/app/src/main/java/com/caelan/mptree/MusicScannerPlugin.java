@@ -394,12 +394,12 @@ public class MusicScannerPlugin extends Plugin {
 
         if (mime.contains("mp4a") || mime.contains("aac")) {
             File tmp = cutAacToM4a(sourcePath, startMs, endMs);
-            JSObject out = publishToMusic(tmp, safe + ".m4a", outName, endMs - startMs, "audio/mp4");
+            JSObject out = publishToMusic(getContext(), tmp, safe + ".m4a", outName, endMs - startMs, "audio/mp4");
             try { tmp.delete(); } catch (Exception ignored) {}
             return out;
         } else if (mime.contains("mpeg") || mime.contains("mp3")) {
             File tmp = cutMp3(sourcePath, startMs, endMs);
-            JSObject out = publishToMusic(tmp, safe + ".mp3", outName, endMs - startMs, "audio/mpeg");
+            JSObject out = publishToMusic(getContext(), tmp, safe + ".mp3", outName, endMs - startMs, "audio/mpeg");
             try { tmp.delete(); } catch (Exception ignored) {}
             return out;
         }
@@ -562,9 +562,10 @@ public class MusicScannerPlugin extends Plugin {
 
     /** Copies `tmp` into the shared Music/MPTree collection via MediaStore and
      *  returns { uri, path, title, duration }. Uses the modern IS_PENDING flow
-     *  on API 29+, and a direct file write + scan on older devices. */
-    private JSObject publishToMusic(File tmp, String fileName, String title, long durationMs, String mimeType) throws Exception {
-        ContentResolver resolver = getContext().getContentResolver();
+     *  on API 29+, and a direct file write + scan on older devices. Also used by
+     *  SyncPlugin, for songs that arrive from another phone. */
+    static JSObject publishToMusic(android.content.Context ctx, File tmp, String fileName, String title, long durationMs, String mimeType) throws Exception {
+        ContentResolver resolver = ctx.getContentResolver();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ContentValues values = new ContentValues();
@@ -592,7 +593,7 @@ public class MusicScannerPlugin extends Plugin {
             resolver.update(item, values, null, null);
 
             // Resolve the real on-disk path for the app's file-path-based player.
-            String realPath = queryPathForUri(item);
+            String realPath = queryPathForUri(ctx, item);
             JSObject out = new JSObject();
             out.put("uri", realPath != null ? realPath : item.toString());
             out.put("path", realPath);
@@ -613,7 +614,7 @@ public class MusicScannerPlugin extends Plugin {
                 while ((n = is.read(buf)) > 0) os.write(buf, 0, n);
             }
             final String destPath = dest.getAbsolutePath();
-            MediaScannerConnection.scanFile(getContext(), new String[]{ destPath }, null, null);
+            MediaScannerConnection.scanFile(ctx, new String[]{ destPath }, null, null);
             JSObject out = new JSObject();
             out.put("uri", destPath);
             out.put("path", destPath);
@@ -623,10 +624,10 @@ public class MusicScannerPlugin extends Plugin {
         }
     }
 
-    private String queryPathForUri(Uri uri) {
+    private static String queryPathForUri(android.content.Context ctx, Uri uri) {
         Cursor c = null;
         try {
-            c = getContext().getContentResolver().query(
+            c = ctx.getContentResolver().query(
                     uri, new String[]{ MediaStore.Audio.Media.DATA }, null, null, null);
             if (c != null && c.moveToFirst()) {
                 return c.getString(c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA));

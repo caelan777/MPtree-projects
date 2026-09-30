@@ -21,7 +21,8 @@ android {
         // by at least 1 for every release you hand out, or Android will refuse
         // to install the update over an existing copy.
         // 1.1.0: 21 on Play, 22 on the website (19 and 20 were the Pro test builds).
-        versionCode 22
+        // 23: Pro test build 11, the MPTree account.
+        versionCode 23
         versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -70,6 +71,9 @@ dependencies {
     // Google Play Billing, for MPTree Pro (a one-time purchase). Talks to the
     // Play Store app on the phone; see BillingPlugin.java.
     implementation "com.android.billingclient:billing:8.0.0"
+    // Sign in with Google, for the MPTree account (Pro). Only the Drive app
+    // folder is asked for; see AccountPlugin.java.
+    implementation "com.google.android.gms:play-services-auth:21.4.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

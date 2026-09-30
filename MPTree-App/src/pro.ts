@@ -66,6 +66,8 @@ export function useTrial(): Trial {
   return useSyncExternalStore(subscribe, trialSnapshot, trialSnapshot);
 }
 export function hasPro(): boolean { return snapshot(); }
+/** For code outside React that needs to know when Pro comes or goes. */
+export const subscribePro = subscribe;
 
 /** Back to the free look, and the launcher icon with it: an icon picked with
  *  Pro is a change to the home screen, which resetLook cannot undo. */

@@ -107,6 +107,33 @@ export type BillingPlugin = {
   restore(options: { productId: string }): Promise<{ ok: boolean; owned: boolean }>;
 };
 
+/** Sign in with Google, for the MPTree account. See AccountPlugin.java. */
+export type AccountPlugin = {
+  signIn(): Promise<{ token?: string; cancelled?: boolean }>;
+  /** Rejects with code NEEDS_SIGN_IN when the grant is gone. */
+  getToken(options: { email?: string }): Promise<{ token: string }>;
+  clearToken(options: { token: string }): Promise<void>;
+  signOut(options: { email?: string }): Promise<void>;
+};
+
+/** Files for the MPTree account: fingerprints, and songs moving in and out.
+ *  See SyncPlugin.java. Chunks are base64. */
+export type SyncPlugin = {
+  deviceId(): Promise<{ id: string }>;
+  network(): Promise<{ online: boolean; unmetered: boolean }>;
+  fingerprints(options: { paths: string[] }): Promise<{ items: { path: string; size: number; fp: string }[] }>;
+  readChunk(options: { path: string; offset: number; length: number }): Promise<{ data: string; size: number }>;
+  beginFile(options: { tid: string }): Promise<void>;
+  appendChunk(options: { tid: string; data: string }): Promise<void>;
+  /** Publishes into Music/MPTree. Rejects with INCOMPLETE when size is given
+   *  and the file is not that size, and with FULL when the phone is full. */
+  finishFile(options: { tid: string; name: string; size?: number }): Promise<{ path: string | null; uri: string }>;
+  abortFile(options: { tid: string }): Promise<void>;
+  driveUpload(options: { token: string; path: string; name: string; tid?: string; appProperties: Record<string, string> }): Promise<{ id: string }>;
+  driveDownload(options: { token: string; fileId: string; tid: string; size?: number }): Promise<{ size: number }>;
+  addListener(event: "progress", handler: (p: { tid: string; done: number; total: number }) => void): Promise<{ remove(): void }>;
+};
+
 // The browser has none of this. The stand-in answers the way a phone with
 // nothing special about it would, so the demo and the dev server run the same
 // code paths.
@@ -127,6 +154,36 @@ const BillingWeb: BillingPlugin = {
   restore:    async () => ({ ok: false, owned: false }),
 };
 
+// No Google sign-in in a browser. On the dev server a stand-in account can be
+// switched on with localStorage.mptree_dev_account = "1": it keeps the "Drive"
+// in localStorage too (see sync/drive.ts), so two tabs act as two phones.
+const devAccount = () => { try { return import.meta.env.DEV && localStorage.getItem("mptree_dev_account") === "1"; } catch { return false; } };
+const unavailable = () => Promise.reject(Object.assign(new Error("Only in the app"), { code: "UNAVAILABLE" }));
+const AccountWeb: AccountPlugin = {
+  signIn:     async () => devAccount() ? { token: "dev" } : unavailable(),
+  getToken:   async () => devAccount() ? { token: "dev" } : unavailable(),
+  clearToken: async () => {},
+  signOut:    async () => {},
+};
+const SyncWeb: SyncPlugin = {
+  deviceId: async () => {
+    let id = sessionStorage.getItem("mptree_dev_device");
+    if (!id) { id = Math.random().toString(36).slice(2, 10); sessionStorage.setItem("mptree_dev_device", id); }
+    return { id };
+  },
+  network:      async () => ({ online: navigator.onLine, unmetered: true }),
+  // The demo songs are the same in every tab, so a name is fingerprint enough.
+  fingerprints: async ({ paths }) => ({ items: paths.map(p => ({ path: p, size: 0, fp: "web-" + p.split("/").pop() })) }),
+  readChunk:    unavailable,
+  beginFile:    unavailable,
+  appendChunk:  unavailable,
+  finishFile:   unavailable,
+  abortFile:    async () => {},
+  driveUpload:  unavailable,
+  driveDownload: unavailable,
+  addListener:  async () => ({ remove() {} }),
+};
+
 const isWeb = Capacitor.getPlatform() === "web";
 
 export const MusicScanner: MusicScannerPlugin = isWeb
@@ -144,3 +201,11 @@ export const System: SystemPlugin = isWeb
 export const Billing: BillingPlugin = isWeb
   ? BillingWeb
   : registerPlugin<BillingPlugin>("Billing");
+
+export const Account: AccountPlugin = isWeb
+  ? AccountWeb
+  : registerPlugin<AccountPlugin>("Account");
+
+export const Sync: SyncPlugin = isWeb
+  ? SyncWeb
+  : registerPlugin<SyncPlugin>("Sync");

@@ -10,8 +10,8 @@ import {
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
 // What Pro is and the one button that buys it. Opened from Settings, and from
-// anything Pro that someone without it taps. Under the buy button, the day
-// pass: one ad for 24 hours of Pro.
+// anything Pro that someone without it taps. Under the buy button, the free
+// week.
 
 const Svg = ({ children }: { children: ReactNode }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -21,6 +21,7 @@ const RecordIcon = () => <Svg><circle cx="12" cy="12" r="10"/><circle cx="12" cy
 const ShadeIcon  = () => <Svg><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/></Svg>;
 const CardIcon   = () => <Svg><rect x="3" y="4" width="18" height="8" rx="3"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="21" x2="14" y2="21"/></Svg>;
 const IconIcon   = () => <Svg><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></Svg>;
+const SyncIcon   = () => <Svg><rect x="2" y="5" width="8" height="14" rx="2"/><rect x="14" y="5" width="8" height="14" rx="2"/><path d="M10.5 10h3"/><path d="M12.5 8.5 14 10l-1.5 1.5"/><path d="M13.5 14h-3"/><path d="M11.5 12.5 10 14l1.5 1.5"/></Svg>;
 const BroomIcon  = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 
 type ProSheetProps = {
@@ -61,6 +62,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
   };
 
   const features: { icon: ReactNode; title: string; body: string }[] = [
+    { icon: <SyncIcon />,   title: t("Account & sync"), body: t("Playlists, likes and settings saved in your account, and all your songs on up to three phones.") },
     { icon: <RecordIcon />, title: t("Records"),      body: t("White, smoke and marble records for the player.") },
     { icon: <ShadeIcon />,  title: t("Shades"),       body: t("AMOLED and graphite for dark mode. Paper, stone, pink and sage for light.") },
     { icon: <CardIcon />,   title: t("Header card"),  body: t("Give the card at the top a colour of its own, from either mode.") },

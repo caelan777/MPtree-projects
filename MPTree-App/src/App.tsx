@@ -33,8 +33,10 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
+import { AccountSheet } from "./components/AccountSheet";
+import { initSync, syncChanged, type Host } from "./sync/engine";
 import { findSuspects } from "./cleanup";
-import { useLook, loadLook, endPreview, setLookMode } from "./look";
+import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -453,20 +455,26 @@ export default function App() {
   const [updateNotices, setUpdateNotices] = useState(true);
   const [mixOthers, setMixOthers]     = useState(false);
   const [duckOthers, setDuckOthers]   = useState(false);
-  useEffect(() => {
+  // Read at start, and again when the MPTree account brings settings from
+  // another phone.
+  const applyPrefs = ([size, lang, notices, mix, duck]: (string | null)[]) => {
+    const sz: UiSize = size === "small" || size === "large" ? size : "medium";
+    setUiSize(sz);
+    System.setTextZoom({ factor: SIZE_TABLE[sz].text }).catch(() => {});
+    const l: LangPref = lang === "en" || lang === "nl" ? lang : "auto";
+    applyLang(l); setLangPref(l);
+    setUpdateNotices(notices !== "0");
+    setMixOthers(mix === "true");
+    setDuckOthers(mix === "true" && duck === "true");
+    AudioPlayer.setMixMode({ mix: mix === "true", duck: mix === "true" && duck === "true" }).catch(() => {});
+  };
+  const loadPrefs = useCallback(() => {
     const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others", "mptree_duck_others"];
-    Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
-      .then(([size, lang, notices, mix, duck]) => {
-        if (size === "small" || size === "large") {
-          setUiSize(size);
-          System.setTextZoom({ factor: SIZE_TABLE[size].text }).catch(() => {});
-        }
-        if (lang === "en" || lang === "nl") { applyLang(lang); setLangPref(lang); }
-        if (notices === "0") setUpdateNotices(false);
-        setMixOthers(mix === "true");
-        setDuckOthers(mix === "true" && duck === "true");
-      });
+    return Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
+      .then(prefs => applyPrefs(prefs));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => { loadPrefs(); }, [loadPrefs]);
 
   const changeUiSize = (s: UiSize) => {
     setUiSize(s);
@@ -651,6 +659,7 @@ export default function App() {
   const [proOpen,     setProOpen]     = useState(false);
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   useEffect(() => { loadLook(); loadPro(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
@@ -1865,6 +1874,59 @@ export default function App() {
     if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
   }, []);
 
+  // ── MPTree account ────────────────────────────────────────────────────────
+  // The engine (src/sync/engine.ts) reads the library through these and puts
+  // the account's version back through them. Started once the first scan is
+  // in, so its first look at this phone is the whole library, not an empty one.
+  const playlistsRef = useRef<Playlist[]>([]);
+  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
+  const songsRef = useRef<Song[]>([]);
+  useEffect(() => { songsRef.current = songs; }, [songs]);
+  const syncHostRef = useRef<Host | null>(null);
+  // Refreshed after every render, so the engine always calls this render's
+  // functions.
+  useEffect(() => { syncHostRef.current = {
+    snapshot: () => ({ songs: songsRef.current, removed: removedRef.current, meta: metaRef.current, playlists: playlistsRef.current }),
+    apply: async a => {
+      if (a.changed.songs) { songsRef.current = a.songs; setSongs(a.songs); await saveCutTracksToStorage(a.songs.filter(x => x.isCut)); }
+      if (a.changed.removed) { removedRef.current = a.removed; setRemovedSongs(a.removed); await saveRemovedTracksToStorage(a.removed); }
+      if (a.changed.meta) { metaRef.current = a.meta; setMeta(a.meta); await saveMetaNow(a.meta); }
+      if (a.changed.playlists) { playlistsRef.current = a.playlists; setPlaylists(a.playlists); await savePlaylists(a.playlists); }
+    },
+    rescan: async () => { await scanMusic(); },
+    settings: async () => {
+      await loadPrefs();
+      const session = await loadSession();
+      if (session.filter) setFilter(session.filter);
+      if (session.playMode) setPlayMode(session.playMode);
+      if (session.crossfadeMs != null) setCrossfadeMs(session.crossfadeMs);
+      if (session.playbackSpeed != null && session.playbackSpeed > 0) setPlaybackSpeed(session.playbackSpeed);
+      if (session.eqEnabled != null) setEqEnabled(session.eqEnabled);
+      if (Array.isArray(session.eqBandLevels) && session.eqBandLevels.length) setEqBandLevels(session.eqBandLevels);
+      if (session.theme) setTheme(session.theme);
+      const before = getLook().icon;
+      const after = (await loadLook()).icon;
+      if (after !== before) System.setAppIcon({ icon: after }).catch(() => {});
+    },
+  }; });
+  const syncStarted = useRef(false);
+  useEffect(() => {
+    if (!libraryReady || syncStarted.current) return;
+    syncStarted.current = true;
+    void initSync({
+      snapshot: () => syncHostRef.current!.snapshot(),
+      apply: a => syncHostRef.current!.apply(a),
+      rescan: () => syncHostRef.current!.rescan(),
+      settings: () => syncHostRef.current!.settings(),
+    });
+  }, [libraryReady]);
+  // Anything the account keeps, changed here: the engine saves it a few
+  // seconds later, in one go.
+  useEffect(() => {
+    if (syncStarted.current) syncChanged();
+  }, [songs, removedSongs, meta, playlists, theme, uiSize, langPref, updateNotices, mixOthers, duckOthers, look,
+      filter, playMode, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels]);
+
   // ── Hooks ─────────────────────────────────────────────────────────────────
   // Stale-safe restore: uses functional setState so it works correctly even
   // when called later from an Undo button (bin state may have changed since).
@@ -2430,6 +2492,7 @@ export default function App() {
       }
       if (showOnboarding)      { finishOnboarding(); return; }
       if (proOpen)             { setProOpen(false); return; }
+      if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       if (lookOpen)            { endPreview(); setLookOpen(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
@@ -3862,6 +3925,7 @@ export default function App() {
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
+            onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
@@ -3911,6 +3975,14 @@ export default function App() {
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}
             onClose={() => setCleanupOpen(false)}
+            T={TH} />
+        )}
+        {accountOpen && (
+          <AccountSheet
+            pro={pro}
+            onOpenPro={() => setProOpen(true)}
+            onClose={() => setAccountOpen(false)}
+            onToast={showToast}
             T={TH} />
         )}
         {proOpen && (
