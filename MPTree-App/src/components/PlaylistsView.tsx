@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
 import { isMissingArtist, readCoverPhoto } from "../utils";
@@ -655,6 +655,17 @@ export const PlaylistsView: React.FC<Props> = ({
   // both on the same curve as the header itself.
   const FOLD_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
   const insetTransition = animateInsets ? `height ${FOLD_MOTION}` : "none";
+  // Scrolled down the list of playlists, the fold does not move the rows: the
+  // spacer changes at once and the scroll position makes up for it.
+  const [bodyScrolled, setBodyScrolled] = useState(false);
+  const prevInside = useRef(insetInside);
+  useLayoutEffect(() => {
+    const el = scrollBodyRef.current;
+    const delta = insetInside - prevInside.current;
+    prevInside.current = insetInside;
+    if (!el || !delta || view !== "list" || el.scrollTop <= 0) return;
+    el.scrollTop += delta;
+  }, [insetInside, view]);
   const rootTransition  = animateInsets ? `padding-top ${FOLD_MOTION}` : "none";
 
   return (
@@ -828,8 +839,13 @@ export const PlaylistsView: React.FC<Props> = ({
       {/* ── Scrollable content ──────────────────────────────────────────── */}
       <div
         ref={scrollBodyRef}
-        onScroll={e => { cancelPress(); onBodyScroll?.((e.target as HTMLDivElement).scrollTop); }}
-        style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+        onScroll={e => {
+          cancelPress();
+          const top = (e.target as HTMLDivElement).scrollTop;
+          if ((top > 0) !== bodyScrolled) setBodyScrolled(top > 0);
+          onBodyScroll?.(top);
+        }}
+        style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none" }}
       >
         {/* The header's height as a spacer INSIDE the scroller, so rows scroll up
             under the collapsed logo instead of leaving a dead band. Rendered
@@ -837,7 +853,7 @@ export const PlaylistsView: React.FC<Props> = ({
             node that is being removed, so unmounting it on a view change snapped
             this to zero while the root's padding was still easing in, which read
             as a double jump. */}
-        <div style={{ height: insetInside, transition: insetTransition }} aria-hidden="true" />
+        <div style={{ height: insetInside, transition: bodyScrolled && view === "list" ? "none" : insetTransition }} aria-hidden="true" />
 
         {/* ── Create playlist input ──────────────────────────────────────────
             Inside the scroller, directly under the header card. It sat above

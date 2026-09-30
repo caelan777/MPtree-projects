@@ -181,6 +181,9 @@ export default function App() {
   const [duration,       setDuration]      = useState(0);
   const [dragging,       setDragging]      = useState(false);
   const [listScrollTop,  setListScrollTop] = useState(0);
+  // Whether the song list is scrolled away from its top. There the fold must
+  // not move the rows at all (see the layout effect by the list's insets).
+  const [listScrolled, setListScrolled] = useState(false);
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
@@ -2608,6 +2611,22 @@ export default function App() {
   const COLLAPSED_INSET = dims.cardTop + 54 + 14;
   const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
   const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  // Folding or unfolding the card while the list is scrolled: the list's top
+  // padding changes at once, and the scroll position moves by the same amount,
+  // so the rows on screen do not move at all. At the very top the list moves
+  // with the card instead, which is what makes room for it.
+  const prevSongsInset = useRef(songsInset);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const delta = songsInset - prevSongsInset.current;
+    prevSongsInset.current = songsInset;
+    if (!el || !delta || el.scrollTop <= 0) return;
+    beginProgrammaticScroll();
+    el.scrollTop += delta;
+  }, [songsInset, beginProgrammaticScroll]);
+  // How far the list's top moves when the card folds, per tab.
+  const foldGap = (from: "songs" | "playlists") =>
+    (from === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 14 - (54 + 14);
   const signedIn = sync.phase === "on" && !sync.pausedNoPro;
   // For the things anchored to the card itself rather than to a list: the update
   // notice, the sort menu, the logo's own options panel.
@@ -2644,7 +2663,9 @@ export default function App() {
     // Only a genuine downward drag folds it away. Scrolling back up leaves the
     // chrome hidden until you actually reach the top, which is what keeps the
     // list from flickering mid-scroll.
-    if (top > prev + 2 && top > CHROME_COLLAPSE_AT) {
+    // Far enough down that the rows can stay exactly where they are while the
+    // card folds: the list scrolls back by what the card gives up.
+    if (top > prev + 2 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
       // Only hint on the transition, not on every scroll event while folded.
       if (chromeOpen) showCollapseHint();
       setChromeOpen(false);
@@ -3561,12 +3582,16 @@ export default function App() {
                 // the card rather than moving with it. React writes this padding
                 // and the card's height in the same commit, so they share a
                 // transition start time and stay locked together.
-                transition: move("padding-top", "padding-bottom"),
+                // Scrolled down, the top is not animated: it changes at once and
+                // the scroll position makes up for it, so the rows stay put.
+                transition: listScrolled ? move("padding-bottom") : move("padding-top", "padding-bottom"),
+                overflowAnchor: "none",
               }}
               data-tour="songs"
               onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
               onScroll={() => {
                 const top = scrollRef.current?.scrollTop ?? 0;
+                if ((top > 0) !== listScrolled) setListScrolled(top > 0);
                 // Only two things are drawn from the scroll position: which rows
                 // the virtual window holds, which changes once per row, and
                 // whether the scroll-to-top button shows. Storing every pixel

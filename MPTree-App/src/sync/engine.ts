@@ -382,6 +382,9 @@ export async function initSync(h: Host): Promise<void> {
   keepChecking();
   if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mptreeSync = {
     state: () => state, run: () => libraryCycle(), signIn: () => signIn(),
+    signOut: (x: boolean) => signOut(x), rename: (id: string, n: string) => renameDevice(id, n),
+    remove: (id: string) => removeDevice(id), test: (step: TestStep) => testPhone(step),
+    restore: (fps: string[]) => restoreDeleted(fps),
   };
   refreshPro();
 }
@@ -918,6 +921,7 @@ async function refreshDeleted() {
   for (const fp of Object.keys(pending.del)) if (!mineGone.has(fp)) mineGone.set(fp, pending.del[fp]);
   const list: Deleted[] = [];
   let pruned = false;
+  for (const fp of Object.keys(gone)) if (myInv[fp]) { delete gone[fp]; pruned = true; }
   for (const [fp, at] of mineGone) {
     if (myInv[fp]) continue;
     const somewhere = [...invs.entries()].some(([id, i]) => id !== deviceId && i.fps[fp]);
@@ -1130,12 +1134,16 @@ async function songsCycle(relist = false): Promise<void> {
       if (changed(LIB)) kick(500);
     }
     const notes = new Map<string, PeerNote>();
+    // Only the devices on the account now: one that left takes its list along.
+    invs.clear();
     for (const d of others) {
       invs.set(d.id, (await readFile<InvFile>(inv(d.id))) ?? { fps: {} });
       const n = await readFile<PeerNote>(peer(d.id));
       if (n) notes.set(d.id, n);
     }
     for (const d of others) for (const [fp, v] of Object.entries(invs.get(d.id)!.fps)) elsewhere.set(fp, v);
+    // Whether a deleted song can still come back depends on these lists.
+    await refreshDeleted();
     const isOpen = (id: string) => (notes.get(id)?.seen ?? 0) > Date.now() - ONLINE_MS;
 
     // Songs a month or more old in Drive: whoever they were for, they go.
