@@ -123,8 +123,9 @@ types are declared. Nothing reaches us.
   HTTPS; songs sent directly go over WebRTC, which is always encrypted.)
 - Which of the following methods of account creation does your app support? **OAuth**
   (Sign in with Google). There is no username or password of our own.
-- Delete account URL: **https://mp-tree.net/privacy#account** (the "Stopping" part
-  explains how to delete everything the account holds).
+- Delete account URL: **https://mp-tree.net/privacy#delete-account** (the steps, and what
+  is deleted and what stays).
+- Delete some data without deleting the account (optional): leave empty.
 - Do you provide a way for users to request that their data is deleted? **Yes.**
   (Delete hidden app data in Google Drive, see the same page.)
 
