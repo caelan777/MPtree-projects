@@ -1150,7 +1150,11 @@ async function songsCycle(relist = false): Promise<void> {
     const theyNeed = new Map<string, Inventory>();
     for (const d of others) {
       const theirs = invs.get(d.id)!;
-      theyNeed.set(d.id, theirs.test ? {} : missingFrom(theirs.fps, [shared], doc, { me: d.id }));
+      // A device that has not said what it has yet (just signed in, or
+      // leaving) is sent nothing: to this phone its list would look empty,
+      // and every song would go to it, including the ones it has.
+      const known = files.has(inv(d.id)) && !theirs.test;
+      theyNeed.set(d.id, known ? missingFrom(theirs.fps, [shared], doc, { me: d.id }) : {});
     }
     const theyMiss = new Set<string>();
     for (const m of theyNeed.values()) for (const fp of Object.keys(m)) theyMiss.add(fp);
@@ -1376,6 +1380,11 @@ async function leaveFor(to: string, theirs: Inventory) {
   for (const [fp] of Object.entries(theirs)) {
     if (!active() || session) break;
     if (already.has(fp)) continue;
+    // Still on the account, and still wanting it? A device that signed out
+    // meanwhile gets nothing more.
+    await listFiles();
+    if (!files.has(inv(to)) || !(await readDevices()).some(d => d.id === to)) break;
+    if ((await readFile<InvFile>(inv(to)))?.fps[fp]) continue;
     const song = find(fileOf(fp));
     if (!song || used + song.size > RELAY_BUDGET) continue;
     if (onMobile && (await mobileUsed()) + song.size > MOBILE_DAILY) { setSongs({ note: "mobile-limit" }); break; }

@@ -69,7 +69,11 @@ from another phone lands in Music/MPTree.
 - **Deleting many files** (bin, sign out) asks Android once
   (`MusicScanner.deleteFiles`), not once per song.
 - **Signing out** is at once on screen; the device leaves the account in the
-  background. Songs only come in while 500 MB stays free.
+  background.
+- **A device that has not said what it has** (no inv file: just signed in, or
+  just signed out) is sent nothing through Drive. Before each song left in
+  Drive, the sender checks the device is still on the account and still
+  lacks it. Songs only come in while 500 MB stays free.
 - **Conflicts:** three-way merge against the last agreed base; a change made on
   two phones goes to the later one (`at` stamps). Plays add up. Who deleted a
   song merges phone by phone.
