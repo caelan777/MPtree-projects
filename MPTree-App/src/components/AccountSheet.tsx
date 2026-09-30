@@ -5,11 +5,10 @@ import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
 import {
-  useSync, signIn, signOut, cancelJoin, answerJoin, removeDevice, dismissRemoved, setMobileData,
-  shareLocalOnly, fetchSkippedAgain, deleteGoneHere, MOBILE_DAILY,
+  useSync, signIn, signOut, cancelJoin, removeDevice, dismissRemoved, setMobileData,
+  fetchSkippedAgain, takeOverLibrary, takeOverLook, forgetOldPhone, MOBILE_DAILY,
   type SyncState, type Device,
 } from "../sync/engine";
-import type { JoinChoice } from "../sync/model";
 
 // ─── ACCOUNT & SYNC ──────────────────────────────────────────────────────────
 // The one page about the MPTree account. It has to answer one question before
@@ -111,7 +110,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   ];
   const saved = (
     <div style={card}>
-      {cardTitle(<CloudCheck />, t("Saved in your account"))}
+      {cardTitle(<CloudCheck />, t("Saved in your account, per phone"))}
       <div style={{ marginTop: 8 }}>
         {savedList.map(x => (
           <div key={x} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: T.text, padding: "3px 0" }}>
@@ -119,6 +118,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           </div>
         ))}
       </div>
+      <div style={small}>{t("Every phone keeps its own, exactly as it is. Nothing is mixed, so signing in asks nothing.")}</div>
+      <div style={small}>{t("Under the top card you pick whose library you see: this phone's, another phone's, or all of them together. Change something on another phone and it asks that phone first.")}</div>
       <div style={small}>{t("Kept in your own Google Drive, in a folder only MPTree can open.")}</div>
     </div>
   );
@@ -134,9 +135,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       <div style={small}>{t("Voice notes, recordings and clips under a minute stay on the phone they are on.")}</div>
       {s.phase === "on" && !s.pausedNoPro && (
         <SongStatus s={s} T={T} busy={busy}
-          onShare={() => run(shareLocalOnly, t("Those songs go to your other phones now"))}
           onFetchAgain={() => run(fetchSkippedAgain, t("Those songs will come back"))}
-          onDeleteGone={() => run(async () => { const n = await deleteGoneHere(); onToast(tn(n, "{n} song deleted from this phone", "{n} songs deleted from this phone")); })}
         />
       )}
     </div>
@@ -145,14 +144,9 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   // ── What the top and bottom of the page do, per state ──
   let top: ReactNode = null;
   let bottom: ReactNode;
-  let showHalves = true;
 
   if (!native) {
     bottom = <div style={{ ...small, textAlign: "center" }}>{t("Sign in with Google in the MPTree app on your phone.")}</div>;
-  } else if (s.phase === "choose" && s.join) {
-    showHalves = false;
-    top = <JoinQuestions s={s} T={T} busy={busy} onDone={(c, songs) => run(() => answerJoin(c, songs))} onCancel={cancelJoin} />;
-    bottom = null;
   } else if (!pro && s.phase !== "on") {
     bottom = (
       <>
@@ -274,8 +268,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
 
         <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>
           {top}
-          {showHalves && saved}
-          {showHalves && songsIntro}
+          {saved}
+          {songsIntro}
           {s.phase === "on" && (
             <>
               <button onClick={() => setMobileData(!s.mobileData)}
@@ -289,7 +283,25 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
                 <Switch on={s.mobileData} T={T} />
               </button>
               <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Phones ({n} of {max})", { n: s.devices.length, max: MAX })}</div>
-              <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
+              <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T}
+                onTakeLook={d => run(() => takeOverLook(d.id), t("This phone now looks like {name}", { name: d.name }))}
+                onTakeLibrary={d => run(() => takeOverLibrary(d.id), t("{name}'s playlists and likes are on this phone now", { name: d.name }))} />
+              {s.oldPhones.length > 0 && (
+                <>
+                  <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Phones that left")}</div>
+                  <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.45, marginBottom: 4 }}>{t("Their libraries are still in your account. Put one on this phone, or delete it.")}</div>
+                  {s.oldPhones.map(p => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderTop: `1px solid ${T.border}` }}>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 14.5, color: T.text }}>{p.name || t("Old phone")}</span>
+                        <span style={{ display: "block", fontSize: 12, color: T.muted, marginTop: 1 }}>{t("last used {when}", { when: ago(p.at) })}</span>
+                      </span>
+                      <button disabled={busy} onClick={() => run(() => takeOverLibrary(p.id), t("{name}'s playlists and likes are on this phone now", { name: p.name }))} style={smallBtn(T, true)}>{t("Put on this phone")}</button>
+                      <button disabled={busy} onClick={() => run(() => forgetOldPhone(p.id))} style={smallBtn(T, false)}>{t("Delete")}</button>
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
         </div>
@@ -300,27 +312,25 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   );
 }
 
-function SongStatus({ s, T, busy, onShare, onFetchAgain, onDeleteGone }: {
-    s: SyncState; T: T; busy: boolean; onShare: () => void; onFetchAgain: () => void; onDeleteGone: () => void;
+const smallBtn = (T: T, strong: boolean) => ({
+  background: strong ? T.accent : "transparent", color: strong ? T.playBtnFg : T.muted,
+  border: strong ? "none" : `1px solid ${T.border}`, borderRadius: 9, padding: "6px 10px",
+  fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" as const,
+});
+
+const linkBtn = (T: T) => ({ background: "transparent", border: "none", padding: 0, color: T.text, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" as const });
+
+function SongStatus({ s, T, busy, onFetchAgain }: {
+    s: SyncState; T: T; busy: boolean; onFetchAgain: () => void;
   }) {
     const inline = { background: "transparent", border: "none", padding: 0, marginTop: 6, color: T.text, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" } as const;
     const g = s.songs;
     const others = s.devices.filter(d => d.id !== s.deviceId);
     const extra: ReactNode[] = [];
-    if (g.localOnly > 0) extra.push(
-      <div key="local">
-        {tn(g.localOnly, "{n} song stays on this phone only.", "{n} songs stay on this phone only.")}
-        <br /><button disabled={busy} onClick={onShare} style={inline}>{t("Send them to my other phones")}</button>
-      </div>);
     if (g.skipped > 0) extra.push(
       <div key="skip">
         {tn(g.skipped, "{n} song you deleted on this phone is not fetched again.", "{n} songs you deleted on this phone are not fetched again.")}
         <br /><button disabled={busy} onClick={onFetchAgain} style={inline}>{t("Get them back")}</button>
-      </div>);
-    if (g.goneHere > 0) extra.push(
-      <div key="gone">
-        {tn(g.goneHere, "{n} song in the bin here was deleted for good on another phone.", "{n} songs in the bin here were deleted for good on another phone.")}
-        <br /><button disabled={busy} onClick={onDeleteGone} style={inline}>{t("Delete here too")}</button>
       </div>);
     if (g.inDrive.count > 0) extra.push(
       <div key="drive" style={{ color: T.muted }}>
@@ -370,91 +380,10 @@ function SongStatus({ s, T, busy, onShare, onFetchAgain, onDeleteGone }: {
     );
 }
 
-function Opt({ on, label, sub, onPick, T }: { on: boolean; label: string; sub?: string; onPick: () => void; T: T }) {
-  return (
-    <button role="radio" aria-checked={on} onClick={onPick}
-      style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%", textAlign: "left", background: "transparent", border: "none", padding: "10px 0 0", cursor: "pointer", fontFamily: "inherit" }}>
-      <span style={{ width: 18, height: 18, borderRadius: 9, border: `2px solid ${on ? T.text : T.muted}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-        {on && <span style={{ width: 8, height: 8, borderRadius: 4, background: T.text }} />}
-      </span>
-      <span>
-        <span style={{ display: "block", fontSize: 14, color: T.text }}>{label}</span>
-        {sub && <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>{sub}</span>}
-      </span>
-    </button>
-  );
-}
-
-/** Asked once, when this phone joins an account that already has things in
- *  it: what happens to the songs, the look, and the rest of this phone. */
-function JoinQuestions({ s, T, busy, onDone, onCancel }: {
-  s: SyncState; T: T; busy: boolean;
-  onDone: (c: JoinChoice, songs: "share" | "local") => void; onCancel: () => void;
+function DeviceList({ devices, me, onRemove, onTakeLook, onTakeLibrary, busy, T }: {
+  devices: Device[]; me?: string; onRemove: (d: Device) => void; busy: boolean; T: T;
+  onTakeLook?: (d: Device) => void; onTakeLibrary?: (d: Device) => void;
 }) {
-  const q = s.join!;
-  const [songs, setSongs] = useState<"share" | "local">("share");
-  const [settings, setSettings] = useState<JoinChoice["settings"]>("account");
-  const [library, setLibrary] = useState<JoinChoice["library"]>("merge");
-  const sh = makeSH(T);
-  const block = { background: T.dim, borderRadius: 14, padding: "14px 16px", marginTop: 10 } as const;
-  const head = { fontSize: 15, fontWeight: 700, color: T.text } as const;
-  const small = { fontSize: 13, color: T.textSub, lineHeight: 1.5, marginTop: 6 } as const;
-  return (
-    <div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: T.text, padding: "0 2px" }}>{t("Joining your account")}</div>
-      <div style={{ ...small, padding: "0 2px" }}>{t("{email} already has things in it. Choose what happens to what is on this phone.", { email: q.email })}</div>
-      {q.otherAccount && (
-        <div style={{ ...block, border: `1px solid ${T.border}` }}>
-          <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.5 }}>
-            {t("{old} was signed in on this phone before. What is on it may be theirs rather than yours.", { old: q.otherAccount })}
-          </div>
-        </div>
-      )}
-
-      <div style={block} role="radiogroup" aria-label={t("Songs")}>
-        <div style={head}>{t("Songs")}</div>
-        <div style={small}>
-          {q.newSongs > 0
-            ? tn(q.newSongs, "{n} song on this phone ({size}) is not on your other phones yet.", "{n} songs on this phone ({size}) are not on your other phones yet.", { size: size(q.newBytes) })
-            : t("Everything on this phone is on your other phones already.")}
-        </div>
-        {q.newSongs > 0 && (
-          <>
-            <Opt T={T} on={songs === "share"} onPick={() => setSongs("share")} label={t("Send them to all my phones")} />
-            <Opt T={T} on={songs === "local"} onPick={() => setSongs("local")} label={t("Keep them on this phone only")}
-              sub={t("Songs added later still go everywhere. You can change this on the account page.")} />
-          </>
-        )}
-        <div style={small}>{t("The songs on your other phones come to this one.")}</div>
-      </div>
-
-      <div style={block} role="radiogroup" aria-label={t("Look and settings")}>
-        <div style={head}>{t("Look and settings")}</div>
-        <Opt T={T} on={settings === "account"} onPick={() => setSettings("account")} label={t("Use the account's")} sub={t("This phone looks like your other phones.")} />
-        <Opt T={T} on={settings === "phone"} onPick={() => setSettings("phone")} label={t("Keep this phone's")} sub={t("Your other phones take on this phone's look.")} />
-      </div>
-
-      {q.hasLibrary && (
-        <div style={block} role="radiogroup" aria-label={t("Playlists, likes and the rest")}>
-          <div style={head}>{t("Playlists, likes and the rest")}</div>
-          <Opt T={T} on={library === "merge"} onPick={() => setLibrary("merge")} label={t("Add this phone's to the account")}
-            sub={t("Nothing is lost. Playlists with the same name become one.")} />
-          <Opt T={T} on={library === "account"} onPick={() => setLibrary("account")} label={t("Replace this phone's with the account's")}
-            sub={t("This phone's playlists, likes and names are removed. The songs stay.")} />
-        </div>
-      )}
-
-      <div style={{ marginTop: 16 }}>
-        <button disabled={busy} onClick={() => onDone({ settings, library }, songs)} style={{ ...sh.saveBtn, fontFamily: "inherit", opacity: busy ? 0.6 : 1 }}>
-          {busy ? t("Joining…") : t("Join")}
-        </button>
-        <button onClick={onCancel} style={{ ...sh.saveBtn, fontFamily: "inherit", background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>{t("Cancel")}</button>
-      </div>
-    </div>
-  );
-}
-
-function DeviceList({ devices, me, onRemove, busy, T }: { devices: Device[]; me?: string; onRemove: (d: Device) => void; busy: boolean; T: T }) {
   const [asking, setAsking] = useState<string | null>(null);
   return (
     <div style={{ marginTop: 6 }}>
@@ -466,6 +395,12 @@ function DeviceList({ devices, me, onRemove, busy, T }: { devices: Device[]; me?
               {d.id === me ? t("This phone")
                 : t("Added {date}", { date: new Date(d.addedAt).toLocaleDateString() }) + " · " + t("last used {when}", { when: ago(d.lastActive ?? d.addedAt) })}
             </span>
+            {d.id !== me && onTakeLook && onTakeLibrary && (
+              <span style={{ display: "flex", gap: 14, marginTop: 6 }}>
+                <button disabled={busy} onClick={() => onTakeLook(d)} style={linkBtn(T)}>{t("Use its look")}</button>
+                <button disabled={busy} onClick={() => onTakeLibrary(d)} style={linkBtn(T)}>{t("Copy its library here")}</button>
+              </span>
+            )}
           </span>
           {d.id !== me && (asking === d.id ? (
             <button onClick={() => { setAsking(null); onRemove(d); }} disabled={busy}

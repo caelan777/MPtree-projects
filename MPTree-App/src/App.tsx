@@ -34,7 +34,8 @@ import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
-import { initSync, syncChanged, songsDeletedForGood, type Host } from "./sync/engine";
+import { initSync, syncChanged, setView, inView, useSync, acceptChanges, declineChanges, type Host } from "./sync/engine";
+import { ViewChips, CHIPS_H, IncomingSheet } from "./components/ViewChips";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
@@ -660,6 +661,7 @@ export default function App() {
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const sync = useSync();
   useEffect(() => { loadLook(); loadPro(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
@@ -687,6 +689,15 @@ export default function App() {
   const showToast  = (m: string, action?: ToastAction) => setToast({ msg: m, action });
   const showError  = useCallback((m: string) => setToast({ msg: "⚠ " + m }), []);
   const fmt        = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`; };
+  // What another phone said to this one's proposal, once.
+  const answerSeen = useRef(0);
+  useEffect(() => {
+    const a = sync.answer;
+    if (!a || a.at <= answerSeen.current) return;
+    answerSeen.current = a.at;
+    showToast(a.accepted ? t("{name} accepted your changes", { name: a.name }) : t("{name} declined your changes", { name: a.name }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sync.answer]);
 
   const toNativeTrack = useCallback((t: Song) => ({
     path:   t.uri,
@@ -732,7 +743,7 @@ export default function App() {
       const scannedWithIds: Song[] = r.songs.map((s: Song) => ({ ...s, id: s.uri }));
       const currentRemoved = removedList ?? removedRef.current;
       const blocked = new Set(currentRemoved.map((s: Song) => s.id));
-      const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
+      const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id) && inView(s.uri)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
       const cutIds = new Set(persistedCuts.filter((s: Song) => !blocked.has(s.id)).map((s: Song) => s.id));
       const result = [...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
       setSongs(() => result);
@@ -1894,6 +1905,13 @@ export default function App() {
       if (a.changed.playlists) { playlistsRef.current = a.playlists; setPlaylists(a.playlists); await savePlaylists(a.playlists); }
     },
     rescan: async () => { await scanMusic(); },
+    showOwn: async () => {
+      const [bin, m, pl] = await Promise.all([loadRemovedTracks(), loadMeta(), loadPlaylists()]);
+      removedRef.current = bin; setRemovedSongs(bin);
+      metaRef.current = m; setMeta(m);
+      playlistsRef.current = pl; setPlaylists(pl);
+      await scanMusic(bin);
+    },
     // Songs whose files go: from the list, the bin and every playlist's view,
     // with cut tracks made from them.
     deleteFiles: async paths => {
@@ -1933,6 +1951,7 @@ export default function App() {
       snapshot: () => syncHostRef.current!.snapshot(),
       apply: a => syncHostRef.current!.apply(a),
       rescan: () => syncHostRef.current!.rescan(),
+      showOwn: () => syncHostRef.current!.showOwn(),
       deleteFiles: paths => syncHostRef.current!.deleteFiles(paths),
       settings: () => syncHostRef.current!.settings(),
     });
@@ -2260,7 +2279,6 @@ export default function App() {
       delete next[s.id];
       return next;
     });
-    if (!s.isCut) void songsDeletedForGood([s.uri]);
     showToast(t("\"{name}\" deleted from device", { name: s.title }));
   }, []);
 
@@ -2272,7 +2290,6 @@ export default function App() {
       toDelete.map(async s => ({ s, ok: await deleteFileAtUri(s.uri) }))
     );
     const deletedIds = new Set(results.filter(r => r.ok).map(r => r.s.id));
-    void songsDeletedForGood(results.filter(r => r.ok && !r.s.isCut).map(r => r.s.uri));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
     setRemovedSongs(remaining);
@@ -2587,8 +2604,11 @@ export default function App() {
   // fold's own third of a second. A gap closing reads as the card arriving;
   // content sliding under a header that is standing still reads as a fault.
   const COLLAPSED_INSET = dims.cardTop + 54 + 14;
-  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
-  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  // The phone chips of an MPTree account, when there is more than one phone.
+  const showChips = sync.phase === "on" && !sync.pausedNoPro && sync.devices.length > 1;
+  const chipsH = showChips && !chromeCollapsed ? CHIPS_H : 0;
+  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14 + chipsH;
+  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14 + chipsH;
   // For the things anchored to the card itself rather than to a list: the update
   // notice, the sort menu, the logo's own options panel.
   const cardBottom      = page === "songs" ? songsInset : playlistsInset;
@@ -3142,7 +3162,7 @@ export default function App() {
                 <IC.Trash />Remove
               </button>
             )}
-            <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
+            <button data-tour="settings" onClick={() => { if (sync.view !== "me") void setView("me"); setSettingsOpen(true); }} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
           </div>
@@ -3384,6 +3404,14 @@ export default function App() {
             channel. Sits under the header rather than at the bottom, where it
             would land on top of the shuffle button and the mini-player, and
             dismisses per version so saying "Later" once means later for good. */}
+        {showChips && (
+          <ViewChips
+            top={(page === "songs" ? songsInset : playlistsInset) - CHIPS_H - 4}
+            hidden={chromeCollapsed}
+            transition={move("top", "opacity")}
+            T={TH} />
+        )}
+
         {updateInfo && (
           <div style={{
             position: "absolute", top: cardBottom, left: 12, right: 12, zIndex: 120,
@@ -4002,6 +4030,13 @@ export default function App() {
             onOpenPro={() => setProOpen(true)}
             onClose={() => setAccountOpen(false)}
             onToast={showToast}
+            T={TH} />
+        )}
+        {sync.phase === "on" && sync.incoming.length > 0 && !proOpen && !settingsOpen && (
+          <IncomingSheet
+            incoming={sync.incoming[0]}
+            onAccept={() => { const from = sync.incoming[0].from; void acceptChanges(from).then(() => showToast(t("Changes accepted"))); }}
+            onDecline={() => { const from = sync.incoming[0].from; void declineChanges(from).then(() => showToast(t("Changes declined. Everything is back as it was."))); }}
             T={TH} />
         )}
         {proOpen && (

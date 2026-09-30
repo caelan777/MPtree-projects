@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Song, Playlist, SongMeta } from "../types";
-import { buildLocal, merge, apply, missingFrom, toKey, songSig, PENDING, type LibDoc } from "./model";
+import { buildLocal, merge, apply, missingFrom, toKey, songSig, overlay, applyEdit, combine, spread, summarize, PENDING, type LibDoc } from "./model";
 
 // Two phones with the same two songs at different paths, and a third song
 // only phone A has.
@@ -218,5 +218,69 @@ describe("merge", () => {
       fp4: [4, "d.mp3"] as [number, string, string?, number?],
     };
     expect(Object.keys(missingFrom(mine, [theirs], doc, { skip: new Set(["fp4"]) }))).toEqual(["fp3"]);
+  });
+});
+
+describe("every phone its own library", () => {
+  const lib = (p: Phone, prefix: string) => round(p, prefix, null, null).merged;
+
+  it("lays a proposal over a library, and the proposal wins", () => {
+    const a = phoneA(); a.meta["/a/one.mp3"] = { customName: "Mine", playCount: 7 };
+    const doc = lib(a, "/a/");
+    const proposed = structuredClone(doc);
+    proposed.songs.fp1 = { customName: "Theirs", liked: true, playCount: 1 };
+    const out = overlay(doc, doc, proposed);
+    expect(out.songs.fp1).toEqual({ customName: "Theirs", liked: true, playCount: 7 });
+  });
+
+  it("turns a change on screen into a change of the whole library", () => {
+    // Pixel's library has fp3, which is not on this phone and so not on screen.
+    const pixel = lib(phoneA(), "/a/");
+    pixel.songs.fp3 = { liked: true };
+    const shownPhone: Phone = { ...phoneB(), meta: {} };
+    const shown = buildLocal({ ...shownPhone, fpOf });
+    const editedPhone: Phone = { ...phoneB(), meta: { "/b/Music/two.mp3": { liked: true } } };
+    const edited = buildLocal({ ...editedPhone, fpOf });
+    const out = applyEdit(pixel, shown, edited);
+    expect(out.songs.fp2).toEqual({ liked: true });
+    expect(out.songs.fp3).toEqual({ liked: true });
+  });
+
+  it("combines phones: this phone's names, likes from anywhere, one playlist per name", () => {
+    const a = phoneA(); a.meta["/a/one.mp3"] = { customName: "A name" };
+    a.playlists = [{ id: "pa", name: "Gym", createdAt: 1, songIds: ["/a/one.mp3"] }];
+    const b = phoneB(); b.meta["/b/Music/one.mp3"] = { customName: "B name", liked: true };
+    b.playlists = [{ id: "pb", name: "gym", createdAt: 2, songIds: ["/b/Music/two.mp3"] }];
+    const c = combine([{ phone: "B", doc: lib(b, "/b/") }, { phone: "A", doc: lib(a, "/a/") }], "A");
+    expect(c.doc.songs.fp1).toMatchObject({ customName: "A name", liked: true });
+    expect(Object.keys(c.doc.playlists)).toEqual(["pa"]);
+    expect(c.doc.playlists.pa.songs).toEqual(["fp1", "fp2"]);
+    expect(c.groups.pa).toEqual([{ phone: "A", id: "pa" }, { phone: "B", id: "pb" }]);
+  });
+
+  it("spreads a change in all phones to every phone it touches", () => {
+    const a = phoneA(); a.playlists = [{ id: "pa", name: "Gym", createdAt: 1, songIds: ["/a/one.mp3"] }];
+    const b = phoneB(); b.playlists = [{ id: "pb", name: "Gym", createdAt: 2, songIds: ["/b/Music/two.mp3"] }];
+    const libs = new Map([["A", lib(a, "/a/")], ["B", lib(b, "/b/")]]);
+    const c = combine([...libs].map(([phone, doc]) => ({ phone, doc })), "A");
+    const shown = { doc: c.doc, speaks: new Set(["fp1", "fp2"]), covers: new Map() };
+    const edited = structuredClone(c.doc);
+    edited.songs.fp2 = { liked: true };
+    edited.playlists.pa = { ...edited.playlists.pa, songs: ["fp2"] };
+    const out = spread(shown, { doc: edited, speaks: shown.speaks, covers: new Map() }, libs, c.groups, "A");
+    expect(out.get("A")!.songs.fp2).toEqual({ liked: true });
+    expect(out.get("B")!.songs.fp2).toEqual({ liked: true });
+    // fp1 was only in A's Gym, fp2 only in B's: each keeps what it had, less fp1.
+    expect(out.get("A")!.playlists.pa.songs).toEqual([]);
+    expect(out.get("B")!.playlists.pb.songs).toEqual(["fp2"]);
+  });
+
+  it("sums up a proposal", () => {
+    const doc = lib(phoneA(), "/a/");
+    const next = structuredClone(doc);
+    next.songs.fp1 = { liked: true };
+    next.songs.fp2 = { bin: true };
+    next.playlists.p9 = { name: "Road", createdAt: 1, songs: [] };
+    expect(summarize(doc, next)).toMatchObject({ liked: 1, binned: 1, newPlaylists: ["Road"] });
   });
 });
