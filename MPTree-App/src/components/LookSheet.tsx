@@ -3,7 +3,6 @@ import { makeSH, cardPalette, SHADE_PREVIEW, type T } from "../themes";
 import type { Theme } from "../types";
 import { t } from "../i18n";
 import { IC } from "./Icons";
-import { ModeNote } from "./ModeSwitch";
 import { MARK_PATH } from "./Logo";
 import { SpinningDisc } from "./SpinningDisc";
 import { usePro } from "../pro";
@@ -312,7 +311,6 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
           <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Personalise")}</span>
           <button onClick={close} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
-        <ModeNote T={T} style={{ margin: "0 12px 2px" }} />
 
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
           <div style={{ position: "relative", margin: "24px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, padding: "10px 0 12px" }}>

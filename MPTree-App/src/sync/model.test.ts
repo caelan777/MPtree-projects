@@ -224,7 +224,7 @@ describe("deleting for good", () => {
     markDeleted(local, acc, ["fp1"], "A", 100);
     const afterA = merge(acc, local, acc);
     expect(afterA.songs.fp1).toEqual({ bin: true, del: { A: 100 } });
-    // B still has it: in its bin of All devices.
+    // B still has it: in its bin.
     const rb = round(b.next, "/b/", b.merged, afterA);
     expect(rb.next.removed.map(s => s.id)).toEqual(["/b/Music/one.mp3"]);
     // A round later A no longer has the file, and nothing changes.

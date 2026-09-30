@@ -6,12 +6,10 @@ import type { Deleted } from "../sync/engine";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
 import { ConfirmSheet } from "./ConfirmSheet";
-import { ModeNote } from "./ModeSwitch";
 
 // ─── BIN VIEW ────────────────────────────────────────────────────────────────
-// The bin of the library that is showing. Signed in to an MPTree account it
-// has a second tab: songs deleted for good on this device, which the other
-// devices still have and can send back.
+// Signed in to an MPTree account the bin has a second tab: songs deleted for
+// good on this phone, which the other phones still have and can send back.
 
 type BinViewProps = {
   removedSongs: Song[];
@@ -101,10 +99,9 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
 
       {deleted && (
         <div style={{ padding: "0 16px 12px", borderBottom: `1px solid ${T.border}` }}>
-          <ModeNote T={T} style={{ marginBottom: 10 }} />
           <div role="tablist" style={{ display: "flex", gap: 2, background: T.surface, borderRadius: 12, padding: 3, border: `1px solid ${T.border}` }}>
             {tabBtn("bin", t("In the bin"), removedSongs.length)}
-            {tabBtn("deleted", t("Deleted for good here"), deleted.length)}
+            {tabBtn("deleted", t("Permanently deleted"), deleted.length)}
           </div>
         </div>
       )}
@@ -201,15 +198,15 @@ function DeletedList({ deleted, onRestore, T }: { deleted: Deleted[]; onRestore:
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: T.muted, gap: 10, padding: "0 32px", textAlign: "center" }}>
         <IC.Bin />
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{t("Nothing deleted for good here")}</div>
-        <div style={{ fontSize: 13, lineHeight: 1.5 }}>{t("A song you delete for good stays on your other devices. It shows up here, and you can get it back from them.")}</div>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{t("Nothing permanently deleted")}</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5 }}>{t("A song you delete permanently stays on your other phones. It shows up here, and you can get it back from them.")}</div>
       </div>
     );
   }
   return (
     <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       <div style={{ padding: "10px 16px 6px", fontSize: 12, color: T.muted, lineHeight: 1.5, display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <span style={{ flex: 1 }}>{t("Your other devices still have these. Getting one back puts it back everywhere it was, on every device.")}</span>
+        <span style={{ flex: 1 }}>{t("Deleted from this phone. Your other phones still have them, so you can get them back.")}</span>
         {back.length > 1 && (
           <button onClick={() => onRestore(back.map(d => d.fp))}
             style={{ flexShrink: 0, padding: "6px 11px", background: T.dim, border: "none", borderRadius: 8, color: T.text, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
@@ -223,7 +220,7 @@ function DeletedList({ deleted, onRestore, T }: { deleted: Deleted[]; onRestore:
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.title}</div>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {d.restoring ? t("Coming back…") : d.canRestore ? (d.artist || t("Unknown Artist")) : t("No device has it any more")}
+              {d.restoring ? t("Coming back…") : d.canRestore ? (d.artist || t("Unknown Artist")) : t("No phone has it any more")}
             </div>
           </div>
           {d.canRestore && !d.restoring && (

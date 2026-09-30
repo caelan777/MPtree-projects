@@ -1,22 +1,19 @@
 # The MPTree account
 
-Part of MPTree Pro. Sign in with Google on up to three phones. Then there are
-two libraries, picked with a switch in the header card and at the top of
-Settings:
+Part of MPTree Pro. Sign in with Google on up to three phones and they share one
+library: playlists, likes, names, the bin, cut tracks and settings are the same
+on all of them. Language, text size, the equalizer and the app icon stay with
+each phone. The songs are not saved in the account; they go from phone to
+phone so every phone has them all.
 
-- **This device**: what the phone had before. Its songs, playlists, likes, bin
-  and look. It stays on the phone; the account never sees it.
-- **All devices**: one library every phone on the account shares. Every song of
-  every phone, with playlists, likes, names, a bin and a look of its own. What
-  is done in it is done on every phone.
-
-Language, text size, the equalizer and the app icon stay with the phone in both.
-The songs are not saved in the account; they go from phone to phone so every
-phone has them all.
+Test build 15 tried two libraries (This device and All devices) side by side.
+That was too complicated and was dropped in build 16; a phone coming from 15
+keeps its own library and joins it with the account again (`leaveTwoLibraries`
+in engine.ts).
 
 Code: `MPTree-App/src/sync/` (model, engine, drive, rtc),
-`src/components/AccountSheet.tsx`, `ModeSwitch.tsx`, `BinView.tsx`, and the
-native `AccountPlugin.java` and `SyncPlugin.java`.
+`src/components/AccountSheet.tsx`, `BinView.tsx`, and the native
+`AccountPlugin.java` and `SyncPlugin.java`.
 
 ## Where things live
 
@@ -26,51 +23,38 @@ the person's own Google Drive, reached with the `drive.appdata` scope only.
 | File | What |
 |---|---|
 | `devices.json` | The phones on the account, three at most (a test phone does not count) |
-| `library.json` | All devices: playlists, song details, bin, who deleted what, cut tracks, settings (songs by fingerprint) |
+| `library.json` | The library: playlists, song details, bin, who deleted what, cut tracks, settings (songs by fingerprint) |
 | `covers.json` | Its cover pictures by hash |
 | `inv-<phone>.json` | Which song files that phone has, with title and artist |
 | `peer-<phone>.json` | "I am open now", and the WebRTC offer or answer |
 | `relay-<to>-<fp>` | A song waiting for phone `<to>`; deleted once it arrives |
 
-On the phone, All devices is kept under keys of its own (`mptree_meta@all` and
-so on, `setLibraryScope` in storage.ts). Switching library saves the settings
-of the one going away (`mptree_profile_device` / `mptree_profile_all`) and puts
-the other's in place (`collectShared` / `restoreShared`).
-
 Songs go straight across over WebRTC when both phones have MPTree open (Google
 STUN, no TURN). When that fails, or the other phone is closed, they wait in the
 app folder, at most 1 GB per phone at a time, and a month at most. Wifi only
 unless the person allows mobile data, and then 500 MB a day at most. A song
-that came from another phone lands in Music/MPTree and shows in All devices
-only, until someone puts it on This device (song menu) or signs out keeping it.
+from another phone lands in Music/MPTree.
 
 ## Rules
 
-- **Signing in** asks nothing. The first time, All devices starts with this
-  phone's likes, names and covers, and none of its playlists. Playlists are
-  made in All devices, or copied either way from a playlist's header.
-- **Binning** is per library: the bin of This device and the bin of All devices
-  are separate. Binning in All devices bins it on every phone's All devices.
-- **Deleting for good**, in either library, takes the file off this phone and is
-  written down in the song's `del` (phone -> when). Other phones that have it
-  keep it in the bin of All devices. This phone lists it in the bin under
-  "Deleted for good here"; "Get back" empties `del` and un-bins it, and every
-  phone that deleted it fetches it again. It comes back into This device, with
-  its playlists and details, if it was there. When no phone has the file any
-  more it is gone: greyed out, and dropped from that list after 30 days.
-- **Deleted outside MPTree** counts as deleted for good.
-- **Before deleting for good** the question says what else happens: that the
-  song is also in This device, that other devices keep it, or that it is the
-  last copy.
-- **Phone full:** songs of All devices that do not fit show greyed out under the
-  list, with how much room they need.
-- **Voice notes, recordings, clips under a minute** (cleanup.ts) stay in This
-  device and are never sent.
-- **Backups, Clean up and restoring** are about This device; they switch to it
-  first.
-- **Signing out** shows This device; the songs from other phones stay (in This
-  device) or are deleted, as chosen.
-- **Pro ends:** All devices stops and the app shows This device.
+- **Signing in** asks nothing: this phone's library joins the account's.
+  Likes add up, playlists of the same name become one, the account's settings
+  win.
+- **Deleting a song permanently** takes the file off this phone only, and is
+  written down in the song's `del` (phone -> when). The song goes in the bin
+  on the other phones. This phone lists it in the bin under "Permanently
+  deleted"; "Get back" empties `del` and takes it out of the bin, and every
+  phone that deleted it fetches it again. When no phone has the file any more
+  it is gone: greyed out, and dropped from that list after 30 days. The
+  question before deleting says whether other phones keep it, or whether it is
+  the last copy.
+- **Deleted outside MPTree** counts as deleted permanently.
+- **Songs not here yet** (on their way, or the phone is full) show greyed out
+  under the song list.
+- **Voice notes, recordings, clips under a minute** (cleanup.ts) are never sent.
+- **Signing out** leaves the phone as it is, with the option to delete the
+  songs that came from the other phones. Signing in again joins afresh.
+- **Pro ends:** syncing stops; nothing on the phone changes.
 - **Two versions of one song** (same title and artist, within 2 s) are not both
   fetched. Songs only come in while 500 MB stays free.
 - **Conflicts:** three-way merge against the last agreed base; a change made on
@@ -86,8 +70,8 @@ only, until someone puts it on This device (song menu) or signs out keeping it.
 
 - **Test phone** (test builds only, on the account page): a pretend phone that
   lives in Drive. It brings three 70 second tone songs through the Drive relay,
-  can make a playlist in All devices and like a song, and can delete its songs
-  for good. It is sent nothing and does not count towards the three.
+  can make a playlist and like a song, and can delete its songs permanently. It
+  is sent nothing and does not count towards the three.
 - **Emulator:** the Android Studio emulator with a Google Play image is a real
   second phone. The AVD `MPTree_Test` (Pixel 7, Android 17, Play Store) is set
   up; start it from Android Studio's Device Manager, sign in to Google, install
@@ -119,4 +103,4 @@ name and signing certificate.
 "Drive" lives in the dev server's memory (`vite.config.ts`). Open
 `http://localhost:5174` and `http://phone-b.localhost:5174` to play two phones.
 Songs do not move in the browser; only the account does.
-`window.__mptreeSync.run()` runs a round by hand, `setMode("all")` switches.
+`window.__mptreeSync.run()` runs a round by hand.

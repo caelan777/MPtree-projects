@@ -4,25 +4,23 @@ import { makeSH, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
-import { ModeSwitch, PhoneIcon, DevicesIcon } from "./ModeSwitch";
 import {
   useSync, signIn, signOut, cancelJoin, removeDevice, dismissRemoved, setMobileData, testPhone,
   MOBILE_DAILY, type SyncState, type Device, type TestStep,
 } from "../sync/engine";
 
 // ─── ACCOUNT & SYNC ──────────────────────────────────────────────────────────
-// The one page about the MPTree account. It answers one question before any
-// other, in as few words as it can: what is where. Three short blocks, always
-// on the page whatever state the account is in: This device, All devices, and
-// what stays with each device either way. Then the songs.
+// The one page about the MPTree account. Short sentences, one idea each: it
+// should make sense to someone who reads it in ten seconds.
 
 const Svg = ({ children, size = 20 }: { children: ReactNode; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
 );
 export const CloudIcon = () => <Svg size={19}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></Svg>;
-const Music = () => <Svg><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></Svg>;
-const Pin = () => <Svg><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></Svg>;
+const Phones = () => <Svg size={18}><rect x="2" y="4" width="10" height="16" rx="2"/><rect x="14" y="7" width="8" height="13" rx="2"/></Svg>;
+const Heart = () => <Svg size={18}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></Svg>;
+const Music = () => <Svg size={18}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></Svg>;
 
 type Props = {
   pro: boolean;
@@ -57,7 +55,6 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 20_000); return () => clearInterval(id); }, []);
 
   const native = Capacitor.getPlatform() !== "web" || import.meta.env.DEV;
-  const on = s.phase === "on" && !s.pausedNoPro;
 
   const doSignIn = async () => {
     setBusy(true);
@@ -77,8 +74,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     setBusy(false);
     setConfirmOut(false);
     onToast(removeReceived
-      ? tn(gone, "Signed out. {n} song from your other devices was removed.", "Signed out. {n} songs from your other devices were removed.")
-      : t("Signed out. Everything stays on this device."));
+      ? tn(gone, "Signed out. {n} song from your other phones was deleted.", "Signed out. {n} songs from your other phones were deleted.")
+      : t("Signed out. Everything stays on this phone."));
   };
   const doTest = async (step: TestStep, done: string) => {
     setBusy(true);
@@ -89,84 +86,59 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
 
   const btn = { ...sh.saveBtn, fontFamily: "inherit" };
   const card = { background: T.dim, borderRadius: 14, padding: "14px 16px", marginTop: 10 } as const;
-  const small = { fontSize: 13, color: T.textSub, lineHeight: 1.5, marginTop: 6 } as const;
+  const small = { fontSize: 13, color: T.textSub, lineHeight: 1.5 } as const;
   const link = { ...btn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
-  const block = (icon: ReactNode, title: string, body: string, current?: boolean) => (
-    <div style={{ ...card, border: `1.5px solid ${current ? T.accent : "transparent"}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, color: T.text, fontSize: 15, fontWeight: 700 }}>
-        <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
-        <span style={{ flex: 1 }}>{title}</span>
-        {current && <span style={{ fontSize: 11, fontWeight: 800, color: T.muted, letterSpacing: "0.05em", textTransform: "uppercase" }}>{t("Showing")}</span>}
-      </div>
-      <div style={small}>{body}</div>
+  const point = (icon: ReactNode, text: string) => (
+    <div key={text} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "7px 0", fontSize: 14.5, color: T.text, lineHeight: 1.45 }}>
+      <span style={{ display: "flex", color: T.muted, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+      <span>{text}</span>
     </div>
   );
 
-  // ── What is where ──
-  const what = (
-    <>
-      {block(<PhoneIcon size={19} />, t("This device"),
-        t("What you already had: your songs, playlists, likes, bin and look. It stays on this device, and your other devices never see it."),
-        on && s.mode === "device")}
-      {block(<DevicesIcon size={19} />, t("All devices"),
-        t("One library on all your devices, with the songs of every one of them. It has its own playlists, likes, bin and look. What you do here happens on every device. It is kept in your own Google Drive."),
-        on && s.mode === "all")}
-      {block(<Pin />, t("Always per device"),
-        t("Language, text size, audio effects and the app icon. They stay the same whichever library you look at."))}
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, color: T.text, fontSize: 15, fontWeight: 700 }}>
-          <span style={{ display: "flex", flexShrink: 0 }}><Music /></span>{t("Your songs")}
-        </div>
-        <div style={small}>
-          {t("Songs are not kept in your account. They go from device to device, so each one has them all. Songs from your other devices land in Music/MPTree and show in All devices only.")}
-        </div>
-        <div style={small}>
-          {t("Delete a song for good and your other devices keep it, in the bin of All devices. You can get it back from them in the bin, under Deleted for good here.")}
-        </div>
-        <div style={small}>{t("Voice notes, recordings and clips under a minute stay in This device.")}</div>
-        {on && <SongStatus s={s} T={T} />}
-      </div>
-    </>
+  // What the account is, for anyone not signed in yet.
+  const intro = (
+    <div style={{ ...card, marginTop: 0, padding: "16px 16px 10px" }}>
+      <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 6 }}>{t("Your music on all your phones")}</div>
+      {point(<Phones />, tn(MAX, "Sign in on up to {n} phone.", "Sign in on up to {n} phones."))}
+      {point(<Heart />, t("Playlists, likes and settings are the same on all of them."))}
+      {point(<Music />, t("Your songs are copied from phone to phone, over wifi."))}
+    </div>
   );
 
-  // ── What the top and bottom of the page do, per state ──
-  let top: ReactNode = null;
+  let body: ReactNode;
   let bottom: ReactNode;
 
   if (!native) {
+    body = intro;
     bottom = <div style={{ ...small, textAlign: "center" }}>{t("Sign in with Google in the MPTree app on your phone.")}</div>;
   } else if (!pro && s.phase !== "on") {
+    body = intro;
     bottom = (
       <>
-        <div style={{ ...small, textAlign: "center", marginTop: 0, marginBottom: 12 }}>
-          {tn(MAX, "Part of MPTree Pro, on up to {n} device.", "Part of MPTree Pro, on up to {n} devices.")}
-        </div>
+        <div style={{ ...small, textAlign: "center", marginBottom: 12 }}>{t("Part of MPTree Pro.")}</div>
         <button onClick={onOpenPro} style={btn}>{t("Get MPTree Pro")}</button>
       </>
     );
   } else if (s.phase === "limit") {
-    top = (
+    body = (
       <div style={{ ...card, marginTop: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{tn(MAX, "Your account is on {n} device already", "Your account is on {n} devices already")}</div>
-        <div style={small}>{t("Take one off to use your account here. Nothing is deleted from it; it just stops syncing.")}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{tn(MAX, "Your account is on {n} phone already", "Your account is on {n} phones already")}</div>
+        <div style={{ ...small, marginTop: 6 }}>{t("Take one off to use it here. Nothing is deleted from that phone.")}</div>
         <DeviceList devices={s.devices.filter(d => !d.test)} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
       </div>
     );
     bottom = <button onClick={cancelJoin} style={link}>{t("Cancel")}</button>;
   } else if (s.phase === "removed") {
-    top = (
+    body = (
       <div style={{ ...card, marginTop: 0 }}>
-        {s.removedWhy === "emptied" ? (
-          <>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{t("Your account was emptied")}</div>
-            <div style={small}>{t("Its data was deleted in Google Drive, so this device stopped syncing. This device stays as it is, and keeps the songs that came from your other devices. Sign in again to start a new account from here.")}</div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{t("This device was taken off your account")}</div>
-            <div style={small}>{t("That was done from another device. This device stays as it is, and keeps the songs that came from your other devices.")}</div>
-          </>
-        )}
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>
+          {s.removedWhy === "emptied" ? t("Your account was emptied") : t("This phone was taken off your account")}
+        </div>
+        <div style={{ ...small, marginTop: 6 }}>
+          {s.removedWhy === "emptied"
+            ? t("Its data was deleted in Google Drive. Everything on this phone stays as it is.")
+            : t("That was done from another phone. Everything on this phone stays as it is.")}
+        </div>
       </div>
     );
     bottom = (
@@ -183,7 +155,13 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       : s.saving ? t("Saving…")
       : s.lastSaved ? t("Saved {when}", { when: ago(s.lastSaved) })
       : t("Saving…");
-    top = (
+    const realDevices = s.devices.filter(d => !d.test);
+    const testOn = s.devices.some(d => d.test);
+    const testRow = (label: string, step: TestStep, done: string) => (
+      <button disabled={busy} onClick={() => doTest(step, done)}
+        style={{ ...btn, background: T.surface, color: T.text, marginTop: 8, opacity: busy ? 0.6 : 1 }}>{label}</button>
+    );
+    body = (
       <>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "2px 2px 4px" }}>
           <span style={{ width: 40, height: 40, borderRadius: 20, background: T.accent, color: T.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 17, flexShrink: 0 }}>
@@ -195,14 +173,59 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           </span>
           <span style={{ fontSize: 12.5, color: s.problem ? T.text : T.muted, textAlign: "right", maxWidth: 130, lineHeight: 1.35 }}>{status}</span>
         </div>
+
         {s.pausedNoPro ? (
-          <div style={{ ...card, marginTop: 8 }}>
+          <div style={card}>
             <div style={{ fontSize: 14, color: T.text, lineHeight: 1.5 }}>
-              {t("All devices is part of MPTree Pro, so it has stopped. Nothing is lost: your account keeps it, and it carries on when Pro is back.")}
+              {t("Syncing is part of MPTree Pro, so it has stopped. Nothing is lost, and it carries on when Pro is back.")}
             </div>
           </div>
         ) : (
-          <div style={{ marginTop: 10 }}><ModeSwitch T={T} /></div>
+          <div style={card}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, marginBottom: 4 }}>{t("Songs")}</div>
+            <SongStatus s={s} T={T} />
+          </div>
+        )}
+
+        <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Your phones ({n} of {max})", { n: realDevices.length, max: MAX })}</div>
+        <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
+
+        <button onClick={() => setMobileData(!s.mobileData)}
+          style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginTop: 16 }}>
+          <span>
+            <span style={{ display: "block", fontSize: 15, color: T.text }}>{t("Also use mobile data")}</span>
+            <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>
+              {t("For songs, at most {size} a day. Otherwise songs wait for wifi.", { size: fmtBytes(MOBILE_DAILY) })}
+            </span>
+          </span>
+          <Switch on={s.mobileData} T={T} />
+        </button>
+
+        <div style={card}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, marginBottom: 2 }}>{t("Good to know")}</div>
+          {[
+            t("Deleting a song permanently only takes it off this phone. You can get it back in the bin, under Permanently deleted."),
+            t("Language, text size, audio effects and the app icon are set per phone."),
+            t("Voice notes and short clips stay on the phone they are on."),
+            t("Everything is kept in your own Google Drive, in a folder only MPTree can open."),
+          ].map(x => <div key={x} style={{ ...small, color: T.text, padding: "5px 0" }}>{x}</div>)}
+        </div>
+
+        {(__PRO_TEST__ || import.meta.env.DEV) && !s.pausedNoPro && (
+          <div style={{ ...card, marginTop: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{t("Test phone")}</div>
+            <div style={{ ...small, marginTop: 6 }}>
+              {t("Only in test builds. A pretend second phone in your Drive, with three short songs, so you can try syncing with one phone.")}
+            </div>
+            {!testOn ? testRow(t("Add a test phone"), "add", t("Test phone added. Its songs come in over the next minute."))
+              : (
+                <>
+                  {testRow(t("Test phone makes a playlist"), "playlist", t("The test phone made a playlist and liked a song"))}
+                  {testRow(t("Test phone deletes its songs permanently"), "delete", t("The test phone deleted its songs. Look in the bin."))}
+                  {testRow(t("Remove the test phone"), "remove", t("Test phone removed"))}
+                </>
+              )}
+          </div>
         )}
       </>
     );
@@ -213,17 +236,15 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
         {confirmOut ? (
           <div style={{ ...card, marginTop: 0 }}>
             <div style={{ fontSize: 14, color: T.text, lineHeight: 1.5 }}>
-              {t("Sign out on this device? All devices disappears from here and This device stays as it is. Your account keeps All devices for your other devices.")}
+              {t("Sign out on this phone? Your playlists and songs stay on it. It just stops syncing.")}
             </div>
             {s.songs.received > 0 && (
               <button onClick={() => setRemoveReceived(!removeReceived)}
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", background: "transparent", border: "none", padding: "12px 0 0", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                 <span style={{ fontSize: 13.5, color: T.text, lineHeight: 1.45 }}>
-                  {removeReceived
-                    ? tn(s.songs.received, "Delete the {n} song that came from your other devices", "Delete the {n} songs that came from your other devices")
-                    : tn(s.songs.received, "Keep the {n} song that came from your other devices, in This device", "Keep the {n} songs that came from your other devices, in This device")}
+                  {tn(s.songs.received, "Also delete the {n} song that came from your other phones", "Also delete the {n} songs that came from your other phones")}
                 </span>
-                <Switch on={!removeReceived} T={T} />
+                <Switch on={removeReceived} T={T} />
               </button>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -237,24 +258,18 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       </>
     );
   } else {
+    body = intro;
     bottom = (
       <>
         <button onClick={doSignIn} disabled={busy || s.phase === "joining"} style={{ ...btn, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: busy ? 0.7 : 1 }}>
           <GoogleG />{busy || s.phase === "joining" ? t("Signing in…") : t("Sign in with Google")}
         </button>
         <div style={{ ...small, textAlign: "center", marginTop: 8 }}>
-          {tn(MAX, "On up to {n} device. MPTree only gets its own folder in your Drive.", "On up to {n} devices. MPTree only gets its own folder in your Drive.")}
+          {t("MPTree only gets its own hidden folder in your Google Drive.")}
         </div>
       </>
     );
   }
-
-  const realDevices = s.devices.filter(d => !d.test);
-  const testOn = s.devices.some(d => d.test);
-  const testRow = (label: string, step: TestStep, done: string) => (
-    <button disabled={busy} onClick={() => doTest(step, done)}
-      style={{ ...btn, background: T.surface, color: T.text, marginTop: 8, opacity: busy ? 0.6 : 1 }}>{label}</button>
-  );
 
   return (
     <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
@@ -264,74 +279,25 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Account & sync")}</span>
           <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
-
-        <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>
-          {top}
-          {what}
-          {s.phase === "on" && (
-            <>
-              <button onClick={() => setMobileData(!s.mobileData)}
-                style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                <span>
-                  <span style={{ display: "block", fontSize: 15, color: T.text }}>{t("Use mobile data for songs")}</span>
-                  <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>
-                    {t("Off: songs only move on wifi. On: at most {size} a day. Your account is always saved.", { size: fmtBytes(MOBILE_DAILY) })}
-                  </span>
-                </span>
-                <Switch on={s.mobileData} T={T} />
-              </button>
-              <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Devices ({n} of {max})", { n: realDevices.length, max: MAX })}</div>
-              <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
-              {(__PRO_TEST__ || import.meta.env.DEV) && !s.pausedNoPro && (
-                <div style={{ ...card, marginTop: 20 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{t("Test phone")}</div>
-                  <div style={small}>
-                    {t("Only in test builds. A pretend second device in your Drive, with three short songs of its own, so you can try All devices with one phone.")}
-                  </div>
-                  {!testOn ? testRow(t("Add a test phone"), "add", t("Test phone added. Its songs come in over the next minute."))
-                    : (
-                      <>
-                        {testRow(t("Test phone makes a playlist"), "playlist", t("The test phone made a playlist and liked a song"))}
-                        {testRow(t("Test phone deletes its songs for good"), "delete", t("The test phone deleted its songs. Look in the bin of All devices."))}
-                        {testRow(t("Remove the test phone"), "remove", t("Test phone removed"))}
-                      </>
-                    )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
+        <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>{body}</div>
         {bottom && <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>{bottom}</div>}
       </div>
     </div>
   );
 }
 
+/** One plain line about the songs, or the song on its way. */
 function SongStatus({ s, T }: { s: SyncState; T: T }) {
   const g = s.songs;
   const others = s.devices.filter(d => d.id !== s.deviceId);
-  const extra: ReactNode[] = [];
-  if (s.deleted.length > 0) extra.push(
-    <div key="del" style={{ color: T.muted }}>
-      {tn(s.deleted.length, "{n} song deleted for good here. See the bin to get it back.", "{n} songs deleted for good here. See the bin to get them back.")}
-    </div>);
-  if (g.inDrive.count > 0) extra.push(
-    <div key="drive" style={{ color: T.muted }}>
-      {tn(g.inDrive.count, "{n} song waiting in your Drive ({size}), until the device it is for opens MPTree.", "{n} songs waiting in your Drive ({size}), until the device they are for opens MPTree.", { size: fmtBytes(g.inDrive.bytes) })}
-    </div>);
-
-  let main: ReactNode;
   if (g.moving) {
     const pct = g.moving.total > 0 ? Math.min(100, Math.round(g.moving.done / g.moving.total * 100)) : 0;
     const what = g.moving.dir === "in"
-      ? t("Getting “{name}” from {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other device") })
-      : g.moving.via === "drive"
-        ? t("Leaving “{name}” in your Drive for {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other device") })
-        : t("Sending “{name}” to {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other device") });
-    main = (
+      ? t("Getting “{name}” from {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other phone") })
+      : t("Sending “{name}” to {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other phone") });
+    return (
       <>
-        <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis" }}>{what}</div>
+        <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis" }}>{what}</div>
         <div style={{ height: 4, background: T.border, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
           <div style={{ width: `${pct}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
         </div>
@@ -342,25 +308,21 @@ function SongStatus({ s, T }: { s: SyncState; T: T }) {
         <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{t("Keep MPTree open. The screen stays on until it is done.")}</div>
       </>
     );
-  } else {
-    let line: string;
-    if (!others.length) line = t("Sign in on another device and your songs go there too.");
-    else if (g.note === "phone-full") line = t("Not enough room on this device: the songs still to come need {need}, and {free} is free. They show greyed out in All devices until you make room.", { need: fmtBytes(g.needBytes ?? 0), free: fmtBytes(Math.max(0, g.freeBytes ?? 0)) });
-    else if (g.note === "mobile-limit") line = t("Today's {size} over mobile data is used up. The rest waits for wifi or tomorrow.", { size: fmtBytes(MOBILE_DAILY) });
-    else if (g.note === "wifi" && (g.missing || g.theyMiss)) line = t("Waiting for wifi. Or turn on mobile data for songs below.");
-    else if (g.missing && g.waitingOn.length) line = tn(g.missing, "{n} song is on {phone} and not here yet. Open MPTree on {phone} to get it.", "{n} songs are on {phone} and not here yet. Open MPTree on {phone} to get them.", { phone: g.waitingOn.join(", ") });
-    else if (g.missing) line = tn(g.missing, "{n} song on its way to this device.", "{n} songs on their way to this device.");
-    else if (g.note === "drive-full" && g.theyMiss) line = t("Your Google Drive is full, so songs can only go straight across. Open MPTree on both devices.");
-    else if (g.theyMiss) line = tn(g.theyMiss, "{n} song from this device still going to your other devices.", "{n} songs from this device still going to your other devices.");
-    else line = tn(g.here, "Your {n} song is on every device.", "All {n} songs are on every device.");
-    main = <>{line}</>;
   }
+  let line: string;
+  if (!others.length) line = t("Sign in on another phone and your songs go there too.");
+  else if (g.note === "phone-full") line = t("This phone is full. Free up {size} to get the rest.", { size: fmtBytes(Math.max(0, (g.needBytes ?? 0) - Math.max(0, (g.freeBytes ?? 0) - 500 * 1024 * 1024))) });
+  else if (g.note === "mobile-limit") line = t("Today's mobile data for songs is used up. The rest waits for wifi.");
+  else if (g.note === "wifi" && (g.missing || g.theyMiss)) line = t("Waiting for wifi.");
+  else if (g.missing && g.waitingOn.length) line = tn(g.missing, "{n} song comes in when you open MPTree on {phone}.", "{n} songs come in when you open MPTree on {phone}.", { phone: g.waitingOn.join(", ") });
+  else if (g.missing) line = tn(g.missing, "{n} song on its way to this phone.", "{n} songs on their way to this phone.");
+  else if (g.theyMiss) line = tn(g.theyMiss, "{n} song still going to your other phones.", "{n} songs still going to your other phones.");
+  else line = t("All your songs are on this phone.");
   return (
-    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`, fontSize: 13.5, color: T.text, lineHeight: 1.45 }}>
-      {main}
+    <>
+      <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>{line}</div>
       {g.arrived > 0 && <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{tn(g.arrived, "{n} song arrived since you opened MPTree.", "{n} songs arrived since you opened MPTree.")}</div>}
-      {extra.map((x, i) => <div key={i} style={{ marginTop: 10 }}>{x}</div>)}
-    </div>
+    </>
   );
 }
 
@@ -375,9 +337,9 @@ function DeviceList({ devices, me, onRemove, busy, T }: {
           <span style={{ flex: 1, minWidth: 0 }}>
             <span style={{ display: "block", fontSize: 14.5, color: T.text }}>{d.name}</span>
             <span style={{ display: "block", fontSize: 12, color: T.muted, marginTop: 1 }}>
-              {d.id === me ? t("This device")
+              {d.id === me ? t("This phone")
                 : d.test ? t("Pretend, for testing")
-                : t("Added {date}", { date: new Date(d.addedAt).toLocaleDateString() }) + " · " + t("last used {when}", { when: ago(d.lastActive ?? d.addedAt) })}
+                : t("Last used {when}", { when: ago(d.lastActive ?? d.addedAt) })}
             </span>
           </span>
           {d.id !== me && !d.test && (asking === d.id ? (

@@ -35,10 +35,8 @@ import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
-  prepareSync, initSync, syncChanged, setMode, songsForMode, useSync, beforeDeleteForever, deleteWarnings,
-  restoreDeleted, putOnThisDevice, copyPlaylist, isOnThisDevice, type Host,
+  prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
 } from "./sync/engine";
-import { ModeSwitch } from "./components/ModeSwitch";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
@@ -738,7 +736,7 @@ export default function App() {
       const scannedWithIds: Song[] = r.songs.map((s: Song) => ({ ...s, id: s.uri }));
       const currentRemoved = removedList ?? removedRef.current;
       const blocked = new Set(currentRemoved.map((s: Song) => s.id));
-      const sorted = songsForMode([...scannedWithIds].filter((s: Song) => !blocked.has(s.id))).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
+      const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
       const cutIds = new Set(persistedCuts.filter((s: Song) => !blocked.has(s.id)).map((s: Song) => s.id));
       const result = [...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
       setSongs(() => result);
@@ -813,8 +811,7 @@ export default function App() {
 
     const initialize = async () => {
       try {
-        // Signed in to an MPTree account, the library that shows may be All
-        // devices, which is kept under keys of its own.
+        // What the MPTree account needs to know before the library is read.
         await prepareSync().catch(() => {});
         const storedBin = await loadRemovedTracks();
         pendingBin = storedBin;
@@ -1903,19 +1900,6 @@ export default function App() {
       if (a.changed.playlists) { playlistsRef.current = a.playlists; setPlaylists(a.playlists); await savePlaylists(a.playlists); }
     },
     rescan: async () => { await scanMusic(); },
-    flush: async () => {
-      if (flushSessionTimer.current) { clearTimeout(flushSessionTimer.current); flushSessionTimer.current = null; }
-      metaDirtyRef.current = false;
-      await saveMetaNow(metaRef.current);
-      await saveSession(sessionNow());
-    },
-    reload: async () => {
-      const [bin, m, pl] = await Promise.all([loadRemovedTracks(), loadMeta(), loadPlaylists()]);
-      removedRef.current = bin; setRemovedSongs(bin);
-      metaRef.current = m; setMeta(m);
-      playlistsRef.current = pl; setPlaylists(pl);
-      await scanMusic(bin);
-    },
     // Songs whose files go: from the list, the bin and every playlist's view,
     // with cut tracks made from them.
     deleteFiles: async paths => {
@@ -1955,8 +1939,6 @@ export default function App() {
       snapshot: () => syncHostRef.current!.snapshot(),
       apply: a => syncHostRef.current!.apply(a),
       rescan: () => syncHostRef.current!.rescan(),
-      reload: () => syncHostRef.current!.reload(),
-      flush: () => syncHostRef.current!.flush(),
       deleteFiles: paths => syncHostRef.current!.deleteFiles(paths),
       settings: () => syncHostRef.current!.settings(),
     });
@@ -2613,13 +2595,7 @@ export default function App() {
   const COLLAPSED_INSET = dims.cardTop + 54 + 14;
   const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
   const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
-  const twoLibraries = sync.phase === "on" && !sync.pausedNoPro;
-  // Backups, Clean up and restoring a backup are about This device, so they
-  // switch to it first.
-  const onThisDevice = (fn: () => void) => () => {
-    if (sync.mode === "all") void setMode("device").then(() => { showToast(t("Switched to This device")); fn(); });
-    else fn();
-  };
+  const signedIn = sync.phase === "on" && !sync.pausedNoPro;
   // For the things anchored to the card itself rather than to a list: the update
   // notice, the sort menu, the logo's own options panel.
   const cardBottom      = page === "songs" ? songsInset : playlistsInset;
@@ -3179,13 +3155,6 @@ export default function App() {
           </div>
           </div>
 
-          {/* Signed in to an MPTree account: which library the list shows. */}
-          {twoLibraries && (
-            <div style={{ paddingTop: 10 }}>
-              <ModeSwitch T={CT} />
-            </div>
-          )}
-
           {/* Search + count/filter. Shown on the Songs page only, but ALWAYS
               MOUNTED, which is load-bearing rather than cosmetic: this block is
               about 96px tall, so gating it on the page made the card's measured
@@ -3686,11 +3655,11 @@ export default function App() {
                   {virtBottomPad > 0 && <div style={{ height: virtBottomPad }} aria-hidden="true" />}
                 </>
               )}
-              {twoLibraries && sync.mode === "all" && sync.songs.absent.length > 0 && !search && !isFavFilter && !activeArtist && (
+              {signedIn && sync.songs.absent.length > 0 && !search && !isFavFilter && !activeArtist && (
                 <div style={{ padding: "18px 0 8px" }}>
                   <div style={{ padding: "0 19px 8px", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: TH.muted }}>
-                      {t("Not on this device yet")}
+                      {t("Not on this phone yet")}
                     </span>
                     <span style={{ fontSize: 12, color: TH.muted }}>{sync.songs.absent.length}</span>
                   </div>
@@ -3817,11 +3786,6 @@ export default function App() {
               songs={songs}
               meta={meta}
               onPlaylistsChange={handlePlaylistsChange}
-              copyTarget={twoLibraries ? (sync.mode === "all" ? "device" : "all") : undefined}
-              onCopyPlaylist={p => {
-                const to = sync.mode === "all" ? "device" : "all";
-                void copyPlaylist(p, to).then(() => showToast(to === "all" ? t("Copied to All devices") : t("Copied to This device")));
-              }}
               onPlayPlaylist={handlePlayPlaylist}
               onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playSong(song, list); }}
               currentSongId={currentSong?.id ?? null}
@@ -4003,9 +3967,6 @@ export default function App() {
             }}
             onShare={() => { const s = menuSong; setMenuSong(null); shareSong(s); }}
             onRemove={() => { const s = menuSong; setMenuSong(null); setRemoveSong(s); }}
-            onPutOnThisDevice={twoLibraries && sync.mode === "all" && !menuSong.isCut && !isOnThisDevice(menuSong.uri)
-              ? () => { const s = menuSong; setMenuSong(null); void putOnThisDevice([s]).then(() => showToast(t("Now on This device too"))); }
-              : undefined}
             onClose={() => setMenuSong(null)}
             T={TH}
           />
@@ -4022,7 +3983,7 @@ export default function App() {
             onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
             onOpenAccount={() => setAccountOpen(true)}
-            onOpenCleanup={pro ? onThisDevice(() => setCleanupOpen(true)) : () => setProOpen(true)}
+            onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
             onViewBin={() => setBinOpen(true)}
@@ -4032,8 +3993,8 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onExport={onThisDevice(handleExportOpen)}
-            onImportOpen={onThisDevice(handleImportOpen)}
+            onExport={handleExportOpen}
+            onImportOpen={handleImportOpen}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4125,13 +4086,12 @@ export default function App() {
             deleteNote={songs => {
               const w = deleteWarnings(songs);
               const lines: string[] = [];
-              if (w.alsoHere) lines.push(tn(w.alsoHere, "This song is also in This device and goes from there too.", "{n} of these are also in This device and go from there too."));
-              if (w.elsewhere) lines.push(tn(w.elsewhere, "Your other devices keep it, in the bin of All devices. You can get it back from them.", "Your other devices keep {n} of them, in the bin of All devices. You can get those back from them."));
-              if (w.lastCopy) lines.push(tn(w.lastCopy, "No other device has this song. After this it is gone everywhere.", "No other device has {n} of these. After this they are gone everywhere."));
+              if (w.elsewhere) lines.push(tn(w.elsewhere, "It only goes from this phone. Your other phones keep it, and you can get it back under Permanently deleted.", "They only go from this phone. Your other phones keep {n} of them, and you can get those back under Permanently deleted."));
+              if (w.lastCopy) lines.push(tn(w.lastCopy, "No other phone has this song. After this it is gone everywhere.", "No other phone has {n} of these. After this they are gone everywhere."));
               return lines.join("\n\n") || null;
             }}
-            deleted={twoLibraries ? sync.deleted : undefined}
-            onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
+            deleted={signedIn ? sync.deleted : undefined}
+            onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other phones")); }}
             onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}

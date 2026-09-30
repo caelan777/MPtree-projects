@@ -1,53 +1,45 @@
 import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
 import { App as CapApp } from "@capacitor/app";
-import { Account, Sync, System, MusicScanner } from "../plugins";
 import { Filesystem, Directory } from "@capacitor/filesystem";
-import { collectShared, restoreShared, loadLibrary, saveLibrary, setLibraryScope } from "../storage";
+import { Account, Sync, System, MusicScanner } from "../plugins";
+import { collectShared, restoreShared } from "../storage";
 import { hasPro, subscribePro } from "../pro";
 import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
 import { openDrive, type Drive, type DriveFile } from "./drive";
 import {
   buildLocal, merge, apply, missingFrom, coverRefs, same, fileOf, songSig, sigsOf,
-  markDeleted, markRestored, deletedBy, PENDING,
+  markDeleted, markRestored, deletedBy,
   type LibDoc, type Applied, type Inventory,
 } from "./model";
 import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type Session } from "./rtc";
 
 // ─── THE MPTREE ACCOUNT ──────────────────────────────────────────────────────
 //
-// Part of MPTree Pro. Sign in with Google on up to three phones. Then there are
-// two libraries, and a switch in the header card and in Settings picks one:
-//
-//   This device    what this phone had before: its songs, playlists, likes,
-//                  bin and look. It stays on the phone and nobody else sees it.
-//   All devices    one library every phone on the account shares: every song
-//                  of every phone, and playlists, likes, names, a bin and a look
-//                  of its own. What is done in it is done on every phone. It
-//                  is saved in the person's own Drive app folder (model.ts).
-//
-// Language, text size, the equalizer and the app icon stay with the phone in
-// both (storage.ts, collectShared).
+// Part of MPTree Pro. Sign in with Google on up to three phones, and they share
+// one library: playlists, likes, names, the bin, cut tracks and settings are
+// the same on all of them. It is saved in the person's own Drive app folder
+// (model.ts). Language, text size, the equalizer and the app icon stay with
+// each phone (storage.ts, collectShared).
 //
 // The songs themselves are not saved in the account. They go from phone to
 // phone so every phone has them all: straight across when both have MPTree
 // open (rtc.ts), otherwise left in the app folder by the one that has a song,
 // taken by the one that needs it, and deleted from Drive once it arrived. Songs
-// that came from another phone go to Music/MPTree and show in All devices only,
-// unless someone puts them on This device too.
+// from another phone land in Music/MPTree.
 //
-// Deleting a song for good, in either library, takes the file off this phone.
-// The other phones keep it, in the bin of All devices; this phone lists it
-// under "Deleted for good on this device" and can bring it back from another
-// phone. A song no phone has any more is gone.
+// Deleting a song for good takes the file off this phone only. The other
+// phones keep it, in the bin; this phone lists it in the bin under
+// "Permanently deleted" and can bring it back from another phone. A song no
+// phone has any more is gone.
 //
-// Voice notes, recordings and clips under a minute (cleanup.ts) stay in This
-// device and are never sent.
+// Voice notes, recordings and clips under a minute (cleanup.ts) stay on the
+// phone they are on.
 //
 // Files in the app folder:
 //   devices.json          the phones on the account, three at most
-//   library.json          All devices (model.ts)
+//   library.json          the shared library (model.ts)
 //   covers.json           its cover pictures, by hash
 //   inv-<phone>.json      the songs that phone has
 //   peer-<phone>.json     "I am open now", and the WebRTC offer or answer
@@ -65,8 +57,6 @@ const peer = (id: string) => `peer-${id}.json`;
 const relayPrefix = (to: string) => `relay-${to}-`;
 
 const KEY_ACCOUNT = "mptree_account";
-/** Which library is showing. */
-const KEY_MODE = "mptree_mode";
 /** What this phone and the account last agreed on, for merging. */
 const KEY_BASE = "mptree_sync_base";
 /** When the first change not yet saved to the account was made. */
@@ -75,12 +65,8 @@ const KEY_DIRTY = "mptree_sync_dirty";
 const KEY_PENDING = "mptree_sync_pending";
 /** Songs that came from other phones, fp -> path. */
 const KEY_RECEIVED = "mptree_sync_received";
-/** Of those, the ones put on This device too, by path. */
-const KEY_ADOPTED = "mptree_sync_adopted";
 /** What is known about songs deleted for good here, for the list of them. */
 const KEY_GONE = "mptree_sync_gone";
-/** The settings of the library that is not showing. */
-const profileKey = (m: Mode) => `mptree_profile_${m}`;
 /** Songs moved over mobile data today. */
 const KEY_MOBILE = "mptree_sync_mobile";
 
@@ -110,13 +96,11 @@ const GONE_SHOWN = 30 * 24 * 60 * 60_000;
 
 // ── State, for the UI ─────────────────────────────────────────────────────────
 
-export type Mode = "device" | "all";
-
 export type Device = { id: string; name: string; addedAt: number; lastActive?: number; test?: boolean };
 
 export type Moving = { dir: "in" | "out"; name: string; done: number; total: number; via: "direct" | "drive"; peer: string };
 
-/** A song of All devices that is not on this phone yet, shown greyed out. */
+/** A song of another phone that is not on this one yet, shown greyed out. */
 export type Absent = { fp: string; title: string; artist: string };
 
 /** A song deleted for good on this phone. */
@@ -137,8 +121,6 @@ export type SyncState = {
   account?: { email: string; name: string; photo?: string };
   deviceId?: string;
   devices: Device[];
-  /** Which library is showing. Always "device" when signed out. */
-  mode: Mode;
   /** Signed in, but Pro ran out (the free week ended). Nothing moves. */
   pausedNoPro: boolean;
   saving: boolean;
@@ -162,11 +144,11 @@ export type SyncState = {
     freeBytes?: number;
     /** Songs waiting in Drive, for any phone. */
     inDrive: { count: number; bytes: number };
-    /** Voice notes and short clips, which stay in This device. */
+    /** Voice notes and short clips, which stay on this phone. */
     notShared: number;
     /** Came from other phones; can go when signing out. */
     received: number;
-    /** All devices' songs not on this phone yet. */
+    /** Other phones' songs not on this one yet. */
     absent: Absent[];
   };
   deleted: Deleted[];
@@ -178,7 +160,7 @@ const initialSongs: SyncState["songs"] = {
   inDrive: { count: 0, bytes: 0 }, notShared: 0, received: 0, absent: [],
 };
 const initial: SyncState = {
-  phase: "off", devices: [], mode: "device", pausedNoPro: false, saving: false,
+  phase: "off", devices: [], pausedNoPro: false, saving: false,
   songs: initialSongs, deleted: [], mobileData: false,
 };
 
@@ -199,25 +181,20 @@ const snap = () => state;
 export function useSync(): SyncState { return useSyncExternalStore(subscribe, snap, snap); }
 export function getSync(): SyncState { return state; }
 
-/** Signed in and able to use All devices right now. */
+/** Signed in and syncing. */
 const accountOn = () => state.phase === "on" && !state.pausedNoPro;
 
 // ── The app, as the engine sees it ────────────────────────────────────────────
 
 export type Host = {
-  /** What the list shows now, in the library that is showing. */
+  /** What the list shows now. */
   snapshot(): { songs: Song[]; removed: Song[]; meta: Record<string, SongMeta>; playlists: Playlist[] };
-  /** Put this version of the library that is showing on screen, and save it. */
+  /** Put the account's version on screen, and save it. */
   apply(a: Applied): Promise<void>;
-  /** Load the library that is showing from storage and scan again. */
-  reload(): Promise<void>;
   /** Songs arrived in Music/MPTree: scan again. */
   rescan(): Promise<void>;
   /** Settings were changed from outside: show them. */
   settings(): Promise<void>;
-  /** Write anything the app holds back for a moment (song details, the
-   *  session), so storage is up to date. */
-  flush(): Promise<void>;
   /** Deletes these files from the phone, and the songs from the list and the
    *  bin. Resolves how many went. */
   deleteFiles(paths: string[]): Promise<number>;
@@ -230,7 +207,7 @@ let host: Host | null = null;
 type StoredAccount = { email: string; name: string; photo?: string; since: number; mobileData?: boolean };
 type Base = { deviceId: string; email: string; doc: LibDoc; keys: string[]; files: Record<string, string> };
 type Pending = { del: Record<string, number>; restore: string[] };
-type GoneInfo = { title: string; artist: string; at: number; path?: string; own: boolean; meta?: SongMeta; restoring?: boolean };
+type GoneInfo = { title: string; artist: string; at: number; restoring?: boolean };
 
 async function readJson<T>(key: string): Promise<T | null> {
   try { const { value } = await Preferences.get({ key }); return value ? JSON.parse(value) as T : null; } catch { return null; }
@@ -240,14 +217,11 @@ const writeJson = (key: string, v: unknown) => Preferences.set({ key, value: JSO
 let stored: StoredAccount | null = null;
 let deviceId = "";
 let receivedPaths = new Map<string, string>(); // fp -> path
-let adopted = new Set<string>();
 let gone: Record<string, GoneInfo> = {};
 let pending: Pending = { del: {}, restore: [] };
 let dirtySince = 0;
 
-let receivedIndex: Set<string> | null = null;
-const saveReceived = () => { receivedIndex = null; return writeJson(KEY_RECEIVED, Object.fromEntries(receivedPaths)); };
-const saveAdopted = () => writeJson(KEY_ADOPTED, [...adopted]);
+const saveReceived = () => writeJson(KEY_RECEIVED, Object.fromEntries(receivedPaths));
 const saveGone = () => writeJson(KEY_GONE, gone);
 const savePending = () => writeJson(KEY_PENDING, pending);
 
@@ -325,28 +299,40 @@ type InvFile = { fps: Inventory; test?: boolean };
 
 // ── Starting up ───────────────────────────────────────────────────────────────
 
-/** Before the app reads its library: which library shows, and which songs
- *  belong in it. Called once, first thing. */
+/** Before the app reads its library. Called once, first thing. */
 export async function prepareSync(): Promise<void> {
   deviceId = (await Sync.deviceId().catch(() => ({ id: "" }))).id;
   stored = await readJson<StoredAccount>(KEY_ACCOUNT);
+  await leaveTwoLibraries();
   receivedPaths = new Map(Object.entries(await readJson<Record<string, string>>(KEY_RECEIVED) ?? {}));
-  receivedIndex = null;
-  adopted = new Set(await readJson<string[]>(KEY_ADOPTED) ?? []);
   gone = await readJson<Record<string, GoneInfo>>(KEY_GONE) ?? {};
   pending = { del: {}, restore: [], ...(await readJson<Pending>(KEY_PENDING) ?? {}) };
   dirtySince = await readJson<number>(KEY_DIRTY) ?? 0;
   if (stored) {
-    const mode = (await readJson<Mode>(KEY_MODE)) === "all" && hasPro() ? "all" : "device";
-    setLibraryScope(mode === "all" ? "all" : "");
     set({
-      phase: "on", deviceId, mode,
+      phase: "on", deviceId,
       account: { email: stored.email, name: stored.name, photo: stored.photo },
       mobileData: !!stored.mobileData,
     });
     if (import.meta.env.DEV) try { if (localStorage.getItem("mptree_dev_account") === "1") token = { value: "dev", at: Date.now() }; } catch { /* no storage */ }
   } else {
     set({ deviceId });
+  }
+}
+
+/** Test build 15 had two libraries, one for the phone and one shared. The phone's
+ *  own one is kept; the next round joins it with the account as on a first
+ *  sign in, so nothing of either is lost. */
+async function leaveTwoLibraries() {
+  const mode = await readJson<string>("mptree_mode");
+  if (mode === null) return;
+  if (mode === "all") {
+    const device = await readJson<Record<string, string>>("mptree_profile_device");
+    if (device) await restoreShared(device);
+  }
+  for (const key of ["mptree_mode", "mptree_profile_device", "mptree_profile_all", "mptree_sync_adopted", KEY_BASE,
+    "mptree_meta@all", "mptree_removed@all", "mptree_cut_tracks@all", "mptree_playlists@all"]) {
+    await Preferences.remove({ key }).catch(() => {});
   }
 }
 
@@ -357,7 +343,7 @@ export async function initSync(h: Host): Promise<void> {
   CapApp.addListener("resume", () => kick(1500)).catch(() => {});
   keepChecking();
   if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mptreeSync = {
-    state: () => state, run: () => libraryCycle(), signIn: () => signIn(), setMode: (m: Mode) => setMode(m),
+    state: () => state, run: () => libraryCycle(), signIn: () => signIn(),
   };
   refreshPro();
 }
@@ -365,54 +351,10 @@ export async function initSync(h: Host): Promise<void> {
 function refreshPro() {
   const paused = !hasPro();
   if (paused !== state.pausedNoPro) set({ pausedNoPro: paused });
-  if (paused && state.mode === "all") void exclusive(() => switchTo("device"));
   if (!paused) kick(2000);
 }
 
 const active = () => accountOn() && !!host && document.visibilityState === "visible";
-
-// ── Which songs each library shows ────────────────────────────────────────────
-
-/** Songs that came from another phone and were not put on This device. */
-const onlyInAll = (path: string) => (receivedIndex ??= new Set(receivedPaths.values())).has(path) && !adopted.has(path);
-
-/** The scanned songs that belong in the library that is showing. The app asks
- *  this whenever it scans. */
-export function songsForMode(list: Song[]): Song[] {
-  if (!accountOn()) return list;
-  if (state.mode === "device") return list.filter(s => s.isCut || !onlyInAll(s.uri));
-  const kept = new Set(findSuspects(list).map(x => x.song.uri));
-  return list.filter(s => s.isCut || !kept.has(s.uri));
-}
-
-/** Whether a song is part of This device (not only in All devices). */
-export function isOnThisDevice(path: string): boolean { return !onlyInAll(path); }
-
-// ── Switching library ─────────────────────────────────────────────────────────
-
-/** Shows the other library: its songs, playlists, bin and look. */
-export async function setMode(next: Mode): Promise<void> {
-  if (!host || next === state.mode) return;
-  if (next === "all" && !accountOn()) return;
-  await exclusive(() => switchTo(next));
-  kick(800);
-}
-
-async function switchTo(next: Mode): Promise<void> {
-  if (!host || next === state.mode) return;
-  {
-    await host.flush();
-    // The look of the library going away is kept for when it comes back.
-    await writeJson(profileKey(state.mode), await collectShared());
-    const theirs = await readJson<Record<string, string>>(profileKey(next));
-    setLibraryScope(next === "all" ? "all" : "");
-    set({ mode: next });
-    await writeJson(KEY_MODE, next);
-    if (theirs) await restoreShared(theirs);
-    await host.reload();
-    await host.settings();
-  }
-}
 
 // ── Signing in ────────────────────────────────────────────────────────────────
 
@@ -487,25 +429,12 @@ async function finishJoin(): Promise<"ok" | "failed"> {
     devices.push({ id: deviceId, name: unique, addedAt: Date.now() });
     await saveDevices(devices);
   }
-  const base = await readJson<Base>(KEY_BASE);
-  const again = !!base && base.deviceId === deviceId && base.email === acc.email;
-  if (!again) {
-    // A first time on this account. All devices starts with what this phone
-    // knows about its songs (likes, names, covers), and none of its playlists:
-    // those are made in All devices itself, or copied in on purpose.
+  if (stored?.email !== acc.email) {
+    // A first time on this account: this phone's library joins the account's.
+    // Nothing is asked; playlists of the same name become one.
     await Preferences.remove({ key: KEY_BASE }).catch(() => {});
-    const current = await loadLibrary("all");
-    if (!Object.keys(current.meta).length && !current.playlists.length) {
-      const own = await loadLibrary("");
-      const meta: Record<string, SongMeta> = {};
-      for (const [path, m] of Object.entries(own.meta)) { const c = { ...m }; delete c.playCount; delete c.lastPlayedAt; meta[path] = c; }
-      await saveLibrary("all", { meta, removed: [], cuts: [], playlists: [] });
-    }
-    if (!(await readJson(profileKey("all")))) await writeJson(profileKey("all"), await collectShared());
-    if (stored?.email !== acc.email) {
-      receivedPaths = new Map(); gone = {}; pending = { del: {}, restore: [] };
-      await Promise.all([saveReceived(), saveGone(), savePending()]);
-    }
+    gone = {}; pending = { del: {}, restore: [] };
+    await Promise.all([saveGone(), savePending()]);
   }
   pendingJoin = null;
   stored = acc;
@@ -542,9 +471,9 @@ async function forgetPhoneFiles(id: string) {
 
 // ── Signing out ───────────────────────────────────────────────────────────────
 
-/** Signing out frees this phone's place on the account and shows This device.
- *  The songs that came from other phones stay, as part of This device, unless
- *  removeReceived: then they go. */
+/** Signing out frees this phone's place on the account. The library stays on
+ *  the phone as it is. The songs that came from the other phones stay too,
+ *  unless removeReceived: then they go. */
 export async function signOut(removeReceived = false): Promise<number> {
   stopTransfers();
   const email = stored?.email;
@@ -562,21 +491,17 @@ export async function signOut(removeReceived = false): Promise<number> {
   return removed;
 }
 
-/** Back to This device alone, after signing out or being taken off. Called
- *  within a round, or on its own. */
+/** Off the account: signed out, or taken off. Signing in again later joins
+ *  this phone's library with the account's afresh. */
 async function leave(removeReceived: boolean): Promise<number> {
-  if (state.mode === "all") await switchTo("device");
   let removed = 0;
-  const theirs = [...receivedPaths.values()].filter(p => !adopted.has(p));
-  if (removeReceived && host) removed = await host.deleteFiles(theirs).catch(() => 0);
-  else for (const p of theirs) adopted.add(p);
+  if (removeReceived && host) removed = await host.deleteFiles([...receivedPaths.values()]).catch(() => 0);
   receivedPaths = new Map(); gone = {}; pending = { del: {}, restore: [] };
-  await Promise.all([saveReceived(), saveAdopted(), saveGone(), savePending()]);
+  await Promise.all([saveReceived(), saveGone(), savePending()]);
   stored = null; token = null; drive = null; files = new Map(); cache.clear(); doc = null;
   await Preferences.remove({ key: KEY_ACCOUNT }).catch(() => {});
   await Preferences.remove({ key: KEY_BASE }).catch(() => {});
   await Preferences.remove({ key: KEY_DIRTY }).catch(() => {});
-  await host?.rescan();
   return removed;
 }
 
@@ -616,13 +541,13 @@ function keepChecking() {
 /** The app calls this whenever something in the library changed. */
 export function syncChanged(): void {
   if (!accountOn()) return;
-  if (state.mode === "all" && !dirtySince) {
+  if (!dirtySince) {
     // Remembered across restarts: a change made with no internet still counts
     // from when it was made, not from when the phone got back online.
     dirtySince = Date.now();
     void writeJson(KEY_DIRTY, dirtySince);
   }
-  kick(state.mode === "all" ? 6000 : 20000);
+  kick(6000);
 }
 
 let running = false, again = false;
@@ -636,8 +561,7 @@ function done() {
   idleWaiters.splice(0).forEach(r => r());
   if (again) { again = false; kick(3000); }
 }
-/** Runs fn with no round running alongside it, so what it writes to storage
- *  cannot be overwritten by a round that read it just before. */
+/** Runs fn with no round running alongside it. */
 async function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   while (running) await whenIdle();
   running = true;
@@ -650,7 +574,7 @@ let fpByPath = new Map<string, string>();
 let pathByFp = new Map<string, string>();
 /** Every song file on this phone. */
 let myInv: Inventory = {};
-/** All devices, as last agreed with the account. */
+/** The library, as last agreed with the account. */
 let doc: LibDoc | null = null;
 /** Other phones' song lists, by phone. */
 const invs = new Map<string, InvFile>();
@@ -662,16 +586,6 @@ let notSharedFps = new Set<string>();
 async function scanAll(): Promise<Song[]> {
   const { songs } = await MusicScanner.scan();
   return songs.map(s => ({ ...s, id: s.uri }));
-}
-
-/** All devices as this phone has it: on screen, or in storage. */
-async function allLibrary(scanned: Song[]): Promise<{ songs: Song[]; removed: Song[]; meta: Record<string, SongMeta>; playlists: Playlist[] }> {
-  if (state.mode === "all" && host) return host.snapshot();
-  const lib = await loadLibrary("all");
-  const binned = new Set(lib.removed.map(s => s.id));
-  const suspects = new Set(findSuspects(scanned).map(x => x.song.uri));
-  const songs = [...lib.cuts.filter(s => !binned.has(s.id)), ...scanned.filter(s => !binned.has(s.id) && !suspects.has(s.uri))];
-  return { songs, removed: lib.removed, meta: lib.meta, playlists: lib.playlists };
 }
 
 async function libraryCycle(): Promise<void> {
@@ -710,21 +624,17 @@ async function libraryCycle(): Promise<void> {
     for (const name of [...files.keys()]) if (/^(lib|covers|prop)-.+\.json$/.test(name)) await removeFile(name).catch(() => {});
 
     // ── The songs on this phone ──
+    const lib = host.snapshot();
     const scanned = await scanAll();
-    const lib = await allLibrary(scanned);
     await fingerprint(scanned, lib.removed);
     const base0 = await readJson<Base>(KEY_BASE);
     const base = base0 && base0.deviceId === deviceId && base0.email === stored?.email ? base0 : null;
     await noticeVanished(base, scanned);
     buildShared(scanned);
 
-    // ── All devices ──
-    const settings = state.mode === "all" ? await collectShared() : (await readJson<Record<string, string>>(profileKey("all")) ?? await collectShared());
+    // ── The library ──
+    const settings = await collectShared();
     const local = buildLocal({ ...lib, settings, fpOf: p => fpByPath.get(p) });
-    // Voice notes and clips are not part of All devices, even when someone
-    // put one there before signing in.
-    for (const fp of notSharedFps) { delete local.doc.songs[fp]; local.speaks.delete(fp); }
-    if (!base) local.doc.playlists = {};
     const fresh = new Set<string>();
     if (base) { const had = new Set(base.keys); for (const k of local.speaks) if (!had.has(k)) fresh.add(k); }
     const remote = await readFile<LibDoc>(LIB);
@@ -760,24 +670,16 @@ async function libraryCycle(): Promise<void> {
 
     // Put the account's version in place, unless the person changed something
     // meanwhile: then keep the old base and try again, so neither side is lost.
-    const showing = state.mode === "all";
-    const now = showing ? host.snapshot() : null;
-    const untouched = !showing || (now!.songs === lib.songs && now!.removed === lib.removed && now!.meta === lib.meta && now!.playlists === lib.playlists);
+    const now = host.snapshot();
+    const untouched = now.songs === lib.songs && now.removed === lib.removed && now.meta === lib.meta && now.playlists === lib.playlists;
     if (untouched) {
       const out = apply(merged, {
         ...lib, settings,
         fpOf: p => fpByPath.get(p), pathOf: fp => pathByFp.get(fp),
         coverOf: h => local.covers.get(h) ?? accountCovers?.[h],
       });
-      if (showing) {
-        if (out.changed.songs || out.changed.removed || out.changed.meta || out.changed.playlists) await host.apply(out);
-        if (out.settings) { await restoreShared(out.settings); await host.settings(); }
-      } else {
-        if (out.changed.removed || out.changed.meta || out.changed.playlists || out.changed.songs) {
-          await saveLibrary("all", { meta: out.meta, removed: out.removed, cuts: out.songs.filter(s => s.isCut), playlists: out.playlists });
-        }
-        if (out.settings) await writeJson(profileKey("all"), { ...settings, ...out.settings });
-      }
+      if (out.changed.songs || out.changed.removed || out.changed.meta || out.changed.playlists) await host.apply(out);
+      if (out.settings) { await restoreShared(out.settings); await host.settings(); }
       await writeJson(KEY_BASE, {
         deviceId, email: stored!.email, doc: merged, keys: [...local.speaks],
         files: Object.fromEntries(Object.keys(shared).map(fp => [fp, pathByFp.get(fp) ?? ""])),
@@ -795,7 +697,7 @@ async function libraryCycle(): Promise<void> {
     setSongs({
       here: Object.keys(myInv).filter(fp => !merged.songs[fp]?.bin).length,
       notShared: notSharedFps.size,
-      received: [...receivedPaths.values()].filter(p => !adopted.has(p)).length,
+      received: receivedPaths.size,
     });
     await songsCycle();
   } catch (e) {
@@ -853,10 +755,10 @@ async function noticeVanished(base: Base | null, scanned: Song[]) {
   for (const [fp, path] of Object.entries(base.files)) {
     if (myInv[fp] || pending.del[fp] || base.doc.songs[fp]?.del?.[deviceId]) continue;
     pending.del[fp] = Date.now();
-    const was = invs.get(deviceId)?.fps[fp] ?? (await readFile<InvFile>(inv(deviceId)))?.fps[fp];
+    const was = (await readFile<InvFile>(inv(deviceId)))?.fps[fp];
     gone[fp] ??= {
       title: was?.[4] ?? byPath.get(path)?.title ?? (was?.[1] ?? "").replace(/\.[^.]+$/, ""),
-      artist: was?.[5] ?? "", at: Date.now(), path, own: !onlyInAll(path),
+      artist: was?.[5] ?? "", at: Date.now(),
     };
     changed = true;
   }
@@ -872,28 +774,29 @@ async function sendInventory(): Promise<void> {
   lastInvHash = hash;
 }
 
-// ── Deleted for good here ─────────────────────────────────────────────────────
+// ── Permanently deleted here ──────────────────────────────────────────────────
 
-/** The app calls this just before it deletes files for good, so what was
- *  known about them can come back with them. */
+/** The app calls this just before it deletes files for good, so the list of
+ *  deleted songs can show their names. */
 export async function beforeDeleteForever(songs: Song[]): Promise<void> {
-  if (!accountOn()) return;
-  const own = state.mode === "device" && host ? host.snapshot().meta : (await loadLibrary("")).meta;
+  if (!accountOn() || !host) return;
+  const meta = host.snapshot().meta;
   for (const s of songs) {
     if (s.isCut) continue;
     const fp = fpByPath.get(s.uri);
     if (!fp) continue;
     gone[fp] = {
-      title: own[s.uri]?.customName || s.title, artist: own[s.uri]?.customArtist || (s.artist !== "<unknown>" ? s.artist : ""),
-      at: Date.now(), path: s.uri, own: !onlyInAll(s.uri), meta: own[s.uri],
+      title: meta[s.uri]?.customName || s.title,
+      artist: meta[s.uri]?.customArtist || (s.artist !== "<unknown>" ? s.artist : ""),
+      at: Date.now(),
     };
   }
   await saveGone();
 }
 
 /** What deleting these songs for good means, for the question asked first. */
-export function deleteWarnings(songs: Song[]): { lastCopy: number; alsoHere: number; elsewhere: number } {
-  const out = { lastCopy: 0, alsoHere: 0, elsewhere: 0 };
+export function deleteWarnings(songs: Song[]): { lastCopy: number; elsewhere: number } {
+  const out = { lastCopy: 0, elsewhere: 0 };
   if (!accountOn()) return out;
   for (const s of songs) {
     if (s.isCut) continue;
@@ -901,7 +804,6 @@ export function deleteWarnings(songs: Song[]): { lastCopy: number; alsoHere: num
     if (!fp || notSharedFps.has(fp)) continue;
     const others = [...invs.entries()].some(([id, i]) => id !== deviceId && !i.test && i.fps[fp]);
     if (!others) out.lastCopy++; else out.elsewhere++;
-    if (state.mode === "all" && !onlyInAll(s.uri)) out.alsoHere++;
   }
   return out;
 }
@@ -948,71 +850,12 @@ export async function restoreDeleted(fps: string[]): Promise<void> {
   kick(300);
 }
 
-/** A song came back that was deleted here: in This device again if it was
- *  there, with its playlists and details. */
-async function cameBack(fp: string, path: string): Promise<boolean> {
-  const info = gone[fp];
-  if (!info) return false;
-  delete gone[fp];
-  await saveGone();
-  if (!info.own) return false;
-  adopted.add(path);
-  await saveAdopted();
-  if (!info.path) return true;
-  const own = await loadLibrary("");
-  const meta = { ...own.meta };
-  if (info.meta && !meta[path]) meta[path] = info.meta;
-  if (meta[info.path] && !meta[path]) { meta[path] = meta[info.path]; }
-  delete meta[info.path];
-  const playlists = own.playlists.map(p => p.songIds.includes(info.path!) ? { ...p, songIds: p.songIds.map(id => id === info.path ? path : id) } : p);
-  await saveLibrary("", { meta, playlists });
-  return true;
-}
-
-// ── Copying between the two libraries ─────────────────────────────────────────
-
-/** Puts songs from All devices on This device too, with their details. */
-export async function putOnThisDevice(songs: Song[]): Promise<number> {
-  return exclusive(() => adopt(songs));
-}
-
-async function adopt(songs: Song[]): Promise<number> {
-  const all = state.mode === "all" && host ? host.snapshot().meta : (await loadLibrary("all")).meta;
-  const own = await loadLibrary("");
-  const meta = { ...own.meta };
-  let n = 0;
-  for (const s of songs) {
-    if (s.isCut) continue;
-    if (onlyInAll(s.uri)) { adopted.add(s.uri); n++; }
-    if (!meta[s.uri] && all[s.uri]) { const m = { ...all[s.uri] }; delete m.playCount; delete m.lastPlayedAt; meta[s.uri] = m; }
-  }
-  await saveAdopted();
-  await saveLibrary("", { meta });
-  return n;
-}
-
-/** Copies a playlist into the other library. Its songs come along: into This
- *  device when copying there. */
-export async function copyPlaylist(p: Playlist, to: Mode): Promise<void> {
-  await exclusive(async () => {
-  const target = await loadLibrary(to === "all" ? "all" : "");
-  const songIds = p.songIds.filter(id => !id.startsWith(PENDING));
-  const copy: Playlist = { ...p, id: `pl_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, createdAt: Date.now(), songIds };
-  if (to === "device") {
-    const songs = songIds.map(id => id.split("__cut__")[0]).filter(path => onlyInAll(path)).map(path => ({ id: path, uri: path, title: "", artist: "", dateAdded: 0 }) as Song);
-    if (songs.length) await adopt(songs);
-  }
-  await saveLibrary(to === "all" ? "all" : "", { playlists: [...target.playlists, copy] });
-  });
-  if (to === "all") syncChanged();
-}
-
 // ── A test phone (test builds) ────────────────────────────────────────────────
 //
 // So someone with one phone can see what a second one does. The test phone is
 // a phone on the account that lives in Drive only. It has three songs of its
 // own, a minute or so of made-up tones, which reach this phone through Drive
-// the way any other phone's songs do. It can make a playlist in All devices,
+// the way any other phone's songs do. It can make a playlist and like a song,
 // and delete its songs for good. It does not count towards the three phones
 // and is sent nothing.
 
@@ -1178,7 +1021,7 @@ async function songsCycle(relist = false): Promise<void> {
   try {
     if (relist) {
       await listFiles();
-      // Another phone changed All devices: take it in.
+      // Another phone changed the library: take it in.
       const changed = (n: string) => files.get(n)?.modifiedTime !== cache.get(n)?.at;
       if (changed(LIB)) kick(500);
     }
@@ -1296,10 +1139,10 @@ async function arrivedHere(fp: string, path: string | null, size: number, name: 
     fpByPath.set(path, fp);
     receivedPaths.set(fp, path);
     await saveReceived();
-    if (await cameBack(fp, path) && state.mode === "device") await host?.reload();
+    if (gone[fp]) { delete gone[fp]; await saveGone(); }
   }
   await countMobile(size);
-  setSongs({ arrived: state.songs.arrived + 1, received: [...receivedPaths.values()].filter(p => !adopted.has(p)).length });
+  setSongs({ arrived: state.songs.arrived + 1, received: receivedPaths.size });
 }
 
 function hooksFor(peerId: string, want: string[]) {

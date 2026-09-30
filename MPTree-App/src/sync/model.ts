@@ -3,11 +3,10 @@ import type { Song, SongMeta, Playlist } from "../types";
 // ─── THE ACCOUNT, AS DATA ────────────────────────────────────────────────────
 //
 // What the MPTree account holds is one document, library.json, in the person's
-// own Drive app folder: the library of "All devices", the one every signed in
-// phone shares. Names and artists typed there, lyrics, covers, likes, play
-// counts, its bin, its playlists, cut tracks and its settings. "This device"
-// is not in it; that stays on the phone. The songs themselves are not either;
-// phones pass those to each other (see engine.ts).
+// own Drive app folder: the library every signed in phone shares. Names and
+// artists typed, lyrics, covers, likes, play counts, the bin, playlists, cut
+// tracks and settings. The songs themselves are not; phones pass those to each
+// other (see engine.ts).
 //
 // A phone knows a song by its path, and the same song has a different path on
 // every phone. So the account knows songs by fingerprint (size plus a checksum,
@@ -38,7 +37,7 @@ export type SongRec = {
   liked?: boolean;
   lastPlayedAt?: number;
   playCount?: number;
-  /** In the bin of All devices. */
+  /** In the bin, on every phone. */
   bin?: boolean;
   /** The phones that deleted the file for good, and when. Another phone that
    *  still has it keeps it in the bin; when no phone has it any more, it is
@@ -554,7 +553,7 @@ export type MissingOptions = {
 };
 
 /** What `mine` is missing that other phones have: not what is in the bin of
- *  All devices, not what this phone deleted for good, and not another version
+ *  bin, not what this phone deleted for good, and not another version
  *  of a song it already has. */
 export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc, opts: MissingOptions = {}): Inventory {
   const out: Inventory = {};
@@ -573,8 +572,8 @@ export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc, o
 // ── Deleting for good, and restoring ──────────────────────────────────────────
 //
 // A song deleted for good on one phone is still on the others, so it is not
-// gone: those phones keep it in the bin of All devices, and the phone that
-// deleted it lists it under "Deleted for good on this device", from where it
+// gone: those phones keep it in the bin, and the phone that
+// deleted it lists it in the bin under "Permanently deleted", from where it
 // can be brought back. Only when no phone has the file any more is it gone.
 
 /** Writes down that this phone deleted these songs for good. */

@@ -10,7 +10,6 @@ import { t, tn, phoneLang, type LangPref } from "../i18n";
 import { useTrial, useOwnsPro, trialTimeLeft } from "../pro";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
-import { ModeSwitch } from "./ModeSwitch";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -274,18 +273,6 @@ export function SettingsSheet({
         </div>
 
         <Section T={T} title={t("Account")}>
-          {/* Signed in: which library these settings belong to. Language,
-              size and audio effects stay with the phone either way. */}
-          {sync.phase === "on" && !sync.pausedNoPro && (
-            <div style={{ marginBottom: 8 }}>
-              <ModeSwitch T={T} />
-              <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.45, padding: "7px 4px 2px" }}>
-                {sync.mode === "all"
-                  ? t("You are changing All devices: the look, the bin and the rest change on all your devices. Language, size and audio effects stay with this device.")
-                  : t("You are changing This device only.")}
-              </div>
-            </div>
-          )}
           <Row T={T}
             first
             onClick={onOpenAccount}
@@ -293,7 +280,7 @@ export function SettingsSheet({
             label={t("Account & sync")}
             sub={sync.phase === "on"
               ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
-              : t("One library on all your devices, with all your songs.")}
+              : t("Your music on all your phones.")}
             right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
         </Section>
@@ -460,8 +447,7 @@ export function SettingsSheet({
         </Section>
 
         <Section T={T} title={t("Backup & Restore")}>
-          <Row T={T} first onClick={onExport} icon={<DownloadIcon />} label={t("Export backup")}
-            sub={sync.phase === "on" && !sync.pausedNoPro ? t("Backs up This device. All devices is already kept in your account.") : undefined} />
+          <Row T={T} first onClick={onExport} icon={<DownloadIcon />} label={t("Export backup")} />
           <Row T={T} onClick={onImportOpen} icon={<UploadIcon />} label={t("Restore backup")} />
         </Section>
 

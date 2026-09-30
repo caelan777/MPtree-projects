@@ -13,16 +13,6 @@ const KEY_REMOVED    = "mptree_removed";
 const KEY_CUT_TRACKS = "mptree_cut_tracks";
 const KEY_PLAYLISTS  = "mptree_playlists";
 
-// ── Which library ─────────────────────────────────────────────────────────────
-// Signed in to an MPTree account there are two: This device, and All devices,
-// the one every phone on the account shares (sync/engine.ts). All devices is
-// kept under keys of its own ("mptree_meta@all"), so the two never overwrite
-// each other. The scope is "" for This device and "all" for All devices.
-let scope = "";
-export function setLibraryScope(next: string): void { scope = next; }
-const k = (key: string) => scope ? `${key}@${scope}` : key;
-const ks = (key: string, sc: string) => sc ? `${key}@${sc}` : key;
-
 // ─── Session ──────────────────────────────────────────────────────────────────
 
 export interface Session {
@@ -71,7 +61,6 @@ export type SongMetaStore = Record<string, {
 
 let _metaFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let _pendingMeta:    SongMetaStore | null = null;
-let _pendingMetaKey  = KEY_META;
 
 async function _flushMeta(): Promise<void> {
   if (!_pendingMeta) return;
@@ -79,14 +68,12 @@ async function _flushMeta(): Promise<void> {
   _pendingMeta       = null;
   _metaFlushTimer    = null;
   try {
-    await Preferences.set({ key: _pendingMetaKey, value: JSON.stringify(snapshot) });
+    await Preferences.set({ key: KEY_META, value: JSON.stringify(snapshot) });
   } catch { /* ignore */ }
 }
 
 export function saveMeta(meta: SongMetaStore): void {
-  if (_pendingMeta && _pendingMetaKey !== k(KEY_META)) void _flushMeta();
   _pendingMeta = meta;
-  _pendingMetaKey = k(KEY_META);
   if (_metaFlushTimer) return;
   _metaFlushTimer = setTimeout(_flushMeta, 4_000);
 }
@@ -95,13 +82,13 @@ export async function saveMetaNow(meta: SongMetaStore): Promise<void> {
   if (_metaFlushTimer) { clearTimeout(_metaFlushTimer); _metaFlushTimer = null; }
   _pendingMeta = null;
   try {
-    await Preferences.set({ key: k(KEY_META), value: JSON.stringify(meta) });
+    await Preferences.set({ key: KEY_META, value: JSON.stringify(meta) });
   } catch { /* ignore */ }
 }
 
 export async function loadMeta(): Promise<SongMetaStore> {
   try {
-    const { value } = await Preferences.get({ key: k(KEY_META) });
+    const { value } = await Preferences.get({ key: KEY_META });
     if (value) return JSON.parse(value) as SongMetaStore;
   } catch { /* fall through */ }
   return {};
@@ -111,13 +98,13 @@ export async function loadMeta(): Promise<SongMetaStore> {
 
 export async function saveRemovedTracksToStorage(songs: Song[]): Promise<void> {
   try {
-    await Preferences.set({ key: k(KEY_REMOVED), value: JSON.stringify(songs) });
+    await Preferences.set({ key: KEY_REMOVED, value: JSON.stringify(songs) });
   } catch { /* ignore */ }
 }
 
 export async function loadRemovedTracks(): Promise<Song[]> {
   try {
-    const { value } = await Preferences.get({ key: k(KEY_REMOVED) });
+    const { value } = await Preferences.get({ key: KEY_REMOVED });
     if (value) return JSON.parse(value) as Song[];
   } catch { /* fall through */ }
   return [];
@@ -127,13 +114,13 @@ export async function loadRemovedTracks(): Promise<Song[]> {
 
 export async function saveCutTracksToStorage(songs: Song[]): Promise<void> {
   try {
-    await Preferences.set({ key: k(KEY_CUT_TRACKS), value: JSON.stringify(songs) });
+    await Preferences.set({ key: KEY_CUT_TRACKS, value: JSON.stringify(songs) });
   } catch { /* ignore */ }
 }
 
 export async function loadCutTracks(): Promise<Song[]> {
   try {
-    const { value } = await Preferences.get({ key: k(KEY_CUT_TRACKS) });
+    const { value } = await Preferences.get({ key: KEY_CUT_TRACKS });
     if (value) return JSON.parse(value) as Song[];
   } catch { /* fall through */ }
   return [];
@@ -143,7 +130,7 @@ export async function loadCutTracks(): Promise<Song[]> {
 
 export async function loadPlaylists(): Promise<Playlist[]> {
   try {
-    const { value } = await Preferences.get({ key: k(KEY_PLAYLISTS) });
+    const { value } = await Preferences.get({ key: KEY_PLAYLISTS });
     if (value) return JSON.parse(value) as Playlist[];
   } catch { /* fall through */ }
   return [];
@@ -151,35 +138,8 @@ export async function loadPlaylists(): Promise<Playlist[]> {
 
 export async function savePlaylists(playlists: Playlist[]): Promise<void> {
   try {
-    await Preferences.set({ key: k(KEY_PLAYLISTS), value: JSON.stringify(playlists) });
+    await Preferences.set({ key: KEY_PLAYLISTS, value: JSON.stringify(playlists) });
   } catch { /* ignore */ }
-}
-
-// ─── Either library, whatever is on screen ─────────────────────────────────────
-
-export type Library = { meta: SongMetaStore; removed: Song[]; cuts: Song[]; playlists: Playlist[] };
-
-const readKey = async <T,>(key: string, fallback: T): Promise<T> => {
-  try { const { value } = await Preferences.get({ key }); return value ? JSON.parse(value) as T : fallback; } catch { return fallback; }
-};
-
-/** A library from storage: "" This device, "all" All devices. */
-export async function loadLibrary(sc: string): Promise<Library> {
-  await _flushMeta();
-  return {
-    meta:      await readKey<SongMetaStore>(ks(KEY_META, sc), {}),
-    removed:   await readKey<Song[]>(ks(KEY_REMOVED, sc), []),
-    cuts:      await readKey<Song[]>(ks(KEY_CUT_TRACKS, sc), []),
-    playlists: await readKey<Playlist[]>(ks(KEY_PLAYLISTS, sc), []),
-  };
-}
-
-export async function saveLibrary(sc: string, lib: Partial<Library>): Promise<void> {
-  const put = (key: string, v: unknown) => Preferences.set({ key: ks(key, sc), value: JSON.stringify(v) }).catch(() => {});
-  if (lib.meta)      await put(KEY_META, lib.meta);
-  if (lib.removed)   await put(KEY_REMOVED, lib.removed);
-  if (lib.cuts)      await put(KEY_CUT_TRACKS, lib.cuts);
-  if (lib.playlists) await put(KEY_PLAYLISTS, lib.playlists);
 }
 
 // ─── Backup ───────────────────────────────────────────────────────────────────
@@ -277,15 +237,13 @@ export async function collectSettings(): Promise<Record<string, string>> {
   return out;
 }
 
-/** Writes restored settings. The app reloads afterwards to pick them up. */
-// ── Settings per library ──────────────────────────────────────────────────────
-// Each library has its own look and settings, and switching swaps them. A few
-// stay with the phone whichever library is showing: the language, the text
-// size, the equalizer (it suits the phone's own speaker or headphones) and the
-// app icon.
+// ── Settings in the MPTree account ────────────────────────────────────────────
+// Signed in, the settings are the same on every phone, except a few that stay
+// with each phone: the language, the text size, the equalizer (it suits the
+// phone's own speaker or headphones) and the app icon.
 const DEVICE_ONLY = ["mptree_lang", "mptree_ui_size"];
 
-/** The settings that belong to the library on screen. */
+/** The settings the account keeps. */
 export async function collectShared(): Promise<Record<string, string>> {
   const out = await collectSettings();
   for (const key of DEVICE_ONLY) delete out[key];
@@ -300,7 +258,7 @@ export async function collectShared(): Promise<Record<string, string>> {
   return out;
 }
 
-/** Puts a library's settings in place, keeping what stays with the phone. */
+/** Puts the account's settings in place, keeping what stays with the phone. */
 export async function restoreShared(settings: Record<string, string>): Promise<void> {
   const next = { ...settings };
   for (const key of DEVICE_ONLY) delete next[key];
@@ -323,6 +281,7 @@ export async function restoreShared(settings: Record<string, string>): Promise<v
   await restoreSettings(next);
 }
 
+/** Writes restored settings. The app reloads afterwards to pick them up. */
 export async function restoreSettings(settings: Record<string, string>): Promise<void> {
   for (const [key, value] of Object.entries(settings)) {
     if (key === KEY_SESSION) {

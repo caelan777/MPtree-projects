@@ -2,7 +2,6 @@ import { useState } from "react";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import type { Song, Playlist } from "../types";
-import { PhoneIcon } from "./ModeSwitch";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
 
@@ -42,9 +41,6 @@ type SongMenuSheetProps = {
   /** Only supplied when the menu was opened from inside a real playlist:
    *  pulls the song out of that playlist without touching the library. */
   onRemoveFromPlaylist?: () => void;
-  /** Signed in and looking at All devices: puts a song that came from another
-   *  device on This device too. */
-  onPutOnThisDevice?: () => void;
   onClose: () => void;
   T: T;
 };
@@ -52,7 +48,7 @@ type SongMenuSheetProps = {
 export function SongMenuSheet({
   song, dispName, dispArtist, customPhoto, isLiked, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
-  onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onPutOnThisDevice, onClose, T,
+  onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
   const [pane, setPane] = useState<"actions" | "playlists">("actions");
@@ -132,7 +128,6 @@ export function SongMenuSheet({
             {row("cut", <IC.Scissors />, t("Cut"), onCut)}
             {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? t("Unlike") : t("Like"), onToggleLike)}
             {row("share", <IC.Share />, t("Share"), onShare)}
-            {onPutOnThisDevice && row("device", <PhoneIcon size={17} />, t("Put on This device too"), onPutOnThisDevice)}
             <div style={{ height: 1, background: T.border, margin: "6px 20px" }} />
             {onRemoveFromPlaylist && row("unpin", (
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
