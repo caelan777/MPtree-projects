@@ -280,7 +280,7 @@ export function SettingsSheet({
             label={t("Account & sync")}
             sub={sync.phase === "on"
               ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
-              : t("Your music on all your phones.")}
+              : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
             right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
         </Section>

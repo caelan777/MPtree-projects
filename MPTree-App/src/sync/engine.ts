@@ -91,6 +91,8 @@ const ROOM_MARGIN = 500 * 1024 * 1024;
 export const MOBILE_DAILY = 500 * 1024 * 1024;
 /** A phone of the same name not used for this long is replaced on joining. */
 const STALE_DEVICE = 30 * 24 * 60 * 60_000;
+/** A phone of the same model this quiet is taken to be this one from before. */
+const QUIET_DEVICE = 15 * 60_000;
 /** A song gone from every phone leaves the list of deleted songs after this. */
 const GONE_SHOWN = 30 * 24 * 60 * 60_000;
 
@@ -254,8 +256,29 @@ function connect(): Drive {
 let files = new Map<string, DriveFile>();
 async function listFiles(): Promise<Map<string, DriveFile>> {
   const all = await connect().list();
+  // Oldest first, so the newest of two files with one name is the one kept.
+  all.sort((a, b) => Date.parse(a.modifiedTime) - Date.parse(b.modifiedTime));
   files = new Map(all.map(f => [f.name, f]));
+  // Two phones creating a file at the same moment can leave two of it. The
+  // phones are joined into one list; of anything else the newest stays.
+  const twice = all.filter(f => files.get(f.name) !== f);
+  if (twice.length) await foldDuplicates(twice);
   return files;
+}
+
+async function foldDuplicates(extra: DriveFile[]) {
+  const d = connect();
+  const lists: Device[][] = [];
+  for (const f of extra) {
+    if (f.name === DEVICES) lists.push((await d.read<{ devices: Device[] }>(f.id).catch(() => null))?.devices ?? []);
+    await d.remove(f.id).catch(() => {});
+  }
+  if (lists.length) {
+    const kept = (await readFile<{ devices: Device[] }>(DEVICES))?.devices ?? [];
+    const all = [...kept];
+    for (const list of lists) for (const dev of list) if (!all.some(x => x.id === dev.id)) all.push(dev);
+    if (all.length !== kept.length) await saveDevices(all);
+  }
 }
 
 /** Reads a JSON file, from a cache when Drive says it has not changed. */
@@ -285,7 +308,8 @@ async function removeFile(name: string): Promise<void> {
 /** The phones on the account, each with when it was last used: the last time
  *  it said anything in its peer file. */
 async function readDevices(): Promise<Device[]> {
-  const list = (await readFile<{ devices: Device[] }>(DEVICES))?.devices ?? [];
+  const list = ((await readFile<{ devices: Device[] }>(DEVICES))?.devices ?? [])
+    .filter((d, i, all) => all.findIndex(x => x.id === d.id) === i);
   return list.map(d => {
     const f = files.get(peer(d.id));
     return { ...d, lastActive: f ? Date.parse(f.modifiedTime) || d.addedAt : d.addedAt };
@@ -410,7 +434,7 @@ async function phoneName(): Promise<string> {
     const d = await System.getDeviceInfo();
     const brand = d.manufacturer ? d.manufacturer[0].toUpperCase() + d.manufacturer.slice(1) : "";
     return d.model.toLowerCase().startsWith(brand.toLowerCase()) ? d.model : `${brand} ${d.model}`.trim();
-  } catch { return "Phone"; }
+  } catch { return "Android"; }
 }
 /** "Pixel 8 (2)" is a Pixel 8. */
 const baseName = (n: string) => n.replace(/ \(\d+\)$/, "");
@@ -421,8 +445,15 @@ async function finishJoin(): Promise<"ok" | "failed"> {
   await listFiles();
   const devices = await readDevices();
   if (!devices.some(d => d.id === deviceId)) {
-    // Two phones of the same model get told apart: "Pixel 8", "Pixel 8 (2)".
     const name = await phoneName();
+    // A device of the same model that has not said anything for a while is
+    // most likely this one from before a reinstall: it makes way.
+    const before = devices.find(d => !d.test && baseName(d.name) === name && Date.now() - (d.lastActive ?? d.addedAt) > QUIET_DEVICE);
+    if (before) {
+      devices.splice(devices.indexOf(before), 1);
+      await forgetPhoneFiles(before.id);
+    }
+    // Two devices of the same model get told apart: "Pixel 8", "Pixel 8 (2)".
     const taken = new Set(devices.map(d => d.name));
     let unique = name;
     for (let n = 2; taken.has(unique); n++) unique = `${name} (${n})`;
@@ -447,8 +478,8 @@ async function finishJoin(): Promise<"ok" | "failed"> {
 export function cancelJoin(): void {
   const email = pendingJoin?.email;
   pendingJoin = null;
+  void Account.signOut({ email, token: token?.value }).catch(() => {});
   token = null; drive = null; files = new Map(); cache.clear();
-  void Account.signOut({ email }).catch(() => {});
   set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
 }
 
@@ -461,6 +492,21 @@ export async function removeDevice(id: string): Promise<void> {
   set({ devices });
   if (state.phase === "limit" && devices.filter(d => !d.test).length < MAX_DEVICES) await nextJoinStep();
   else kick(500);
+}
+
+/** Gives a device on the account another name. */
+export async function renameDevice(id: string, name: string): Promise<void> {
+  const clean = name.trim().replace(/\s+/g, " ").slice(0, 30);
+  if (!clean) return;
+  await exclusive(async () => {
+    await listFiles();
+    const devices = await readDevices();
+    const d = devices.find(x => x.id === id);
+    if (!d || d.name === clean) return;
+    d.name = clean;
+    await saveDevices(devices);
+    set({ devices });
+  });
 }
 
 async function forgetPhoneFiles(id: string) {
@@ -485,7 +531,7 @@ export async function signOut(removeReceived = false): Promise<number> {
       await forgetPhoneFiles(deviceId);
     }
   } catch { /* offline: the place frees when another phone removes it */ }
-  await Account.signOut({ email }).catch(() => {});
+  await Account.signOut({ email, token: token?.value }).catch(() => {});
   const removed = await exclusive(() => leave(removeReceived));
   set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
   return removed;
@@ -874,7 +920,7 @@ export async function testPhone(step: TestStep): Promise<void> {
     }
     if (step === "add") {
       if (!devices.some(d => d.id === TEST_PHONE)) {
-        await saveDevices([...devices, { id: TEST_PHONE, name: "Testtelefoon", addedAt: Date.now(), test: true }]);
+        await saveDevices([...devices, { id: TEST_PHONE, name: "Testapparaat", addedAt: Date.now(), test: true }]);
       }
       await writeFile(peer(TEST_PHONE), { seen: 0 });
       const fps: Inventory = {};
@@ -883,7 +929,7 @@ export async function testPhone(step: TestStep): Promise<void> {
         const name = `${title}.wav`;
         const wav = testTone(i);
         const fp = fingerprintOf(wav);
-        fps[fp] = [wav.length, name, songSig(title, ""), 70_000, title, "Testtelefoon"];
+        fps[fp] = [wav.length, name, songSig(title, ""), 70_000, title, "Testapparaat"];
         if (isDev() || files.has(relayPrefix(deviceId) + fp) || myInv[fp]) continue;
         const path = `mptree-test-${i}.wav`;
         await Filesystem.writeFile({ path, data: toBase64(wav), directory: Directory.Cache });
@@ -905,7 +951,7 @@ export async function testPhone(step: TestStep): Promise<void> {
     const now = Date.now();
     if (step === "playlist") {
       const id = "pl_test_" + now.toString(36);
-      lib.playlists[id] = { name: "Van de testtelefoon", createdAt: now, songs: Object.keys(theirs) };
+      lib.playlists[id] = { name: "Van het testapparaat", createdAt: now, songs: Object.keys(theirs) };
       at["p:" + id] = now;
       const first = Object.keys(theirs)[0];
       if (first) { lib.songs[first] = { ...(lib.songs[first] ?? {}), liked: true }; at["s:" + first] = now; }

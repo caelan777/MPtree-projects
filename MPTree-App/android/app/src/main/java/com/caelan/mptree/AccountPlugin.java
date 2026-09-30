@@ -18,7 +18,6 @@ import com.google.android.gms.auth.api.identity.AuthorizationRequest;
 import com.google.android.gms.auth.api.identity.AuthorizationResult;
 import com.google.android.gms.auth.api.identity.ClearTokenRequest;
 import com.google.android.gms.auth.api.identity.Identity;
-import com.google.android.gms.auth.api.identity.RevokeAccessRequest;
 import com.google.android.gms.common.api.Scope;
 
 import java.util.Collections;
@@ -123,13 +122,14 @@ public class AccountPlugin extends Plugin {
                 .addOnCompleteListener(t -> call.resolve());
     }
 
-    /** Signing out takes MPTree's access away on Google's side too, so the next
-     *  sign-in asks which account again. */
+    /** Signing out forgets this phone's token and nothing more. Taking the
+     *  access away on Google's side (revokeAccess) would sign out every other
+     *  phone on the account too, since the grant is one per Google account. */
     @PluginMethod
     public void signOut(PluginCall call) {
-        Account acc = account(call.getString("email"));
-        if (acc == null) { call.resolve(); return; }
-        client().revokeAccess(RevokeAccessRequest.builder().setAccount(acc).setScopes(SCOPES).build())
+        String token = call.getString("token");
+        if (token == null) { call.resolve(); return; }
+        client().clearToken(ClearTokenRequest.builder().setToken(token).build())
                 .addOnCompleteListener(t -> call.resolve());
     }
 }

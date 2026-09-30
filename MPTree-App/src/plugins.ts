@@ -113,7 +113,7 @@ export type AccountPlugin = {
   /** Rejects with code NEEDS_SIGN_IN when the grant is gone. */
   getToken(options: { email?: string }): Promise<{ token: string }>;
   clearToken(options: { token: string }): Promise<void>;
-  signOut(options: { email?: string }): Promise<void>;
+  signOut(options: { email?: string; token?: string }): Promise<void>;
 };
 
 /** Files for the MPTree account: fingerprints, and songs moving in and out.

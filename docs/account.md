@@ -53,22 +53,30 @@ from another phone lands in Music/MPTree.
   under the song list.
 - **Voice notes, recordings, clips under a minute** (cleanup.ts) are never sent.
 - **Signing out** leaves the phone as it is, with the option to delete the
-  songs that came from the other phones. Signing in again joins afresh.
+  songs that came from the other phones. Signing in again joins afresh. It
+  only forgets this phone's token: revoking MPTree's access on Google's side
+  would sign out every phone on the account, since the grant is per Google
+  account.
+- **Device names** come from the model and can be changed on the account
+  page (`renameDevice`).
 - **Pro ends:** syncing stops; nothing on the phone changes.
 - **Two versions of one song** (same title and artist, within 2 s) are not both
   fetched. Songs only come in while 500 MB stays free.
 - **Conflicts:** three-way merge against the last agreed base; a change made on
   two phones goes to the later one (`at` stamps). Plays add up. Who deleted a
   song merges phone by phone.
-- **Reinstalling** keeps the phone's id (ANDROID_ID). A phone of the same name
-  unused for 30 days makes room by itself; same-model phones get "(2)".
+- **Reinstalling** keeps the phone's id (ANDROID_ID). A phone of the same model
+  that has been quiet for 15 minutes is taken to be this one from before and
+  makes way; otherwise same-model phones get "(2)". Two files of the same name
+  (two phones creating one at once) are folded into one: devices.json lists
+  are joined, of anything else the newest stays.
 - **Emptied in Drive** (Delete hidden app data): phones stop and say so,
   instead of filling it up again.
 - The screen stays on while a song is moving.
 
 ## Testing with one phone
 
-- **Test phone** (test builds only, on the account page): a pretend phone that
+- **Test device** (test builds only, on the account page): a pretend phone that
   lives in Drive. It brings three 70 second tone songs through the Drive relay,
   can make a playlist and like a song, and can delete its songs permanently. It
   is sent nothing and does not count towards the three.

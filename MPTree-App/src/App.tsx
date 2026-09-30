@@ -3659,7 +3659,7 @@ export default function App() {
                 <div style={{ padding: "18px 0 8px" }}>
                   <div style={{ padding: "0 19px 8px", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: TH.muted }}>
-                      {t("Not on this phone yet")}
+                      {t("Not on this device yet")}
                     </span>
                     <span style={{ fontSize: 12, color: TH.muted }}>{sync.songs.absent.length}</span>
                   </div>
@@ -4086,12 +4086,12 @@ export default function App() {
             deleteNote={songs => {
               const w = deleteWarnings(songs);
               const lines: string[] = [];
-              if (w.elsewhere) lines.push(tn(w.elsewhere, "It only goes from this phone. Your other phones keep it, and you can get it back under Permanently deleted.", "They only go from this phone. Your other phones keep {n} of them, and you can get those back under Permanently deleted."));
-              if (w.lastCopy) lines.push(tn(w.lastCopy, "No other phone has this song. After this it is gone everywhere.", "No other phone has {n} of these. After this they are gone everywhere."));
+              if (w.elsewhere) lines.push(tn(w.elsewhere, "It only goes from this device. Your other devices keep it, and you can get it back under Permanently deleted.", "They only go from this device. Your other devices keep {n} of them, and you can get those back under Permanently deleted."));
+              if (w.lastCopy) lines.push(tn(w.lastCopy, "No other device has this song. After this it is gone everywhere.", "No other device has {n} of these. After this they are gone everywhere."));
               return lines.join("\n\n") || null;
             }}
             deleted={signedIn ? sync.deleted : undefined}
-            onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other phones")); }}
+            onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
             onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
