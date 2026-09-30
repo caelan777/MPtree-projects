@@ -1,8 +1,9 @@
 # The MPTree account
 
-Part of MPTree Pro. Sign in with Google on up to three phones. Everything a
-person made or set is saved in the account; the songs are not, they go from
-phone to phone. Code: `MPTree-App/src/sync/` (model, engine, drive, rtc),
+Part of MPTree Pro. Sign in with Google on up to three phones. Every phone
+keeps its own library (playlists, likes, details, bin, look), saved in the
+account per phone; nothing is merged. The songs are not saved, they go from
+phone to phone so every phone has them all. Code: `MPTree-App/src/sync/` (model, engine, drive, rtc),
 `src/components/AccountSheet.tsx`, and the native `AccountPlugin.java` and
 `SyncPlugin.java`.
 
@@ -14,8 +15,9 @@ the person's own Google Drive, reached with the `drive.appdata` scope only.
 | File | What |
 |---|---|
 | `devices.json` | The phones on the account, three at most |
-| `library.json` | Playlists, song details, bin, cut tracks, settings (songs by fingerprint) |
-| `covers.json` | Cover pictures by hash |
+| `lib-<phone>.json` | That phone's playlists, song details, bin, cut tracks, settings (songs by fingerprint) |
+| `covers-<phone>.json` | That phone's cover pictures by hash |
+| `prop-<to>-<from>.json` | Changes phone `<from>` made to `<to>`'s library, waiting for Accept or Decline |
 | `inv-<phone>.json` | Which song files that phone has |
 | `peer-<phone>.json` | "I am open now", and the WebRTC offer or answer |
 | `relay-<to>-<fp>` | A song waiting for phone `<to>`; deleted once it arrives |
@@ -25,27 +27,42 @@ STUN, no TURN). When that fails, or the other phone is closed, they wait in the
 app folder, at most 1 GB per phone at a time, and a month at most. Wifi only
 unless the person allows mobile data, and then 500 MB a day at most.
 
+## Whose library
+
+With two phones or more, chips under the header card pick the view:
+**This phone**, each other phone by name, or **All**.
+
+- Another phone's view loads its library into scoped storage keys
+  (`mptree_*@<view>`, see `setLibraryScope` in storage.ts), so it never
+  overwrites this phone's own. The song list is filtered to the songs that
+  phone has.
+- An edit there becomes a proposal (`applyEdit`). Everyone sees it at once,
+  marked "Waiting for ... to accept". When MPTree opens on that phone it asks:
+  Accept puts it in that phone's library, Decline deletes the proposal so it is
+  gone everywhere. The sender gets a toast either way.
+- **All** combines every library: likes together, playlists of the same name as
+  one (`combine`). An edit there is split (`spread`): this phone's part is
+  kept straight away, the other phones get proposals.
+- Settings always switches back to This phone, so the bin, cleanup and backups
+  only ever touch this phone.
+- The account page can copy another phone's look or library onto this one.
+  Phones taken off the account keep their library under "Phones that left",
+  to put on this phone or delete.
+
 ## Rules for the awkward cases
 
-- **Joining an account that has things in it** asks three questions: send this
-  phone's new songs everywhere or keep them here; the account's look or this
-  phone's; add this phone's playlists and likes, or replace them with the
-  account's. Playlists with the same name become one. A song this phone has
-  stays in its list even if the account has it in the bin.
-- **Signing out** drops the base: the account is the same everywhere, so what
-  was deleted on the phone while signed out comes back on the next sign-in.
-  Signing out can also delete the songs that came from other phones.
-- **Voice notes, recordings, clips under a minute** (cleanup.ts) and songs kept
-  "on this phone only" are never sent.
+- **Signing in** asks nothing: this phone's library goes up as its own.
+- **Signing out** leaves the phone as it is, and can also delete the songs that
+  came from other phones.
+- **Voice notes, recordings, clips under a minute** (cleanup.ts) are never sent.
 - **Deleted outside MPTree:** a file that disappears is not fetched back.
   "Get them back" on the account page undoes that.
-- **Deleted for good in the bin** marks the song `gone`; other phones offer
-  "Delete here too". Restoring it anywhere undoes it.
 - **Two versions of one song** (same title and artist, within 2 s) are not both
   fetched.
 - **Room:** songs only come in while 500 MB stays free.
-- **Conflicts:** a change made on two phones goes to the later one (`at`
-  stamps, with the time of the edit kept across restarts).
+- **Conflicts:** only a phone itself writes its library; other phones can only
+  propose. A proposal is laid over the library as it was when it was made
+  (`overlay`), so later edits on the phone are kept.
 - **Reinstalling** keeps the phone's id (ANDROID_ID). A phone of the same name
   unused for 30 days makes room by itself; same-model phones get "(2)".
 - **Emptied in Drive** (Delete hidden app data): phones stop and say so,
