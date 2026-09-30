@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Song, Playlist, SongMeta } from "../types";
-import { buildLocal, merge, apply, missingFrom, toKey, songSig, overlay, applyEdit, combine, spread, summarize, PENDING, type LibDoc } from "./model";
+import { buildLocal, merge, apply, missingFrom, toKey, songSig, markDeleted, markRestored, deletedBy, PENDING, type LibDoc } from "./model";
 
 // Two phones with the same two songs at different paths, and a third song
 // only phone A has.
@@ -196,18 +196,6 @@ describe("merge", () => {
     expect(r.next.songs.map(s => s.id)).toContain("/b/Music/one.mp3");
   });
 
-  it("lets a song deleted for good be restored elsewhere", () => {
-    const acc = round(phoneA(), "/a/", null, null).merged;
-    const gone = { ...acc, songs: { ...acc.songs, fp1: { bin: true, gone: true } } };
-    const b = round(phoneB(), "/b/", null, acc);
-    // B has one.mp3 in its list; A deleted it for good meanwhile.
-    const bin = merge(b.merged, buildLocal({ ...b.next, fpOf }), gone);
-    expect(bin.songs.fp1).toEqual({ bin: true, gone: true });
-    // B restores it from its bin: no longer gone.
-    const restored = merge(bin, buildLocal({ ...b.next, fpOf }), bin, { stamp: Date.now() + 1000 });
-    expect(restored.songs.fp1).toBeUndefined();
-  });
-
   it("does not fetch what this phone threw out, or another version of what it has", () => {
     const doc = round(phoneA(), "/a/", null, null).merged;
     const sig = songSig("Blue Hour", "The Halogens");
@@ -221,66 +209,62 @@ describe("merge", () => {
   });
 });
 
-describe("every phone its own library", () => {
-  const lib = (p: Phone, prefix: string) => round(p, prefix, null, null).merged;
+describe("deleting for good", () => {
+  const joined = () => {
+    const acc = round(phoneA(), "/a/", null, null).merged;
+    const b = round(phoneB(), "/b/", null, acc);
+    return { acc, b };
+  };
 
-  it("lays a proposal over a library, and the proposal wins", () => {
-    const a = phoneA(); a.meta["/a/one.mp3"] = { customName: "Mine", playCount: 7 };
-    const doc = lib(a, "/a/");
-    const proposed = structuredClone(doc);
-    proposed.songs.fp1 = { customName: "Theirs", liked: true, playCount: 1 };
-    const out = overlay(doc, doc, proposed);
-    expect(out.songs.fp1).toEqual({ customName: "Theirs", liked: true, playCount: 7 });
+  it("puts a song deleted on one phone in the bin of the others", () => {
+    const { acc, b } = joined();
+    // A deletes one.mp3 for good: the file is gone from A.
+    const a = phoneA(); a.songs = a.songs.slice(1);
+    const local = buildLocal({ ...a, fpOf });
+    markDeleted(local, acc, ["fp1"], "A", 100);
+    const afterA = merge(acc, local, acc);
+    expect(afterA.songs.fp1).toEqual({ bin: true, del: { A: 100 } });
+    // B still has it: in its bin of All devices.
+    const rb = round(b.next, "/b/", b.merged, afterA);
+    expect(rb.next.removed.map(s => s.id)).toEqual(["/b/Music/one.mp3"]);
+    // A round later A no longer has the file, and nothing changes.
+    const again = merge(afterA, buildLocal({ ...a, fpOf }), afterA);
+    expect(again.songs.fp1).toEqual({ bin: true, del: { A: 100 } });
+    expect([...deletedBy(again, "A")]).toEqual([["fp1", 100]]);
   });
 
-  it("turns a change on screen into a change of the whole library", () => {
-    // Pixel's library has fp3, which is not on this phone and so not on screen.
-    const pixel = lib(phoneA(), "/a/");
-    pixel.songs.fp3 = { liked: true };
-    const shownPhone: Phone = { ...phoneB(), meta: {} };
-    const shown = buildLocal({ ...shownPhone, fpOf });
-    const editedPhone: Phone = { ...phoneB(), meta: { "/b/Music/two.mp3": { liked: true } } };
-    const edited = buildLocal({ ...editedPhone, fpOf });
-    const out = applyEdit(pixel, shown, edited);
-    expect(out.songs.fp2).toEqual({ liked: true });
-    expect(out.songs.fp3).toEqual({ liked: true });
+  it("keeps two phones deleting a song at the same time", () => {
+    const { acc } = joined();
+    const la = buildLocal({ ...phoneA(), fpOf }); markDeleted(la, acc, ["fp1"], "A", 100);
+    const afterA = merge(acc, la, acc);
+    const lb = buildLocal({ ...phoneB(), fpOf }); markDeleted(lb, acc, ["fp1"], "B", 200);
+    expect(merge(acc, lb, afterA).songs.fp1).toEqual({ bin: true, del: { A: 100, B: 200 } });
   });
 
-  it("combines phones: this phone's names, likes from anywhere, one playlist per name", () => {
-    const a = phoneA(); a.meta["/a/one.mp3"] = { customName: "A name" };
-    a.playlists = [{ id: "pa", name: "Gym", createdAt: 1, songIds: ["/a/one.mp3"] }];
-    const b = phoneB(); b.meta["/b/Music/one.mp3"] = { customName: "B name", liked: true };
-    b.playlists = [{ id: "pb", name: "gym", createdAt: 2, songIds: ["/b/Music/two.mp3"] }];
-    const c = combine([{ phone: "B", doc: lib(b, "/b/") }, { phone: "A", doc: lib(a, "/a/") }], "A");
-    expect(c.doc.songs.fp1).toMatchObject({ customName: "A name", liked: true });
-    expect(Object.keys(c.doc.playlists)).toEqual(["pa"]);
-    expect(c.doc.playlists.pa.songs).toEqual(["fp1", "fp2"]);
-    expect(c.groups.pa).toEqual([{ phone: "A", id: "pa" }, { phone: "B", id: "pb" }]);
+  it("does not forget a deletion because a phone's own list says nothing about it", () => {
+    const { acc, b } = joined();
+    const la = buildLocal({ ...phoneA(), fpOf }); markDeleted(la, acc, ["fp2"], "A", 100);
+    const afterA = merge(acc, la, acc);
+    // B still has two.mp3 and changes something else.
+    const b2: Phone = { ...b.next, meta: { "/b/Music/one.mp3": { liked: true } } };
+    const afterB = merge(b.merged, buildLocal({ ...b2, fpOf }), afterA);
+    expect(afterB.songs.fp2?.del).toEqual({ A: 100 });
   });
 
-  it("spreads a change in all phones to every phone it touches", () => {
-    const a = phoneA(); a.playlists = [{ id: "pa", name: "Gym", createdAt: 1, songIds: ["/a/one.mp3"] }];
-    const b = phoneB(); b.playlists = [{ id: "pb", name: "Gym", createdAt: 2, songIds: ["/b/Music/two.mp3"] }];
-    const libs = new Map([["A", lib(a, "/a/")], ["B", lib(b, "/b/")]]);
-    const c = combine([...libs].map(([phone, doc]) => ({ phone, doc })), "A");
-    const shown = { doc: c.doc, speaks: new Set(["fp1", "fp2"]), covers: new Map() };
-    const edited = structuredClone(c.doc);
-    edited.songs.fp2 = { liked: true };
-    edited.playlists.pa = { ...edited.playlists.pa, songs: ["fp2"] };
-    const out = spread(shown, { doc: edited, speaks: shown.speaks, covers: new Map() }, libs, c.groups, "A");
-    expect(out.get("A")!.songs.fp2).toEqual({ liked: true });
-    expect(out.get("B")!.songs.fp2).toEqual({ liked: true });
-    // fp1 was only in A's Gym, fp2 only in B's: each keeps what it had, less fp1.
-    expect(out.get("A")!.playlists.pa.songs).toEqual([]);
-    expect(out.get("B")!.playlists.pb.songs).toEqual(["fp2"]);
+  it("brings a song back everywhere when any phone restores it", () => {
+    const { acc } = joined();
+    const la = buildLocal({ ...phoneA(), fpOf }); markDeleted(la, acc, ["fp1"], "A", 100);
+    const afterA = merge(acc, la, acc);
+    const lb = buildLocal({ ...phoneB(), fpOf }); markRestored(lb, afterA, ["fp1"]);
+    const back = merge(afterA, lb, afterA);
+    expect(back.songs.fp1).toBeUndefined();
+    // And A fetches it again.
+    expect(Object.keys(missingFrom({}, [{ fp1: [1, "one.mp3"] }], back, { me: "A" }))).toEqual(["fp1"]);
   });
 
-  it("sums up a proposal", () => {
-    const doc = lib(phoneA(), "/a/");
-    const next = structuredClone(doc);
-    next.songs.fp1 = { liked: true };
-    next.songs.fp2 = { bin: true };
-    next.playlists.p9 = { name: "Road", createdAt: 1, songs: [] };
-    expect(summarize(doc, next)).toMatchObject({ liked: 1, binned: 1, newPlaylists: ["Road"] });
+  it("does not fetch back what this phone deleted", () => {
+    const doc: LibDoc = { v: 1, songs: { fp1: { del: { A: 1 } } }, playlists: {}, cuts: {}, settings: {} };
+    expect(Object.keys(missingFrom({}, [{ fp1: [1, "one.mp3"] }], doc, { me: "A" }))).toEqual([]);
+    expect(Object.keys(missingFrom({}, [{ fp1: [1, "one.mp3"] }], { ...doc, songs: { fp1: { del: { B: 1 } } } }, { me: "A" }))).toEqual(["fp1"]);
   });
 });

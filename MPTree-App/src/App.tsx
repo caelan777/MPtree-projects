@@ -25,7 +25,7 @@ import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
-import { applyLang, t, tn, type LangPref } from "./i18n";
+import { applyLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
@@ -34,8 +34,11 @@ import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
-import { initSync, syncChanged, setView, inView, useSync, acceptChanges, declineChanges, type Host } from "./sync/engine";
-import { ViewChips, CHIPS_H, IncomingSheet } from "./components/ViewChips";
+import {
+  prepareSync, initSync, syncChanged, setMode, songsForMode, useSync, beforeDeleteForever, deleteWarnings,
+  restoreDeleted, putOnThisDevice, copyPlaylist, isOnThisDevice, type Host,
+} from "./sync/engine";
+import { ModeSwitch } from "./components/ModeSwitch";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
@@ -689,15 +692,6 @@ export default function App() {
   const showToast  = (m: string, action?: ToastAction) => setToast({ msg: m, action });
   const showError  = useCallback((m: string) => setToast({ msg: "⚠ " + m }), []);
   const fmt        = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`; };
-  // What another phone said to this one's proposal, once.
-  const answerSeen = useRef(0);
-  useEffect(() => {
-    const a = sync.answer;
-    if (!a || a.at <= answerSeen.current) return;
-    answerSeen.current = a.at;
-    showToast(a.accepted ? t("{name} accepted your changes", { name: a.name }) : t("{name} declined your changes", { name: a.name }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sync.answer]);
 
   const toNativeTrack = useCallback((t: Song) => ({
     path:   t.uri,
@@ -708,15 +702,7 @@ export default function App() {
 
   // ── flushSession ──────────────────────────────────────────────────────────
   const flushSessionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flushSession = useCallback(() => {
-    if (flushSessionTimer.current) return;
-    flushSessionTimer.current = setTimeout(() => {
-      flushSessionTimer.current = null;
-      if (metaDirtyRef.current) {
-        metaDirtyRef.current = false;
-        saveMetaNow(metaRef.current);
-      }
-      saveSession({
+  const sessionNow = useCallback((): Parameters<typeof saveSession>[0] => ({
         filter:       filterRef.current,
         playMode:     playModeRef.current,
         currentId:    curRef.current?.id,
@@ -731,9 +717,18 @@ export default function App() {
         eqBandLevels: eqBandLevelsRef.current,
         theme:        themeRef.current,
         playNextQueue: playNextQueueRef.current,
-      });
+  }), []);
+  const flushSession = useCallback(() => {
+    if (flushSessionTimer.current) return;
+    flushSessionTimer.current = setTimeout(() => {
+      flushSessionTimer.current = null;
+      if (metaDirtyRef.current) {
+        metaDirtyRef.current = false;
+        saveMetaNow(metaRef.current);
+      }
+      saveSession(sessionNow());
     }, 0);
-  }, []);
+  }, [sessionNow]);
 
   // ── Scan ──────────────────────────────────────────────────────────────────
   const scanMusic = useCallback(async (removedList?: Song[]): Promise<Song[]> => {
@@ -743,7 +738,7 @@ export default function App() {
       const scannedWithIds: Song[] = r.songs.map((s: Song) => ({ ...s, id: s.uri }));
       const currentRemoved = removedList ?? removedRef.current;
       const blocked = new Set(currentRemoved.map((s: Song) => s.id));
-      const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id) && inView(s.uri)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
+      const sorted = songsForMode([...scannedWithIds].filter((s: Song) => !blocked.has(s.id))).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
       const cutIds = new Set(persistedCuts.filter((s: Song) => !blocked.has(s.id)).map((s: Song) => s.id));
       const result = [...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
       setSongs(() => result);
@@ -818,6 +813,9 @@ export default function App() {
 
     const initialize = async () => {
       try {
+        // Signed in to an MPTree account, the library that shows may be All
+        // devices, which is kept under keys of its own.
+        await prepareSync().catch(() => {});
         const storedBin = await loadRemovedTracks();
         pendingBin = storedBin;
         setRemovedSongs(storedBin);
@@ -1905,7 +1903,13 @@ export default function App() {
       if (a.changed.playlists) { playlistsRef.current = a.playlists; setPlaylists(a.playlists); await savePlaylists(a.playlists); }
     },
     rescan: async () => { await scanMusic(); },
-    showOwn: async () => {
+    flush: async () => {
+      if (flushSessionTimer.current) { clearTimeout(flushSessionTimer.current); flushSessionTimer.current = null; }
+      metaDirtyRef.current = false;
+      await saveMetaNow(metaRef.current);
+      await saveSession(sessionNow());
+    },
+    reload: async () => {
       const [bin, m, pl] = await Promise.all([loadRemovedTracks(), loadMeta(), loadPlaylists()]);
       removedRef.current = bin; setRemovedSongs(bin);
       metaRef.current = m; setMeta(m);
@@ -1951,7 +1955,8 @@ export default function App() {
       snapshot: () => syncHostRef.current!.snapshot(),
       apply: a => syncHostRef.current!.apply(a),
       rescan: () => syncHostRef.current!.rescan(),
-      showOwn: () => syncHostRef.current!.showOwn(),
+      reload: () => syncHostRef.current!.reload(),
+      flush: () => syncHostRef.current!.flush(),
       deleteFiles: paths => syncHostRef.current!.deleteFiles(paths),
       settings: () => syncHostRef.current!.settings(),
     });
@@ -2261,6 +2266,7 @@ export default function App() {
 
   // ── Permanent delete (bin) ─────────────────────────────────────────────────
   const handleDeleteForever = useCallback(async (s: Song) => {
+    await beforeDeleteForever([s]);
     // Ask the device to actually delete the file. On Android 11+ this shows a
     // system confirmation dialog; if the user declines, keep the song in the bin.
     const deleted = await deleteFileAtUri(s.uri);
@@ -2284,6 +2290,7 @@ export default function App() {
 
   const handleEmptyBin = useCallback(async () => {
     const toDelete = removedRef.current;
+    await beforeDeleteForever(toDelete);
     // Delete each file from the device. Track which actually got removed so a
     // cancelled confirmation leaves that song in the bin.
     const results = await Promise.all(
@@ -2604,11 +2611,15 @@ export default function App() {
   // fold's own third of a second. A gap closing reads as the card arriving;
   // content sliding under a header that is standing still reads as a fault.
   const COLLAPSED_INSET = dims.cardTop + 54 + 14;
-  // The phone chips of an MPTree account, when there is more than one phone.
-  const showChips = sync.phase === "on" && !sync.pausedNoPro && sync.devices.length > 1;
-  const chipsH = showChips && !chromeCollapsed ? CHIPS_H : 0;
-  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14 + chipsH;
-  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14 + chipsH;
+  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
+  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  const twoLibraries = sync.phase === "on" && !sync.pausedNoPro;
+  // Backups, Clean up and restoring a backup are about This device, so they
+  // switch to it first.
+  const onThisDevice = (fn: () => void) => () => {
+    if (sync.mode === "all") void setMode("device").then(() => { showToast(t("Switched to This device")); fn(); });
+    else fn();
+  };
   // For the things anchored to the card itself rather than to a list: the update
   // notice, the sort menu, the logo's own options panel.
   const cardBottom      = page === "songs" ? songsInset : playlistsInset;
@@ -3162,11 +3173,18 @@ export default function App() {
                 <IC.Trash />Remove
               </button>
             )}
-            <button data-tour="settings" onClick={() => { if (sync.view !== "me") void setView("me"); setSettingsOpen(true); }} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
+            <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
           </div>
           </div>
+
+          {/* Signed in to an MPTree account: which library the list shows. */}
+          {twoLibraries && (
+            <div style={{ paddingTop: 10 }}>
+              <ModeSwitch T={CT} />
+            </div>
+          )}
 
           {/* Search + count/filter. Shown on the Songs page only, but ALWAYS
               MOUNTED, which is load-bearing rather than cosmetic: this block is
@@ -3404,14 +3422,6 @@ export default function App() {
             channel. Sits under the header rather than at the bottom, where it
             would land on top of the shuffle button and the mini-player, and
             dismisses per version so saying "Later" once means later for good. */}
-        {showChips && (
-          <ViewChips
-            top={(page === "songs" ? songsInset : playlistsInset) - CHIPS_H - 4}
-            hidden={chromeCollapsed}
-            transition={move("top", "opacity")}
-            T={TH} />
-        )}
-
         {updateInfo && (
           <div style={{
             position: "absolute", top: cardBottom, left: 12, right: 12, zIndex: 120,
@@ -3676,6 +3686,37 @@ export default function App() {
                   {virtBottomPad > 0 && <div style={{ height: virtBottomPad }} aria-hidden="true" />}
                 </>
               )}
+              {twoLibraries && sync.mode === "all" && sync.songs.absent.length > 0 && !search && !isFavFilter && !activeArtist && (
+                <div style={{ padding: "18px 0 8px" }}>
+                  <div style={{ padding: "0 19px 8px", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: TH.muted }}>
+                      {t("Not on this device yet")}
+                    </span>
+                    <span style={{ fontSize: 12, color: TH.muted }}>{sync.songs.absent.length}</span>
+                  </div>
+                  <div style={{ padding: "0 19px 10px", fontSize: 12.5, color: TH.muted, lineHeight: 1.45 }}>
+                    {sync.songs.note === "phone-full"
+                      ? t("Not enough room. Free up {size} to get them all.", { size: fmtBytes(Math.max(0, (sync.songs.needBytes ?? 0) - Math.max(0, (sync.songs.freeBytes ?? 0) - 500 * 1024 * 1024))) })
+                      : sync.songs.note === "wifi" ? t("They come in on wifi.")
+                      : sync.songs.waitingOn.length ? t("They come in when MPTree is open on {phones}.", { phones: sync.songs.waitingOn.join(", ") })
+                      : t("On their way.")}
+                  </div>
+                  {sync.songs.absent.slice(0, 200).map(a => (
+                    <div key={a.fp} style={{ display: "flex", alignItems: "center", gap: 10, height: ROW_H, padding: "0 16px 0 19px", boxSizing: "border-box", opacity: 0.42 }}>
+                      <div style={{ width: ART, height: ART, borderRadius: 8, background: TH.dim, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: TH.muted }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.title}</div>
+                        <div style={{ fontSize: 13, color: TH.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.artist || t("Unknown Artist")}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {sync.songs.absent.length > 200 && (
+                    <div style={{ padding: "8px 19px", fontSize: 12.5, color: TH.muted }}>{t("and {n} more", { n: sync.songs.absent.length - 200 })}</div>
+                  )}
+                </div>
+              )}
             </main>
 
             {/* ═══ SCROLL TO TOP (floating circle above the mini player) ═══ */}
@@ -3776,6 +3817,11 @@ export default function App() {
               songs={songs}
               meta={meta}
               onPlaylistsChange={handlePlaylistsChange}
+              copyTarget={twoLibraries ? (sync.mode === "all" ? "device" : "all") : undefined}
+              onCopyPlaylist={p => {
+                const to = sync.mode === "all" ? "device" : "all";
+                void copyPlaylist(p, to).then(() => showToast(to === "all" ? t("Copied to All devices") : t("Copied to This device")));
+              }}
               onPlayPlaylist={handlePlayPlaylist}
               onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playSong(song, list); }}
               currentSongId={currentSong?.id ?? null}
@@ -3957,6 +4003,9 @@ export default function App() {
             }}
             onShare={() => { const s = menuSong; setMenuSong(null); shareSong(s); }}
             onRemove={() => { const s = menuSong; setMenuSong(null); setRemoveSong(s); }}
+            onPutOnThisDevice={twoLibraries && sync.mode === "all" && !menuSong.isCut && !isOnThisDevice(menuSong.uri)
+              ? () => { const s = menuSong; setMenuSong(null); void putOnThisDevice([s]).then(() => showToast(t("Now on This device too"))); }
+              : undefined}
             onClose={() => setMenuSong(null)}
             T={TH}
           />
@@ -3973,7 +4022,7 @@ export default function App() {
             onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
             onOpenAccount={() => setAccountOpen(true)}
-            onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
+            onOpenCleanup={pro ? onThisDevice(() => setCleanupOpen(true)) : () => setProOpen(true)}
             cleanupCount={cleanupSuspects.length}
             onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
             onViewBin={() => setBinOpen(true)}
@@ -3983,8 +4032,8 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onExport={handleExportOpen}
-            onImportOpen={handleImportOpen}
+            onExport={onThisDevice(handleExportOpen)}
+            onImportOpen={onThisDevice(handleImportOpen)}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4032,13 +4081,6 @@ export default function App() {
             onToast={showToast}
             T={TH} />
         )}
-        {sync.phase === "on" && sync.incoming.length > 0 && !proOpen && !settingsOpen && (
-          <IncomingSheet
-            incoming={sync.incoming[0]}
-            onAccept={() => { const from = sync.incoming[0].from; void acceptChanges(from).then(() => showToast(t("Changes accepted"))); }}
-            onDecline={() => { const from = sync.incoming[0].from; void declineChanges(from).then(() => showToast(t("Changes declined. Everything is back as it was."))); }}
-            T={TH} />
-        )}
         {proOpen && (
           <ProSheet
             onClose={() => setProOpen(false)}
@@ -4080,6 +4122,16 @@ export default function App() {
             onRestore={doRestore}
             onDeleteForever={handleDeleteForever}
             onEmptyBin={handleEmptyBin}
+            deleteNote={songs => {
+              const w = deleteWarnings(songs);
+              const lines: string[] = [];
+              if (w.alsoHere) lines.push(tn(w.alsoHere, "This song is also in This device and goes from there too.", "{n} of these are also in This device and go from there too."));
+              if (w.elsewhere) lines.push(tn(w.elsewhere, "Your other devices keep it, in the bin of All devices. You can get it back from them.", "Your other devices keep {n} of them, in the bin of All devices. You can get those back from them."));
+              if (w.lastCopy) lines.push(tn(w.lastCopy, "No other device has this song. After this it is gone everywhere.", "No other device has {n} of these. After this they are gone everywhere."));
+              return lines.join("\n\n") || null;
+            }}
+            deleted={twoLibraries ? sync.deleted : undefined}
+            onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
             onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}

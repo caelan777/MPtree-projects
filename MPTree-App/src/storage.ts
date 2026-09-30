@@ -13,13 +13,15 @@ const KEY_REMOVED    = "mptree_removed";
 const KEY_CUT_TRACKS = "mptree_cut_tracks";
 const KEY_PLAYLISTS  = "mptree_playlists";
 
-// ── Whose library ─────────────────────────────────────────────────────────────
-// Signed in to an MPTree account, the list can show another phone's library
-// (sync/engine.ts). The app then works on a copy of that library, kept under
-// its own keys, so looking at another phone never overwrites this one's own.
+// ── Which library ─────────────────────────────────────────────────────────────
+// Signed in to an MPTree account there are two: This device, and All devices,
+// the one every phone on the account shares (sync/engine.ts). All devices is
+// kept under keys of its own ("mptree_meta@all"), so the two never overwrite
+// each other. The scope is "" for This device and "all" for All devices.
 let scope = "";
 export function setLibraryScope(next: string): void { scope = next; }
 const k = (key: string) => scope ? `${key}@${scope}` : key;
+const ks = (key: string, sc: string) => sc ? `${key}@${sc}` : key;
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -153,25 +155,27 @@ export async function savePlaylists(playlists: Playlist[]): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// ─── This phone's own library, whatever is on screen ───────────────────────────
+// ─── Either library, whatever is on screen ─────────────────────────────────────
 
-export type OwnLibrary = { meta: SongMetaStore; removed: Song[]; cuts: Song[]; playlists: Playlist[] };
+export type Library = { meta: SongMetaStore; removed: Song[]; cuts: Song[]; playlists: Playlist[] };
 
 const readKey = async <T,>(key: string, fallback: T): Promise<T> => {
   try { const { value } = await Preferences.get({ key }); return value ? JSON.parse(value) as T : fallback; } catch { return fallback; }
 };
 
-export async function loadOwnLibrary(): Promise<OwnLibrary> {
+/** A library from storage: "" This device, "all" All devices. */
+export async function loadLibrary(sc: string): Promise<Library> {
+  await _flushMeta();
   return {
-    meta:      await readKey<SongMetaStore>(KEY_META, {}),
-    removed:   await readKey<Song[]>(KEY_REMOVED, []),
-    cuts:      await readKey<Song[]>(KEY_CUT_TRACKS, []),
-    playlists: await readKey<Playlist[]>(KEY_PLAYLISTS, []),
+    meta:      await readKey<SongMetaStore>(ks(KEY_META, sc), {}),
+    removed:   await readKey<Song[]>(ks(KEY_REMOVED, sc), []),
+    cuts:      await readKey<Song[]>(ks(KEY_CUT_TRACKS, sc), []),
+    playlists: await readKey<Playlist[]>(ks(KEY_PLAYLISTS, sc), []),
   };
 }
 
-export async function saveOwnLibrary(lib: Partial<OwnLibrary>): Promise<void> {
-  const put = (key: string, v: unknown) => Preferences.set({ key, value: JSON.stringify(v) }).catch(() => {});
+export async function saveLibrary(sc: string, lib: Partial<Library>): Promise<void> {
+  const put = (key: string, v: unknown) => Preferences.set({ key: ks(key, sc), value: JSON.stringify(v) }).catch(() => {});
   if (lib.meta)      await put(KEY_META, lib.meta);
   if (lib.removed)   await put(KEY_REMOVED, lib.removed);
   if (lib.cuts)      await put(KEY_CUT_TRACKS, lib.cuts);
@@ -274,6 +278,51 @@ export async function collectSettings(): Promise<Record<string, string>> {
 }
 
 /** Writes restored settings. The app reloads afterwards to pick them up. */
+// ── Settings per library ──────────────────────────────────────────────────────
+// Each library has its own look and settings, and switching swaps them. A few
+// stay with the phone whichever library is showing: the language, the text
+// size, the equalizer (it suits the phone's own speaker or headphones) and the
+// app icon.
+const DEVICE_ONLY = ["mptree_lang", "mptree_ui_size"];
+
+/** The settings that belong to the library on screen. */
+export async function collectShared(): Promise<Record<string, string>> {
+  const out = await collectSettings();
+  for (const key of DEVICE_ONLY) delete out[key];
+  try {
+    const session = JSON.parse(out[KEY_SESSION] ?? "{}") as Partial<Session>;
+    delete session.eqEnabled; delete session.eqBandLevels;
+    out[KEY_SESSION] = JSON.stringify(session);
+  } catch { /* keep as it is */ }
+  if (out.mptree_look) {
+    try { const look = JSON.parse(out.mptree_look); delete look.icon; out.mptree_look = JSON.stringify(look); } catch { /* keep */ }
+  }
+  return out;
+}
+
+/** Puts a library's settings in place, keeping what stays with the phone. */
+export async function restoreShared(settings: Record<string, string>): Promise<void> {
+  const next = { ...settings };
+  for (const key of DEVICE_ONLY) delete next[key];
+  if (next.mptree_look) {
+    try {
+      const look = JSON.parse(next.mptree_look);
+      const { value } = await Preferences.get({ key: "mptree_look" });
+      const icon = value ? JSON.parse(value).icon : undefined;
+      if (icon) look.icon = icon; else delete look.icon;
+      next.mptree_look = JSON.stringify(look);
+    } catch { /* keep */ }
+  }
+  if (next[KEY_SESSION]) {
+    try {
+      const session = JSON.parse(next[KEY_SESSION]) as Partial<Session>;
+      delete session.eqEnabled; delete session.eqBandLevels;
+      next[KEY_SESSION] = JSON.stringify(session);
+    } catch { /* keep */ }
+  }
+  await restoreSettings(next);
+}
+
 export async function restoreSettings(settings: Record<string, string>): Promise<void> {
   for (const [key, value] of Object.entries(settings)) {
     if (key === KEY_SESSION) {

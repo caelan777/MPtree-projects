@@ -3,10 +3,11 @@ import type { Song, SongMeta, Playlist } from "../types";
 // ─── THE ACCOUNT, AS DATA ────────────────────────────────────────────────────
 //
 // What the MPTree account holds is one document, library.json, in the person's
-// own Drive app folder. Everything a person made is in it: names and artists
-// they typed, lyrics, covers, likes, play counts, the bin, playlists, cut
-// tracks and settings. The songs themselves are not; phones pass those to each
-// other (see engine.ts).
+// own Drive app folder: the library of "All devices", the one every signed in
+// phone shares. Names and artists typed there, lyrics, covers, likes, play
+// counts, its bin, its playlists, cut tracks and its settings. "This device"
+// is not in it; that stays on the phone. The songs themselves are not either;
+// phones pass those to each other (see engine.ts).
 //
 // A phone knows a song by its path, and the same song has a different path on
 // every phone. So the account knows songs by fingerprint (size plus a checksum,
@@ -37,11 +38,13 @@ export type SongRec = {
   liked?: boolean;
   lastPlayedAt?: number;
   playCount?: number;
-  /** In the bin, on every phone. */
+  /** In the bin of All devices. */
   bin?: boolean;
-  /** Deleted for good on one phone. The others still have it in the bin, and
-   *  offer to delete it there too. */
-  gone?: boolean;
+  /** The phones that deleted the file for good, and when. Another phone that
+   *  still has it keeps it in the bin; when no phone has it any more, it is
+   *  gone. Restoring it anywhere empties this, and the phones that deleted it
+   *  fetch it again. An empty object is how a restore is written down. */
+  del?: Record<string, number>;
 };
 
 export type PlaylistRec = { name: string; createdAt: number; cover?: string; songs: Key[] };
@@ -201,6 +204,12 @@ export function same(a: unknown, b: unknown): boolean {
   return ka.length === kb.length && ka.every(k => same((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
+const keysOf = (...objs: (object | undefined)[]) => {
+  const s = new Set<string>();
+  for (const o of objs) if (o) for (const k of Object.keys(o)) s.add(k);
+  return s;
+};
+
 /** Changed on one side: that side. Changed on both: the newer change. */
 function pick3<T>(b: T | undefined, l: T | undefined, r: T | undefined, localNewer: boolean): T | undefined {
   if (same(l, b)) return r;
@@ -209,7 +218,10 @@ function pick3<T>(b: T | undefined, l: T | undefined, r: T | undefined, localNew
 }
 
 function mergeSong(b: SongRec | undefined, l: SongRec | undefined, r: SongRec | undefined, localNewer: boolean): SongRec | undefined {
-  const bb = b ?? {}, ll = l ?? {}, rr = r ?? {};
+  const bb = b ?? {}, rr = r ?? {};
+  // A phone's own list says nothing about who deleted what: that side only
+  // changes it when it deleted or restored something itself.
+  const ll: SongRec = l?.del === undefined ? { ...(l ?? {}), del: bb.del } : l;
   const out: SongRec = {};
   for (const f of META_FIELDS) {
     if (f === "playCount") {
@@ -224,12 +236,15 @@ function mergeSong(b: SongRec | undefined, l: SongRec | undefined, r: SongRec | 
       if (v !== undefined) (out as Record<string, unknown>)[f] = v;
     }
   }
-  if (pick3(bb.bin, ll.bin, rr.bin, localNewer)) {
-    out.bin = true;
-    // Deleted for good on some phone. Taking it out of the bin anywhere
-    // brings it back, so "gone" only holds while it is in the bin.
-    if (pick3(bb.gone, ll.gone, rr.gone, localNewer)) out.gone = true;
+  if (pick3(bb.bin, ll.bin, rr.bin, localNewer)) out.bin = true;
+  // Who deleted it, phone by phone, so two phones deleting it at once are
+  // both kept.
+  const del: Record<string, number> = {};
+  for (const p of keysOf(bb.del, ll.del, rr.del)) {
+    const v = pick3(bb.del?.[p], ll.del?.[p], rr.del?.[p], localNewer);
+    if (v) del[p] = v;
   }
+  if (Object.keys(del).length) out.del = del;
   return clean(out);
 }
 
@@ -244,7 +259,8 @@ function joinSong(l: SongRec | undefined, r: SongRec | undefined, keepLocalBin: 
     playCount: Math.max(l?.playCount ?? 0, r?.playCount ?? 0),
     lastPlayedAt: Math.max(l?.lastPlayedAt ?? 0, r?.lastPlayedAt ?? 0),
   };
-  if (keepLocalBin) { out.bin = l?.bin; out.gone = l?.bin ? l.gone : undefined; }
+  if (keepLocalBin) out.bin = l?.bin;
+  if (r?.del) out.del = r.del; else delete out.del;
   return clean(out);
 }
 
@@ -275,11 +291,6 @@ function mergePlaylist(b: PlaylistRec | undefined, l: PlaylistRec | undefined, r
   return out;
 }
 
-const keysOf = (...objs: (object | undefined)[]) => {
-  const s = new Set<string>();
-  for (const o of objs) if (o) for (const k of Object.keys(o)) s.add(k);
-  return s;
-};
 
 const normName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -499,10 +510,11 @@ export function apply(doc: LibDoc, input: ApplyInput): Applied {
 
 // ── Songs to move ─────────────────────────────────────────────────────────────
 
-/** fp -> [size, file name, title and artist, length in ms]: the song files one
- *  phone shares. The last two tell two versions of one song apart from two
- *  songs. */
-export type Inventory = Record<string, [number, string, string?, number?]>;
+/** fp -> [size, file name, title and artist, length in ms, title, artist]:
+ *  the song files one phone shares. The signature and length tell two
+ *  versions of one song apart from two songs; the title and artist are for
+ *  showing a song that is not on a phone yet. */
+export type Inventory = Record<string, [number, string, string?, number?, string?, string?]>;
 
 /** Title and artist, the way two copies of one song would both have them. */
 export function songSig(title: string, artist: string): string | undefined {
@@ -533,21 +545,24 @@ function isCopy(entry: Inventory[string], sigs: Map<string, number[]>): boolean 
 }
 
 export type MissingOptions = {
-  /** Songs this phone deleted and does not want back. */
+  /** This phone: what it deleted for good is not fetched back. */
+  me?: string;
+  /** Songs this phone does not want, whatever the account says. */
   skip?: Set<string>;
   /** What this phone has, by title and artist (sigsOf). */
   sigs?: Map<string, number[]>;
 };
 
-/** What `mine` is missing that other phones have: not what is in the bin or
- *  deleted for good, not what this phone threw away itself, and not another
- *  version of a song it already has. */
+/** What `mine` is missing that other phones have: not what is in the bin of
+ *  All devices, not what this phone deleted for good, and not another version
+ *  of a song it already has. */
 export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc, opts: MissingOptions = {}): Inventory {
   const out: Inventory = {};
   const sigs = opts.sigs ?? sigsOf(mine);
   for (const inv of others) {
     for (const [fp, v] of Object.entries(inv)) {
-      if (mine[fp] || out[fp] || doc.songs[fp]?.bin || opts.skip?.has(fp)) continue;
+      const rec = doc.songs[fp];
+      if (mine[fp] || out[fp] || rec?.bin || (opts.me && rec?.del?.[opts.me]) || opts.skip?.has(fp)) continue;
       if (isCopy(v, sigs)) continue;
       out[fp] = v;
     }
@@ -555,184 +570,36 @@ export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc, o
   return out;
 }
 
-// ── Every phone its own library ───────────────────────────────────────────────
+// ── Deleting for good, and restoring ──────────────────────────────────────────
 //
-// Each phone keeps its own library and writes it to the account as it is; no
-// phone ever merges another's into its own. What the others see:
-//
-//   one phone   its library, with any changes other phones proposed on top
-//   all phones  every library laid over each other (combine)
-//
-// A change made while looking at another phone is a proposal. That phone asks
-// its owner, who accepts or declines; until then everyone sees it, marked as
-// waiting. A change made in "all phones" goes to every phone it touches
-// (spread): straight into this phone's own library, and as proposals to the
-// rest.
+// A song deleted for good on one phone is still on the others, so it is not
+// gone: those phones keep it in the bin of All devices, and the phone that
+// deleted it lists it under "Deleted for good on this device", from where it
+// can be brought back. Only when no phone has the file any more is it gone.
 
-const allKeys = (d: LibDoc) => new Set([...Object.keys(d.songs), ...Object.keys(d.cuts)]);
+/** Writes down that this phone deleted these songs for good. */
+export function markDeleted(local: LocalDoc, known: LibDoc | null, fps: Iterable<string>, me: string, at: number): void {
+  for (const fp of fps) {
+    const was = local.doc.songs[fp] ?? known?.songs[fp] ?? {};
+    local.doc.songs[fp] = { ...was, bin: true, del: { ...(known?.songs[fp]?.del ?? {}), ...(was.del ?? {}), [me]: at } };
+    local.speaks.add(fp);
+  }
+}
 
-/** `doc` with a proposal laid over it. Where both changed something, the
- *  proposal wins: it is what was asked for. */
-export function overlay(doc: LibDoc, base: LibDoc, proposed: LibDoc): LibDoc {
-  const out = merge(base, { doc, speaks: allKeys(doc), covers: new Map() }, proposed, { stamp: -1 });
-  out.settings = doc.settings;
-  keepPlays(out, doc);
+/** Writes down that these songs are back: out of the bin, and every phone
+ *  that deleted them fetches them again. */
+export function markRestored(local: LocalDoc, known: LibDoc | null, fps: Iterable<string>): void {
+  for (const fp of fps) {
+    const was = { ...(local.doc.songs[fp] ?? known?.songs[fp] ?? {}) };
+    delete was.bin;
+    local.doc.songs[fp] = { ...was, del: {} };
+    local.speaks.add(fp);
+  }
+}
+
+/** Songs this phone deleted for good, with when. */
+export function deletedBy(doc: LibDoc, me: string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [fp, r] of Object.entries(doc.songs)) { const at = r.del?.[me]; if (at) out.set(fp, at); }
   return out;
 }
-
-/** Plays are the phone's own: nobody proposes them to another. */
-function keepPlays(out: LibDoc, from: LibDoc) {
-  for (const k of keysOf(out.songs, from.songs)) {
-    const f = from.songs[k];
-    const o = out.songs[k];
-    if (!o && !f) continue;
-    const rec: SongRec = { ...(o ?? {}) };
-    if (f?.playCount) rec.playCount = f.playCount; else delete rec.playCount;
-    if (f?.lastPlayedAt) rec.lastPlayedAt = f.lastPlayedAt; else delete rec.lastPlayedAt;
-    const c = clean(rec);
-    if (c) out.songs[k] = c; else delete out.songs[k];
-  }
-}
-
-/** A change made on the screen: what the phone showed (`shown`) against what
- *  it shows now (`edited`), laid onto the whole library it came from. The
- *  screen only holds the songs on this phone, so the rest of `full` stays. */
-export function applyEdit(full: LibDoc, shown: LocalDoc, edited: LocalDoc): LibDoc {
-  const out = merge(shown.doc, { doc: edited.doc, speaks: new Set([...shown.speaks, ...edited.speaks]), covers: edited.covers }, full, { stamp: Infinity });
-  out.settings = full.settings;
-  keepPlays(out, full);
-  return out;
-}
-
-export type Combined = {
-  doc: LibDoc;
-  /** Combined playlist id -> the playlists it is made of, per phone. */
-  groups: Record<string, { phone: string; id: string }[]>;
-};
-
-/** Every phone's library laid over each other, this phone first: its names
- *  and covers win, a song is liked if it is liked anywhere, plays add up, and
- *  playlists of the same name are one. The bin is this phone's. */
-export function combine(libs: { phone: string; doc: LibDoc }[], me: string): Combined {
-  const order = [...libs].sort((a, b) => (a.phone === me ? -1 : b.phone === me ? 1 : 0));
-  const doc = emptyDoc();
-  const groups: Combined["groups"] = {};
-  for (const { phone, doc: d } of order) {
-    for (const [k, r] of Object.entries(d.songs)) {
-      const cur: SongRec = doc.songs[k] ?? {};
-      const next: SongRec = { ...cur };
-      for (const f of META_FIELDS) {
-        if (f === "liked") next.liked = cur.liked || r.liked;
-        else if (f === "playCount") next.playCount = (cur.playCount ?? 0) + (r.playCount ?? 0);
-        else if (f === "lastPlayedAt") next.lastPlayedAt = Math.max(cur.lastPlayedAt ?? 0, r.lastPlayedAt ?? 0);
-        else if (cur[f] === undefined && r[f] !== undefined) (next as Record<string, unknown>)[f] = r[f];
-      }
-      next.bin = phone === me ? r.bin : cur.bin;
-      const c = clean(next);
-      if (c) doc.songs[k] = c;
-    }
-    for (const [k, c] of Object.entries(d.cuts)) doc.cuts[k] ??= c;
-    for (const [id, p] of Object.entries(d.playlists)) {
-      const gid = Object.keys(doc.playlists).find(g => normName(doc.playlists[g].name) === normName(p.name)) ?? id;
-      const cur = doc.playlists[gid];
-      doc.playlists[gid] = cur
-        ? { ...cur, cover: cur.cover ?? p.cover, songs: mergeList([], cur.songs, p.songs) }
-        : { ...p, songs: [...p.songs] };
-      (groups[gid] ??= []).push({ phone, id });
-    }
-  }
-  return { doc, groups };
-}
-
-/** A change made in "all phones", sent to each phone's library. Returns the
- *  libraries it changed. Plays go to this phone only. */
-export function spread(shown: LocalDoc, edited: LocalDoc, libs: Map<string, LibDoc>, groups: Combined["groups"], me: string): Map<string, LibDoc> {
-  const b = shown.doc, a = edited.doc;
-  const out = new Map<string, LibDoc>();
-  const doc = (phone: string) => {
-    let d = out.get(phone);
-    if (!d) { d = structuredClone(libs.get(phone) ?? emptyDoc()); out.set(phone, d); }
-    return d;
-  };
-  const phones = [...libs.keys()];
-
-  for (const k of keysOf(b.songs, a.songs)) {
-    const was = b.songs[k] ?? {}, now = a.songs[k] ?? {};
-    for (const f of [...META_FIELDS, "bin"] as const) {
-      if (same(was[f], now[f])) continue;
-      if (f === "playCount") {
-        const d = doc(me);
-        const n = (d.songs[k]?.playCount ?? 0) + ((now.playCount ?? 0) - (was.playCount ?? 0));
-        d.songs[k] = { ...(d.songs[k] ?? {}), playCount: n > 0 ? n : undefined };
-        continue;
-      }
-      const targets = f === "lastPlayedAt" ? [me] : phones;
-      for (const p of targets) {
-        const d = doc(p);
-        const rec: SongRec = { ...(d.songs[k] ?? {}) };
-        if (now[f] === undefined || now[f] === false) delete rec[f]; else (rec as Record<string, unknown>)[f] = now[f];
-        if (f === "bin" && !rec.bin) delete rec.gone;
-        const c = clean(rec);
-        if (c) d.songs[k] = c; else delete d.songs[k];
-      }
-    }
-  }
-
-  for (const k of keysOf(b.cuts, a.cuts)) {
-    if (b.cuts[k] && !a.cuts[k]) for (const p of phones) { if (libs.get(p)?.cuts[k]) delete doc(p).cuts[k]; }
-    else if (!b.cuts[k] && a.cuts[k]) doc(me).cuts[k] = a.cuts[k];
-    else if (!same(b.cuts[k], a.cuts[k])) for (const p of phones) { if (libs.get(p)?.cuts[k]) doc(p).cuts[k] = a.cuts[k]; }
-  }
-
-  for (const gid of keysOf(b.playlists, a.playlists)) {
-    const was = b.playlists[gid], now = a.playlists[gid];
-    const members = groups[gid] ?? [];
-    if (!was && now) { doc(me).playlists[gid] = now; continue; }
-    if (was && !now) { for (const m of members) delete doc(m.phone).playlists[m.id]; continue; }
-    if (!was || !now || same(was, now)) continue;
-    const added = now.songs.filter(k => !was.songs.includes(k));
-    const gone = new Set(was.songs.filter(k => !now.songs.includes(k)));
-    for (const m of members) {
-      const d = doc(m.phone);
-      const p = d.playlists[m.id];
-      if (!p) continue;
-      const songs = p.songs.filter(k => !gone.has(k));
-      for (const k of added) if (!songs.includes(k)) songs.push(k);
-      d.playlists[m.id] = { ...p, songs, name: was.name !== now.name ? now.name : p.name, ...(was.cover !== now.cover ? { cover: now.cover } : {}) };
-      if (was.cover !== now.cover && !now.cover) delete d.playlists[m.id].cover;
-    }
-  }
-
-  for (const [p, d] of out) if (same(d, libs.get(p))) out.delete(p);
-  return out;
-}
-
-/** What a proposal changes, for the question its owner is asked. */
-export type Summary = {
-  liked: number; unliked: number; details: number; binned: number; restored: number;
-  cuts: number; newPlaylists: string[]; changedPlaylists: string[]; deletedPlaylists: string[];
-};
-
-export function summarize(base: LibDoc, doc: LibDoc): Summary {
-  const s: Summary = { liked: 0, unliked: 0, details: 0, binned: 0, restored: 0, cuts: 0, newPlaylists: [], changedPlaylists: [], deletedPlaylists: [] };
-  for (const k of keysOf(base.songs, doc.songs)) {
-    const b = base.songs[k] ?? {}, d = doc.songs[k] ?? {};
-    if (!b.liked && d.liked) s.liked++;
-    if (b.liked && !d.liked) s.unliked++;
-    if (!b.bin && d.bin) s.binned++;
-    if (b.bin && !d.bin) s.restored++;
-    if (["customName", "customArtist", "customGenre", "customLyrics", "customPhoto"].some(f => !same(b[f as keyof SongRec], d[f as keyof SongRec]))) s.details++;
-  }
-  for (const k of keysOf(base.cuts, doc.cuts)) if (!same(base.cuts[k], doc.cuts[k])) s.cuts++;
-  for (const id of keysOf(base.playlists, doc.playlists)) {
-    const b = base.playlists[id], d = doc.playlists[id];
-    if (!b && d) s.newPlaylists.push(d.name);
-    else if (b && !d) s.deletedPlaylists.push(b.name);
-    else if (b && d && !same(b, d)) s.changedPlaylists.push(d.name);
-  }
-  return s;
-}
-
-export const isEmptySummary = (s: Summary) =>
-  !s.liked && !s.unliked && !s.details && !s.binned && !s.restored && !s.cuts
-  && !s.newPlaylists.length && !s.changedPlaylists.length && !s.deletedPlaylists.length;

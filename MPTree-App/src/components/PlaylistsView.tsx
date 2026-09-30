@@ -6,6 +6,7 @@ import { AlbumArt } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar } from "./MultiSelectBar";
 import { IC } from "./Icons";
+import { PhoneIcon, DevicesIcon } from "./ModeSwitch";
 import type { T } from "../themes";
 import { t as tr, tn } from "../i18n";
 
@@ -77,6 +78,10 @@ interface Props {
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
   animateInsets?:     boolean;
+  /** Signed in to an MPTree account: the other library, where a playlist can
+   *  be copied to. */
+  copyTarget?:        "device" | "all";
+  onCopyPlaylist?:    (p: Playlist) => void;
   /** Called when the user backs out of the root "list" view — App treats this as "go to Songs page" */
   onClose:            () => void;
   T:                  T;
@@ -187,7 +192,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
   onLikeMany, onShuffleMany, onPlayManyNext, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, animateInsets = true, onClose, T,
+  onBodyScroll, animateInsets = true, copyTarget, onCopyPlaylist, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -728,6 +733,16 @@ export const PlaylistsView: React.FC<Props> = ({
               >
                 {tr("+ Add")}
               </button>
+              {copyTarget && onCopyPlaylist && activePlaylist && (
+                <button
+                  onClick={() => onCopyPlaylist(activePlaylist)}
+                  aria-label={copyTarget === "all" ? tr("Copy to All devices") : tr("Copy to This device")}
+                  style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: "4px 6px", display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}
+                >
+                  {copyTarget === "all" ? <DevicesIcon size={16} /> : <PhoneIcon size={16} />}
+                  {tr("Copy")}
+                </button>
+              )}
               <button
                 onClick={() => setConfirmDeleteId(activeId)}
                 style={{ background: "none", border: "none", color: "#e8445a", cursor: "pointer", padding: 6, display: "flex" }}

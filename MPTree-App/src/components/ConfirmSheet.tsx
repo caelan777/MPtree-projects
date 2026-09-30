@@ -22,7 +22,7 @@ export function ConfirmSheet({ title, body, confirmLabel, onConfirm, onCancel, T
           <button onClick={onCancel} style={sh.xBtn}><IC.Close /></button>
         </div>
         <div style={{ padding: "0 20px 20px" }}>
-          <p style={{ color: T.textSub, fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>{body}</p>
+          <p style={{ color: T.textSub, fontSize: 14, lineHeight: 1.6, margin: "0 0 20px", whiteSpace: "pre-line" }}>{body}</p>
           <button
             onClick={onConfirm}
             style={{ ...sh.saveBtn, background: "#e8445a" }}

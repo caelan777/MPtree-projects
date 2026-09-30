@@ -65,3 +65,9 @@ export function t(en: string, vars?: Record<string, string | number>): string {
 export function tn(n: number, one: string, other: string, vars?: Record<string, string | number>): string {
   return t(n === 1 ? one : other, { n, ...vars });
 }
+
+/** 840 MB, 4.2 GB. */
+export function fmtBytes(n: number): string {
+  if (n >= 1024 ** 3) return t("{n} GB", { n: (n / 1024 ** 3).toFixed(1) });
+  return t("{n} MB", { n: Math.max(1, Math.round(n / 1024 ** 2)) });
+}
