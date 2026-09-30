@@ -86,6 +86,22 @@ function hapticImpact(style: "light" | "medium" | "heavy" = "light"): void {
   Haptics.impact({ style: map[style] }).catch(() => {});
 }
 
+/** Deletes many files with one system question instead of one per song.
+ *  Resolves the ones that went. */
+async function deleteFilesAtUris(uris: string[]): Promise<Set<string>> {
+  const unique = [...new Set(uris)];
+  if (!unique.length) return new Set();
+  try {
+    const { deleted } = await MusicScanner.deleteFiles({ paths: unique });
+    return new Set(deleted);
+  } catch {
+    // Older builds of the native side, or the web: one by one.
+    const gone = new Set<string>();
+    for (const u of unique) if (await deleteFileAtUri(u)) gone.add(u);
+    return gone;
+  }
+}
+
 async function deleteFileAtUri(uri: string): Promise<boolean> {
   // Deletes the file from the device via MediaStore (native). On Android 10+
   // a plain filesystem delete can't remove shared-storage files the app didn't
@@ -1903,8 +1919,7 @@ export default function App() {
     // Songs whose files go: from the list, the bin and every playlist's view,
     // with cut tracks made from them.
     deleteFiles: async paths => {
-      const gone = new Set<string>();
-      for (const p of paths) if (await deleteFileAtUri(p)) gone.add(p);
+      const gone = await deleteFilesAtUris(paths);
       if (!gone.size) return 0;
       const keep = (x: Song) => !gone.has(x.uri);
       const nextSongs = songsRef.current.filter(keep);
@@ -2273,12 +2288,10 @@ export default function App() {
   const handleEmptyBin = useCallback(async () => {
     const toDelete = removedRef.current;
     await beforeDeleteForever(toDelete);
-    // Delete each file from the device. Track which actually got removed so a
-    // cancelled confirmation leaves that song in the bin.
-    const results = await Promise.all(
-      toDelete.map(async s => ({ s, ok: await deleteFileAtUri(s.uri) }))
-    );
-    const deletedIds = new Set(results.filter(r => r.ok).map(r => r.s.id));
+    // All files in one go, with one question from Android. Track which
+    // actually went, so a declined question leaves those songs in the bin.
+    const gone = await deleteFilesAtUris(toDelete.map(s => s.uri));
+    const deletedIds = new Set(toDelete.filter(s => gone.has(s.uri)).map(s => s.id));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
     setRemovedSongs(remaining);

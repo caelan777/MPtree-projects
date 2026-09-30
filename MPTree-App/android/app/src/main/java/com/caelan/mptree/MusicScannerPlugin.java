@@ -230,7 +230,62 @@ public class MusicScannerPlugin extends Plugin {
     // cancelled the confirmation, or rejects on hard error.
 
     private static final int DELETE_REQUEST_CODE = 51234;
+    private static final int DELETE_MANY_REQUEST_CODE = 51235;
     private PluginCall pendingDeleteCall;
+    private PluginCall pendingDeleteManyCall;
+    private List<String> pendingDeleteManyDone;
+    private List<String> pendingDeleteManyAsked;
+
+    // ── deleteFiles ────────────────────────────────────────────────────────
+    //
+    // Deletes many files with at most ONE system question. Asking file by file
+    // put up a dialog per song, which is what emptying the bin or signing out
+    // with "delete the songs from my other devices" did. Files MPTree may
+    // delete on its own (the ones it saved itself) go straight away; the rest
+    // are asked about together. Resolves { deleted: [paths] }.
+    @PluginMethod
+    public void deleteFiles(PluginCall call) {
+        JSArray arr = call.getArray("paths");
+        List<String> paths = new ArrayList<>();
+        try { if (arr != null) for (int i = 0; i < arr.length(); i++) paths.add(arr.getString(i)); } catch (Exception ignored) {}
+        ContentResolver resolver = getContext().getContentResolver();
+        List<String> done = new ArrayList<>();
+        List<String> askPaths = new ArrayList<>();
+        List<Uri> askUris = new ArrayList<>();
+        for (String raw : paths) {
+            String path = raw.startsWith("file://") ? raw.substring("file://".length()) : raw;
+            Uri uri = findAudioUriForPath(path);
+            if (uri == null) { if (tryPlainFileDelete(path)) done.add(raw); continue; }
+            try {
+                if (resolver.delete(uri, null, null) > 0) done.add(raw);
+            } catch (SecurityException sec) {
+                askPaths.add(raw);
+                askUris.add(uri);
+            } catch (Exception ignored) { }
+        }
+        if (askUris.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            resolveMany(call, done);
+            return;
+        }
+        try {
+            android.app.PendingIntent pi = MediaStore.createDeleteRequest(resolver, askUris);
+            pendingDeleteManyCall = call;
+            pendingDeleteManyDone = done;
+            pendingDeleteManyAsked = askPaths;
+            bridge.getActivity().startIntentSenderForResult(pi.getIntentSender(), DELETE_MANY_REQUEST_CODE, null, 0, 0, 0);
+        } catch (Exception e) {
+            pendingDeleteManyCall = null;
+            resolveMany(call, done);
+        }
+    }
+
+    private void resolveMany(PluginCall call, List<String> deleted) {
+        JSObject ret = new JSObject();
+        JSArray out = new JSArray();
+        for (String p : deleted) out.put(p);
+        ret.put("deleted", out);
+        call.resolve(ret);
+    }
 
     @PluginMethod
     public void deleteFile(PluginCall call) {
@@ -296,6 +351,15 @@ public class MusicScannerPlugin extends Plugin {
             boolean ok = resultCode == Activity.RESULT_OK;
             resolveDeleted(pendingDeleteCall, ok);
             pendingDeleteCall = null;
+        }
+        if (requestCode == DELETE_MANY_REQUEST_CODE && pendingDeleteManyCall != null) {
+            // The ones asked about went only if the person said yes.
+            List<String> deleted = new ArrayList<>(pendingDeleteManyDone);
+            if (resultCode == Activity.RESULT_OK) deleted.addAll(pendingDeleteManyAsked);
+            resolveMany(pendingDeleteManyCall, deleted);
+            pendingDeleteManyCall = null;
+            pendingDeleteManyDone = null;
+            pendingDeleteManyAsked = null;
         }
     }
 

@@ -527,20 +527,25 @@ export function songSig(title: string, artist: string): string | undefined {
 export function sigsOf(inv: Inventory): Map<string, number[]> {
   const out = new Map<string, number[]>();
   for (const [, , sig, ms] of Object.values(inv)) {
-    if (!sig || !ms) continue;
+    if (!sig) continue;
     const list = out.get(sig) ?? [];
-    list.push(ms);
+    list.push(ms ?? 0);
     out.set(sig, list);
   }
   return out;
 }
 
-/** Another version of a song this phone already has: same title and artist,
- *  and no more than two seconds longer or shorter. */
-function isCopy(entry: Inventory[string], sigs: Map<string, number[]>): boolean {
+/** File name and size, the plainest sign of one file copied twice. */
+export const nameSize = (entry: Inventory[string]) => `${entry[1].toLowerCase()}|${entry[0]}`;
+
+/** Another copy of a song this phone already has: the same file name and
+ *  size, or the same title and artist and no more than two seconds longer or
+ *  shorter. A length that is not known yet counts as the same. */
+export function isCopy(entry: Inventory[string], sigs: Map<string, number[]>, names?: Set<string>): boolean {
+  if (names?.has(nameSize(entry))) return true;
   const [, , sig, ms] = entry;
-  if (!sig || !ms) return false;
-  return (sigs.get(sig) ?? []).some(d => Math.abs(d - ms) <= 2000);
+  if (!sig) return false;
+  return (sigs.get(sig) ?? []).some(d => !d || !ms || Math.abs(d - ms) <= 2000);
 }
 
 export type MissingOptions = {
@@ -552,17 +557,23 @@ export type MissingOptions = {
   sigs?: Map<string, number[]>;
 };
 
+/** What this phone has, by file name and size. */
+export function namesOf(inv: Inventory): Set<string> {
+  return new Set(Object.values(inv).map(nameSize));
+}
+
 /** What `mine` is missing that other phones have: not what is in the bin of
  *  bin, not what this phone deleted for good, and not another version
  *  of a song it already has. */
 export function missingFrom(mine: Inventory, others: Inventory[], doc: LibDoc, opts: MissingOptions = {}): Inventory {
   const out: Inventory = {};
   const sigs = opts.sigs ?? sigsOf(mine);
+  const names = namesOf(mine);
   for (const inv of others) {
     for (const [fp, v] of Object.entries(inv)) {
       const rec = doc.songs[fp];
       if (mine[fp] || out[fp] || rec?.bin || (opts.me && rec?.del?.[opts.me]) || opts.skip?.has(fp)) continue;
-      if (isCopy(v, sigs)) continue;
+      if (isCopy(v, sigs, names)) continue;
       out[fp] = v;
     }
   }

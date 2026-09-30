@@ -26,6 +26,8 @@ export type MusicScannerPlugin = {
   // Resolves { deleted: true } on success, { deleted: false } if the user
   // declined the system confirmation dialog (Android 11+).
   deleteFile(options: { path: string }): Promise<{ deleted: boolean }>;
+  /** Many at once, with at most one system question. */
+  deleteFiles(options: { paths: string[] }): Promise<{ deleted: string[] }>;
   // Losslessly exports a segment [startMs, endMs] of an audio file to a real
   // file in Music/MPTree and registers it with MediaStore. Rejects with code
   // "UNSUPPORTED_FORMAT" when the source codec can't be muxed losslessly.

@@ -5,7 +5,7 @@ import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
 import {
-  useSync, signIn, signOut, cancelJoin, removeDevice, renameDevice, dismissRemoved, setMobileData, testPhone,
+  useSync, signIn, signOut, cancelJoin, removeDevice, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles,
   MOBILE_DAILY, type SyncState, type Device, type TestStep,
 } from "../sync/engine";
 
@@ -184,6 +184,21 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           <div style={card}>
             <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, marginBottom: 4 }}>{t("Songs")}</div>
             <SongStatus s={s} T={T} />
+            {s.songs.doubles.length > 0 && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>
+                  {tn(s.songs.doubles.length, "{n} song is on this device twice.", "{n} songs are on this device twice.")}
+                </div>
+                <button disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  const n = await deleteDoubles().catch(() => 0);
+                  setBusy(false);
+                  onToast(tn(n, "{n} extra copy deleted", "{n} extra copies deleted"));
+                }} style={{ ...btn, background: T.surface, color: T.text, marginTop: 10, opacity: busy ? 0.6 : 1 }}>
+                  {t("Delete the extra copies")}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

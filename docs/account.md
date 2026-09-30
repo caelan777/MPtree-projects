@@ -60,8 +60,16 @@ from another phone lands in Music/MPTree.
 - **Device names** come from the model and can be changed on the account
   page (`renameDevice`).
 - **Pro ends:** syncing stops; nothing on the phone changes.
-- **Two versions of one song** (same title and artist, within 2 s) are not both
-  fetched. Songs only come in while 500 MB stays free.
+- **Two copies of one song** are not both fetched: same file name and size, or
+  same title and artist within 2 s (or with a length not known yet). A song
+  that reads back under another fingerprint than it was sent with keeps the
+  sent one (`alias`). Copies that got through anyway are listed on the account
+  page, and "Delete the extra copies" removes them without telling the other
+  phones (`skip`).
+- **Deleting many files** (bin, sign out) asks Android once
+  (`MusicScanner.deleteFiles`), not once per song.
+- **Signing out** is at once on screen; the device leaves the account in the
+  background. Songs only come in while 500 MB stays free.
 - **Conflicts:** three-way merge against the last agreed base; a change made on
   two phones goes to the later one (`at` stamps). Plays add up. Who deleted a
   song merges phone by phone.

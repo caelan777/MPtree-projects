@@ -196,6 +196,17 @@ describe("merge", () => {
     expect(r.next.songs.map(s => s.id)).toContain("/b/Music/one.mp3");
   });
 
+  it("knows a copy by file name and size, or by title and artist when a length is missing", () => {
+    const doc = round(phoneA(), "/a/", null, null).merged;
+    const mine = { fp1: [100, "Song.mp3", songSig("Song", "X"), undefined] as [number, string, string?, number?] };
+    const theirs = {
+      fp2: [100, "song.mp3"] as [number, string, string?, number?],
+      fp3: [200, "other.mp3", songSig("song", "x"), 180_000] as [number, string, string?, number?],
+      fp4: [300, "new.mp3", songSig("New", "X"), 180_000] as [number, string, string?, number?],
+    };
+    expect(Object.keys(missingFrom(mine, [theirs], doc))).toEqual(["fp4"]);
+  });
+
   it("does not fetch what this phone threw out, or another version of what it has", () => {
     const doc = round(phoneA(), "/a/", null, null).merged;
     const sig = songSig("Blue Hour", "The Halogens");

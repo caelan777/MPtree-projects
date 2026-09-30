@@ -574,4 +574,9 @@ export const NL: Record<string, string> = {
   "Sign in to sync your songs between your devices.": "Log in om je nummers tussen je apparaten te synchroniseren.",
   "Rename": "Naam wijzigen",
   "Name of this device": "Naam van dit apparaat",
+  "{n} song is on this device twice.": "{n} nummer staat twee keer op dit apparaat.",
+  "{n} songs are on this device twice.": "{n} nummers staan twee keer op dit apparaat.",
+  "{n} extra copy deleted": "{n} extra kopie verwijderd",
+  "{n} extra copies deleted": "{n} extra kopieën verwijderd",
+  "Delete the extra copies": "Verwijder de extra kopieën",
 };
