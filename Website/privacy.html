@@ -43,7 +43,7 @@
 
   <section class="section-flush">
     <div class="prose">
-      <p class="prose-date">Last updated: 29 September 2026</p>
+      <p class="prose-date">Last updated: 30 September 2026</p>
 
       <h2>Who this covers</h2>
       <p>
@@ -69,15 +69,16 @@
       <p>
         To play your music, MPTree asks Android for permission to read the audio files on your
         device (the <b>Read audio</b> or <b>Read storage</b> permission). This access is used
-        only to find and play your music on the device itself. Your files are never uploaded,
-        copied off the device, or shared with anyone. If you deny this permission, MPTree simply
-        cannot show your library.
+        only to find and play your music on the device itself. Your files are never sent to us
+        or shared with anyone. The one time they leave the phone is when you sign in to an
+        <a href="#account">MPTree account</a> yourself: then they go to your own other phones.
+        If you deny this permission, MPTree simply cannot show your library.
       </p>
 
       <h2 id="internet">Internet access</h2>
       <p>
         MPTree plays your local files and does not need the internet to work. It never streams,
-        never sends us your listening activity, and never uploads your music or anything about it.
+        and never sends us your listening activity, your music or anything about it.
       </p>
       <p>
         There is one background request, and only in the copy you download from this website:
@@ -96,8 +97,9 @@
       </p>
       <p>
         Apart from that, MPTree opens a connection only when you do something that needs one:
-        tapping an outward link, which opens in your own browser, or buying or restoring Pro,
-        which goes through Google Play.
+        tapping an outward link, which opens in your own browser, buying or restoring Pro,
+        which goes through Google Play, or signing in to an <a href="#account">MPTree account</a>,
+        which talks to your own Google Drive and your own other phones.
       </p>
 
       <h2 id="pro">MPTree Pro</h2>
@@ -111,6 +113,38 @@
       <p>
         Pro can also be tried for free for one week. That week is counted on your phone and
         nowhere else: no account, no payment details, and nothing is charged when it ends.
+      </p>
+
+      <h2 id="account">The MPTree account</h2>
+      <p>
+        With Pro you can sign in with your Google account, on up to three phones. This is
+        optional: MPTree works the same without it.
+      </p>
+      <p>
+        <b>What is saved, and where.</b> Your playlists, likes, play counts, the names, artists,
+        lyrics and covers you set, the bin, cut tracks, and your settings are saved in your own
+        Google Drive, in its app folder. That is a hidden folder that only MPTree can open; it
+        cannot see the rest of your Drive, and your other files cannot see it. It sits in your
+        Drive, under your Google account, not with us. We have no server and never receive a
+        copy. To sign in, MPTree asks Google for access to that one folder and nothing else. It
+        reads your name and email address from Google only to show you which account you are
+        signed in with, on your phone.
+      </p>
+      <p>
+        <b>Your songs.</b> The songs themselves are not saved in your account. They go from one
+        of your phones straight to your other phones, so each one has them all. To find each
+        other, the phones leave a short note in the same app folder, and ask a Google server
+        (a so-called STUN server) which internet address they have, the way video calls do.
+        When a phone that needs a song is not open, the phone that has it can leave the song in
+        your Drive's app folder instead; the other phone deletes it from there as soon as it has
+        it. So a song can sit in your own Drive for a while, and it counts towards your Drive's
+        storage while it does. Songs only move on wifi unless you allow mobile data.
+      </p>
+      <p>
+        <b>Stopping.</b> Signing out stops syncing on that phone and leaves everything on it as
+        it is. To delete what the account holds, open your Google Drive on the web, go to
+        Settings, then Manage apps, and choose <i>Delete hidden app data</i> next to MPTree. You
+        can also take away MPTree's access at myaccount.google.com, under Security.
       </p>
 
       <h2>Backups</h2>
@@ -157,6 +191,10 @@
         This page describes MPTree as it works today. If a future version adds something that
         handles your data differently, this policy will be updated before that version ships,
         with a new date at the top, and it will say plainly what changed.
+      </p>
+      <p>
+        <b>30 September 2026:</b> added the MPTree account, which saves your library in your
+        own Google Drive and moves your songs between your own phones. We still receive nothing.
       </p>
       <p>
         <b>29 September 2026:</b> added MPTree Pro, bought through Google Play, and its free
