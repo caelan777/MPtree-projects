@@ -23,6 +23,11 @@ import { t } from "./i18n";
 // person who paid must keep Pro on a plane; Play is asked again whenever it
 // can be reached, and only a definite "not owned" from Play takes it away.
 //
+// Pro also comes with the MPTree account: a device that bought it says so in
+// the account (see sync/engine.ts), and any device signed in to that account
+// has Pro too, for as long as it stays signed in. So Pro bought on one Google
+// Play account reaches a device that uses another one.
+//
 // Every build also has a free week: all of Pro for seven days, once, started
 // from the Pro page. No payment details are asked, so nothing is ever charged;
 // it simply stops. It is kept on the phone, so a reinstall starts afresh.
@@ -46,12 +51,15 @@ export type Trial =
   | { state: "over"; notice: boolean };
 
 let owned = false;
+/** Pro from the MPTree account this device is signed in to. */
+let fromAccount = false;
 let trial: Trial = { state: "unused" };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach(l => l());
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
-const snapshot = () => owned || trial.state === "live";
+const snapshot = () => owned || fromAccount || trial.state === "live";
 const ownedSnapshot = () => owned;
+const accountSnapshot = () => fromAccount && !owned;
 const trialSnapshot = () => trial;
 
 /** Pro is on: bought, or the free week running. */
@@ -62,10 +70,32 @@ export function usePro(): boolean {
 export function useOwnsPro(): boolean {
   return useSyncExternalStore(subscribe, ownedSnapshot, ownedSnapshot);
 }
+/** Pro only because the signed in account has it. */
+export function useAccountPro(): boolean {
+  return useSyncExternalStore(subscribe, accountSnapshot, accountSnapshot);
+}
 export function useTrial(): Trial {
   return useSyncExternalStore(subscribe, trialSnapshot, trialSnapshot);
 }
 export function hasPro(): boolean { return snapshot(); }
+/** Bought on this device (or unlocked in a test build), not the week or the account. */
+export function ownsPro(): boolean { return owned; }
+/** Pro only because the signed in account has it. */
+export function proFromAccountOnly(): boolean { return fromAccount && !owned && trial.state !== "live"; }
+
+const ACCOUNT_KEY = "mptree_pro_account";
+/** The engine says whether the account this device is signed in to has Pro.
+ *  Remembered, so it holds with no internet. */
+export function setAccountPro(on: boolean): void {
+  if (on === fromAccount) return;
+  fromAccount = on;
+  if (on) Preferences.set({ key: ACCOUNT_KEY, value: "1" }).catch(() => {});
+  else {
+    Preferences.remove({ key: ACCOUNT_KEY }).catch(() => {});
+    if (!owned && trial.state !== "live") dropProLook();
+  }
+  emit();
+}
 /** For code outside React that needs to know when Pro comes or goes. */
 export const subscribePro = subscribe;
 
@@ -83,7 +113,7 @@ function setOwned(next: boolean, via: Stored["via"]) {
     Preferences.set({ key: KEY, value: JSON.stringify({ owned: true, via, since: Date.now() } satisfies Stored) }).catch(() => {});
   } else {
     Preferences.remove({ key: KEY }).catch(() => {});
-    if (was && trial.state !== "live") dropProLook();
+    if (was && !fromAccount && trial.state !== "live") dropProLook();
   }
   if (was !== next) emit();
 }
@@ -124,7 +154,7 @@ function endTrial(notice: boolean) {
   if (trial.state !== "live") return;
   saveTrial({ from: trial.from, until: Math.min(trial.until, Date.now()), noticed: !notice });
   trial = { state: "over", notice };
-  if (!owned) dropProLook();
+  if (!owned && !fromAccount) dropProLook();
   emit();
 }
 
@@ -170,6 +200,9 @@ export async function loadPro(): Promise<void> {
     // A "free" unlock from a test build does not carry over into a Play build
     // installed on top of it, and the other way round.
     if (s?.owned && s.via === (PRO_MODE === "play" ? "play" : "free")) { owned = true; emit(); }
+  } catch { /* nothing stored */ }
+  try {
+    if ((await Preferences.get({ key: ACCOUNT_KEY })).value === "1") { fromAccount = true; emit(); }
   } catch { /* nothing stored */ }
   try {
     const { value } = await Preferences.get({ key: TRIAL_KEY });

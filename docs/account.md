@@ -26,6 +26,7 @@ the person's own Google Drive, reached with the `drive.appdata` scope only.
 | `library.json` | The library: playlists, song details, bin, who deleted what, cut tracks, settings (songs by fingerprint) |
 | `covers.json` | Its cover pictures by hash |
 | `inv-<phone>.json` | Which song files that phone has, with title and artist |
+| `pro.json` | "This account has Pro": which device bought it, and whether on Play or as a test build's free unlock |
 | `peer-<phone>.json` | "I am open now", and the WebRTC offer or answer |
 | `relay-<to>-<fp>` | A song waiting for phone `<to>`; deleted once it arrives |
 
@@ -59,7 +60,16 @@ from another phone lands in Music/MPTree.
   account.
 - **Device names** come from the model and can be changed on the account
   page (`renameDevice`).
-- **Pro ends:** syncing stops; nothing on the phone changes.
+- **Pro comes with the account.** A device that bought Pro writes `pro.json`;
+  any device signed in to the account has Pro too, also one whose Google Play
+  account is another one. A device without Pro can still sign in ("Have Pro on
+  another device? Sign in", on the Pro page and the account page); if the
+  account has no Pro it is signed out again at once and nothing is written. Pro
+  from the account goes with signing out. A Play build only takes a `pro.json`
+  from Play, not a test build's free unlock. When the device that bought it
+  loses Pro (refunded), it deletes `pro.json`, also while paused.
+- **Pro ends:** syncing stops; nothing on the phone changes. A paused device
+  keeps looking for `pro.json`, so Pro bought on another device reaches it.
 - **Two copies of one song** are not both fetched: same file name and size, or
   same title and artist within 2 s (or with a length not known yet). A song
   that reads back under another fingerprint than it was sent with keeps the

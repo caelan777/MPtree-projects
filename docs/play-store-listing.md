@@ -11,15 +11,15 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 ## Release notes for 1.2.0 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.0.aab`
-(versionCode 33).
+(versionCode 34).
 
 ```
 <en-GB>
-New with Pro: the MPTree account. Sign in with Google on up to three devices and they share one library: playlists, likes and settings. Your songs go from one device to the others by themselves, over wifi. Everything stays in your own Google Drive.
+New with Pro: the MPTree account. Sign in with Google on up to three devices and they share one library: playlists, likes and settings. Your songs go from one device to the others by themselves, over wifi. Everything stays in your own Google Drive. Buy Pro once and every device on your account has it.
 Deleted a song for good? The bin now has a Permanently deleted tab, so you can get it back from your other devices.
 </en-GB>
 <nl-NL>
-Nieuw met Pro: het MPTree-account. Log in met Google op maximaal drie apparaten en ze delen één bibliotheek: afspeellijsten, likes en instellingen. Je nummers gaan vanzelf van het ene apparaat naar de andere, via wifi. Alles blijft in je eigen Google Drive.
+Nieuw met Pro: het MPTree-account. Log in met Google op maximaal drie apparaten en ze delen één bibliotheek: afspeellijsten, likes en instellingen. Je nummers gaan vanzelf van het ene apparaat naar de andere, via wifi. Alles blijft in je eigen Google Drive. Koop Pro één keer en elk apparaat op je account heeft het.
 Een nummer voorgoed verwijderd? In de prullenbak staat nu Permanent verwijderd, zodat je het terughaalt van je andere apparaten.
 </nl-NL>
 ```
@@ -88,7 +88,7 @@ other app icons, and never takes a free feature away. Try it free for a week fir
 With Pro you can also sign in with Google and use MPTree on up to three devices. Your
 playlists, likes and settings are the same on all of them, and your songs go from one
 device to the others by themselves. Everything is kept in your own Google Drive, not
-with us.
+with us. Buy Pro once and every device you sign in on has it.
 
 PRIVATE BY DESIGN
 

@@ -4,9 +4,10 @@ import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
-  useOwnsPro, useTrial, buyPro, restorePro, proPrice, lockProForTesting,
+  useOwnsPro, useAccountPro, useTrial, buyPro, restorePro, proPrice, lockProForTesting,
   startTrial, trialTimeLeft, endTrialForTesting, resetTrialForTesting, PRO_MODE,
 } from "../pro";
+import { useSync } from "../sync/engine";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
 // What Pro is and the one button that buys it. Opened from Settings, and from
@@ -29,12 +30,16 @@ type ProSheetProps = {
   onToast: (msg: string) => void;
   /** Opens a store link. The sideloaded build uses it to point at Play. */
   onOpenStore: () => void;
+  /** Account & sync, to sign in with an account that has Pro already. */
+  onOpenAccount: () => void;
   T: T;
 };
 
-export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
+export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: ProSheetProps) {
   const sh = makeSH(T);
   const owns = useOwnsPro();
+  const viaAccount = useAccountPro();
+  const signedIn = useSync().phase === "on";
   const trial = useTrial();
   const [price, setPrice] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "buy" | "restore">(null);
@@ -85,6 +90,11 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
       </div>
     </>
   );
+  // Bought on another device, perhaps on another Google Play account: signing
+  // in to the MPTree account brings it here.
+  const accountLink = !signedIn && (
+    <button onClick={onOpenAccount} style={link}>{t("Have Pro on another device? Sign in")}</button>
+  );
   const trialTest = PRO_MODE === "free" && (
     trial.state === "live" ? (
       <button onClick={endTrialForTesting} style={link}>{t("End the free week (test build)")}</button>
@@ -114,6 +124,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
             </div>
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
               {owns ? t("You have Pro. Thank you for supporting MPTree.")
+                : viaAccount ? t("You have Pro through your MPTree account.")
                 : trial.state === "live" ? t("Free week: {time} left.", { time: trialTimeLeft(trial.until) })
                 : t("Pay once, keep it forever. No subscription.")}
             </div>
@@ -143,6 +154,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
             ) : (
               <button onClick={onClose} style={sh.saveBtn}>{t("Done")}</button>
             )
+          ) : viaAccount ? (
+            <button onClick={onClose} style={sh.saveBtn}>{t("Done")}</button>
           ) : PRO_MODE === "none" ? (
             <>
               {trialButton}
@@ -150,6 +163,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
                 {t("Pro is sold through Google Play. This copy of MPTree came from the website, so it cannot buy it.")}
               </div>
               <button onClick={onOpenStore} style={sh.saveBtn}>{t("Open Google Play")}</button>
+              {accountLink}
             </>
           ) : (
             <>
@@ -167,6 +181,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, T }: ProSheetProps) {
                   {busy === "restore" ? t("Checking…") : t("Restore purchase")}
                 </button>
               )}
+              {accountLink}
             </>
           )}
         </div>

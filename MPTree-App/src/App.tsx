@@ -4085,6 +4085,7 @@ export default function App() {
             onClose={() => setProOpen(false)}
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
+            onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
             T={TH} />
         )}
 

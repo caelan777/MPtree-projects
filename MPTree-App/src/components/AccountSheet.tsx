@@ -4,6 +4,7 @@ import { makeSH, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
+import { useAccountPro, useTrial } from "../pro";
 import {
   useSync, signIn, signOut, cancelJoin, removeDevice, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles,
   MOBILE_DAILY, type SyncState, type Device, type TestStep,
@@ -50,6 +51,9 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const [busy, setBusy] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
   const [removeReceived, setRemoveReceived] = useState(false);
+  const viaAccount = useAccountPro();
+  const trial = useTrial();
+  const proFromAccount = viaAccount && trial.state !== "live";
   // "Saved 2 minutes ago" keeps moving while the page is open.
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 20_000); return () => clearInterval(id); }, []);
@@ -57,10 +61,13 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const native = Capacitor.getPlatform() !== "web" || import.meta.env.DEV;
 
   const doSignIn = async () => {
+    const had = pro;
     setBusy(true);
     const r = await signIn();
     setBusy(false);
     if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
+    else if (r === "nopro") onToast(t("This account has no MPTree Pro yet. Sign in with the account your device with Pro uses."));
+    else if (r === "ok" && !had) onToast(t("MPTree Pro is on, from your account"));
   };
   const doRemove = async (d: Device) => {
     setBusy(true);
@@ -117,6 +124,9 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       <>
         <div style={{ ...small, textAlign: "center", marginBottom: 12 }}>{t("Part of MPTree Pro.")}</div>
         <button onClick={onOpenPro} style={btn}>{t("Get MPTree Pro")}</button>
+        <button onClick={doSignIn} disabled={busy || s.phase === "joining"} style={{ ...link, opacity: busy ? 0.6 : 1 }}>
+          {busy || s.phase === "joining" ? t("Signing in…") : t("Have Pro on another device? Sign in")}
+        </button>
       </>
     );
   } else if (s.phase === "limit") {
@@ -252,6 +262,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           <div style={{ ...card, marginTop: 0 }}>
             <div style={{ fontSize: 14, color: T.text, lineHeight: 1.5 }}>
               {t("Sign out on this device? Your playlists and songs stay on it. It just stops syncing.")}
+              {proFromAccount && " " + t("MPTree Pro came with your account, so it stops here too.")}
             </div>
             {s.songs.received > 0 && (
               <button onClick={() => setRemoveReceived(!removeReceived)}

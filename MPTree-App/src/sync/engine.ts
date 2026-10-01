@@ -4,7 +4,7 @@ import { App as CapApp } from "@capacitor/app";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Account, Sync, System, MusicScanner } from "../plugins";
 import { collectShared, restoreShared } from "../storage";
-import { hasPro, subscribePro } from "../pro";
+import { hasPro, subscribePro, ownsPro, setAccountPro, PRO_MODE } from "../pro";
 import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
 import { openDrive, type Drive, type DriveFile } from "./drive";
@@ -44,6 +44,8 @@ import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type
 //   inv-<phone>.json      the songs that phone has
 //   peer-<phone>.json     "I am open now", and the WebRTC offer or answer
 //   relay-<to>-<fp>       a song waiting for phone <to>
+//   pro.json              "this account has Pro": written by a device that
+//                         bought it, so every device on the account has Pro
 //
 // Nothing runs while the app is in the background: Android freezes the WebView
 // there, which is fine, because both phones being open is the point.
@@ -52,6 +54,13 @@ const MAX_DEVICES = 3;
 const DEVICES = "devices.json";
 const LIB = "library.json";
 const COVERS = "covers.json";
+const PRO = "pro.json";
+/** Who put Pro in the account. `via` "free" is a test build's free unlock,
+ *  which a Play build does not take. */
+type ProFile = { by: string; at: number; via: "play" | "free" };
+const proVia: ProFile["via"] = PRO_MODE === "play" ? "play" : "free";
+/** Whether this build takes the account's Pro. */
+const takesPro = (p: ProFile | null): p is ProFile => !!p && (PRO_MODE === "free" || p.via === "play");
 const inv = (id: string) => `inv-${id}.json`;
 const peer = (id: string) => `peer-${id}.json`;
 const relayPrefix = (to: string) => `relay-${to}-`;
@@ -377,8 +386,9 @@ async function leaveTwoLibraries() {
 export async function initSync(h: Host): Promise<void> {
   host = h;
   subscribePro(() => { refreshPro(); });
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(1500); });
-  CapApp.addListener("resume", () => kick(1500)).catch(() => {});
+  const back = () => { kick(1500); if (paused()) void checkAccountPro(); };
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") back(); });
+  CapApp.addListener("resume", back).catch(() => {});
   keepChecking();
   if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mptreeSync = {
     state: () => state, run: () => libraryCycle(), signIn: () => signIn(),
@@ -393,6 +403,7 @@ function refreshPro() {
   const paused = !hasPro();
   if (paused !== state.pausedNoPro) set({ pausedNoPro: paused });
   if (!paused) kick(2000);
+  else if (state.phase === "on" && host) void checkAccountPro();
 }
 
 const active = () => accountOn() && !!host && document.visibilityState === "visible";
@@ -401,8 +412,9 @@ const active = () => accountOn() && !!host && document.visibilityState === "visi
 
 let pendingJoin: StoredAccount | null = null;
 
-export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed"> {
-  if (!hasPro()) return "failed";
+/** Signing in needs Pro, on this device or in the account: "nopro" when
+ *  neither has it, and then nothing happened. */
+export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "nopro" | "failed"> {
   set({ phase: "joining", problem: null, removedWhy: undefined });
   try {
     const r = await Account.signIn();
@@ -412,11 +424,24 @@ export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed">
     files = new Map();
     cache.clear();
     const me = await connect().about();
+    if (!hasPro()) {
+      // Bought on another device, maybe with another Google Play account.
+      await listFiles();
+      const note = await readFile<ProFile>(PRO);
+      if (!takesPro(note)) {
+        void Account.signOut({ email: me.email, token: r.token }).catch(() => {});
+        token = null; drive = null; files = new Map(); cache.clear();
+        set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
+        return "nopro";
+      }
+      setAccountPro(true);
+    }
     pendingJoin = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
     set({ account: { email: me.email, name: me.name, photo: me.photo }, deviceId });
     return await nextJoinStep();
   } catch {
     pendingJoin = null;
+    if (!stored) setAccountPro(false);
     set({ phase: "off", problem: "signin" });
     return "failed";
   }
@@ -497,6 +522,7 @@ export function cancelJoin(): void {
   pendingJoin = null;
   void Account.signOut({ email, token: token?.value }).catch(() => {});
   token = null; drive = null; files = new Map(); cache.clear();
+  if (!stored) setAccountPro(false);
   set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
 }
 
@@ -572,6 +598,7 @@ async function leave(removeReceived: boolean): Promise<number> {
   receivedPaths = new Map(); gone = {}; pending = { del: {}, restore: [] }; skip = new Set(); alias = {};
   await Promise.all([saveReceived(), saveGone(), savePending(), saveSkip(), saveAlias()]);
   stored = null; token = null; drive = null; files = new Map(); cache.clear(); doc = null;
+  setAccountPro(false);
   await Preferences.remove({ key: KEY_ACCOUNT }).catch(() => {});
   await Preferences.remove({ key: KEY_BASE }).catch(() => {});
   await Preferences.remove({ key: KEY_DIRTY }).catch(() => {});
@@ -608,7 +635,43 @@ function kick(ms: number) {
 /** A round every minute while the app is open and signed in, so a change made
  *  on another phone shows up here without anyone doing anything. */
 function keepChecking() {
-  everyTimer ??= setInterval(() => { if (active()) void libraryCycle(); }, LIBRARY_EVERY);
+  everyTimer ??= setInterval(() => {
+    if (active()) void libraryCycle();
+    else if (paused()) void checkAccountPro();
+  }, LIBRARY_EVERY);
+}
+
+/** Signed in, but without Pro. */
+const paused = () => state.phase === "on" && state.pausedNoPro && !!host && document.visibilityState === "visible";
+
+/** While paused, looks whether another device has put Pro in the account.
+ *  And the device that put it there takes it out when its own Pro is gone
+ *  (refunded), since without Pro it runs no rounds to do that in. */
+async function checkAccountPro() {
+  if (running || !stored) return;
+  try {
+    await listFiles();
+    const note = await readFile<ProFile>(PRO);
+    if (note?.by === deviceId && !ownsPro()) { await removeFile(PRO).catch(() => {}); return; }
+    if (stored && takesPro(note) && note.by !== deviceId) setAccountPro(true);
+  } catch { /* next time */ }
+}
+
+/** Keeps pro.json right: there while a device that bought Pro is on the
+ *  account, gone when the one that put it there no longer has it (refunded).
+ *  Every other device on the account has Pro while it is there. */
+async function syncPro() {
+  let note = await readFile<ProFile>(PRO);
+  if (ownsPro()) {
+    if (!note || (note.via !== proVia && proVia === "play")) {
+      note = { by: deviceId, at: Date.now(), via: proVia };
+      await writeFile(PRO, note);
+    }
+  } else if (note?.by === deviceId) {
+    await removeFile(PRO).catch(() => {});
+    note = null;
+  }
+  if (stored) setAccountPro(takesPro(note) && note.by !== deviceId);
 }
 
 /** The app calls this whenever something in the library changed. */
@@ -690,6 +753,8 @@ async function libraryCycle(): Promise<void> {
       return;
     }
     set({ devices });
+    await syncPro();
+    if (!accountOn()) return;
     // "Still here", now and then, for "last used" on the other phones.
     const mine = files.get(peer(deviceId));
     if (!mine || Date.now() - Date.parse(mine.modifiedTime) > ALIVE_MS) {
