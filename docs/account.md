@@ -102,6 +102,31 @@ from another phone lands in Music/MPTree.
   makes way; otherwise same-model phones get "(2)". Two files of the same name
   (two phones creating one at once) are folded into one: devices.json lists
   are joined, of anything else the newest stays.
+- **A reinstalled phone and Pro.** The phone that bought Pro wrote `pro.json`,
+  and after a reinstall it has no Pro of its own until Play answers (a test
+  build never gets it back by itself). It does not take the note out for that:
+  only when its Pro is known to be gone (`proLost` in pro.ts: Play said so, or
+  a test build locked it again) or is for another account. Until then it has
+  Pro from its own note, like any other device on the account.
+- **A reinstalled phone and the songs it received.** A song from another
+  phone can read back under another fingerprint than it was sent with
+  (`alias`), and a reinstall forgets which. On its first round the phone
+  looks at what it last told the account it had (`inv-<phone>.json`): a file
+  with the same name and size under another fingerprint is that song
+  (`recallAliases`). Otherwise playlists would come back empty and covers and
+  likes not at all.
+- **A cover whose picture is not here yet** stays in the library. The base
+  remembers which pictures had not arrived (`noPic`), so a song without its
+  picture on this phone is not read as someone taking the cover off.
+- **Android's backup** keeps MPTree's preferences (playlists, covers, likes,
+  names, the bin, settings; `res/xml/backup_rules.xml`), so they come back
+  when MPTree is installed again, also without an account. Android makes that
+  backup about once a day, on wifi, when the phone is idle and its Google
+  backup is on; nothing MPTree can hurry. The restored install starts signed
+  out (`fresh` from `Sync.deviceId`, see `prepareSync`): signing in again
+  joins the account as a new device would.
+- **Settings from the account** show at once, also automatic collapsing and
+  where the collapse button is parked.
 - **Emptied in Drive** (Delete hidden app data): phones stop and say so,
   instead of filling it up again.
 - The screen stays on while a song is moving.

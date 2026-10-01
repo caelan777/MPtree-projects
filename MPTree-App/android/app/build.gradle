@@ -22,8 +22,8 @@ android {
         // to install the update over an existing copy.
         // 1.1.0: 21 on Play, 22 on the website (19 and 20 were the Pro test builds).
         // 23 to 32: Pro test builds 11 to 20, the MPTree account.
-        // 33, 35, 37, 39: Pro test builds 21 to 24. 1.2.0: 40 on Play (34, 36, 38 were earlier 1.2.0 bundles).
-        versionCode 40
+        // 33, 35, 37, 39, 41: Pro test builds 21 to 25. 1.2.0: 40 on Play (34, 36, 38 were earlier 1.2.0 bundles).
+        versionCode 41
         versionName "1.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

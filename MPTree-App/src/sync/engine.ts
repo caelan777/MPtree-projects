@@ -4,12 +4,12 @@ import { App as CapApp } from "@capacitor/app";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Account, Sync, System, MusicScanner } from "../plugins";
 import { collectShared, restoreShared } from "../storage";
-import { hasPro, subscribePro, ownsPro, proIsFor, setAccountPro, PRO_MODE } from "../pro";
+import { hasPro, subscribePro, ownsPro, proIsFor, proLost, setAccountPro, forgetAccountPro, PRO_MODE } from "../pro";
 import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
 import { openDrive, type Drive, type DriveFile } from "./drive";
 import {
-  buildLocal, merge, apply, missingFrom, coverRefs, same, fileOf, songSig, sigsOf, isCopy, namesOf,
+  buildLocal, merge, apply, missingFrom, coverRefs, coverHash, same, fileOf, songSig, sigsOf, isCopy, namesOf, nameSize,
   markDeleted, markRestored, deletedBy,
   type LibDoc, type Applied, type Inventory,
 } from "./model";
@@ -224,7 +224,9 @@ let host: Host | null = null;
 // ── Stored on the phone ───────────────────────────────────────────────────────
 
 type StoredAccount = { email: string; name: string; photo?: string; since: number; mobileData?: boolean };
-type Base = { deviceId: string; email: string; doc: LibDoc; keys: string[]; files: Record<string, string> };
+/** `noPic`: covers the library names whose picture had not reached this
+ *  phone when the base was saved. */
+type Base = { deviceId: string; email: string; doc: LibDoc; keys: string[]; files: Record<string, string>; noPic?: string[] };
 type Pending = { del: Record<string, number>; restore: string[] };
 type GoneInfo = { title: string; artist: string; at: number; restoring?: boolean };
 
@@ -346,7 +348,20 @@ type InvFile = { fps: Inventory; test?: boolean };
 
 /** Before the app reads its library. Called once, first thing. */
 export async function prepareSync(): Promise<void> {
-  deviceId = (await Sync.deviceId().catch(() => ({ id: "" }))).id;
+  const me = await Sync.deviceId().catch(() => ({ id: "", fresh: false }));
+  deviceId = me.id;
+  // A first start that already has settings: Android put them back from its
+  // backup, after a reinstall or on a new phone. The library and the look are
+  // welcome. Being signed in is not: this install never signed in, and what it
+  // remembers of the account (the base it merged against, what came from
+  // which phone) is from some time before. So it starts signed out, and
+  // signing in joins the account the way a new device does.
+  if (me.fresh) {
+    for (const key of [KEY_ACCOUNT, KEY_BASE, KEY_DIRTY, KEY_PENDING, KEY_RECEIVED, KEY_GONE, KEY_SKIP, KEY_ALIAS]) {
+      await Preferences.remove({ key }).catch(() => {});
+    }
+    await forgetAccountPro();
+  }
   stored = await readJson<StoredAccount>(KEY_ACCOUNT);
   await leaveTwoLibraries();
   receivedPaths = new Map(Object.entries(await readJson<Record<string, string>>(KEY_RECEIVED) ?? {}));
@@ -646,13 +661,20 @@ async function checkAccountPro() {
   try {
     await listFiles();
     const note = await readFile<ProFile>(PRO);
-    if (note?.by === deviceId && !(await givesPro())) { await removeFile(PRO).catch(() => {}); return; }
-    if (stored && takesPro(note) && note.by !== deviceId) setAccountPro(true);
+    if (await takeBack(note)) { await removeFile(PRO).catch(() => {}); return; }
+    if (stored && takesPro(note) && (note.by !== deviceId || !ownsPro())) setAccountPro(true);
   } catch { /* next time */ }
 }
 
 /** This device bought Pro, for the account it is signed in to. */
 const givesPro = async () => ownsPro() && !!stored && await proIsFor(stored.email);
+
+/** Whether this device takes out the note it wrote: its Pro is for another
+ *  account, or it is gone (refunded). Not merely missing: a device that was
+ *  reinstalled wrote the note too, has no Pro of its own yet, and gets it
+ *  back from the very note. */
+const takeBack = async (note: ProFile | null) =>
+  note?.by === deviceId && !(await givesPro()) && (ownsPro() || proLost());
 
 /** Keeps pro.json right: there while a device that bought Pro for this
  *  account is on it, gone when the one that put it there no longer has it
@@ -664,11 +686,11 @@ async function syncPro() {
       note = { by: deviceId, at: Date.now(), via: proVia };
       await writeFile(PRO, note);
     }
-  } else if (note?.by === deviceId) {
+  } else if (await takeBack(note)) {
     await removeFile(PRO).catch(() => {});
     note = null;
   }
-  if (stored) setAccountPro(takesPro(note) && note.by !== deviceId);
+  if (stored) setAccountPro(takesPro(note) && (note.by !== deviceId || !ownsPro()));
 }
 
 /** The app calls this whenever something in the library changed. */
@@ -764,9 +786,9 @@ async function libraryCycle(): Promise<void> {
     // ── The songs on this phone ──
     const lib = host.snapshot();
     const scanned = await scanAll();
-    await fingerprint(scanned, lib.removed);
     const base0 = await readJson<Base>(KEY_BASE);
     const base = base0 && base0.deviceId === deviceId && base0.email === stored?.email ? base0 : null;
+    await fingerprint(scanned, lib.removed, !base);
     await noticeVanished(base, scanned);
     buildShared(scanned);
     findDoubles();
@@ -774,6 +796,7 @@ async function libraryCycle(): Promise<void> {
     // ── The library ──
     const settings = await collectShared();
     const local = buildLocal({ ...lib, settings, fpOf: p => fpByPath.get(p) });
+    keepUnseenCovers(local, base);
     const fresh = new Set<string>();
     if (base) { const had = new Set(base.keys); for (const k of local.speaks) if (!had.has(k)) fresh.add(k); }
     const remote = await readFile<LibDoc>(LIB);
@@ -822,6 +845,7 @@ async function libraryCycle(): Promise<void> {
       await writeJson(KEY_BASE, {
         deviceId, email: stored!.email, doc: merged, keys: [...local.speaks],
         files: Object.fromEntries(Object.keys(shared).map(fp => [fp, pathByFp.get(fp) ?? ""])),
+        noPic: [...refs].filter(h => !local.covers.has(h) && !accountCovers?.[h]),
       } satisfies Base);
       pending = { del: {}, restore: [] };
       await savePending();
@@ -847,12 +871,56 @@ async function libraryCycle(): Promise<void> {
   }
 }
 
-async function fingerprint(scanned: Song[], removed: Song[]) {
+/** A cover the library names but whose picture never reached this phone is
+ *  not a cover this phone took off. The song has no picture here, and read
+ *  as it stands that would look like someone removing it, and the account
+ *  would drop the cover for every phone. */
+function keepUnseenCovers(local: ReturnType<typeof buildLocal>, base: Base | null) {
+  if (!base?.noPic?.length) return;
+  const unseen = new Set(base.noPic);
+  for (const [k, r] of Object.entries(base.doc.songs)) {
+    const h = coverHash(r.customPhoto);
+    if (h && unseen.has(h) && local.speaks.has(k) && !local.doc.songs[k]?.customPhoto) {
+      local.doc.songs[k] = { ...(local.doc.songs[k] ?? {}), customPhoto: r.customPhoto };
+    }
+  }
+  for (const [id, p] of Object.entries(base.doc.playlists)) {
+    const h = coverHash(p.cover);
+    const mine = local.doc.playlists[id];
+    if (h && unseen.has(h) && mine && !mine.cover) mine.cover = p.cover;
+  }
+}
+
+/** A song that came from another phone can read back under another
+ *  fingerprint than it was sent with; `alias` remembers which. A reinstall
+ *  forgets that, and then the account's playlists and song details point at
+ *  songs this phone no longer recognises: playlists come back empty, covers
+ *  and likes do not come back at all. What this phone last told the account
+ *  it had is still there, by file name and size, so a file here that matches
+ *  one of those but reads as something else is that song. */
+async function recallAliases(items: { path: string; size: number; fp: string }[]) {
+  const before = (await readFile<InvFile>(inv(deviceId)).catch(() => null))?.fps;
+  if (!before) return;
+  const here = new Set(items.map(i => alias[i.fp] ?? i.fp));
+  const byNameSize = new Map<string, string>();
+  for (const [fp, v] of Object.entries(before)) if (!here.has(fp)) byNameSize.set(nameSize(v), fp);
+  let found = false;
+  for (const it of items) {
+    if (alias[it.fp] || before[it.fp]) continue;
+    const was = byNameSize.get(`${(it.path.split("/").pop() ?? "").toLowerCase()}|${it.size}`);
+    if (was) { alias[it.fp] = was; found = true; }
+  }
+  if (found) await saveAlias();
+}
+
+/** `recall`: this phone has no base, so it may be back from a reinstall. */
+async function fingerprint(scanned: Song[], removed: Song[], recall = false) {
   const byPath = new Map<string, Song>();
   for (const s of scanned) byPath.set(s.uri, s);
   // A cut track's file is its source; it has to be known for the cut's key.
   for (const s of removed) if (!byPath.has(s.uri)) byPath.set(s.uri, s);
   const { items } = await Sync.fingerprints({ paths: [...byPath.keys()] });
+  if (recall) await recallAliases(items);
   fpByPath = new Map();
   pathByFp = new Map();
   myInv = {};

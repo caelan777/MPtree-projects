@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What Android's own backup keeps of MPTree (Android 11 and older; newer
+    ones read data_extraction_rules.xml, which says the same).
+
+    Only the preferences: playlists, covers, likes, names, lyrics, the bin and
+    the settings. That is everything a person set up, and it is what comes back
+    when MPTree is installed again or on a new phone.
+
+    Naming it leaves everything else out, on purpose. The WebView's own folder
+    and anything else under files/ would count against the 25 MB a backup may
+    be, and going over that means no backup at all.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="CapacitorStorage.xml" />
+</full-backup-content>

@@ -187,6 +187,9 @@ export default function App() {
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
+  // The height of a song row (it follows the Size setting), for the effect
+  // that scrolls to the playing song by counting rows.
+  const rowHRef = useRef(64);
 
   // ── Floating header geometry ───────────────────────────────────────────────
   // Everything the folding header needs, measured in one pass so no consumer can
@@ -358,22 +361,55 @@ export default function App() {
   const [autoCollapse, setAutoCollapse] = useState(true);
   const autoCollapseRef = useRef(true);
   useEffect(() => { autoCollapseRef.current = autoCollapse; }, [autoCollapse]);
-  useEffect(() => {
+  // Read at start, and again when the account brings its settings in.
+  const loadAutoCollapse = useCallback(() => {
     Preferences.get({ key: "mptree_auto_collapse" })
-      .then(({ value }) => { if (value === "0") { setAutoCollapse(false); autoCollapseRef.current = false; } })
+      .then(({ value }) => { const on = value !== "0"; setAutoCollapse(on); autoCollapseRef.current = on; })
       .catch(() => {});
   }, []);
+  useEffect(() => { loadAutoCollapse(); }, [loadAutoCollapse]);
+  // The same for where the collapse button is parked, which is set up further down.
+  const loadLogoPosRef = useRef<() => void>(() => {});
   const CHROME_COLLAPSE_AT = 80;
   // Scrolls the app performs itself (jumping to the playing track, the
   // scroll-to-top button) must not be mistaken for the user dragging the list.
   // Smooth scrolling has no completion event, so the flag is simply held for
   // comfortably longer than the animation lasts.
-  const programmaticScrollRef   = useRef(false);
-  const programmaticScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmaticUntil = useRef(0);
+  const programmaticCap   = useRef(0);
   const beginProgrammaticScroll = useCallback(() => {
-    programmaticScrollRef.current = true;
-    if (programmaticScrollTimer.current) clearTimeout(programmaticScrollTimer.current);
-    programmaticScrollTimer.current = setTimeout(() => { programmaticScrollRef.current = false; }, 800);
+    const now = Date.now();
+    programmaticUntil.current = now + 800;
+    programmaticCap.current   = now + 3000;
+  }, []);
+  // A smooth scroll across a long list (shuffle jumps anywhere) outlasts any
+  // fixed wait, and its last events used to fold the header and the player
+  // away right after the tap that had opened them. So while the app's own
+  // scroll is still producing events, it is still the app's scroll.
+  const programmaticScrolling = () => {
+    const now = Date.now();
+    if (now >= programmaticUntil.current) return false;
+    programmaticUntil.current = Math.min(programmaticCap.current, Math.max(programmaticUntil.current, now + 250));
+    return true;
+  };
+  // A scroll the app starts, kept until it has arrived. Unfolding the header
+  // moves the list's scroll position in the same frame (see the fold's layout
+  // effect), and setting scrollTop stops a smooth scroll dead: the scroll-to-top
+  // button only unfolded the header and had to be pressed again, and the jump
+  // to the playing song stopped short of it. The fold starts it again from here.
+  const pendingScroll      = useRef<null | (() => void)>(null);
+  const pendingScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollAndHold = useCallback((go: () => void) => {
+    pendingScroll.current = go;
+    if (pendingScrollTimer.current) clearTimeout(pendingScrollTimer.current);
+    pendingScrollTimer.current = setTimeout(() => { pendingScroll.current = null; }, 900);
+    go();
+  }, []);
+  // A finger on the screen takes over: from there on a scroll is the user's.
+  useEffect(() => {
+    const takeOver = () => { programmaticUntil.current = 0; pendingScroll.current = null; };
+    window.addEventListener("touchstart", takeOver, { passive: true, capture: true });
+    return () => window.removeEventListener("touchstart", takeOver, { capture: true });
   }, []);
 
   // Bring the chrome back. Playing something — tapping a song, hitting shuffle
@@ -1094,7 +1130,7 @@ export default function App() {
     // can settle and emit scroll events before this effect's timer fires, and
     // any of those arriving unguarded would fold the header away.
     beginProgrammaticScroll();
-    const t = setTimeout(() => {
+    const t = setTimeout(() => scrollAndHold(() => {
       // Re-armed so the window covers the smooth scroll that starts now.
       beginProgrammaticScroll();
       const el = songRowRefs.current.get(currentSong.id);
@@ -1103,12 +1139,12 @@ export default function App() {
         return;
       }
       // Virtualized: the target row isn't mounted, so scroll by computed offset
-      // (uniform 64px rows + the pull spacer height, centered in the viewport).
+      // (uniform rows + the pull spacer height, centered in the viewport).
       const list = displayListRef.current;
       const idx = list.findIndex(s => s.id === currentSong.id);
       const cont = scrollRef.current;
       if (idx < 0 || !cont) return;
-      const ROW = 64;
+      const ROW = rowHRef.current;
       // Rows start below the floating header's padding, so that has to be added
       // in. Read off the scroller rather than closed over: this effect is keyed
       // on [currentSong] alone, so a captured value would be whatever the inset
@@ -1117,7 +1153,7 @@ export default function App() {
       const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
       const target = Math.max(0, pad + idx * ROW - cont.clientHeight / 2 + ROW / 2);
       cont.scrollTo({ top: target, behavior: "smooth" });
-    }, 120);
+    }), 120);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
@@ -1936,6 +1972,8 @@ export default function App() {
     },
     settings: async () => {
       await loadPrefs();
+      loadAutoCollapse();
+      loadLogoPosRef.current();
       const session = await loadSession();
       if (session.filter) setFilter(session.filter);
       if (session.playMode) setPlayMode(session.playMode);
@@ -1966,7 +2004,7 @@ export default function App() {
   useEffect(() => {
     if (syncStarted.current) syncChanged();
   }, [songs, removedSongs, meta, playlists, theme, uiSize, langPref, updateNotices, mixOthers, duckOthers, look,
-      filter, playMode, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels]);
+      filter, playMode, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
 
   // ── Hooks ─────────────────────────────────────────────────────────────────
   // Stale-safe restore: uses functional setState so it works correctly even
@@ -2620,9 +2658,12 @@ export default function App() {
     const el = scrollRef.current;
     const delta = songsInset - prevSongsInset.current;
     prevSongsInset.current = songsInset;
-    if (!el || !delta || el.scrollTop <= 0) return;
-    beginProgrammaticScroll();
-    el.scrollTop += delta;
+    if (!el || !delta) return;
+    if (el.scrollTop > 0) {
+      beginProgrammaticScroll();
+      el.scrollTop += delta;
+    }
+    pendingScroll.current?.();
   }, [songsInset, beginProgrammaticScroll]);
   // How far the list's top moves when the card folds, per tab.
   const foldGap = (from: "songs" | "playlists") =>
@@ -2650,7 +2691,7 @@ export default function App() {
     lastRef.current = top;
     // A scroll the app started (jumping to the playing track after shuffle or
     // skip) is not the user asking for more list room.
-    if (programmaticScrollRef.current) return;
+    if (programmaticScrolling()) return;
     // With automatic collapsing off, scrolling never touches the chrome at all,
     // not even to restore it at the top.
     if (!autoCollapseRef.current) return;
@@ -2741,20 +2782,26 @@ export default function App() {
   const [logoDrag, setLogoDrag] = useState<{ x: number; y: number } | null>(null);
   const [overRemove, setOverRemove] = useState(false);
   useEffect(() => { logoParkedRef.current = logoPos !== null; }, [logoPos]);
+  // Where the button is parked is one of the settings the account keeps.
+  useEffect(() => { if (syncStarted.current) syncChanged(); }, [logoPos]);
   // Which button the options panel was opened from. With the button parked and
   // the header open there are two logos on screen, and the panel belongs next
   // to the one you held.
   const [menuFromBall, setMenuFromBall] = useState(false);
   useEffect(() => {
-    Preferences.get({ key: "mptree_logo_pos" })
-      .then(({ value }) => {
-        if (!value) return;
-        const p = JSON.parse(value) as { fx?: unknown; fy?: unknown };
-        if (typeof p.fx === "number" && typeof p.fy === "number") {
-          setLogoPos({ fx: Math.min(1, Math.max(0, p.fx)), fy: Math.min(1, Math.max(0, p.fy)) });
-        }
-      })
-      .catch(() => {});
+    const load = () => {
+      Preferences.get({ key: "mptree_logo_pos" })
+        .then(({ value }) => {
+          if (!value) return;
+          const p = JSON.parse(value) as { fx?: unknown; fy?: unknown };
+          if (typeof p.fx === "number" && typeof p.fy === "number") {
+            setLogoPos({ fx: Math.min(1, Math.max(0, p.fx)), fy: Math.min(1, Math.max(0, p.fy)) });
+          }
+        })
+        .catch(() => {});
+    };
+    loadLogoPosRef.current = load;
+    load();
   }, []);
 
   const bandMinX = HOME_X;
@@ -2975,6 +3022,7 @@ export default function App() {
   // row actually had 10px padding and came out at 68px, so every row the
   // virtual window skipped was 4px short and the list shuffled as it scrolled.
   const ROW_H = SIZE_TABLE[uiSize].row;
+  rowHRef.current = ROW_H;
   const ART   = ROW_H - 20;       // 10px above and below
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
@@ -3759,8 +3807,10 @@ export default function App() {
                     chromeManualRef.current = null;
                     setChromeOpen(true);
                   }
-                  beginProgrammaticScroll();
-                  scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                  scrollAndHold(() => {
+                    beginProgrammaticScroll();
+                    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                  });
                   if (auto) window.setTimeout(() => setChromeAnimate(true), 600);
                 }}
                 aria-label={t("Scroll to top")}
@@ -4108,9 +4158,10 @@ export default function App() {
             onSetUpdateNotices={changeUpdateNotices}
             songCount={songs.length}
             onEnter={() => setWelcome("entering")}
-            // A beat with the library on its own before the tour starts talking
-            // over it: straight after the opening it read as one rushed motion.
-            onEntered={() => { setWelcome(null); startTutorial(900); }}
+            // A short beat with the library on its own before the tour starts
+            // talking over it. It was 900 ms, long enough to start tapping
+            // around before the tour arrived.
+            onEntered={() => { setWelcome(null); startTutorial(300); }}
             T={TH}
           />
         )}

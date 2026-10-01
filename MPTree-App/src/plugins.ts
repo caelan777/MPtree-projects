@@ -122,7 +122,8 @@ export type AccountPlugin = {
 /** Files for the MPTree account: fingerprints, and songs moving in and out.
  *  See SyncPlugin.java. Chunks are base64. */
 export type SyncPlugin = {
-  deviceId(): Promise<{ id: string }>;
+  /** `fresh`: the first start of this install. */
+  deviceId(): Promise<{ id: string; fresh?: boolean }>;
   network(): Promise<{ online: boolean; unmetered: boolean }>;
   /** Bytes free where songs go; -1 when unknown. */
   freeSpace(): Promise<{ bytes: number }>;

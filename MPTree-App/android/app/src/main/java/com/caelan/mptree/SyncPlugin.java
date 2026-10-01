@@ -78,7 +78,11 @@ public class SyncPlugin extends Plugin {
         try {
             File f = new File(getContext().getNoBackupFilesDir(), "mptree-device-id");
             String id = null;
-            if (f.exists()) id = new String(readAll(new FileInputStream(f)), StandardCharsets.UTF_8).trim();
+            // No file yet: the first start of this install. Android's backup
+            // never brings the file along, so on a reinstall or a new phone
+            // that got MPTree's settings back it is the one thing still missing.
+            boolean fresh = !f.exists();
+            if (!fresh) id = new String(readAll(new FileInputStream(f)), StandardCharsets.UTF_8).trim();
             if (id == null || id.isEmpty()) {
                 String android = Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID);
                 id = android != null && android.length() >= 8
@@ -88,6 +92,7 @@ public class SyncPlugin extends Plugin {
             }
             JSObject r = new JSObject();
             r.put("id", id);
+            r.put("fresh", fresh);
             call.resolve(r);
         } catch (Exception e) {
             call.reject("No device id: " + e.getMessage());

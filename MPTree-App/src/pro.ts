@@ -128,6 +128,11 @@ export function setAccountPro(on: boolean): void {
   }
   emit();
 }
+/** Pro from an account this install is not signed in to (see prepareSync). */
+export async function forgetAccountPro(): Promise<void> {
+  await Preferences.remove({ key: ACCOUNT_KEY }).catch(() => {});
+  setAccountPro(false);
+}
 /** For code outside React that needs to know when Pro comes or goes. */
 export const subscribePro = subscribe;
 
@@ -138,10 +143,25 @@ function dropProLook() {
   System.setAppIcon({ icon: "classic" }).catch(() => {});
 }
 
+/** This device had Pro of its own and it went: refunded on Play, or locked
+ *  again in a test build. Remembered, because it is what tells a device that
+ *  lost Pro from one that was reinstalled and has not heard from Play yet. */
+const LOST_KEY = "mptree_pro_lost";
+let lost = false;
+export function proLost(): boolean { return lost; }
+function setLost(next: boolean) {
+  if (next === lost) return;
+  lost = next;
+  if (next) Preferences.set({ key: LOST_KEY, value: "1" }).catch(() => {});
+  else Preferences.remove({ key: LOST_KEY }).catch(() => {});
+}
+
 function setOwned(next: boolean, via: Stored["via"], tag: string | null = null) {
   const was = owned;
   owned = next;
   ownedTag = next ? tag : null;
+  // Play's word is final either way; a test build only knows what it saw.
+  setLost(!next && (via === "play" || was || lost));
   if (next) {
     Preferences.set({ key: KEY, value: JSON.stringify({ owned: true, via, since: Date.now(), tag } satisfies Stored) }).catch(() => {});
   } else {
@@ -234,6 +254,7 @@ export async function loadPro(): Promise<void> {
     // installed on top of it, and the other way round.
     if (s?.owned && s.via === (PRO_MODE === "play" ? "play" : "free")) { owned = true; ownedTag = s.tag ?? null; emit(); }
   } catch { /* nothing stored */ }
+  try { lost = !owned && (await Preferences.get({ key: LOST_KEY })).value === "1"; } catch { /* nothing stored */ }
   try {
     if ((await Preferences.get({ key: ACCOUNT_KEY })).value === "1") { fromAccount = true; emit(); }
   } catch { /* nothing stored */ }
