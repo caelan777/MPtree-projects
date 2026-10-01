@@ -60,12 +60,14 @@ from another phone lands in Music/MPTree.
   account.
 - **Device names** come from the model and can be changed on the account
   page (`renameDevice`).
+- **Sign in first, then buy.** On a phone (not in the browser demo) the Pro
+  page asks to sign in before it offers the purchase: "Sign in to get Pro".
+  Signing in needs no Pro. An account that has Pro gives it to the device
+  straight away; otherwise the device is signed in, paused, and the Pro page
+  shows the buy button. The free week and Restore purchase need no account.
 - **Pro comes with the account.** A device that bought Pro writes `pro.json`;
   any device signed in to the account has Pro too, also one whose Google Play
-  account is another one. A device without Pro can still sign in ("Have Pro on
-  another device? Sign in", on the Pro page and the account page); if the
-  account has no Pro it is signed out again at once and nothing is written. Pro
-  from the account goes with signing out. A Play build only takes a `pro.json`
+  account is another one. Pro from the account goes with signing out. A Play build only takes a `pro.json`
   from Play, not a test build's free unlock. When the device that bought it
   loses Pro (refunded), it deletes `pro.json`, also while paused.
 - **Pro ends:** syncing stops; nothing on the phone changes. A paused device

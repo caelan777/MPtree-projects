@@ -11,7 +11,7 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 ## Release notes for 1.2.0 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.0.aab`
-(versionCode 34).
+(versionCode 36).
 
 ```
 <en-GB>
@@ -180,8 +180,8 @@ Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
 - Ads: **No, this app does not contain ads.**
 - App access: **All functionality is available without special access.** Nothing needs a
   login of ours. Pro is a purchase, and it can be tried free for a week from Settings,
-  then MPTree Pro. The MPTree account (Settings, Account & sync, with Pro or the free
-  week) signs in with the reviewer's own Google account, so no test credentials are
+  then MPTree Pro. Buying Pro starts with signing in with Google (the reviewer's own
+  account, it is the MPTree account that keeps Pro), so no test credentials are
   needed. Granting the audio permission on first launch reveals the full library.
 - Content ratings: complete the questionnaire above.
 - Target audience and content: choose the age groups you want. MPTree is fine for all

@@ -4,7 +4,7 @@ import { makeSH, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
-import { useAccountPro, useTrial } from "../pro";
+import { useAccountPro, useTrial, hasPro } from "../pro";
 import {
   useSync, signIn, signOut, cancelJoin, removeDevice, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles,
   MOBILE_DAILY, type SyncState, type Device, type TestStep,
@@ -66,8 +66,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     const r = await signIn();
     setBusy(false);
     if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
-    else if (r === "nopro") onToast(t("This account has no MPTree Pro yet. Sign in with the account your device with Pro uses."));
-    else if (r === "ok" && !had) onToast(t("MPTree Pro is on, from your account"));
+    else if (r === "ok" && !had && hasPro()) onToast(t("MPTree Pro is on, from your account"));
   };
   const doRemove = async (d: Device) => {
     setBusy(true);
@@ -118,17 +117,6 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   if (!native) {
     body = intro;
     bottom = <div style={{ ...small, textAlign: "center" }}>{t("Sign in with Google in the MPTree app on your phone.")}</div>;
-  } else if (!pro && s.phase !== "on") {
-    body = intro;
-    bottom = (
-      <>
-        <div style={{ ...small, textAlign: "center", marginBottom: 12 }}>{t("Part of MPTree Pro.")}</div>
-        <button onClick={onOpenPro} style={btn}>{t("Get MPTree Pro")}</button>
-        <button onClick={doSignIn} disabled={busy || s.phase === "joining"} style={{ ...link, opacity: busy ? 0.6 : 1 }}>
-          {busy || s.phase === "joining" ? t("Signing in…") : t("Have Pro on another device? Sign in")}
-        </button>
-      </>
-    );
   } else if (s.phase === "limit") {
     body = (
       <div style={{ ...card, marginTop: 0 }}>
@@ -291,7 +279,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           <GoogleG />{busy || s.phase === "joining" ? t("Signing in…") : t("Sign in with Google")}
         </button>
         <div style={{ ...small, textAlign: "center", marginTop: 8 }}>
-          {t("MPTree only gets its own hidden folder in your Google Drive.")}
+          {pro ? t("MPTree only gets its own hidden folder in your Google Drive.")
+            : t("Part of MPTree Pro. Sign in first: if your account has Pro, this device has it too.")}
         </div>
       </>
     );
@@ -407,7 +396,7 @@ function DeviceList({ devices, me, onRemove, busy, T }: {
 /** Google's G, in its own colours on a white disc: Google's sign-in rules ask
  *  for the standard G, and the disc keeps it tidy on a black button. The only
  *  colour on the page, and it is Google's, not ours. */
-function GoogleG() {
+export function GoogleG() {
   return (
     <span style={{ width: 22, height: 22, borderRadius: 11, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
       <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true">

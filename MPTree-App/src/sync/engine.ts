@@ -412,9 +412,10 @@ const active = () => accountOn() && !!host && document.visibilityState === "visi
 
 let pendingJoin: StoredAccount | null = null;
 
-/** Signing in needs Pro, on this device or in the account: "nopro" when
- *  neither has it, and then nothing happened. */
-export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "nopro" | "failed"> {
+/** Signing in comes first, before buying Pro: the account is where Pro is
+ *  kept. An account that has Pro already gives it to this device; without
+ *  it the device is signed in and paused until Pro is bought. */
+export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed"> {
   set({ phase: "joining", problem: null, removedWhy: undefined });
   try {
     const r = await Account.signIn();
@@ -427,14 +428,7 @@ export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "nopro" |
     if (!hasPro()) {
       // Bought on another device, maybe with another Google Play account.
       await listFiles();
-      const note = await readFile<ProFile>(PRO);
-      if (!takesPro(note)) {
-        void Account.signOut({ email: me.email, token: r.token }).catch(() => {});
-        token = null; drive = null; files = new Map(); cache.clear();
-        set({ ...initial, deviceId, pausedNoPro: state.pausedNoPro });
-        return "nopro";
-      }
-      setAccountPro(true);
+      if (takesPro(await readFile<ProFile>(PRO))) setAccountPro(true);
     }
     pendingJoin = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
     set({ account: { email: me.email, name: me.name, photo: me.photo }, deviceId });

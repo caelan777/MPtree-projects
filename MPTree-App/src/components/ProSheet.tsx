@@ -1,13 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Capacitor } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
   useOwnsPro, useAccountPro, useTrial, buyPro, restorePro, proPrice, lockProForTesting,
-  startTrial, trialTimeLeft, endTrialForTesting, resetTrialForTesting, PRO_MODE,
+  startTrial, trialTimeLeft, endTrialForTesting, resetTrialForTesting, PRO_MODE, hasPro,
 } from "../pro";
-import { useSync } from "../sync/engine";
+import { useSync, signIn } from "../sync/engine";
+import { GoogleG } from "./AccountSheet";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
 // What Pro is and the one button that buys it. Opened from Settings, and from
@@ -30,7 +32,7 @@ type ProSheetProps = {
   onToast: (msg: string) => void;
   /** Opens a store link. The sideloaded build uses it to point at Play. */
   onOpenStore: () => void;
-  /** Account & sync, to sign in with an account that has Pro already. */
+  /** Account & sync, for when the account is on three devices already. */
   onOpenAccount: () => void;
   T: T;
 };
@@ -39,10 +41,14 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const sh = makeSH(T);
   const owns = useOwnsPro();
   const viaAccount = useAccountPro();
-  const signedIn = useSync().phase === "on";
+  const phase = useSync().phase;
   const trial = useTrial();
   const [price, setPrice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "buy" | "restore">(null);
+  const [busy, setBusy] = useState<null | "buy" | "restore" | "signin">(null);
+  // Pro is kept in the MPTree account, so buying starts with signing in. Not
+  // in a browser, where there is no signing in (the demo buys straight away).
+  const needSignIn = phase !== "on" && (Capacitor.getPlatform() !== "web" || import.meta.env.DEV);
+  const joining = busy === "signin" || phase === "joining";
 
   useEffect(() => {
     let live = true;
@@ -58,6 +64,22 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     else if (r === "pending") onToast(t("Payment pending. Pro unlocks as soon as it goes through."));
     else if (r === "failed") onToast(t("Google Play could not be reached. Try again in a moment."));
   };
+  const join = async () => {
+    setBusy("signin");
+    const r = await signIn();
+    setBusy(null);
+    if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
+    // Three devices on the account already: the account page lets one go.
+    else if (r === "limit") onOpenAccount();
+    else if (r === "ok" && hasPro()) onToast(t("MPTree Pro is on, from your account"));
+    else if (r === "ok" && PRO_MODE === "none") onToast(t("This account has no MPTree Pro yet."));
+  };
+  const signInButton = (label: string) => (
+    <button onClick={join} disabled={busy !== null || joining}
+      style={{ ...sh.saveBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: joining ? 0.7 : 1 }}>
+      <GoogleG />{joining ? t("Signing in…") : label}
+    </button>
+  );
   const restore = async () => {
     setBusy("restore");
     const r = await restorePro();
@@ -89,11 +111,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
         {t("No payment. It stops by itself after the week.")}
       </div>
     </>
-  );
-  // Bought on another device, perhaps on another Google Play account: signing
-  // in to the MPTree account brings it here.
-  const accountLink = !signedIn && (
-    <button onClick={onOpenAccount} style={link}>{t("Have Pro on another device? Sign in")}</button>
   );
   const trialTest = PRO_MODE === "free" && (
     trial.state === "live" ? (
@@ -163,7 +180,20 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
                 {t("Pro is sold through Google Play. This copy of MPTree came from the website, so it cannot buy it.")}
               </div>
               <button onClick={onOpenStore} style={sh.saveBtn}>{t("Open Google Play")}</button>
-              {accountLink}
+              {needSignIn && (
+                <button onClick={join} disabled={busy !== null || joining} style={link}>
+                  {joining ? t("Signing in…") : t("Have Pro on another device? Sign in")}
+                </button>
+              )}
+            </>
+          ) : needSignIn ? (
+            <>
+              {signInButton(t("Sign in to get Pro"))}
+              <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7, lineHeight: 1.45 }}>
+                {t("Pro is kept in your MPTree account, so every device you sign in on has it.")}
+              </div>
+              {trialButton}
+              {trialTest}
             </>
           ) : (
             <>
@@ -181,7 +211,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
                   {busy === "restore" ? t("Checking…") : t("Restore purchase")}
                 </button>
               )}
-              {accountLink}
             </>
           )}
         </div>
