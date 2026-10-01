@@ -1,9 +1,13 @@
 package com.caelan.mptree;
 
 import android.accounts.Account;
+import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.content.Intent;
+import android.os.Build;
 
+import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.IntentSenderRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -32,8 +36,11 @@ import java.util.List;
  * drive.appdata scope, and what comes back is a short-lived access token that
  * src/sync uses to talk to Drive directly.
  *
- * Google Play services does the account picker and the consent screen, and
- * remembers the grant: after the first time a token comes back without any UI.
+ * Signing in starts with Android's own account chooser, so another Google
+ * account can be picked (or added) each time; left to itself, Google Play
+ * services would quietly take the account used last. Then Play services shows
+ * the consent screen once per account and remembers the grant: after the
+ * first time a token comes back without any UI.
  * Which app is asking is known from the package name and signing certificate,
  * which is why the OAuth client in Google Cloud lists both signing keys.
  */
@@ -44,7 +51,8 @@ public class AccountPlugin extends Plugin {
     private static final List<Scope> SCOPES = Collections.singletonList(new Scope(DRIVE_APPDATA));
 
     private ActivityResultLauncher<IntentSenderRequest> consent;
-    /** The signIn() call waiting for the account picker to finish. */
+    private ActivityResultLauncher<Intent> chooser;
+    /** The signIn() call waiting for the account chooser or consent screen. */
     private PluginCall pending;
 
     @Override
@@ -68,6 +76,32 @@ public class AccountPlugin extends Plugin {
                         call.reject("Sign-in failed: " + e.getMessage(), "AUTH_FAILED");
                     }
                 });
+        chooser = getActivity().registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), this::chosen);
+    }
+
+    /** The account chooser closed: on to the consent screen for that account. */
+    private void chosen(ActivityResult res) {
+        PluginCall call = pending;
+        pending = null;
+        if (call == null) return;
+        Intent data = res.getData();
+        String name = data == null ? null : data.getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
+        if (res.getResultCode() != Activity.RESULT_OK || name == null) {
+            JSObject r = new JSObject();
+            r.put("cancelled", true);
+            call.resolve(r);
+            return;
+        }
+        authorize(call, new Account(name, "com.google"), true);
+    }
+
+    @SuppressWarnings("deprecation")
+    private Intent chooserIntent() {
+        String[] types = { "com.google" };
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? AccountManager.newChooseAccountIntent(null, null, types, null, null, null, null)
+                : AccountManager.newChooseAccountIntent(null, null, types, true, null, null, null, null);
     }
 
     private AuthorizationClient client() {
@@ -86,9 +120,8 @@ public class AccountPlugin extends Plugin {
         call.resolve(r);
     }
 
-    private void authorize(PluginCall call, boolean interactive) {
+    private void authorize(PluginCall call, Account acc, boolean interactive) {
         AuthorizationRequest.Builder req = AuthorizationRequest.builder().setRequestedScopes(SCOPES);
-        Account acc = account(call.getString("email"));
         if (acc != null) req.setAccount(acc);
         client().authorize(req.build())
                 .addOnSuccessListener(result -> {
@@ -102,16 +135,25 @@ public class AccountPlugin extends Plugin {
                 .addOnFailureListener(e -> call.reject("Sign-in failed: " + e.getMessage(), "AUTH_FAILED"));
     }
 
-    /** Shows Google's account picker and consent screen when needed. Resolves
-     *  { token } or { cancelled: true }. */
+    /** Shows the account chooser, then Google's consent screen when needed.
+     *  Resolves { token } or { cancelled: true }. */
     @PluginMethod
-    public void signIn(PluginCall call) { authorize(call, true); }
+    public void signIn(PluginCall call) {
+        pending = call;
+        try {
+            chooser.launch(chooserIntent());
+        } catch (Exception e) {
+            // No chooser on this device: Play services picks, as before.
+            pending = null;
+            authorize(call, null, true);
+        }
+    }
 
     /** A fresh token without any UI, for the account signed in with. Rejects
      *  with NEEDS_SIGN_IN when the grant is gone (revoked from the Google
      *  account page, for one). */
     @PluginMethod
-    public void getToken(PluginCall call) { authorize(call, false); }
+    public void getToken(PluginCall call) { authorize(call, account(call.getString("email")), false); }
 
     /** Forgets a token Drive refused, so the next getToken fetches a new one. */
     @PluginMethod
