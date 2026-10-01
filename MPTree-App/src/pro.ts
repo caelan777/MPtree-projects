@@ -26,7 +26,9 @@ import { t } from "./i18n";
 // Pro also comes with the MPTree account: a device that bought it says so in
 // the account (see sync/engine.ts), and any device signed in to that account
 // has Pro too, for as long as it stays signed in. So Pro bought on one Google
-// Play account reaches a device that uses another one.
+// Play account reaches a device that uses another one. A purchase belongs to
+// one MPTree account: the one signed in when it was bought (Play keeps a tag
+// for it), so signing in to other accounts does not hand Pro to those too.
 //
 // Every build also has a free week: all of Pro for seven days, once, started
 // from the Pro page. No payment details are asked, so nothing is ever charged;
@@ -40,7 +42,8 @@ export const PRO_MODE: ProMode =
   : __PRO_TEST__ || __DISTRIBUTION__ === "demo" ? "free"
   : "none";
 
-type Stored = { owned: boolean; via: "play" | "free"; since: number };
+/** `tag`: the MPTree account the purchase belongs to (see accountTag). */
+type Stored = { owned: boolean; via: "play" | "free"; since: number; tag?: string | null };
 const KEY = "mptree_pro";
 
 /** The free week: not started, running until `until`, or over. `notice` is
@@ -51,6 +54,9 @@ export type Trial =
   | { state: "over"; notice: boolean };
 
 let owned = false;
+/** Which MPTree account the Pro bought here belongs to; null when Play has
+ *  no tag for it (bought before tags existed). */
+let ownedTag: string | null = null;
 /** Pro from the MPTree account this device is signed in to. */
 let fromAccount = false;
 let trial: Trial = { state: "unused" };
@@ -83,6 +89,32 @@ export function ownsPro(): boolean { return owned; }
 /** Pro only because the signed in account has it. */
 export function proFromAccountOnly(): boolean { return fromAccount && !owned && trial.state !== "live"; }
 
+/** An MPTree account, as Play keeps it with a purchase: a hash, so the
+ *  email itself never goes to Play. */
+export async function accountTag(email: string): Promise<string> {
+  const bytes = new TextEncoder().encode("mptree:" + email.trim().toLowerCase());
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** The account a purchase without a tag went to first. Kept on the device. */
+const BOUND_KEY = "mptree_pro_bound";
+
+/** Whether the Pro bought on this device is for the account `email`, and so
+ *  may be put in it for its other devices. A purchase from before tags goes
+ *  to the first account it is used with. */
+export async function proIsFor(email: string): Promise<boolean> {
+  if (!owned) return false;
+  const tag = await accountTag(email);
+  if (ownedTag) return ownedTag === tag;
+  try {
+    const { value } = await Preferences.get({ key: BOUND_KEY });
+    if (value) return value === tag;
+    await Preferences.set({ key: BOUND_KEY, value: tag });
+    return true;
+  } catch { return false; }
+}
+
 const ACCOUNT_KEY = "mptree_pro_account";
 /** The engine says whether the account this device is signed in to has Pro.
  *  Remembered, so it holds with no internet. */
@@ -106,11 +138,12 @@ function dropProLook() {
   System.setAppIcon({ icon: "classic" }).catch(() => {});
 }
 
-function setOwned(next: boolean, via: Stored["via"]) {
+function setOwned(next: boolean, via: Stored["via"], tag: string | null = null) {
   const was = owned;
   owned = next;
+  ownedTag = next ? tag : null;
   if (next) {
-    Preferences.set({ key: KEY, value: JSON.stringify({ owned: true, via, since: Date.now() } satisfies Stored) }).catch(() => {});
+    Preferences.set({ key: KEY, value: JSON.stringify({ owned: true, via, since: Date.now(), tag } satisfies Stored) }).catch(() => {});
   } else {
     Preferences.remove({ key: KEY }).catch(() => {});
     if (was && !fromAccount && trial.state !== "live") dropProLook();
@@ -199,7 +232,7 @@ export async function loadPro(): Promise<void> {
     const s = value ? (JSON.parse(value) as Stored) : null;
     // A "free" unlock from a test build does not carry over into a Play build
     // installed on top of it, and the other way round.
-    if (s?.owned && s.via === (PRO_MODE === "play" ? "play" : "free")) { owned = true; emit(); }
+    if (s?.owned && s.via === (PRO_MODE === "play" ? "play" : "free")) { owned = true; ownedTag = s.tag ?? null; emit(); }
   } catch { /* nothing stored */ }
   try {
     if ((await Preferences.get({ key: ACCOUNT_KEY })).value === "1") { fromAccount = true; emit(); }
@@ -223,12 +256,20 @@ export async function loadPro(): Promise<void> {
 
 export type BuyResult = "owned" | "pending" | "cancelled" | "failed";
 
-export async function buyPro(): Promise<BuyResult> {
-  if (PRO_MODE === "free") { setOwned(true, "free"); return "owned"; }
+/** `email`: the MPTree account signed in, which the purchase belongs to. */
+export async function buyPro(email?: string): Promise<BuyResult> {
+  const tag = email ? await accountTag(email) : undefined;
+  if (PRO_MODE === "free") { setOwned(true, "free", tag ?? null); return "owned"; }
   if (PRO_MODE !== "play") return "failed";
   try {
-    const r = await Billing.purchase({ productId: PRODUCT_ID });
-    if (r.owned) { setOwned(true, "play"); return "owned"; }
+    const r = await Billing.purchase({ productId: PRODUCT_ID, accountTag: tag });
+    if (r.owned) {
+      setOwned(true, "play", r.tag ?? null);
+      // Owned already (bought before on this Google Play account): Play's
+      // own record says which account it is for.
+      if (!r.tag) await restorePro();
+      return "owned";
+    }
     return r.pending ? "pending" : r.cancelled ? "cancelled" : "failed";
   } catch {
     return "failed";
@@ -242,7 +283,7 @@ export async function restorePro(): Promise<boolean | null> {
   try {
     const r = await Billing.restore({ productId: PRODUCT_ID });
     if (!r.ok) return null;
-    setOwned(r.owned, "play");
+    setOwned(r.owned, "play", r.tag ?? null);
     return r.owned;
   } catch {
     return null;

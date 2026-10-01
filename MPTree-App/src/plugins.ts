@@ -103,10 +103,11 @@ export type SystemPlugin = {
 export type BillingPlugin = {
   /** price is Play's own formatted price in the person's currency. */
   getProduct(options: { productId: string }): Promise<{ price: string }>;
-  /** Opens Play's purchase sheet. Resolves when the person has finished with it. */
-  purchase(options: { productId: string }): Promise<{ owned: boolean; pending?: boolean; cancelled?: boolean }>;
+  /** Opens Play's purchase sheet. Resolves when the person has finished with it.
+   *  accountTag ties the purchase to an MPTree account; tag is the one it has. */
+  purchase(options: { productId: string; accountTag?: string }): Promise<{ owned: boolean; pending?: boolean; cancelled?: boolean; tag?: string }>;
   /** What this Google account already owns. ok:false means Play could not be reached. */
-  restore(options: { productId: string }): Promise<{ ok: boolean; owned: boolean }>;
+  restore(options: { productId: string }): Promise<{ ok: boolean; owned: boolean; tag?: string }>;
 };
 
 /** Sign in with Google, for the MPTree account. See AccountPlugin.java. */

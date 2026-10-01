@@ -4,7 +4,7 @@ import { App as CapApp } from "@capacitor/app";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Account, Sync, System, MusicScanner } from "../plugins";
 import { collectShared, restoreShared } from "../storage";
-import { hasPro, subscribePro, ownsPro, setAccountPro, PRO_MODE } from "../pro";
+import { hasPro, subscribePro, ownsPro, proIsFor, setAccountPro, PRO_MODE } from "../pro";
 import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
 import { openDrive, type Drive, type DriveFile } from "./drive";
@@ -646,17 +646,20 @@ async function checkAccountPro() {
   try {
     await listFiles();
     const note = await readFile<ProFile>(PRO);
-    if (note?.by === deviceId && !ownsPro()) { await removeFile(PRO).catch(() => {}); return; }
+    if (note?.by === deviceId && !(await givesPro())) { await removeFile(PRO).catch(() => {}); return; }
     if (stored && takesPro(note) && note.by !== deviceId) setAccountPro(true);
   } catch { /* next time */ }
 }
 
-/** Keeps pro.json right: there while a device that bought Pro is on the
- *  account, gone when the one that put it there no longer has it (refunded).
- *  Every other device on the account has Pro while it is there. */
+/** This device bought Pro, for the account it is signed in to. */
+const givesPro = async () => ownsPro() && !!stored && await proIsFor(stored.email);
+
+/** Keeps pro.json right: there while a device that bought Pro for this
+ *  account is on it, gone when the one that put it there no longer has it
+ *  (refunded). Every other device on the account has Pro while it is there. */
 async function syncPro() {
   let note = await readFile<ProFile>(PRO);
-  if (ownsPro()) {
+  if (await givesPro()) {
     if (!note || (note.via !== proVia && proVia === "play")) {
       note = { by: deviceId, at: Date.now(), via: proVia };
       await writeFile(PRO, note);

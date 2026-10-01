@@ -11,7 +11,7 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 ## Release notes for 1.2.0 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.0.aab`
-(versionCode 38).
+(versionCode 40).
 
 ```
 <en-GB>
@@ -141,6 +141,7 @@ functionality.**
 | App activity | App interactions | Likes and play counts |
 | App activity | Other user-generated content | Playlists, song names, lyrics, the bin, settings |
 | Device or other IDs | Device or other IDs | A number per device in the list of devices, so they can tell each other apart |
+| Personal info | User IDs | A hash of the MPTree account's email, kept by Google Play with the Pro purchase (obfuscated account id) so one purchase goes to one account. Purpose: App functionality and Fraud prevention, security, and compliance |
 
 Not ticked, on purpose:
 - **Email address / Name:** MPTree reads them from Google only to show which account is

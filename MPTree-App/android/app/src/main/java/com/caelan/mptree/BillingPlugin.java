@@ -2,6 +2,7 @@ package com.caelan.mptree;
 
 import androidx.annotation.NonNull;
 
+import com.android.billingclient.api.AccountIdentifiers;
 import com.android.billingclient.api.AcknowledgePurchaseParams;
 import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
@@ -33,6 +34,11 @@ import java.util.List;
  *
  * Every purchase is acknowledged. Play refunds one that is not acknowledged
  * within three days, which would take Pro away from someone who paid.
+ *
+ * A purchase carries a tag for the MPTree account it was bought for (Play's
+ * obfuscated account id: a hash, never the email itself), and Play gives it
+ * back with the purchase, also after a reinstall. src/pro.ts uses it so Pro
+ * goes into that one account only.
  */
 @CapacitorPlugin(name = "Billing")
 public class BillingPlugin extends Plugin {
@@ -51,10 +57,12 @@ public class BillingPlugin extends Plugin {
         int code = result.getResponseCode();
         if (code == BillingClient.BillingResponseCode.OK && purchases != null) {
             boolean owned = false, pending = false;
+            String tag = null;
             for (Purchase p : purchases) {
                 if (product != null && !p.getProducts().contains(product)) continue;
                 if (p.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
                     owned = true;
+                    tag = tagOf(p);
                     acknowledge(p);
                 } else if (p.getPurchaseState() == Purchase.PurchaseState.PENDING) {
                     pending = true;
@@ -64,6 +72,7 @@ public class BillingPlugin extends Plugin {
                 JSObject r = new JSObject();
                 r.put("owned", owned);
                 r.put("pending", pending && !owned);
+                if (tag != null) r.put("tag", tag);
                 call.resolve(r);
             }
         } else if (code == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED && call != null) {
@@ -142,10 +151,13 @@ public class BillingPlugin extends Plugin {
         String productId = call.getString("productId");
         if (productId == null) { call.reject("productId is required"); return; }
         if (pendingPurchase != null) { call.reject("A purchase is already open"); return; }
+        String accountTag = call.getString("accountTag");
         whenReady(call, () -> productDetails(call, productId, pd -> {
             List<BillingFlowParams.ProductDetailsParams> items = new ArrayList<>();
             items.add(BillingFlowParams.ProductDetailsParams.newBuilder().setProductDetails(pd).build());
-            BillingFlowParams flow = BillingFlowParams.newBuilder().setProductDetailsParamsList(items).build();
+            BillingFlowParams.Builder flowB = BillingFlowParams.newBuilder().setProductDetailsParamsList(items);
+            if (accountTag != null && !accountTag.isEmpty()) flowB.setObfuscatedAccountId(accountTag);
+            BillingFlowParams flow = flowB.build();
             getActivity().runOnUiThread(() -> {
                 pendingPurchase = call;
                 pendingProduct = productId;
@@ -203,18 +215,29 @@ public class BillingPlugin extends Plugin {
         client.queryPurchasesAsync(params, (result, purchases) -> {
             if (result.getResponseCode() != BillingClient.BillingResponseCode.OK) { notReachable(call); return; }
             boolean owned = false;
+            String tag = null;
             for (Purchase p : purchases) {
                 if (!p.getProducts().contains(productId)) continue;
                 if (p.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
                     owned = true;
+                    tag = tagOf(p);
                     acknowledge(p);
                 }
             }
             JSObject r = new JSObject();
             r.put("ok", true);
             r.put("owned", owned);
+            if (tag != null) r.put("tag", tag);
             call.resolve(r);
         });
+    }
+
+    /** The MPTree account tag the purchase was made with, or null (bought
+     *  before tags, or outside MPTree's purchase flow). */
+    private static String tagOf(Purchase p) {
+        AccountIdentifiers ids = p.getAccountIdentifiers();
+        String tag = ids == null ? null : ids.getObfuscatedAccountId();
+        return tag == null || tag.isEmpty() ? null : tag;
     }
 
     private void acknowledge(Purchase p) {

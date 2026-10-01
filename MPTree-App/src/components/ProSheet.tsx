@@ -41,7 +41,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const sh = makeSH(T);
   const owns = useOwnsPro();
   const viaAccount = useAccountPro();
-  const phase = useSync().phase;
+  const sync = useSync();
+  const phase = sync.phase;
   const trial = useTrial();
   const [price, setPrice] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "buy" | "restore" | "signin">(null);
@@ -58,7 +59,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
 
   const buy = async () => {
     setBusy("buy");
-    const r = await buyPro();
+    // For the account signed in: Pro goes into that account, and no other.
+    const r = await buyPro(sync.phase === "on" ? sync.account?.email : undefined);
     setBusy(null);
     if (r === "owned") onToast(t("Pro unlocked. Thank you!"));
     else if (r === "pending") onToast(t("Payment pending. Pro unlocks as soon as it goes through."));

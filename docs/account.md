@@ -67,7 +67,15 @@ from another phone lands in Music/MPTree.
   shows the buy button. The free week and Restore purchase need no account.
 - **Pro comes with the account.** A device that bought Pro writes `pro.json`;
   any device signed in to the account has Pro too, also one whose Google Play
-  account is another one. Pro from the account goes with signing out. A Play build only takes a `pro.json`
+  account is another one. Pro from the account goes with signing out.
+- **One purchase, one account.** The purchase carries a tag for the account
+  signed in when it was bought (Play's obfuscated account id: SHA-256 of
+  "mptree:" + the email, never the email). Play returns it with the purchase,
+  also after a reinstall, and a device only writes `pro.json` into that
+  account (`proIsFor` in pro.ts). Signed in to another account it keeps Pro
+  itself but gives it to nobody, and takes out a `pro.json` it wrote there. A
+  purchase from before tags goes to the first account it is used with,
+  remembered on the device (`mptree_pro_bound`). A Play build only takes a `pro.json`
   from Play, not a test build's free unlock. When the device that bought it
   loses Pro (refunded), it deletes `pro.json`, also while paused.
 - **Pro ends:** syncing stops; nothing on the phone changes. A paused device
