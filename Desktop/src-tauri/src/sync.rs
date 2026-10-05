@@ -5,10 +5,12 @@
 // Errors go to the window as "CODE: what happened" (FULL, INCOMPLETE, NETWORK);
 // SyncDesktop.ts turns the part before the colon back into `code`.
 
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, UNIX_EPOCH};
 
 use base64::Engine;
 use serde::Serialize;
@@ -28,6 +30,18 @@ fn temp_file(app: &tauri::AppHandle, tid: &str) -> Result<PathBuf, String> {
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let safe: String = tid.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
     Ok(dir.join(format!("{safe}.part")))
+}
+
+/// Half-received songs from a run that was closed in the middle of one. Nothing
+/// picks them up again (the song is asked for anew), so they would only pile up.
+pub fn clear_parts(app: &tauri::AppHandle) {
+    let Ok(dir) = app.path().app_cache_dir().map(|d| d.join("sync")) else { return };
+    let Ok(list) = fs::read_dir(dir) else { return };
+    for entry in list.flatten() {
+        if entry.path().extension().is_some_and(|e| e == "part") {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// Where songs from the other devices land, as Music/MPTree does on a phone.
@@ -60,9 +74,50 @@ pub fn sync_device_id(app: tauri::AppHandle) -> Result<DeviceId, String> {
             return Ok(DeviceId { id, fresh: false });
         }
     }
-    let id = uuid::Uuid::new_v4().simple().to_string()[..16].to_string();
+    // No file: the first start of this install. The id is made from what
+    // Windows calls this computer and who is logged in, so an MPTree that was
+    // removed with its data and installed again is the same device on the
+    // account: it keeps its place, and what was deleted on it stays deleted.
+    // Android does the same with its ANDROID_ID (SyncPlugin.java).
+    let id = machine_id().unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string()[..16].to_string());
     fs::write(&file, &id).map_err(|e| e.to_string())?;
     Ok(DeviceId { id, fresh: true })
+}
+
+#[cfg(windows)]
+#[link(name = "advapi32")]
+extern "system" {
+    fn RegGetValueW(key: isize, sub: *const u16, value: *const u16, flags: u32, kind: *mut u32, data: *mut u8, size: *mut u32) -> i32;
+}
+
+/// Sixteen hex digits that stand for this Windows installation and this user
+/// on it. Not the machine's own id: a hash of it, which cannot be turned back.
+fn machine_id() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use sha2::{Digest, Sha256};
+        let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+        let mut buf = [0u16; 128];
+        let mut size = (buf.len() * 2) as u32;
+        // HKEY_LOCAL_MACHINE, a string, and the 64-bit view of the registry.
+        let ok = unsafe {
+            RegGetValueW(0x8000_0002u32 as i32 as isize, wide("SOFTWARE\\Microsoft\\Cryptography").as_ptr(), wide("MachineGuid").as_ptr(),
+                0x2 | 0x0001_0000, std::ptr::null_mut(), buf.as_mut_ptr() as *mut u8, &mut size)
+        };
+        if ok != 0 {
+            return None;
+        }
+        let guid = String::from_utf16_lossy(&buf[..(size as usize / 2).min(buf.len())]);
+        let guid = guid.trim_end_matches('\0').trim();
+        if guid.len() < 8 {
+            return None;
+        }
+        let user = std::env::var("USERNAME").unwrap_or_default().to_lowercase();
+        let hash = Sha256::digest(format!("mptree-device:{}:{user}", guid.to_lowercase()).as_bytes());
+        return Some(hash.iter().take(8).map(|b| format!("{b:02x}")).collect());
+    }
+    #[allow(unreachable_code)]
+    None
 }
 
 /// The computer's name, for the list of devices on the account page.
@@ -129,6 +184,14 @@ pub struct Fingerprint {
     fp: String,
 }
 
+/// Fingerprints taken, with the size and the time the file had then. The
+/// engine asks for every song's on every round; the answer only changes when
+/// the file does. SyncPlugin.java keeps the same kind of list.
+fn taken() -> &'static Mutex<HashMap<String, (u64, u64, String)>> {
+    static TAKEN: OnceLock<Mutex<HashMap<String, (u64, u64, String)>>> = OnceLock::new();
+    TAKEN.get_or_init(Default::default)
+}
+
 #[tauri::command]
 pub async fn sync_fingerprints(paths: Vec<String>) -> Result<Vec<Fingerprint>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -139,7 +202,16 @@ pub async fn sync_fingerprints(paths: Vec<String>) -> Result<Vec<Fingerprint>, S
                 if !meta.is_file() {
                     return None;
                 }
-                let fp = fingerprint(Path::new(&p), meta.len()).ok()?;
+                let changed = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64).unwrap_or(0);
+                let hit = taken().lock().unwrap().get(&p).filter(|(s, c, _)| *s == meta.len() && *c == changed).map(|(_, _, fp)| fp.clone());
+                let fp = match hit {
+                    Some(fp) => fp,
+                    None => {
+                        let fp = fingerprint(Path::new(&p), meta.len()).ok()?;
+                        taken().lock().unwrap().insert(p.clone(), (meta.len(), changed, fp.clone()));
+                        fp
+                    }
+                };
                 Some(Fingerprint { path: p, size: meta.len(), fp })
             })
             .collect()
@@ -192,13 +264,63 @@ pub async fn sync_append_chunk(app: tauri::AppHandle, tid: String, data: String)
     .map_err(|e| e.to_string())?
 }
 
-fn safe_name(name: &str) -> String {
+pub fn safe_name(name: &str) -> String {
     let cleaned: String = name
         .chars()
         .map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c })
         .collect();
-    let cleaned = cleaned.trim().trim_end_matches('.').to_string();
+    let mut cleaned = cleaned.trim().trim_end_matches(['.', ' ']).to_string();
+    // Names Windows keeps for itself, whatever comes after the dot: a song
+    // called "Con.mp3" on a phone cannot be a file called that here.
+    let stem = cleaned.split('.').next().unwrap_or("").trim().to_ascii_uppercase();
+    let taken = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (stem.len() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT")) && stem.as_bytes()[3].is_ascii_digit());
+    if taken {
+        cleaned.insert(0, '_');
+    }
+    // And not longer than Windows lets a path be, with the folder in front.
+    if cleaned.chars().count() > 150 {
+        let ext = cleaned.rsplit_once('.').map(|(_, e)| e.to_string()).filter(|e| e.len() <= 5);
+        let keep = 150 - ext.as_ref().map(|e| e.len() + 1).unwrap_or(0);
+        cleaned = cleaned.chars().take(keep).collect::<String>().trim_end().to_string();
+        if let Some(ext) = ext {
+            cleaned = format!("{cleaned}.{ext}");
+        }
+    }
     if cleaned.is_empty() { "song.mp3".into() } else { cleaned }
+}
+
+/// For each path: "here" when the file is there, "gone" when it is not but
+/// its disk is, "away" when the disk itself is not there (a stick taken out, a
+/// share that is offline). The engine asks this about songs the scan no longer
+/// lists, before it concludes they were deleted.
+#[tauri::command]
+pub async fn sync_path_states(paths: Vec<String>) -> Result<Vec<&'static str>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // The disk first, and each disk once: asking a share that is offline
+        // about every one of its files would wait for the network every time.
+        let mut disks: HashMap<PathBuf, bool> = HashMap::new();
+        paths
+            .iter()
+            .map(|p| {
+                let path = Path::new(p);
+                let disk = path.ancestors().last().filter(|d| !d.as_os_str().is_empty() && *d != path);
+                let there = match disk {
+                    Some(d) => *disks.entry(d.to_path_buf()).or_insert_with(|| d.exists()),
+                    None => true,
+                };
+                if !there {
+                    "away"
+                } else if path.is_file() {
+                    "here"
+                } else {
+                    "gone"
+                }
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
@@ -285,6 +407,17 @@ impl<R: Read> Read for Told<'_, R> {
     }
 }
 
+/// For a whole song: no limit on how long it takes, only on how long nothing
+/// may happen. Without one a connection that went quiet held the transfer,
+/// and everything queued behind it, until MPTree was closed.
+fn slow() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(30))
+        .timeout_read(Duration::from_secs(90))
+        .timeout_write(Duration::from_secs(90))
+        .build()
+}
+
 fn http_err(e: ureq::Error) -> String {
     match e {
         ureq::Error::Status(code, _) => format!("HTTP_{code}: Drive answered {code}"),
@@ -317,7 +450,8 @@ pub async fn sync_drive_upload(
 
         let tid = tid.unwrap_or_default();
         let body = Told { inner: file, app: &app, tid: &tid, total: size as i64, done: 0, told: 0 };
-        let done = ureq::put(&session)
+        let done = slow()
+            .put(&session)
             .set("Content-Type", "application/octet-stream")
             .set("Content-Length", &size.to_string())
             .send(body)
@@ -339,7 +473,8 @@ pub async fn sync_drive_download(
 ) -> Result<serde_json::Value, String> {
     let tmp = temp_file(&app, &tid)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let got = ureq::get(&format!("{DRIVE}/drive/v3/files/{file_id}?alt=media"))
+        let got = slow()
+            .get(&format!("{DRIVE}/drive/v3/files/{file_id}?alt=media"))
             .set("Authorization", &format!("Bearer {token}"))
             .call()
             .map_err(http_err)?;

@@ -34,7 +34,7 @@ export function DesktopPlayerBar({
   const dim = hasSong ? 1 : 0.4;
 
   return (
-    <footer style={{
+    <footer data-tour="d-player" style={{
       gridColumn: "1 / -1", gridRow: 2, display: "grid", alignItems: "center", gap: 20,
       gridTemplateColumns: "minmax(180px, 1fr) minmax(320px, 2fr) minmax(180px, 1fr)",
       padding: "12px 20px", borderTop: `1px solid ${T.border}`, background: T.playerBg, color: T.text,

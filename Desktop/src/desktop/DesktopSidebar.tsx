@@ -61,7 +61,7 @@ export function DesktopSidebar({ T, ground, page, onPage, onSettings, account, o
   onAccount: () => void;
 }) {
   return (
-    <nav style={{
+    <nav data-tour="d-sidebar" style={{
       gridColumn: 1, gridRow: 1, display: "flex", flexDirection: "column", gap: 2, minHeight: 0,
       padding: mini ? "16px 8px 12px" : "16px 12px 12px", borderRight: `1px solid ${T.border}`, background: ground,
       // Hover takes its colour from this palette, not the page's.

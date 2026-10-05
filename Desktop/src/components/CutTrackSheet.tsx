@@ -1,19 +1,12 @@
 import { useState, useEffect } from "react";
-import { registerPlugin } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import type { Song } from "../types";
 import { IC } from "./Icons";
-
-type AudioPlayerPlugin = {
-  play(options: { path: string; title?: string; artist?: string }): Promise<void>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  getCurrentPosition(): Promise<{ position: number }>;
-  getDuration(): Promise<{ duration: number }>;
-  seekTo(options: { milliseconds: number }): Promise<void>;
-};
-const AudioPlayer = registerPlugin<AudioPlayerPlugin>("AudioPlayer");
+// The player the rest of the window uses. Asking Capacitor for "AudioPlayer"
+// here, as the phone does, gets a plugin that does not exist on Windows, and
+// the preview stayed switched off.
+import { AudioPlayer } from "../plugins";
 
 // ─── CUT TRACK SHEET ─────────────────────────────────────────────────────────
 // Pick the piece of a song you want to keep, and save it as its own track.
@@ -135,7 +128,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
 
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 18 }}>
             <span>{fmt(0)}</span>
-            <span style={{ color: T.text, fontWeight: 700 }}>Keeps {fmt(endMs - startMs)}</span>
+            <span style={{ color: T.text, fontWeight: 700 }}>{t("Keeps {len}", { len: fmt(endMs - startMs) })}</span>
             <span>{fmt(total)}</span>
           </div>
 

@@ -12,6 +12,9 @@ import { t } from "../i18n";
 interface Props {
   onDone: () => void;
   T: T;
+  /** The window layout (sidebar, table, player bar): other things to point
+   *  at, and a mouse and a keyboard to say it for. */
+  wide?: boolean;
 }
 
 interface Step {
@@ -27,7 +30,7 @@ interface Step {
   pickRow?: boolean;
 }
 
-const STEPS: Step[] = [
+const PHONE_STEPS: Step[] = [
   {
     target: '[data-tour="logo"]',
     title: "The logo is a button",
@@ -61,9 +64,46 @@ const STEPS: Step[] = [
   },
 ];
 
+/** The same walk for the wide layout on Windows. Nothing is tapped or held
+ *  there, and what the phone keeps in its header is in a sidebar and a bar. */
+const WIDE_STEPS: Step[] = [
+  {
+    target: '[data-tour="d-sidebar"]',
+    title: "Your library",
+    body: "Songs, playlists and the bin are on the left. The arrow at the top folds this bar down to its icons.",
+  },
+  {
+    target: '[data-tour="d-search"]',
+    title: "Find anything fast",
+    body: "Search your whole library by song or artist. Ctrl+F puts the cursor here.",
+  },
+  {
+    target: '[data-tour="songs"]',
+    title: "Double-click to play",
+    body: "One click selects a song, a double click plays it. A right click opens edit, cut, like and play next. Ctrl with a click selects several.",
+    pickRow: true,
+  },
+  {
+    target: ".dshuffle",
+    title: "Shuffle everything",
+    body: "Click to shuffle all songs.",
+  },
+  {
+    target: '[data-tour="d-player"]',
+    title: "The player",
+    body: "Play, skip, seek and volume are down here. Space plays and pauses, and the media keys on your keyboard work too.",
+  },
+  {
+    target: 'nav [data-tour="settings"]',
+    title: "Make it yours",
+    body: "Sound, the look, your music folder, the floating button and help are in Settings. Enjoy the music!",
+  },
+];
+
 type Rect = { top: number; left: number; width: number; height: number };
 
-export function OnboardingOverlay({ onDone, T }: Props) {
+export function OnboardingOverlay({ onDone, T, wide }: Props) {
+  const STEPS = wide ? WIDE_STEPS : PHONE_STEPS;
   // Straight into the first tip. There used to be a "Welcome to MPTree" card in
   // front of it, which after the first-launch welcome page was the same
   // greeting twice, and from Settings was a step between asking for the
@@ -138,13 +178,13 @@ export function OnboardingOverlay({ onDone, T }: Props) {
       // A target taller than half the viewport leaves no room for the tip card
       // (this is what pushed the card off-screen on the song-list step).
       // Fall back to spotlighting a band near the top of it.
-      if (height > vhNow * 0.5) { top = Math.max(top, 96); height = 150; }
+      if (height > vhNow * 0.5 && !wide) { top = Math.max(top, 96); height = 150; }
       setRect({ top, left: r.left - pad, width: r.width + pad * 2, height });
     };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, wide]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Block background scrolling while the tour is up.
   useEffect(() => {
@@ -189,7 +229,22 @@ export function OnboardingOverlay({ onDone, T }: Props) {
     const aboveTop = rect.top - GAP - cardH;
     if (coversSpotlight && aboveTop >= EDGE) cardTop = aboveTop;
   }
-  const cardStyle: React.CSSProperties = { position: "fixed", left: 16, right: 16, top: cardTop };
+  let cardStyle: React.CSSProperties = { position: "fixed", left: 16, right: 16, top: cardTop };
+  // In a window the card stands by what it is about, not across the middle:
+  // under or over it, in line with it, or beside it when it is as tall as the
+  // window (the sidebar).
+  if (wide && rect) {
+    const vw = window.innerWidth;
+    const CARD_W = Math.min(400, vw - EDGE * 2);
+    const clampX = (x: number) => Math.max(EDGE, Math.min(x, vw - CARD_W - EDGE));
+    if (rect.height > vh * 0.5) {
+      const right = rect.left + rect.width + GAP;
+      const left = right + CARD_W <= vw - EDGE ? right : clampX(rect.left - GAP - CARD_W);
+      cardStyle = { position: "fixed", left, width: CARD_W, top: Math.max(EDGE, Math.min(rect.top + 56, vh - cardH - EDGE)) };
+    } else {
+      cardStyle = { position: "fixed", left: clampX(rect.left + rect.width / 2 - CARD_W / 2), width: CARD_W, top: cardTop };
+    }
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 600 }}>

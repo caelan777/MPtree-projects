@@ -52,7 +52,9 @@ export type MusicScannerPlugin = {
 };
 
 export type AudioPlayerPlugin = {
-  play(options: { path: string; title?: string; artist?: string }): Promise<void>;
+  /** cutFrom and cutTo: a cut kept as two markers on its source. Windows keeps
+   *  to them in the player; Android ignores them and the window watches. */
+  play(options: { path: string; title?: string; artist?: string; cutFrom?: number; cutTo?: number }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   getCurrentPosition(): Promise<{ position: number }>;
@@ -61,8 +63,8 @@ export type AudioPlayerPlugin = {
   getCurrentSong(): Promise<{ path: string; isPlaying: boolean }>;
   seekTo(options: { milliseconds: number }): Promise<void>;
   addListener(event: "trackComplete", handler: () => void): Promise<{ remove(): void }>;
-  addListener(event: "stateChange", handler: (data: { isPlaying: boolean; path: string }) => void): Promise<{ remove(): void }>;
-  setQueue(options: { tracks: { path: string; title: string; artist: string; isCut?: boolean }[]; currentIndex: number }): Promise<void>;
+  addListener(event: "stateChange", handler: (data: { isPlaying: boolean; path: string; index?: number }) => void): Promise<{ remove(): void }>;
+  setQueue(options: { tracks: { path: string; title: string; artist: string; isCut?: boolean; cutFrom?: number; cutTo?: number }[]; currentIndex: number }): Promise<void>;
   setPlayMode(options: { mode: string }): Promise<void>;
   setCrossfadeDuration(options: { milliseconds: number }): Promise<void>;
   setPlaybackSpeed(options: { speed: number }): Promise<void>;
@@ -135,6 +137,9 @@ export type SyncPlugin = {
   freeSpace(): Promise<{ bytes: number }>;
   keepScreenOn(options: { on: boolean }): Promise<void>;
   fingerprints(options: { paths: string[] }): Promise<{ items: { path: string; size: number; fp: string }[] }>;
+  /** For each path, in order: "here" (the file is there), "gone" (it is not,
+   *  but its disk is) or "away" (the disk it was on is not there now). */
+  pathStates(options: { paths: string[] }): Promise<{ states: string[] }>;
   readChunk(options: { path: string; offset: number; length: number }): Promise<{ data: string; size: number }>;
   beginFile(options: { tid: string }): Promise<void>;
   appendChunk(options: { tid: string; data: string }): Promise<void>;
@@ -189,6 +194,7 @@ const SyncWeb: SyncPlugin = {
   keepScreenOn: async () => {},
   // The demo songs are the same in every tab, so a name is fingerprint enough.
   fingerprints: async ({ paths }) => ({ items: paths.map(p => ({ path: p, size: 0, fp: "web-" + p.split("/").pop() })) }),
+  pathStates:   async ({ paths }) => ({ states: paths.map(() => "gone") }),
   readChunk:    unavailable,
   beginFile:    unavailable,
   appendChunk:  unavailable,

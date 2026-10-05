@@ -85,6 +85,12 @@ function toFileUri(uri: string): string {
   return uri.startsWith("file://") ? uri : `file://${uri}`;
 }
 
+/** How long a row says a song is. A cut that is two markers on its source is
+ *  as long as what lies between them, not as long as the source. */
+function rowLength(s: Song): number {
+  return s.isCut && s.cutTo != null ? Math.max(0, s.cutTo - (s.cutFrom ?? 0)) : s.duration ?? 0;
+}
+
 // Fire-and-forget haptic feedback. Wrapped so every call site can use it
 // without a .catch() — devices/browsers without haptics support (or a plain
 // web preview) just silently no-op instead of throwing.
@@ -441,7 +447,10 @@ export default function App() {
   const [booting, setBooting] = useState(isDesktop);
   const [scanPct, setScanPct] = useState<number | null>(null);
   useEffect(() => {
-    if (!isDesktop) return;
+    // Only while the loading screen is up. Every later scan (a sync round, a
+    // return to the window) reports its progress too, and drawing the whole
+    // app again for each of those reports is work for nothing.
+    if (!isDesktop || !booting) return;
     const un = listen<[number, number]>("scan-progress", e => {
       const [n, total] = e.payload;
       if (total > 0) setScanPct(n / total);
@@ -449,7 +458,7 @@ export default function App() {
     // Never stuck behind it, whatever the scan does.
     const giveUp = setTimeout(() => setBooting(false), 60000);
     return () => { clearTimeout(giveUp); void un.then(f => f()); };
-  }, []);
+  }, [booting]);
   // True once the music scan has finished (which is also when the Android
   // media-permission prompt has been answered).
   const [libraryReady, setLibraryReady] = useState(false);
@@ -786,6 +795,7 @@ export default function App() {
     title:  metaRef.current[t.id]?.customName ?? t.title,
     artist: metaRef.current[t.id]?.customArtist ?? (!isMissingArtist(t.artist) ? t.artist : "Unknown"),
     isCut:  !!t.isCut,
+    ...(t.isCut ? { cutFrom: t.cutFrom, cutTo: t.cutTo } : null),
   }), []);
 
   // ── flushSession ──────────────────────────────────────────────────────────
@@ -829,7 +839,13 @@ export default function App() {
       const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
       const cutIds = new Set(persistedCuts.filter((s: Song) => !blocked.has(s.id)).map((s: Song) => s.id));
       const result = [...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
-      setSongs(() => result);
+      // A scan that found what was there already leaves the list as it is: a
+      // new list, however equal, reads to the rest of the app (and to the sync
+      // engine) as the person having changed something.
+      setSongs(prev => prev.length === result.length && prev.every((s, i) => {
+        const r = result[i];
+        return s.id === r.id && s.title === r.title && s.artist === r.artist && s.duration === r.duration && s.dateAdded === r.dateAdded;
+      }) ? prev : result);
       setBooting(false);
 
       return result;
@@ -1346,17 +1362,21 @@ export default function App() {
   //
   // This keeps UI and native perfectly in lock-step without the old 800ms race
   // guard.
-  const syncToNativePath = useCallback((path: string, nativeIsPlaying: boolean) => {
+  const syncToNativePath = useCallback((path: string, nativeIsPlaying: boolean, index?: number) => {
     const cs = curRef.current;
+    const q = queueRef.current;
+    // Windows also says where in the queue it is, when it moved on by itself.
+    // A cut and its source are the same file, so only that tells them apart.
+    const at = index != null ? q[index] : undefined;
+    const exact = at && at.uri === path ? at : null;
     // Same track still playing — just reconcile the play/pause flag.
-    if (cs && path === cs.uri) {
+    if (cs && path === cs.uri && (!exact || exact.id === cs.id)) {
       setPlaying(nativeIsPlaying);
       return;
     }
     // Native moved to a different track. Find it in the current queue first
     // (covers shuffle + normal), then fall back to the display list.
-    const q = queueRef.current;
-    let next = q.find(s => s.uri === path) ?? null;
+    let next = exact ?? q.find(s => s.uri === path) ?? null;
     let sourceList = q;
     if (!next) {
       const list = displayListRef.current;
@@ -1415,9 +1435,9 @@ export default function App() {
     }).then(l => { listener = l; });
 
     // Primary sync channel: adopt whatever native is actually playing.
-    AudioPlayer.addListener("stateChange", ({ isPlaying: nip, path }) => {
+    AudioPlayer.addListener("stateChange", ({ isPlaying: nip, path, index }) => {
       if (!path) { setPlaying(nip); return; }
-      syncToNativePath(path, nip);
+      syncToNativePath(path, nip, index);
     }).then(l => { stateListener = l; });
 
     return () => { listener?.remove(); stateListener?.remove(); };
@@ -1477,7 +1497,7 @@ export default function App() {
       setQueue(q); setCurrent(s); setCurrentTime(0); setDuration(0); setPlaying(true); loadedRef.current = true;
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
       const artist = artistOverride ?? getMeta(s).customArtist ?? (s.artist && s.artist.toLowerCase() !== "<unknown>" ? s.artist : "Unknown");
-      await AudioPlayer.play({ path: s.uri, title, artist });
+      await AudioPlayer.play({ path: s.uri, title, artist, ...(s.isCut ? { cutFrom: s.cutFrom, cutTo: s.cutTo } : null) });
       if (s.isCut && s.cutFrom && s.cutFrom > 0) {
         await AudioPlayer.seekTo({ milliseconds: s.cutFrom }); setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom;
       }
@@ -1494,7 +1514,7 @@ export default function App() {
     if (!currentSong) return;
     try {
       if (!loadedRef.current) {
-        await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown" });
+        await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown", ...(currentSong.isCut ? { cutFrom: currentSong.cutFrom, cutTo: currentSong.cutTo } : null) });
         const seekTarget = currentSong.isCut && currentTime <= (currentSong.cutFrom ?? 0) ? (currentSong.cutFrom ?? 0) : currentTime;
         if (seekTarget > 0) await AudioPlayer.seekTo({ milliseconds: seekTarget });
         loadedRef.current = true; setPlaying(true); return;
@@ -1507,7 +1527,7 @@ export default function App() {
   const seekTo = async (ms: number) => {
     if (!currentSong) return;
     try {
-      if (!loadedRef.current) { await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown" }); await AudioPlayer.pause(); loadedRef.current = true; }
+      if (!loadedRef.current) { await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown", ...(currentSong.isCut ? { cutFrom: currentSong.cutFrom, cutTo: currentSong.cutTo } : null) }); await AudioPlayer.pause(); loadedRef.current = true; }
       await AudioPlayer.seekTo({ milliseconds: ms });
     } catch { /* ignore */ }
   };
@@ -2448,7 +2468,10 @@ export default function App() {
     await beforeDeleteForever([s]);
     // Ask the device to actually delete the file. On Android 11+ this shows a
     // system confirmation dialog; if the user declines, keep the song in the bin.
-    const deleted = await deleteFileAtUri(s.uri);
+    // A cut that is two markers on its source has no file of its own: its
+    // path is the original song's. Deleting "the file" took the original away
+    // with the cut.
+    const deleted = s.isCut ? true : await deleteFileAtUri(s.uri);
     if (!deleted) {
       showToast(t("Delete cancelled"));
       return;
@@ -2472,8 +2495,10 @@ export default function App() {
     await beforeDeleteForever(toDelete);
     // All files in one go, with one question from Android. Track which
     // actually went, so a declined question leaves those songs in the bin.
-    const gone = await deleteFilesAtUris(toDelete.map(s => s.uri));
-    const deletedIds = new Set(toDelete.filter(s => gone.has(s.uri)).map(s => s.id));
+    // The cuts that are two markers on their source go from the bin and
+    // nothing else: see handleDeleteForever.
+    const gone = await deleteFilesAtUris(toDelete.filter(s => !s.isCut).map(s => s.uri));
+    const deletedIds = new Set(toDelete.filter(s => s.isCut || gone.has(s.uri)).map(s => s.id));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
     setRemovedSongs(remaining);
@@ -3908,7 +3933,7 @@ export default function App() {
             {wide && (
               <div style={{ flexShrink: 0, padding: "14px 24px 0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1, maxWidth: 420, display: "flex", alignItems: "center", background: TH.surface, borderRadius: 10, padding: "0 12px", height: 38, gap: 8, border: `1px solid ${TH.border}` }}>
+                  <div data-tour="d-search" style={{ flex: 1, maxWidth: 420, display: "flex", alignItems: "center", background: TH.surface, borderRadius: 10, padding: "0 12px", height: 38, gap: 8, border: `1px solid ${TH.border}` }}>
                     {IC.Search(TH.muted)}
                     <input ref={deskSearchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 14, minWidth: 0, fontFamily: "inherit" }} />
                     {search.length > 0 && (
@@ -4067,7 +4092,7 @@ export default function App() {
                                 >
                                   <IC.Heart filled={liked} size={15} />
                                 </button>
-                                <span style={{ fontSize: 12, color: TH.muted, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{song.duration != null && song.duration > 0 ? fmt(song.duration) : ""}</span>
+                                <span style={{ fontSize: 12, color: TH.muted, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{rowLength(song) > 0 ? fmt(rowLength(song)) : ""}</span>
                                 <button
                                   onClick={e => { e.stopPropagation(); setMenuSong(song); }}
                                   onMouseDown={e => e.stopPropagation()}
@@ -4095,7 +4120,7 @@ export default function App() {
                                 <span style={{ fontSize: 12, fontWeight: "600", color: isActive ? TH.accent : TH.muted, flexShrink: 0 }}>{idx + 1}</span>
                                 */}
                                 <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist || t("Unknown Artist")}</span>
-                                {song.duration != null && song.duration > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>}
+                                {rowLength(song) > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(rowLength(song))}</span>}
                               </div>
                             </div>
                             {!selectMode && liked && (
@@ -4708,8 +4733,8 @@ export default function App() {
         )}
 
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
-        {!isInitializing && libraryReady && showOnboarding && !welcome && !wide && (
-          <OnboardingOverlay onDone={finishOnboarding} T={TH} />
+        {!isInitializing && libraryReady && showOnboarding && !welcome && (
+          <OnboardingOverlay key={wide ? "wide" : "phone"} onDone={finishOnboarding} T={TH} wide={wide} />
         )}
 
         {/* ═══ LOADING SCREEN ══════════════════════════════════════════════

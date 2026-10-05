@@ -126,7 +126,7 @@ export function SongMenuSheet({
             ), t("Play next"), onPlayNext)}
             {row("add", <IC.Plus />, t("Add to playlist"), () => setPane("playlists"), { trailing: <IC.ChevronR /> })}
             {row("lyrics", <IC.Lyrics />, t("Lyrics"), onEditLyrics)}
-            {!isDesktop && row("cut", <IC.Scissors />, t("Cut"), onCut)}
+            {row("cut", <IC.Scissors />, t("Cut"), onCut)}
             {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? t("Unlike") : t("Like"), onToggleLike)}
             {row("share", <IC.Share />, t("Share"), onShare)}
             <div style={{ height: 1, background: T.border, margin: "6px 20px" }} />

@@ -178,7 +178,7 @@ export function EQSheet({
             <input type="range" min={0} max={CROSSFADE_STOPS.length - 1} step={1} value={cfIndex}
               className="slider"
               onChange={e => setCfIndex(Number(e.target.value))}
-              onMouseUp={commitCfChange} onTouchEnd={commitCfChange}
+              onMouseUp={commitCfChange} onTouchEnd={commitCfChange} onKeyUp={commitCfChange}
               style={{ width: "100%", accentColor: accent }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
               <span style={{ fontSize: 11, color: T.muted }}>{t("Off")}</span>
@@ -278,7 +278,7 @@ export function EQSheet({
                           <input type="range" min={minMb} max={maxMb} step={100} value={level}
                             className="slider" disabled={!eqEnabled}
                             onChange={e => handleBandChange(i, e.target.value)}
-                            onMouseUp={commitBandChange} onTouchEnd={commitBandChange}
+                            onMouseUp={commitBandChange} onTouchEnd={commitBandChange} onKeyUp={commitBandChange}
                             style={{ width: 80, transform: "rotate(-90deg)", accentColor: accent, cursor: eqEnabled ? "pointer" : "default" }} />
                         </div>
                       </div>

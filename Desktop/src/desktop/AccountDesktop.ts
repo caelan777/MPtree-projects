@@ -39,6 +39,7 @@ export class SyncDesktop extends WebPlugin {
   async freeSpace() { return { bytes: await call<number>("sync_free_space") }; }
   async keepScreenOn() {}
   async fingerprints(o: { paths: string[] }) { return { items: await call<{ path: string; size: number; fp: string }[]>("sync_fingerprints", o) }; }
+  async pathStates(o: { paths: string[] }) { return { states: await call<string[]>("sync_path_states", o) }; }
   readChunk(o: { path: string; offset: number; length: number }) { return call<{ data: string; size: number }>("sync_read_chunk", o); }
   beginFile(o: { tid: string }) { return call<void>("sync_begin_file", o); }
   appendChunk(o: { tid: string; data: string }) { return call<void>("sync_append_chunk", o); }

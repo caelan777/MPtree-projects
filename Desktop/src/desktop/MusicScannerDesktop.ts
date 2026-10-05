@@ -50,7 +50,17 @@ export class MusicScannerDesktop extends WebPlugin {
 
   async setAsRingtone() { return { ok: false }; }
 
-  async cutTrack(): Promise<never> {
-    throw Object.assign(new Error("Not on Windows yet"), { code: "UNSUPPORTED_FORMAT" });
+  /** A piece of a song as a file of its own (MP3 and WAV). Anything else
+   *  rejects with UNSUPPORTED_FORMAT, and App.tsx keeps the cut as two markers
+   *  on the original, which the player then keeps to. */
+  async cutTrack(o: { path: string; startMs: number; endMs: number; name: string }) {
+    try {
+      return await invoke<{ uri: string; title: string; duration: number }>("cut_track", { path: o.path, startMs: o.startMs, endMs: o.endMs, name: o.name });
+    } catch (e) {
+      // "CODE: what happened", as every command here says it.
+      const text = String((e as { message?: string })?.message ?? e);
+      const m = /^([A-Z_]+): ([\s\S]*)$/.exec(text);
+      throw Object.assign(new Error(m ? m[2] : text), { code: m ? m[1] : "" });
+    }
   }
 }

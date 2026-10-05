@@ -3,11 +3,13 @@
 // Playback itself is in the window (src/desktop/AudioPlayerDesktop.ts).
 
 mod account;
+mod media;
 mod sync;
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use base64::Engine;
@@ -22,7 +24,7 @@ use walkdir::WalkDir;
 const AUDIO_EXTENSIONS: [&str; 8] = ["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "weba"];
 
 /// The same shape as `Song` in src/types.ts.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Song {
     id: String,
@@ -71,7 +73,16 @@ fn read_song(path: &Path) -> Song {
 
     // A file with broken or missing tags still belongs in the library, under
     // its file name.
-    if let Ok(file) = lofty::read_from_path(path) {
+    // By its name first; then by what it really is, for a download saved under
+    // the wrong name; and a Matroska file, which lofty does not read at all,
+    // at least says how long it is.
+    let tagged = lofty::read_from_path(path).ok().or_else(|| {
+        lofty::probe::Probe::open(path).ok()?.guess_file_type().ok()?.read().ok()
+    });
+    if tagged.is_none() {
+        song.duration = media::matroska_duration(path).unwrap_or(0);
+    }
+    if let Some(file) = tagged {
         song.duration = file.properties().duration().as_millis() as u64;
         if let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) {
             if let Some(t) = tag.title().filter(|t| !t.trim().is_empty()) {
@@ -103,8 +114,38 @@ fn worth_entering(entry: &walkdir::DirEntry) -> bool {
 /// Every song under `folder`. With no folder chosen it looks through the whole
 /// user folder (Music, Downloads, Desktop, Documents and the rest), and leaves
 /// out anything under half a minute, which there is a sound effect, not a song.
+/// Tags already read, with the size and the time the file had then. The sync
+/// engine scans on every round and the window on every return to it; without
+/// this each of those read every file on the disk again.
+#[derive(Default)]
+struct Tags {
+    known: Arc<Mutex<HashMap<PathBuf, (u64, u64, Song)>>>,
+    /// One scan at a time: the second one waits and finds the tags read.
+    turn: tauri::async_runtime::Mutex<()>,
+}
+
+/// Size and time of change, and whether the file is on this disk at all.
+/// A file that OneDrive (or any cloud folder) keeps online only has a name
+/// here and nothing behind it: reading its tags would download it, and a
+/// library of them would download in full on the first scan.
+fn on_disk(path: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        // OFFLINE, RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS
+        if meta.file_attributes() & (0x1000 | 0x0004_0000 | 0x0040_0000) != 0 {
+            return None;
+        }
+    }
+    let changed = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64).unwrap_or(0);
+    Some((meta.len(), changed))
+}
+
 #[tauri::command]
-async fn scan(app: tauri::AppHandle, folder: String) -> Result<Vec<Song>, String> {
+async fn scan(app: tauri::AppHandle, tags: tauri::State<'_, Tags>, folder: String) -> Result<Vec<Song>, String> {
+    let _turn = tags.turn.lock().await;
+    let known = tags.known.clone();
     let everywhere = folder.is_empty();
     let root = if everywhere {
         app.path().home_dir().map_err(|e| e.to_string())?
@@ -137,6 +178,11 @@ async fn scan(app: tauri::AppHandle, folder: String) -> Result<Vec<Song>, String
                     .map(|e| e.into_path()),
             );
         }
+        // Each file with what it is now; the ones that are online only fall out.
+        let paths: Vec<(PathBuf, u64, u64)> = paths
+            .into_iter()
+            .filter_map(|p| on_disk(&p).map(|(size, changed)| (p, size, changed)))
+            .collect();
         let total = paths.len();
         let done = AtomicUsize::new(0);
         let keep = |s: &Song| {
@@ -158,11 +204,16 @@ async fn scan(app: tauri::AppHandle, folder: String) -> Result<Vec<Song>, String
             let workers: Vec<_> = paths
                 .chunks(total.div_ceil(4).max(1))
                 .map(|part| {
-                    let (done, progress, keep) = (&done, &progress, &keep);
+                    let (done, progress, keep, known) = (&done, &progress, &keep, &known);
                     scope.spawn(move || {
                         part.iter()
-                            .map(|p| {
-                                let song = read_song(p);
+                            .map(|(p, size, changed)| {
+                                let hit = known.lock().unwrap().get(p).filter(|(s, c, _)| s == size && c == changed).map(|(_, _, song)| song.clone());
+                                let song = hit.unwrap_or_else(|| {
+                                    let song = read_song(p);
+                                    known.lock().unwrap().insert(p.clone(), (*size, *changed, song.clone()));
+                                    song
+                                });
                                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
                                 if n % 20 == 0 || n == total {
                                     let _ = progress.emit("scan-progress", (n, total));
@@ -189,7 +240,7 @@ async fn scan(app: tauri::AppHandle, folder: String) -> Result<Vec<Song>, String
     for song in &songs {
         if let Some(dir) = Path::new(&song.uri).parent() {
             if seen.insert(dir.to_path_buf()) {
-                scope.allow_directory(dir, false).map_err(|e| e.to_string())?;
+                let _ = scope.allow_directory(dir, false);
             }
         }
     }
@@ -225,7 +276,72 @@ fn lyrics(path: String) -> String {
 /// Moves the files to the Recycle Bin. Returns the ones that went.
 #[tauri::command]
 fn trash_files(paths: Vec<String>) -> Vec<String> {
-    paths.into_iter().filter(|p| trash::delete(p).is_ok()).collect()
+    // A network drive or a stick has no Recycle Bin. MPTree only gets here
+    // after saying the song goes for good, so there it does.
+    paths
+        .into_iter()
+        .filter(|p| trash::delete(p).is_ok() || (Path::new(p).is_file() && std::fs::remove_file(p).is_ok()))
+        .collect()
+}
+
+#[derive(Serialize)]
+struct Cut {
+    uri: String,
+    title: String,
+    duration: u64,
+}
+
+/// A piece of a song as a file of its own, in Music/MPTree, where the songs
+/// from the other devices land too. MP3 and WAV only (see media.rs); anything
+/// else answers UNSUPPORTED_FORMAT and the window keeps the cut as markers.
+#[tauri::command]
+async fn cut_track(app: tauri::AppHandle, path: String, start_ms: u64, end_ms: u64, name: String) -> Result<Cut, String> {
+    let dir = sync::incoming_dir(&app)?;
+    let scope = app.asset_protocol_scope();
+    tauri::async_runtime::spawn_blocking(move || {
+        let src = PathBuf::from(&path);
+        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        if ext != "mp3" && ext != "wav" {
+            return Err(media::UNSUPPORTED.to_string());
+        }
+        // Songs are a few megabytes; a "song" that is not gets the markers.
+        if std::fs::metadata(&src).map(|m| m.len()).unwrap_or(u64::MAX) > 400 * 1024 * 1024 {
+            return Err(media::UNSUPPORTED.to_string());
+        }
+        let bytes = std::fs::read(&src).map_err(|e| format!("READ_FAILED: {e}"))?;
+        let (out, duration) = if ext == "mp3" { media::cut_mp3(&bytes, start_ms, end_ms)? } else { media::cut_wav(&bytes, start_ms, end_ms)? };
+
+        std::fs::create_dir_all(&dir).map_err(|e| format!("WRITE_FAILED: {e}"))?;
+        let stem = sync::safe_name(name.trim());
+        let stem = if stem.is_empty() { "Cut".to_string() } else { stem };
+        let mut dest = dir.join(format!("{stem}.{ext}"));
+        let mut n = 2;
+        while dest.exists() {
+            dest = dir.join(format!("{stem} ({n}).{ext}"));
+            n += 1;
+        }
+        std::fs::write(&dest, out).map_err(|e| format!("WRITE_FAILED: {e}"))?;
+
+        // The name it was given as its title, and the artist it had. Not
+        // being able to write them is not a reason to lose the cut.
+        if ext == "mp3" {
+            use lofty::config::WriteOptions;
+            use lofty::tag::{Tag, TagExt, TagType};
+            let mut tag = Tag::new(TagType::Id3v2);
+            tag.set_title(name.trim().to_string());
+            let artist = lofty::read_from_path(&src).ok().and_then(|f| f.primary_tag().or_else(|| f.first_tag()).and_then(|t| t.artist().map(|a| a.to_string())));
+            if let Some(artist) = artist.filter(|a| !a.trim().is_empty()) {
+                tag.set_artist(artist);
+            }
+            let _ = tag.save_to_path(&dest, WriteOptions::default());
+        }
+        if let Some(parent) = dest.parent() {
+            let _ = scope.allow_directory(parent, false);
+        }
+        Ok(Cut { uri: dest.to_string_lossy().to_string(), title: name.trim().to_string(), duration })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ── The round button ───────────────────────────────────────────────────────
@@ -297,8 +413,18 @@ mod win {
     extern "system" {
         pub fn CreateEllipticRgn(x1: i32, y1: i32, x2: i32, y2: i32) -> isize;
     }
+    #[link(name = "kernel32")]
+    extern "system" {
+        pub fn CreateMutexW(attrs: *const core::ffi::c_void, owned: i32, name: *const u16) -> isize;
+        pub fn CreateEventW(attrs: *const core::ffi::c_void, manual: i32, set: i32, name: *const u16) -> isize;
+        pub fn OpenEventW(access: u32, inherit: i32, name: *const u16) -> isize;
+        pub fn SetEvent(event: isize) -> i32;
+        pub fn WaitForSingleObject(handle: isize, ms: u32) -> u32;
+        pub fn GetLastError() -> u32;
+    }
     #[link(name = "user32")]
     extern "system" {
+        pub fn AllowSetForegroundWindow(process: u32) -> i32;
         pub fn SetWindowRgn(hwnd: isize, rgn: isize, redraw: i32) -> i32;
         pub fn SystemParametersInfoW(action: u32, param: u32, data: *mut core::ffi::c_void, ini: u32) -> i32;
     }
@@ -551,11 +677,70 @@ fn floating(app: &tauri::App, label: &str, page: &str, w: f64, h: f64) -> tauri:
         .build()
 }
 
+// ── One MPTree at a time ───────────────────────────────────────────────────
+// A second start must not open a second MPTree: the two would play over each
+// other, and both speak for this computer on the account. The first one holds
+// a named mutex; a later one finds it taken, raises a named event and leaves,
+// and the first one, waiting on that event, comes to the front.
+
+const ONLY_ONE: &str = "Local\\net.mp-tree.desktop.one";
+const SHOW_IT: &str = "Local\\net.mp-tree.desktop.show";
+
+/// False when another MPTree was running already: it has been told to show
+/// itself, and this one should end.
+fn first_instance() -> bool {
+    #[cfg(windows)]
+    unsafe {
+        let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+        let mutex = win::CreateMutexW(std::ptr::null(), 0, wide(ONLY_ONE).as_ptr());
+        // 183: ERROR_ALREADY_EXISTS. The handle is kept for as long as MPTree
+        // runs, which is what makes the name taken.
+        if mutex != 0 && win::GetLastError() == 183 {
+            let event = win::OpenEventW(0x0002, 0, wide(SHOW_IT).as_ptr());
+            if event != 0 {
+                // Windows only lets the program in front hand the front on.
+                win::AllowSetForegroundWindow(u32::MAX);
+                win::SetEvent(event);
+            }
+            return false;
+        }
+    }
+    true
+}
+
+/// Waits to be asked to show itself, for as long as MPTree runs.
+fn answer_second_starts(app: tauri::AppHandle) {
+    #[cfg(windows)]
+    std::thread::spawn(move || unsafe {
+        let wide: Vec<u16> = SHOW_IT.encode_utf16().chain(std::iter::once(0)).collect();
+        let event = win::CreateEventW(std::ptr::null(), 0, 0, wide.as_ptr());
+        if event == 0 {
+            return;
+        }
+        loop {
+            if win::WaitForSingleObject(event, u32::MAX) != 0 {
+                return;
+            }
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.unminimize();
+                let _ = main.show();
+                let _ = main.set_focus();
+            }
+        }
+    });
+    #[cfg(not(windows))]
+    let _ = app;
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if !first_instance() {
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(account::Access::default())
+        .manage(Tags::default())
         .setup(|app| {
             let saved: Saved = saved_file(app.handle())
                 .and_then(|f| std::fs::read_to_string(f).ok())
@@ -573,16 +758,19 @@ pub fn run() {
                 let handle = app.handle().clone();
                 main.on_window_event(move |event| on_main_event(&handle, event));
             }
+            answer_second_starts(app.handle().clone());
+            sync::clear_parts(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            scan, album_art, lyrics, trash_files,
+            scan, album_art, lyrics, trash_files, cut_track,
             bubble_click, bubble_drag, shortcut_get, shortcut_set, shortcut_style, mini_hide, is_mini,
             account::google_sign_in, account::google_cancel_sign_in, account::google_token, account::google_clear_token,
             account::google_sign_out, account::google_available,
             sync::sync_device_id, sync::host_name, sync::sync_free_space, sync::sync_fingerprints,
             sync::sync_read_chunk, sync::sync_begin_file, sync::sync_append_chunk, sync::sync_finish_file,
             sync::sync_abort_file, sync::sync_drive_upload, sync::sync_drive_download, sync::open_external,
+            sync::sync_path_states,
         ])
         .run(tauri::generate_context!())
         .expect("MPTree could not start");

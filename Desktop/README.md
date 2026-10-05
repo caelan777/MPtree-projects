@@ -61,16 +61,60 @@ the link in `Website/windows.html` and the `windows` block in
 `Website/version.json`. The picture on the site comes from
 `node Desktop/scripts/site-shot.mjs`.
 
+## Things worth knowing
+
+- **One at a time.** A second start shows the MPTree that is already open
+  (`first_instance` in `lib.rs`).
+- **The scan is cached.** Tags are read once per file and kept for as long as
+  the file does not change (`Tags` in `lib.rs`); the sync engine scans on
+  every round. Fingerprints are kept the same way (`sync.rs`).
+- **Files that are online only are left out.** A OneDrive file that is not on
+  this disk would be downloaded by reading its tags.
+- **Crossfade** is two `<audio>` elements changing places in volume
+  (`AudioPlayerDesktop.ts`), as the phone has two MediaPlayers.
+- **A cut** is a real file when the source is MP3 or WAV (`media.rs`), and two
+  markers on the original otherwise, which the player keeps to itself.
+- **A marker cut is not a file.** Its path is its source's. Deleting one for
+  good takes it out of the bin and leaves the source where it is
+  (`handleDeleteForever` and `handleEmptyBin` in `App.tsx`); before 0.1.2 it
+  took the original song with it.
+- **A WebM saved as .mp3** plays, and shows its length (`media.rs` reads it
+  from the Matroska header; lofty goes by the name and gives up).
+- **A song the scan no longer lists is not "deleted"** while its file is still
+  there or its disk is not (a stick taken out, another music folder chosen):
+  see `keepUnscanned` in `src/sync/engine.ts`. Counting it as deleted would
+  put it in the bin on every device.
+
+## Trying the real window without touching your own library
+
+The built app can be started on an empty profile, and driven from a script
+through the WebView's debugging port:
+
+```bash
+export WEBVIEW2_USER_DATA_FOLDER="$PWD/.test-run/profile"
+export WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9340"
+src-tauri/target/release/mptree-desktop.exe
+```
+
+That profile has no account, so nothing syncs. Point it at a folder of copies
+(`localStorage.mptree_desktop_folder`), and keep that folder under a name that
+starts with a dot: the scan of the whole user folder skips those, so the copies
+never show up in the real library. Songs in `Music\MPTree` are listed whichever
+folder is chosen, and a cut is written there, so remove test cuts afterwards.
+MPTree runs once at a time: close the real one first.
+
 ## Not there yet
 
-- Crossfade (one `<audio>` element has nothing to fade into).
-- Cutting tracks and ringtones (left out of the song menu on Windows).
-- Buying Pro on Windows. There is no Google Play here, so there is nothing to
-  buy with yet. Pro bought on a phone does arrive, through the account.
+- Buying Pro on Windows is built (a web checkout, `BillingDesktop.ts`) and
+  switched off in public builds until the shop is approved: it is on when
+  `VITE_CHECKOUT_URL` is set at build time.
 - Updates do not install themselves. The app reads the `windows` block of
   `Website/version.json` once a day and points at `mp-tree.net/windows.html`.
 - Code signing: the installer is unsigned, so Windows warns about it.
 - The Playlists page is the phone page with a wider grid; it has no keyboard
   handling.
-- The tour is switched off in the wide layout.
 - Formats the WebView cannot decode are not scanned (see `AUDIO_EXTENSIONS`).
+- A metered connection is not told apart from wifi, so songs sync on both.
+- This PC cannot always build the release: the last link needs a few
+  gigabytes of memory. Close the browser first if it fails with "out of
+  memory".
