@@ -70,6 +70,23 @@
     });
   }
 
+  /* ── How it looks: Android or Windows ────────────────────────────────
+   * Two pictures, one showing. The buttons are tabs in the accessibility
+   * sense, so the chosen one is announced as selected.
+   */
+  var lookTabs = document.querySelectorAll("[data-look]");
+  for (var t = 0; t < lookTabs.length; t++) {
+    lookTabs[t].addEventListener("click", function () {
+      var want = this.getAttribute("data-look");
+      for (var k = 0; k < lookTabs.length; k++) {
+        var name = lookTabs[k].getAttribute("data-look");
+        lookTabs[k].setAttribute("aria-selected", name === want ? "true" : "false");
+        var panel = document.getElementById("look-" + name);
+        if (panel) panel.hidden = name !== want;
+      }
+    });
+  }
+
   /* The comment section used to be loaded here, lazily, from Cusdis. Their
    * service returns 521 and their repository is archived, so the whole thing
    * is gone. Nothing on the site loads from a third party any more. */

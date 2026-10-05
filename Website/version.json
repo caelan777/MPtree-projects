@@ -7,5 +7,14 @@
     "MPTree Pro, free to try for a week.",
     "Dark and light mode each keep their own look.",
     "Backups: pick what goes in."
-  ]
+  ],
+  "windows": {
+    "_comment": "The Windows app reads this block instead of the top one (Desktop/src/updateCheck.ts).",
+    "latest": "0.1.0",
+    "date": "2026-10-05",
+    "url": "https://mp-tree.net/windows.html",
+    "notes": [
+      "The first early release for Windows."
+    ]
+  }
 }

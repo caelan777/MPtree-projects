@@ -12,8 +12,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
-<link rel="stylesheet" href="assets/tokens.css?v=42">
-<link rel="stylesheet" href="assets/site.css?v=42">
+<link rel="stylesheet" href="assets/tokens.css?v=43">
+<link rel="stylesheet" href="assets/site.css?v=43">
 </head>
 <body>
 
@@ -44,11 +44,11 @@
 
   <section class="section-flush">
     <div class="prose">
-      <p class="prose-date">Last updated: 1 October 2026</p>
+      <p class="prose-date">Last updated: 5 October 2026</p>
 
       <h2>Who this covers</h2>
       <p>
-        This policy applies to the MPTree Android app and the website at mp-tree.net. MPTree is
+        This policy applies to the MPTree apps for Android and Windows and the website at mp-tree.net. MPTree is
         an offline music player built by Verkuijl. There is no company behind it and no
         server that stores your information.
       </p>
@@ -80,6 +80,11 @@
         <a href="#account">MPTree account</a> yourself: then they go to your own other devices.
         If you deny this permission, MPTree simply cannot show your library.
       </p>
+      <p>
+        On Windows there is no such permission to ask for. MPTree reads the audio files in your
+        own user folder, or in the one folder you pick in Settings, and nothing else. Songs that
+        arrive from your other devices are saved in <b>Music\MPTree</b>.
+      </p>
 
       <h2 id="internet">Internet access</h2>
       <p>
@@ -92,8 +97,8 @@
         whether a newer version has been released. That request carries nothing except the ask
         itself. Like any web request, including loading this page, it does reach the server with
         your device's IP address. Nothing is stored against you, and nothing links one check to
-        the next. The Google Play version does not make this request at all, and neither does the
-        demo you can try on this site.
+        the next. The Windows app makes the same request. The Google Play version does not make it at all,
+        and neither does the demo you can try on this site.
       </p>
       <p>
         MPTree does not fetch lyrics. Tapping <strong>Search online</strong> on a song opens your
@@ -152,6 +157,11 @@
         copy. To sign in, MPTree asks Google for access to that one folder and nothing else. It
         reads your name and email address from Google only to show you which account you are
         signed in with, on your device.
+      </p>
+      <p>
+        On Windows, signing in opens Google's own page in your browser. What lets MPTree stay
+        signed in afterwards is kept on that computer, in the Windows Credential Manager, and
+        is removed when you sign out.
       </p>
       <p>
         <b>Your songs.</b> The songs themselves are not saved in your account. They go from one

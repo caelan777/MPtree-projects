@@ -15,18 +15,18 @@
 <meta property="og:title" content="MPTree, an offline music player">
 <meta property="og:description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
 <meta property="og:url" content="https://mp-tree.net/">
-<meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=42">
+<meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=43">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=42">
+<meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=43">
 
 <link rel="icon" type="image/svg+xml" href="assets/icon/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
-<link rel="stylesheet" href="assets/tokens.css?v=42">
-<link rel="stylesheet" href="assets/site.css?v=42">
+<link rel="stylesheet" href="assets/tokens.css?v=43">
+<link rel="stylesheet" href="assets/site.css?v=43">
 </head>
 <body>
 
@@ -56,7 +56,7 @@
 
     <div class="hero-disc" aria-hidden="true">
       <div class="disc">
-        <img src="assets/img/vinyl.webp?v=42" alt="" width="1000" height="1000">
+        <img src="assets/img/vinyl.webp?v=43" alt="" width="1000" height="1000">
       </div>
       <div class="disc-label">
         <img src="assets/img/mptree-mark-black.svg" alt="" width="26" height="26">
@@ -109,26 +109,46 @@
   <section id="look" class="section wrap">
     <h2>How it looks</h2>
     <p class="section-lede">
-      The song list and your playlists, straight from the app.
+      Straight from the app, on your phone and on your computer.
     </p>
 
+    <!-- Android or Windows. Both are pictures of the real interface; the
+         buttons only swap which one shows (assets/site.js). Without script
+         the Android one stays, which is the default anyway. -->
+    <div class="look-switch" role="tablist" aria-label="Which MPTree">
+      <button type="button" role="tab" aria-selected="true" aria-controls="look-android" data-look="android">Android</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="look-windows" data-look="windows">Windows</button>
+    </div>
+
+    <div id="look-android" role="tabpanel">
     <div class="phone-strip">
       <div class="phone-row">
         <div class="phone">
           <div class="phone-screen">
-            <img class="phone-shot" src="assets/img/screens/songs.png?v=42"
+            <img class="phone-shot" src="assets/img/screens/songs.png?v=43"
                  alt="The MPTree song list, with a track playing in the bar at the bottom"
                  width="1080" height="2400" loading="lazy">
           </div>
         </div>
         <div class="phone">
           <div class="phone-screen">
-            <img class="phone-shot" src="assets/img/screens/playlists.png?v=42"
+            <img class="phone-shot" src="assets/img/screens/playlists.png?v=43"
                  alt="The MPTree playlists page, with the automatic playlists above your own"
                  width="1080" height="2400" loading="lazy">
           </div>
         </div>
       </div>
+    </div>
+    </div>
+
+    <div id="look-windows" role="tabpanel" hidden>
+      <div class="desk">
+        <div class="desk-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+        <img class="desk-shot" src="assets/img/screens/windows.jpg?v=43"
+             alt="MPTree on Windows: a sidebar, the song list as a table, and the record with what plays next on the right"
+             width="1920" height="1140" loading="lazy">
+      </div>
+      <p class="look-note">An early release. <a href="windows.html">Get it for Windows</a></p>
     </div>
   </section>
 
@@ -195,10 +215,10 @@
            target="_blank" rel="noopener">
           Get it on Google Play
         </a>
-        <span class="btn btn-lg btn-soon" aria-disabled="true">
+        <a class="btn btn-lg btn-ghost" href="windows.html">
           Windows
-          <span class="soon">Coming soon</span>
-        </span>
+          <span class="soon">Early release</span>
+        </a>
       </div>
 
       <!-- Two steps rather than the old three. Installing from Play is one
@@ -275,8 +295,8 @@
   </div>
 </footer>
 
-<script src="assets/versions.js?v=42"></script>
-<script src="assets/releases.js?v=42" defer></script>
-<script src="assets/site.js?v=42" defer></script>
+<script src="assets/versions.js?v=43"></script>
+<script src="assets/releases.js?v=43" defer></script>
+<script src="assets/site.js?v=43" defer></script>
 </body>
 </html>
