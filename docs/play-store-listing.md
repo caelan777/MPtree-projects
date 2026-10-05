@@ -8,6 +8,34 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.1 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.1.aab`
+(versionCode 46). Fixes only: nothing new to declare, and the data safety answers
+for 1.2.0 still hold. The one change to the manifest is the WAKE_LOCK permission,
+which needs no declaration.
+
+```
+<en-GB>
+Fixes.
+Music keeps playing when you swipe MPTree away, and comes back after another app has made a sound.
+Deleting a song for good now takes one go.
+Opening MPTree while music is playing brings the queue back, so Next works again.
+Deleting a cut no longer deletes the song it was cut from.
+A memory card that is taken out no longer counts as deleted songs on your other devices.
+</en-GB>
+<nl-NL>
+Verbeteringen.
+Muziek speelt door als je MPTree wegveegt, en komt terug nadat een andere app geluid heeft gemaakt.
+Een nummer voorgoed verwijderen kan nu in één keer.
+Open je MPTree terwijl er muziek speelt, dan is de wachtrij er weer en werkt Volgende.
+Een knipsel verwijderen verwijdert niet meer het nummer waaruit het geknipt is.
+Een geheugenkaart die eruit is telt niet meer als verwijderde nummers op je andere apparaten.
+</nl-NL>
+```
+
+---
+
 ## Release notes for 1.2.0 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.0.aab`
