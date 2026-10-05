@@ -10,7 +10,7 @@ import type { BillingPlugin } from "../plugins";
 // account's tag (the hash from accountTag, never the email). The payment
 // service reports the paid order to mp-tree.net/api/pay, which writes the tag
 // down; this file asks mp-tree.net/api/pro whether the tag is there. Nobody
-// types a code. See Website/functions/api/ and Website/README.md.
+// types a code. See functions/api/ (at the repository root) and Website/README.md.
 
 /** The product's checkout link at the payment service. Empty until the shop
  *  exists: Pro is then not sold on Windows, and src/pro.ts says so. */

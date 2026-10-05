@@ -104,7 +104,8 @@ service that hides the destination.
 ## Pro on Windows: the web checkout
 
 The Windows app sells Pro through a web checkout (Lemon Squeezy). Two small
-functions in `functions/api/` connect a payment to an MPTree account:
+functions in `functions/api/` at the repository root (Cloudflare Pages looks
+for them beside the project root, not inside `Website/`) connect a payment to an MPTree account:
 
 - `pay.js` is the webhook the payment service calls. A paid order writes the
   account's tag down; a refund removes it.
