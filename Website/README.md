@@ -100,3 +100,30 @@ service that hides the destination.
 * The hero photograph is a generated image. It is the loosest fit to a brand that forbids
   gradients and glows, so it is deliberately contained in a bordered panel rather than
   used full bleed.
+
+## Pro on Windows: the web checkout
+
+The Windows app sells Pro through a web checkout (Lemon Squeezy). Two small
+functions in `functions/api/` connect a payment to an MPTree account:
+
+- `pay.js` is the webhook the payment service calls. A paid order writes the
+  account's tag down; a refund removes it.
+- `pro.js` answers the app: does this tag have Pro?
+
+All that is kept is the tag (a hash of the account, never the email) and the
+order number, in a Cloudflare KV namespace.
+
+One-time setup, in the Cloudflare dashboard, on the Pages project:
+
+1. Storage and databases, KV: create a namespace, for example `mptree-pro`.
+2. Pages project, Settings, Bindings: add a KV binding named `PRO` to it.
+3. Settings, Variables and secrets: add the secret `LEMON_WEBHOOK_SECRET`, a
+   long random text you make up. Optional: `LEMON_PRODUCT_ID`, so only orders
+   of that product count.
+4. In Lemon Squeezy, Settings, Webhooks: add `https://mp-tree.net/api/pay`
+   with the same secret, for the events `order_created` and `order_refunded`.
+5. Put the product's checkout link in `CHECKOUT_URL` in
+   `Desktop/src/desktop/BillingDesktop.ts` and build the app. Until then the
+   Windows app does not sell Pro.
+
+A new deploy is needed after steps 2 and 3 before the functions see them.
