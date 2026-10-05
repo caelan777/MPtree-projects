@@ -65,7 +65,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     setBusy(null);
     if (r === "owned") onToast(t("Pro unlocked. Thank you!"));
     else if (r === "pending") onToast(t("Payment pending. Pro unlocks as soon as it goes through."));
-    else if (r === "failed") onToast(t("Google Play could not be reached. Try again in a moment."));
+    else if (r === "failed") onToast(isDesktop ? t("The checkout could not be opened. Try again in a moment.") : t("Google Play could not be reached. Try again in a moment."));
+    else if (r === "cancelled" && isDesktop) onToast(t("No payment came in. Nothing was charged."));
   };
   const join = async () => {
     setBusy("signin");
@@ -87,8 +88,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     setBusy("restore");
     const r = await restorePro();
     setBusy(null);
-    onToast(r === null ? t("Google Play could not be reached. Try again in a moment.")
-      : r ? t("Pro restored") : t("No Pro purchase found on this Google account"));
+    onToast(r === null ? (isDesktop ? t("Could not check. Try again in a moment.") : t("Google Play could not be reached. Try again in a moment."))
+      : r ? t("Pro restored") : isDesktop ? t("No Pro purchase found for this account") : t("No Pro purchase found on this Google account"));
   };
 
   const features: { icon: ReactNode; title: string; body: string }[] = [
@@ -204,8 +205,15 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
                 style={{ ...sh.saveBtn, opacity: busy ? 0.6 : 1 }}>
                 {PRO_MODE === "free"
                   ? t("Unlock Pro for free (test build)")
-                  : busy === "buy" ? t("Opening Google Play…") : t("Get Pro for {price}", { price: priceLabel })}
+                  : busy === "buy" ? (isDesktop ? t("Waiting for the payment…") : t("Opening Google Play…")) : t("Get Pro for {price}", { price: priceLabel })}
               </button>
+              {isDesktop && PRO_MODE === "play" && (
+                <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7, lineHeight: 1.45 }}>
+                  {busy === "buy"
+                    ? t("Pay in your browser, then come back here. Pro switches on by itself.")
+                    : t("You pay in your browser. Pro is then on every device you sign in on.")}
+                </div>
+              )}
               {trialButton}
               {trialTest}
               {PRO_MODE === "play" && (

@@ -5,6 +5,7 @@ import { MusicScannerWeb } from "./web/MusicScannerWeb";
 import { AudioPlayerDesktop } from "./desktop/AudioPlayerDesktop";
 import { MusicScannerDesktop } from "./desktop/MusicScannerDesktop";
 import { AccountDesktop, SystemDesktop, makeSyncDesktop } from "./desktop/AccountDesktop";
+import { BillingDesktop } from "./desktop/BillingDesktop";
 
 // ─── PLUGINS ─────────────────────────────────────────────────────────────────
 //
@@ -221,7 +222,9 @@ export const System: SystemPlugin = isDesktop
   ? SystemWeb
   : registerPlugin<SystemPlugin>("System");
 
-export const Billing: BillingPlugin = isWeb
+export const Billing: BillingPlugin = isDesktop
+  ? BillingDesktop
+  : isWeb
   ? BillingWeb
   : registerPlugin<BillingPlugin>("Billing");
 

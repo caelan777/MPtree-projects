@@ -640,4 +640,11 @@ export const NL: Record<string, string> = {
   "Bin": "Prullenbak",
   "Shuffle all": "Alles shuffelen",
   "Shuffle favorites": "Favorieten shuffelen",
+  "The checkout could not be opened. Try again in a moment.": "De kassa kon niet worden geopend. Probeer het zo nog eens.",
+  "No payment came in. Nothing was charged.": "Er is geen betaling binnengekomen. Er is niets afgeschreven.",
+  "Could not check. Try again in a moment.": "Controleren lukte niet. Probeer het zo nog eens.",
+  "No Pro purchase found for this account": "Geen Pro-aankoop gevonden voor dit account",
+  "Waiting for the payment…": "Wachten op de betaling…",
+  "Pay in your browser, then come back here. Pro switches on by itself.": "Betaal in je browser en kom dan hier terug. Pro gaat vanzelf aan.",
+  "You pay in your browser. Pro is then on every device you sign in on.": "Je betaalt in je browser. Pro staat daarna op elk apparaat waarop je inlogt.",
 };

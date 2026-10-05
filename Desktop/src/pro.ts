@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
-import { Billing, System } from "./plugins";
+import { Billing, System, isDesktop } from "./plugins";
+import { CHECKOUT_URL } from "./desktop/BillingDesktop";
 import { resetLook } from "./look";
 import { t } from "./i18n";
 
@@ -18,6 +19,10 @@ import { t } from "./i18n";
 //          it can be tried before anything is on sale.
 //   none   The APK from the website. Play Billing only works in an app Play
 //          installed, so Pro is not sold there (yet).
+//
+// Windows is "play" too, once it has a shop: a web checkout stands where Play
+// Billing stands (desktop/BillingDesktop.ts), and keeps the receipt the same
+// way. Until the checkout link is filled in there, Windows is "none".
 //
 // Owning Pro is also written to Preferences. MPTree is an offline app, and a
 // person who paid must keep Pro on a plane; Play is asked again whenever it
@@ -38,7 +43,7 @@ export const PRODUCT_ID = "mptree_pro";
 
 export type ProMode = "play" | "free" | "none";
 export const PRO_MODE: ProMode =
-  __DISTRIBUTION__ === "play" ? "play"
+  __DISTRIBUTION__ === "play" || (isDesktop && !!CHECKOUT_URL) ? "play"
   : __PRO_TEST__ || __DISTRIBUTION__ === "demo" ? "free"
   : "none";
 
