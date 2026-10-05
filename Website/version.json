@@ -10,13 +10,13 @@
   ],
   "windows": {
     "_comment": "The Windows app reads this block instead of the top one (Desktop/src/updateCheck.ts).",
-    "latest": "0.1.1",
+    "latest": "0.1.2",
     "date": "2026-10-05",
     "url": "https://mp-tree.net/windows.html",
     "notes": [
-      "Clearer account pages.",
-      "A sign-in can be cancelled when the browser was closed.",
-      "Fixes to syncing songs with your phone."
+      "Crossfade between songs, and cutting tracks.",
+      "A tour of the window for new users.",
+      "Safer syncing: a disk that is unplugged no longer counts as deleted songs."
     ]
   }
 }
