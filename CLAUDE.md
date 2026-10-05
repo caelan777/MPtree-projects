@@ -9,7 +9,7 @@ brand and a feel but stay simple under the hood.
 ## Vision
 
 - Android app ✅ (exists)
-- Desktop app (planned, Tauri)
+- Desktop app (Windows prototype exists, Tauri)
 - Official website (planned, also the download/update hub)
 - Shared branding across all surfaces
 - Modern UI, fast performance, easy updates
@@ -32,7 +32,7 @@ MPtree projects/            ← workspace root (this folder)
 ├─ Branding/                ← brand assets, generated from one master SVG
 ├─ Website/                 ← the site, live at mp-tree.net (Cloudflare Pages)
 ├─ Dashboard/               ← internal tooling: collects every MPTree number into one page
-└─ Desktop/                 ← (empty) → Tauri desktop prototype will live here
+└─ Desktop/                 ← the Windows prototype (Tauri). See Desktop/README.md
 ```
 
 `Dashboard/` is not a surface, it is a workbench. `node Dashboard/collect.mjs`
@@ -40,8 +40,7 @@ pulls download counts, site health, Cloudflare traffic and Play into
 one JSON, which is pushed into a published dashboard artifact. Credentials live
 in `Dashboard/secrets.env` and never leave the machine. See its README.
 
-Note: `Desktop/` is still an empty placeholder, and the
-top-level `README.md` is (oddly) a directory. Both are cleanup targets, see the roadmap.
+Note: the top-level `README.md` is (oddly) a directory. It is a cleanup target, see the roadmap.
 
 ## The Android app (`MPTree-App/`)
 

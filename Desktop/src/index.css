@@ -1,0 +1,40 @@
+/* ── MPTree global reset ─────────────────────────────────────────────────────
+   Replaces the stock Vite template stylesheet. The template's
+   `#root { border-inline: 1px solid ... }` was the faint gray line running
+   down each edge of the screen; this reset keeps the canvas clean. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  border: none;
+}
+/* MPTree for Windows scrolls inside its own lists. The page itself never
+   scrolls, or a second scrollbar appears down the side of the window. */
+html, body { height: 100%; overflow: hidden; }
+
+/* The app sits under its own title bar by a top margin. Without flow-root that
+   margin collapses through #root and pushes it 34px past the bottom of the
+   page, and then anything that scrolls a row into view drags the whole app up
+   under the title bar. */
+#root { display: flow-root; height: 100%; min-height: 0; }
+
+/* Thin, quiet scrollbars everywhere, instead of the wide grey ones with arrows
+   that Windows draws by default. Grey at half strength reads on both grounds. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.45); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.7); background-clip: content-box; }
+::-webkit-scrollbar-button { display: none; }

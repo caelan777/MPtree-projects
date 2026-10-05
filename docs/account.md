@@ -159,8 +159,27 @@ from another phone lands in Music/MPTree.
 5. **Audience, Publish app.** While it is in Testing, only listed test users can
    sign in, and their access runs out after 7 days.
 
-No client id goes into the app: Google Play services matches the app by package
+No client id goes into the Android app: Google Play services matches the app by package
 name and signing certificate.
+
+### Windows
+
+The Windows app (`Desktop/`) has no Google Play services, so it does carry a
+client: a third one, of type **Desktop app**, in the *same* project. The same
+project matters: the app folder in Drive belongs to the project, so a client in
+another project would see an empty account.
+
+Its id and secret go in `Desktop/src-tauri/google-oauth.json`, which is not in
+the repository:
+
+```json
+{ "client_id": "....apps.googleusercontent.com", "client_secret": "..." }
+```
+
+`build.rs` reads it when the app is built. Without the file the app builds and
+signing in says it is not set up. Sign-in opens the browser and listens on
+`127.0.0.1` for Google's answer (`account.rs`); the refresh token is kept in
+the Windows Credential Manager.
 
 ## Testing on the dev server
 

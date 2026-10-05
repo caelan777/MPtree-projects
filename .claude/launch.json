@@ -34,6 +34,26 @@
       ],
       "port": 8090,
       "cwd": "Website"
+    },
+    {
+      "name": "mptree-desktop-ui",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5180"
+      ],
+      "port": 5180,
+      "cwd": "Desktop"
+    },
+    {
+      "name": "mptree-desktop-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite"
+      ],
+      "port": 5173,
+      "cwd": "Desktop"
     }
   ]
 }

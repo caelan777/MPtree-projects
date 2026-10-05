@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the MPTree window may ask of the system",
+  "windows": [
+    "main",
+    "bubble",
+    "dismiss"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized"
+  ]
+}

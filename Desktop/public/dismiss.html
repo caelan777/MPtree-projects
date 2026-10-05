@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="UTF-8" />
+<title>MPTree</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+  body { display: flex; align-items: center; justify-content: center; }
+  /* The window is cut to this circle in lib.rs (make_round); keep the two in step. */
+  div {
+    width: 88px; height: 88px; border-radius: 50%; box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.28); background: #0b0b0d; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  /* The button is over it: let go and it is gone. */
+  div.near { background: #fff; color: #0b0b0d; }
+</style>
+<div id="x" aria-label="Remove the button">
+  <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+</div>
+<script>
+  // Shown only while the round button is dragged. lib.rs calls this.
+  function setNear(on) { document.getElementById("x").className = on ? "near" : ""; }
+</script>
+</html>
