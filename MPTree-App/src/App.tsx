@@ -814,7 +814,12 @@ export default function App() {
     MusicScanner.openAppSettings().catch(() => {});
   }, []);
 
-  const resyncFromNative = async (scanned: Song[]) => {
+  // `session`: what was saved when the app was last on screen. On a cold start
+  // over music that kept playing (the app was swiped away, the service played
+  // on) the song comes from the service, and the queue it is part of from
+  // there: without it the app showed the song alone, with no Up next and a
+  // next button that had nowhere to go.
+  const resyncFromNative = async (scanned: Song[], session?: Awaited<ReturnType<typeof loadSession>>) => {
     try {
       const native = await AudioPlayer.getCurrentSong();
       if (!native?.path) return false;
@@ -824,7 +829,12 @@ export default function App() {
       setCurrent(match); setCurrentTime(position); currentTimeRef.current = position;
       if (dur > 0) setDuration(dur);
       setPlaying(native.isPlaying); loadedRef.current = true;
-      setQueue(prev => prev.some(s => s.id === match.id) ? prev : [match]);
+      const saved = session?.playMode === "shuffle" && session.queueIds
+        ? session.queueIds.map((id: string) => scanned.find(s => s.id === id)).filter((s): s is Song => !!s)
+        : [];
+      setQueue(prev => prev.some(s => s.id === match.id) ? prev
+        : saved.some(s => s.id === match.id) ? saved
+        : [match]);
       return true;
     } catch { return false; }
   };
@@ -846,7 +856,7 @@ export default function App() {
         const scanned = await scanMusic(pendingBin);
         const session = pendingSession;
 
-        const resynced = await resyncFromNative(scanned);
+        const resynced = await resyncFromNative(scanned, session);
         if (!resynced && session.currentId) {
           const found = scanned.find(s => s.id === session.currentId);
           if (found) {
@@ -1379,7 +1389,9 @@ export default function App() {
   // both modes just step through the queue and pins are honoured either way.
   const skip = async (dir: -1 | 1) => {
     if (!currentSong) return;
-    const q = queue.length ? queue : displayList;
+    // A queue of just the current song is what is left after the app was
+    // reopened over music that kept playing: the list on screen is the queue then.
+    const q = queue.length > 1 ? queue : displayList;
     const idx = q.findIndex(s => s.id === currentSong.id);
     if (idx === -1) return;
     const nxt = q[idx + dir];
