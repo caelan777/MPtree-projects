@@ -61,6 +61,12 @@ the link in `Website/windows.html` and the `windows` block in
 `Website/version.json`. The picture on the site comes from
 `node Desktop/scripts/site-shot.mjs`.
 
+While the shop is not open, the public build is made with the checkout link
+empty: `VITE_CHECKOUT_URL="" npm run app:build` (an empty value in the shell
+wins over `.env.local`). A build with the link and one without write the same
+installer file, so copy the public one out of `bundle/nsis/` before building
+the other.
+
 ## Things worth knowing
 
 - **One at a time.** A second start shows the MPTree that is already open
