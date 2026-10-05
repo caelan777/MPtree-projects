@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { isDesktop } from "../plugins";
+import { invoke } from "@tauri-apps/api/core";
 import { Capacitor } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
@@ -79,10 +80,18 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     else if (r === "ok" && PRO_MODE === "none") onToast(t("This account has no MPTree Pro yet."));
   };
   const signInButton = (label: string) => (
+    <>
     <button onClick={join} disabled={busy !== null || joining}
       style={{ ...sh.saveBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: joining ? 0.7 : 1 }}>
       <GoogleG />{joining ? t("Signing in…") : label}
     </button>
+    {isDesktop && joining && (
+      <button onClick={() => { invoke("google_cancel_sign_in").catch(() => {}); }}
+        style={{ display: "block", margin: "8px auto 0", background: "transparent", border: "none", color: T.muted, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+        {t("Browser closed? Cancel and try again")}
+      </button>
+    )}
+    </>
   );
   const restore = async () => {
     setBusy("restore");
@@ -105,7 +114,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
 
   const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
   // Once only, and nothing to pay: it stops by itself after the week.
-  const trialButton = trial.state === "unused" && (
+  const trialButton = trial.state === "unused" && busy !== "buy" && (
     <>
       <button onClick={() => { if (startTrial()) onToast(t("Pro is on for 7 days")); }}
         style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: PRO_MODE === "none" ? 0 : 8 }}>
@@ -144,7 +153,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
               </span>
             </div>
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
-              {owns ? t("You have Pro. Thank you for supporting MPTree.")
+              {owns && isDesktop && sync.phase === "on" && sync.account?.email
+                ? t("You have Pro, bought for {email}. Thank you for supporting MPTree.", { email: sync.account.email })
+                : owns ? t("You have Pro. Thank you for supporting MPTree.")
                 : viaAccount ? t("You have Pro through your MPTree account.")
                 : trial.state === "live" ? t("Free week: {time} left.", { time: trialTimeLeft(trial.until) })
                 : t("Pay once, keep it forever. No subscription.")}
@@ -207,6 +218,11 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
                   ? t("Unlock Pro for free (test build)")
                   : busy === "buy" ? (isDesktop ? t("Waiting for the payment…") : t("Opening Google Play…")) : t("Get Pro for {price}", { price: priceLabel })}
               </button>
+              {isDesktop && trial.state === "live" && busy !== "buy" && (
+                <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7, lineHeight: 1.45 }}>
+                  {t("Your free week is running. Pro is not bought yet.")}
+                </div>
+              )}
               {isDesktop && PRO_MODE === "play" && (
                 <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7, lineHeight: 1.45 }}>
                   {busy === "buy"

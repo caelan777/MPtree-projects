@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
 import { Billing, System, isDesktop } from "./plugins";
-import { CHECKOUT_URL } from "./desktop/BillingDesktop";
+import { CHECKOUT_URL, billingAccount } from "./desktop/BillingDesktop";
 import { resetLook } from "./look";
 import { t } from "./i18n";
 
@@ -314,6 +314,33 @@ export async function restorePro(): Promise<boolean | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Windows: MPTree is signed in to the account `email`. On a phone a purchase
+ * stays with the phone's own Play account whoever signs in to MPTree; a
+ * computer has no such thing, so there Pro follows the MPTree account. Signing
+ * in to an account that did not buy it shows the Buy button again, rather
+ * than every account on this computer seeming to have Pro.
+ */
+export async function proAccountIs(email: string): Promise<void> {
+  if (!isDesktop || PRO_MODE !== "play") return;
+  const tag = await accountTag(email);
+  if (owned && ownedTag === tag) return;
+  billingAccount(tag);
+  try {
+    const r = await Billing.restore({ productId: PRODUCT_ID });
+    if (!r.ok) return;
+    if (r.owned) { setOwned(true, "play", tag); return; }
+  } catch { return; }
+  if (!owned) return;
+  // Bought here, for another account. Not "lost": nothing was refunded, and
+  // the account it was for still has it.
+  owned = false;
+  ownedTag = null;
+  Preferences.remove({ key: KEY }).catch(() => {});
+  if (!fromAccount && trial.state !== "live") dropProLook();
+  emit();
 }
 
 /** The price as Play shows it in the person's own currency, e.g. "€ 2,99". */

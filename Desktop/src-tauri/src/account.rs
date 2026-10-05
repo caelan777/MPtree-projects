@@ -18,6 +18,7 @@
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -34,6 +35,11 @@ const KEY_SERVICE: &str = "MPTree";
 const KEY_USER: &str = "google-refresh-token";
 /// How long the browser page may stay unanswered before sign-in gives up.
 const WAIT: Duration = Duration::from_secs(300);
+
+/// Which sign-in is the one being waited for. Starting another, or cancelling,
+/// moves it on, and the wait that was running gives up: a browser that was
+/// closed halfway must not leave MPTree "signing in" for five minutes.
+static ATTEMPT: AtomicU64 = AtomicU64::new(0);
 
 /// The access token and when it stops working.
 #[derive(Default, Clone)]
@@ -114,10 +120,13 @@ fn answer(stream: &mut std::net::TcpStream, message: &str) {
 
 /// Waits for Google to send the browser back. Ok(None) when the person closed
 /// the page, said no, or never answered.
-fn wait_for_code(listener: &TcpListener, state: &str) -> Result<Option<String>, String> {
+fn wait_for_code(listener: &TcpListener, state: &str, attempt: u64) -> Result<Option<String>, String> {
     listener.set_nonblocking(true).map_err(|e| format!("AUTH_FAILED: {e}"))?;
     let until = Instant::now() + WAIT;
     while Instant::now() < until {
+        if ATTEMPT.load(Ordering::SeqCst) != attempt {
+            return Ok(None);
+        }
         let Ok((mut stream, _)) = listener.accept() else {
             std::thread::sleep(Duration::from_millis(150));
             continue;
@@ -167,6 +176,7 @@ fn remember(access: &Access, json: &serde_json::Value) -> Result<String, String>
 
 fn sign_in_blocking(access: &Access) -> Result<SignIn, String> {
     let (id, secret) = creds()?;
+    let attempt = ATTEMPT.fetch_add(1, Ordering::SeqCst) + 1;
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| format!("AUTH_FAILED: {e}"))?;
     let port = listener.local_addr().map_err(|e| format!("AUTH_FAILED: {e}"))?.port();
     let redirect = format!("http://127.0.0.1:{port}");
@@ -183,7 +193,7 @@ fn sign_in_blocking(access: &Access) -> Result<SignIn, String> {
     );
     open::that(&url).map_err(|e| format!("AUTH_FAILED: Could not open the browser: {e}"))?;
 
-    let Some(code) = wait_for_code(&listener, &state)? else {
+    let Some(code) = wait_for_code(&listener, &state, attempt)? else {
         return Ok(SignIn { cancelled: Some(true), ..Default::default() });
     };
     let json = token_request(&[
@@ -224,6 +234,13 @@ pub async fn google_sign_in(access: tauri::State<'_, Access>) -> Result<SignIn, 
     tauri::async_runtime::spawn_blocking(move || sign_in_blocking(&access))
         .await
         .map_err(|e| format!("AUTH_FAILED: {e}"))?
+}
+
+/// Stops waiting for the browser: the sign-in that is running answers
+/// "cancelled".
+#[tauri::command]
+pub fn google_cancel_sign_in() {
+    ATTEMPT.fetch_add(1, Ordering::SeqCst);
 }
 
 /// The token for the account that is signed in. Never opens the browser:

@@ -647,4 +647,12 @@ export const NL: Record<string, string> = {
   "Waiting for the payment…": "Wachten op de betaling…",
   "Pay in your browser, then come back here. Pro switches on by itself.": "Betaal in je browser en kom dan hier terug. Pro gaat vanzelf aan.",
   "You pay in your browser. Pro is then on every device you sign in on.": "Je betaalt in je browser. Pro staat daarna op elk apparaat waarop je inlogt.",
+  "Browser closed? Cancel and try again": "Browser gesloten? Annuleer en probeer opnieuw",
+  "All your songs, on all your devices": "Al je nummers, op al je apparaten",
+  "To start syncing your songs between your devices, buy MPTree Pro, or sign in to a Google account that has Pro.": "Koop MPTree Pro, of log in met een Google-account dat Pro heeft, om je nummers tussen je apparaten te synchroniseren.",
+  "Buy MPTree Pro": "Koop MPTree Pro",
+  "You have Pro, bought for {email}. Thank you for supporting MPTree.": "Je hebt Pro, gekocht voor {email}. Bedankt dat je MPTree steunt.",
+  "Your free week is running. Pro is not bought yet.": "Je gratis week loopt. Pro is nog niet gekocht.",
+  "Sign in on up to {n} device. Your songs, playlists, likes and settings are the same on all of them.": "Log in op maximaal {n} apparaat. Je nummers, afspeellijsten, likes en instellingen zijn overal hetzelfde.",
+  "Sign in on up to {n} devices. Your songs, playlists, likes and settings are the same on all of them.": "Log in op maximaal {n} apparaten. Je nummers, afspeellijsten, likes en instellingen zijn overal hetzelfde.",
 };

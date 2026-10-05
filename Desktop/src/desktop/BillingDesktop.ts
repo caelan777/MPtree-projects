@@ -12,9 +12,11 @@ import type { BillingPlugin } from "../plugins";
 // down; this file asks mp-tree.net/api/pro whether the tag is there. Nobody
 // types a code. See functions/api/ (at the repository root) and Website/README.md.
 
-/** The product's checkout link at the payment service. Empty until the shop
- *  exists: Pro is then not sold on Windows, and src/pro.ts says so. */
-export const CHECKOUT_URL: string = "https://mptree.lemonsqueezy.com/checkout/buy/c756f81f-5e57-424c-a8eb-1cd0c268712e";
+/** The product's checkout link at the payment service, from VITE_CHECKOUT_URL
+ *  at build time (Desktop/.env.local, which is not in the repository). Built
+ *  without it, Pro is not sold on Windows, and src/pro.ts says so: that is
+ *  how a public build is made while the shop is not open yet. */
+export const CHECKOUT_URL: string = import.meta.env.VITE_CHECKOUT_URL ?? "";
 
 const API = "https://mp-tree.net/api/pro";
 /** Shown on the button. The checkout shows the real price, with tax. */
@@ -38,6 +40,8 @@ async function ask(tag: string): Promise<boolean | null> {
   }
 }
 
+/** The account MPTree is signed in to now: the one restore() asks about. */
+export const billingAccount = (tag: string) => remember(tag);
 const remember = (tag: string) => { try { localStorage.setItem(TAG_KEY, tag); } catch { /* private mode */ } };
 const remembered = () => { try { return localStorage.getItem(TAG_KEY) || ""; } catch { return ""; } };
 

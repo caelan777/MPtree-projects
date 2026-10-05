@@ -39,7 +39,7 @@ import {
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
-import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
+import { usePro, loadPro, useTrial, dismissTrialNotice, proAccountIs } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
@@ -750,6 +750,9 @@ export default function App() {
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
+  // Windows: Pro bought in the web checkout belongs to the account signed in.
+  const syncEmail = sync.phase === "on" ? sync.account?.email : undefined;
+  useEffect(() => { if (syncEmail) void proAccountIs(syncEmail); }, [syncEmail]);
   useEffect(() => { loadLook(); loadPro(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)

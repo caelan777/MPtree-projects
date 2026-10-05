@@ -578,7 +578,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan, album_art, lyrics, trash_files,
             bubble_click, bubble_drag, shortcut_get, shortcut_set, shortcut_style, mini_hide, is_mini,
-            account::google_sign_in, account::google_token, account::google_clear_token,
+            account::google_sign_in, account::google_cancel_sign_in, account::google_token, account::google_clear_token,
             account::google_sign_out, account::google_available,
             sync::sync_device_id, sync::host_name, sync::sync_free_space, sync::sync_fingerprints,
             sync::sync_read_chunk, sync::sync_begin_file, sync::sync_append_chunk, sync::sync_finish_file,
