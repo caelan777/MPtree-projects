@@ -144,6 +144,8 @@ export type SyncState = {
   lastSaved?: number;
   /** Something went wrong on the last try, in plain words. */
   problem?: "offline" | "drive" | "signin" | null;
+  /** What the failed round actually said, for whoever has to find out why. */
+  problemDetail?: string;
   songs: {
     here: number;
     /** On other phones and not on this one. */
@@ -171,6 +173,12 @@ export type SyncState = {
     doubles: string[];
   };
   deleted: Deleted[];
+  /** The list of deleted songs has been worked out since MPTree was opened.
+   *  Until then it is empty because it is not known, not because it is. */
+  deletedLoaded: boolean;
+  /** What this device remembers of its account has been read. Before that,
+   *  "off" only means "not looked yet". */
+  ready: boolean;
   mobileData: boolean;
 };
 
@@ -180,10 +188,10 @@ const initialSongs: SyncState["songs"] = {
 };
 const initial: SyncState = {
   phase: "off", devices: [], pausedNoPro: false, saving: false,
-  songs: initialSongs, deleted: [], mobileData: false,
+  songs: initialSongs, deleted: [], deletedLoaded: false, ready: true, mobileData: false,
 };
 
-let state: SyncState = initial;
+let state: SyncState = { ...initial, ready: false };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<SyncState>) => { state = { ...state, ...patch }; listeners.forEach(l => l()); };
 const setSongs = (patch: Partial<SyncState["songs"]>) => {
@@ -372,13 +380,13 @@ export async function prepareSync(): Promise<void> {
   alias = await readJson<Record<string, string>>(KEY_ALIAS) ?? {};
   if (stored) {
     set({
-      phase: "on", deviceId,
+      phase: "on", deviceId, ready: true,
       account: { email: stored.email, name: stored.name, photo: stored.photo },
       mobileData: !!stored.mobileData,
     });
     if (import.meta.env.DEV) try { if (localStorage.getItem("mptree_dev_account") === "1") token = { value: "dev", at: Date.now() }; } catch { /* no storage */ }
   } else {
-    set({ deviceId });
+    set({ deviceId, ready: true });
   }
 }
 
@@ -864,7 +872,11 @@ async function libraryCycle(): Promise<void> {
     });
     await songsCycle();
   } catch (e) {
-    set({ problem: (e as { code?: string })?.code === "NEEDS_SIGN_IN" ? "signin" : "drive" });
+    const err = e as { code?: string; status?: number; reason?: string; message?: string };
+    set({
+      problem: err?.code === "NEEDS_SIGN_IN" ? "signin" : "drive",
+      problemDetail: [err?.status, err?.reason || err?.message || String(e)].filter(Boolean).join(" ").slice(0, 160),
+    });
   } finally {
     set({ saving: false });
     done();
@@ -907,7 +919,7 @@ async function recallAliases(items: { path: string; size: number; fp: string }[]
   let found = false;
   for (const it of items) {
     if (alias[it.fp] || before[it.fp]) continue;
-    const was = byNameSize.get(`${(it.path.split("/").pop() ?? "").toLowerCase()}|${it.size}`);
+    const was = byNameSize.get(`${(it.path.split(/[\\/]/).pop() ?? "").toLowerCase()}|${it.size}`);
     if (was) { alias[it.fp] = was; found = true; }
   }
   if (found) await saveAlias();
@@ -931,7 +943,7 @@ async function fingerprint(scanned: Song[], removed: Song[], recall = false) {
     const s = byPath.get(it.path);
     const real = s && !s.isCut;
     myInv[it.fp] = [
-      it.size, it.path.split("/").pop() ?? "song.mp3",
+      it.size, it.path.split(/[\\/]/).pop() ?? "song.mp3",
       real ? songSig(s.title, s.artist) : undefined, real ? s.duration : undefined,
       real ? s.title : undefined, real && s.artist && s.artist !== "<unknown>" ? s.artist : undefined,
     ];
@@ -1073,7 +1085,7 @@ async function refreshDeleted() {
   }
   if (pruned) await saveGone();
   list.sort((a, b) => b.at - a.at);
-  set({ deleted: list });
+  set({ deleted: list, deletedLoaded: true });
 }
 
 /** Brings songs deleted here back, on every phone that deleted them. */
@@ -1284,6 +1296,7 @@ async function songsCycle(relist = false): Promise<void> {
     const inDrive = { count: waiting.length, bytes: waiting.reduce((n, f) => n + Number(f.size ?? 0), 0) };
 
     const need = missingFrom(myInv, others.map(d => invs.get(d.id)!.fps), doc, { me: deviceId, sigs: sigsOf(myInv), skip });
+    for (const fp of fetchedNow) delete need[fp];
     // A song asked back is fetched even though this phone deleted it once.
     const theyNeed = new Map<string, Inventory>();
     for (const d of others) {
@@ -1377,9 +1390,15 @@ const find = (fp: string) => {
   return path && v ? { fp, path, size: v[0], name: v[1] } : null;
 };
 
+/** What came in since MPTree was opened. A song that arrived and then does not
+ *  show up in the library (a file the scanner cannot read) would otherwise
+ *  look missing every round and be fetched again and again. */
+const fetchedNow = new Set<string>();
+
 async function arrivedHere(fp: string, path: string | null, size: number, name: string) {
+  fetchedNow.add(fp);
   const v = elsewhere.get(fp);
-  myInv[fp] = [size, (path ?? name).split("/").pop() ?? name, v?.[2], v?.[3], v?.[4], v?.[5]];
+  myInv[fp] = [size, (path ?? name).split(/[\\/]/).pop() ?? name, v?.[2], v?.[3], v?.[4], v?.[5]];
   if (path) {
     pathByFp.set(fp, path);
     fpByPath.set(path, fp);
@@ -1484,8 +1503,8 @@ async function takeRelayed() {
     if (!active()) break;
     const fp = f.appProperties?.fp ?? "";
     // Here already, or deleted here and not asked back: not wanted, so gone.
-    if (!fp || myInv[fp] || skip.has(fp) || doc?.songs[fp]?.del?.[deviceId] || doc?.songs[fp]?.bin) { await removeFile(f.name).catch(() => {}); continue; }
-    const name = f.appProperties?.name ?? "song.mp3";
+    if (!fp || myInv[fp] || fetchedNow.has(fp) || skip.has(fp) || doc?.songs[fp]?.del?.[deviceId] || doc?.songs[fp]?.bin) { await removeFile(f.name).catch(() => {}); continue; }
+    const name = (f.appProperties?.name ?? "song.mp3").split(/[\\/]/).pop() || "song.mp3";
     const size = Number(f.size ?? -1);
     if (!fits(Math.max(0, size))) { setSongs({ note: "phone-full" }); continue; }
     const tid = "relay-" + fp;

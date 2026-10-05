@@ -173,6 +173,12 @@ export type SyncState = {
     doubles: string[];
   };
   deleted: Deleted[];
+  /** The list of deleted songs has been worked out since MPTree was opened.
+   *  Until then it is empty because it is not known, not because it is. */
+  deletedLoaded: boolean;
+  /** What this device remembers of its account has been read. Before that,
+   *  "off" only means "not looked yet". */
+  ready: boolean;
   mobileData: boolean;
 };
 
@@ -182,10 +188,10 @@ const initialSongs: SyncState["songs"] = {
 };
 const initial: SyncState = {
   phase: "off", devices: [], pausedNoPro: false, saving: false,
-  songs: initialSongs, deleted: [], mobileData: false,
+  songs: initialSongs, deleted: [], deletedLoaded: false, ready: true, mobileData: false,
 };
 
-let state: SyncState = initial;
+let state: SyncState = { ...initial, ready: false };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<SyncState>) => { state = { ...state, ...patch }; listeners.forEach(l => l()); };
 const setSongs = (patch: Partial<SyncState["songs"]>) => {
@@ -374,13 +380,13 @@ export async function prepareSync(): Promise<void> {
   alias = await readJson<Record<string, string>>(KEY_ALIAS) ?? {};
   if (stored) {
     set({
-      phase: "on", deviceId,
+      phase: "on", deviceId, ready: true,
       account: { email: stored.email, name: stored.name, photo: stored.photo },
       mobileData: !!stored.mobileData,
     });
     if (import.meta.env.DEV) try { if (localStorage.getItem("mptree_dev_account") === "1") token = { value: "dev", at: Date.now() }; } catch { /* no storage */ }
   } else {
-    set({ deviceId });
+    set({ deviceId, ready: true });
   }
 }
 
@@ -1079,7 +1085,7 @@ async function refreshDeleted() {
   }
   if (pruned) await saveGone();
   list.sort((a, b) => b.at - a.at);
-  set({ deleted: list });
+  set({ deleted: list, deletedLoaded: true });
 }
 
 /** Brings songs deleted here back, on every phone that deleted them. */
@@ -1498,7 +1504,7 @@ async function takeRelayed() {
     const fp = f.appProperties?.fp ?? "";
     // Here already, or deleted here and not asked back: not wanted, so gone.
     if (!fp || myInv[fp] || fetchedNow.has(fp) || skip.has(fp) || doc?.songs[fp]?.del?.[deviceId] || doc?.songs[fp]?.bin) { await removeFile(f.name).catch(() => {}); continue; }
-    const name = f.appProperties?.name ?? "song.mp3";
+    const name = (f.appProperties?.name ?? "song.mp3").split(/[\\/]/).pop() || "song.mp3";
     const size = Number(f.size ?? -1);
     if (!fits(Math.max(0, size))) { setSongs({ note: "phone-full" }); continue; }
     const tid = "relay-" + fp;

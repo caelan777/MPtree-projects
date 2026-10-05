@@ -117,6 +117,12 @@ public class AudioPlayerPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        // The window is going; the service stays. It must not call back into
+        // a bridge that no longer exists.
+        if (playerService != null) {
+            playerService.setOnCompletionListener(null);
+            playerService.setOnStateChangeListener(null);
+        }
         if (bound) {
             getContext().unbindService(connection);
             bound = false;

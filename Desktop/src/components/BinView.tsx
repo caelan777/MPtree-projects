@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Loading } from "./Loading";
 import { isWide, TITLE_H } from "../themes";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
@@ -24,6 +25,8 @@ type BinViewProps = {
   deleteNote?: (songs: Song[]) => string | null;
   /** Signed in: songs deleted for good on this device. */
   deleted?: Deleted[];
+  /** The list above is not known yet (MPTree was only just opened). */
+  deletedLoading?: boolean;
   onRestoreDeleted?: (fps: string[]) => void;
   /** Play a bin song, using the bin as the queue. */
   onPlaySong: (s: Song, list: Song[]) => void;
@@ -49,7 +52,7 @@ function TrashIcon() {
   );
 }
 
-export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmptyBin, deleteNote, deleted, onRestoreDeleted, onPlaySong, onTogglePlay, currentSongId, isPlaying, onClose, T }: BinViewProps) {
+export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmptyBin, deleteNote, deleted, deletedLoading, onRestoreDeleted, onPlaySong, onTogglePlay, currentSongId, isPlaying, onClose, T }: BinViewProps) {
   const dispName   = (s: Song) => meta[s.id]?.customName   || s.title;
   const dispArtist = (s: Song) => meta[s.id]?.customArtist || (s.artist && s.artist.toLowerCase() !== "<unknown>" ? s.artist : "");
 
@@ -111,7 +114,9 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
       )}
 
       {showDeleted ? (
-        <DeletedList deleted={deleted!} onRestore={fps => onRestoreDeleted?.(fps)} T={T} />
+        deletedLoading && !deleted!.length
+          ? <Loading T={T} />
+          : <DeletedList deleted={deleted!} onRestore={fps => onRestoreDeleted?.(fps)} T={T} />
       ) : removedSongs.length === 0 ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: T.muted, gap: 12 }}>
           <IC.Bin />

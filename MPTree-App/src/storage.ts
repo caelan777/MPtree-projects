@@ -318,7 +318,7 @@ function isStorageFullError(e: unknown): boolean {
 
 /** Extract the filename from an absolute path. */
 function basename(filePath: string): string {
-  return filePath.split("/").pop() ?? filePath;
+  return filePath.split(/[\\/]/).pop() ?? filePath;
 }
 
 /**

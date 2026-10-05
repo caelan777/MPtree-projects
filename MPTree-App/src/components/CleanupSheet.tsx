@@ -82,7 +82,7 @@ export function CleanupSheet({ suspects, meta, onBin, onPlay, onTogglePlay, curr
               {suspects.map(({ song, why }) => {
                 const on = picked.has(song.id);
                 const m = meta[song.id] || {};
-                const folder = song.uri.split("/").slice(-2, -1)[0] || "";
+                const folder = song.uri.split(/[\\/]/).slice(-2, -1)[0] || "";
                 const current = song.id === currentSongId;
                 return (
                   <div

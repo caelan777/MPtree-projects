@@ -655,4 +655,5 @@ export const NL: Record<string, string> = {
   "Your free week is running. Pro is not bought yet.": "Je gratis week loopt. Pro is nog niet gekocht.",
   "Sign in on up to {n} device. Your songs, playlists, likes and settings are the same on all of them.": "Log in op maximaal {n} apparaat. Je nummers, afspeellijsten, likes en instellingen zijn overal hetzelfde.",
   "Sign in on up to {n} devices. Your songs, playlists, likes and settings are the same on all of them.": "Log in op maximaal {n} apparaten. Je nummers, afspeellijsten, likes en instellingen zijn overal hetzelfde.",
+  "Loading…": "Laden…",
 };

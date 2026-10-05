@@ -847,6 +847,26 @@ export default function App() {
     }
   }, [showError]);
 
+  // Windows: a song saved to disk while MPTree is open (a download, a copy
+  // from a stick) shows up when the window is next looked at, and with F5.
+  // The phone gets this from Android telling it the app came back; a window
+  // on a desk only knows that it was clicked.
+  const lastScanRef = useRef(0);
+  useEffect(() => {
+    if (!isDesktop) return;
+    const look = (force: boolean) => {
+      if (holdScanRef.current || isInitializing || booting) return;
+      if (!force && Date.now() - lastScanRef.current < 20000) return;
+      lastScanRef.current = Date.now();
+      void scanMusic();
+    };
+    const onFocus = () => look(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "F5") { e.preventDefault(); look(true); } };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener("keydown", onKey); };
+  }, [scanMusic, isInitializing, booting]);
+
   // The wide layout: a sidebar, a table and a player bar, instead of the phone
   // layout. A narrow window keeps the phone layout, which suits it.
   const [winW, setWinW] = useState(() => window.innerWidth);
@@ -4595,6 +4615,7 @@ export default function App() {
               return lines.join("\n\n") || null;
             }}
             deleted={signedIn ? sync.deleted : undefined}
+            deletedLoading={signedIn && !sync.deletedLoaded && !sync.problem}
             onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
             onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
             onTogglePlay={togglePlay}

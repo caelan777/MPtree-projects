@@ -5,6 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
+import { Loading } from "./Loading";
 import { Switch } from "./Switch";
 import { useAccountPro, useTrial, hasPro } from "../pro";
 import {
@@ -111,7 +112,11 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   let body: ReactNode;
   let bottom: ReactNode;
 
-  if (!native) {
+  if (!s.ready) {
+    // Only just opened: whether there is an account here is not read yet.
+    body = <Loading T={T} />;
+    bottom = null;
+  } else if (!native) {
     body = intro;
     bottom = <div style={{ ...small, textAlign: "center" }}>{t("Sign in with Google in the MPTree app on your phone.")}</div>;
   } else if (s.phase === "limit") {
@@ -203,7 +208,9 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
 
         {!s.pausedNoPro && (<>
         <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Your devices ({n} of {max})", { n: realDevices.length, max: MAX })}</div>
-        <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
+        {s.devices.length === 0 && !s.problem
+          ? <Loading T={T} />
+          : <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />}
 
         <button onClick={() => setMobileData(!s.mobileData)}
           style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginTop: 16 }}>
@@ -365,6 +372,9 @@ function SongStatus({ s, T }: { s: SyncState; T: T }) {
       </>
     );
   }
+  // Only just opened: who else is on the account is not known yet, so there
+  // is nothing true to say about the songs.
+  if (!s.devices.length && !s.problem) return <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.45 }}>{t("Loading…")}</div>;
   let line: string;
   if (!others.length) line = t("Sign in on another device and your songs go there too.");
   else if (g.note === "phone-full") line = t("This device is full. Free up {size} to get the rest.", { size: fmtBytes(Math.max(0, (g.needBytes ?? 0) - Math.max(0, (g.freeBytes ?? 0) - 500 * 1024 * 1024))) });

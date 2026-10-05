@@ -13,6 +13,9 @@
          nothing is granted silently: see MusicScannerPlugin.setAsRingtone. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <!--  ── Required for foreground service + media controls ─────────────  -->
+    <!-- Keeps the CPU awake while a song plays with the screen off, so the next
+         one starts. Held by MediaPlayer only while it is playing. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 

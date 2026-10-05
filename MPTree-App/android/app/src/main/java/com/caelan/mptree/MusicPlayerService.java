@@ -213,6 +213,15 @@ public class MusicPlayerService extends Service {
         }
     };
 
+    /** Holds the CPU for as long as this player is playing. Without it the
+     *  phone may doze once the screen is off and the app is gone from recents:
+     *  the song that was playing runs out and the next one is never started.
+     *  MediaPlayer takes and releases the lock itself. */
+    private void keepAwake(MediaPlayer player) {
+        try { player.setWakeMode(getApplicationContext(), android.os.PowerManager.PARTIAL_WAKE_LOCK); }
+        catch (Exception ignored) { }
+    }
+
     public interface OnCompletionListener {
         void onTrackComplete();
     }
@@ -230,7 +239,10 @@ public class MusicPlayerService extends Service {
         stateChangeListener = l;
     }
     private void notifyStateChange() {
-        if (stateChangeListener != null) stateChangeListener.onStateChange();
+        // The listener is the app's window. When that is gone (swiped away) a
+        // call into it must never take the music down with it.
+        try { if (stateChangeListener != null) stateChangeListener.onStateChange(); }
+        catch (Exception ignored) { }
     }
 
     private final BroadcastReceiver actionReceiver = new BroadcastReceiver() {
@@ -300,6 +312,11 @@ public class MusicPlayerService extends Service {
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
+        // Swiped away from recents. Playing: make sure the service is in the
+        // foreground, which is what keeps Android from ending it with the
+        // window (an earlier promotion can have been refused, see
+        // promoteToForeground). Not playing: nothing to keep alive.
+        if (isPlaying) showNotification();
     }
 
     private void createNotificationChannel() {
@@ -352,13 +369,54 @@ public class MusicPlayerService extends Service {
     // again (with a different gain) replaces MPTree's entry rather than stacking
     // a second one, and there is never a moment in between where the other app
     // gets focus back and starts up again.
+    // Whether it was another app that paused MPTree, and when. A game's
+    // end-of-match jingle or a navigation voice takes the speaker for a moment;
+    // when they give it back MPTree carries on. A pause by the person clears it.
+    private boolean pausedByFocus = false;
+    private long    pausedByFocusAt = 0;
+    /** Past this, coming back is no longer "the same listening": a call that
+     *  took an hour should not end in music starting by itself. */
+    private static final long RESUME_WITHIN_MS = 10 * 60 * 1000;
+    /** An app that took the speaker for good (a video app, say) is only
+     *  followed for this long: a jingle is over by then, and somebody who went
+     *  to watch something does not get music back the moment they pause it. */
+    private static final long RESUME_AFTER_TAKEOVER_MS = 20 * 1000;
+    private long resumeWithin = RESUME_WITHIN_MS;
+
     private final AudioManager.OnAudioFocusChangeListener focusListener = focusChange -> {
         if (mixWithOthers) return;
         if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
                 focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+            boolean wasPlaying = isPlaying;
             pausePlayback();
+            if (wasPlaying) {
+                pausedByFocus = true;
+                pausedByFocusAt = System.currentTimeMillis();
+                resumeWithin = focusChange == AudioManager.AUDIOFOCUS_LOSS ? RESUME_AFTER_TAKEOVER_MS : RESUME_WITHIN_MS;
+                // An app that took the speaker for good never hands it back,
+                // so nothing would say when its sound is over. Asking again
+                // after a moment does: the request is granted once it is done.
+                if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+                    mainHandler.postDelayed(this::resumeAfterFocusLoss, 4000);
+                }
+            }
+        } else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
+            resumeAfterFocusLoss();
         }
     };
+
+    private void resumeAfterFocusLoss() {
+        if (!pausedByFocus || isPlaying) return;
+        if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; return; }
+        // Something else is still sounding (a video, a call): leave it, and
+        // look again in a while.
+        if (audioManager != null && audioManager.isMusicActive()) {
+            mainHandler.postDelayed(this::resumeAfterFocusLoss, 3000);
+            return;
+        }
+        pausedByFocus = false;
+        resumePlayback();
+    }
 
     private boolean requestAudioFocus() {
         if (mixWithOthers) {
@@ -553,6 +611,7 @@ public class MusicPlayerService extends Service {
         isPreparing = true;
 
         mediaPlayer = new MediaPlayer();
+        keepAwake(mediaPlayer);
         ensureSharedSessionId(mediaPlayer);
         mediaPlayer.setAudioAttributes(new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -629,6 +688,9 @@ public class MusicPlayerService extends Service {
     }
 
     public void pause() {
+        // Whoever pauses, it is no longer "paused by another app" unless the
+        // focus listener says so right after this.
+        pausedByFocus = false;
         if (mediaPlayer != null && isPlaying) {
             try { mediaPlayer.pause(); } catch (Exception ignored) {}
             if (incomingPlayer != null) { try { incomingPlayer.pause(); } catch (Exception ignored) {} }
@@ -646,6 +708,7 @@ public class MusicPlayerService extends Service {
     }
 
     public void resume() {
+        pausedByFocus = false;
         if (mediaPlayer != null && !isPlaying && !isPreparing) {
             // Resuming used to skip this, so after another app had paused MPTree,
             // play started it again without focus: the other app kept playing
@@ -776,6 +839,7 @@ public class MusicPlayerService extends Service {
 
         try {
             incomingPlayer = new MediaPlayer();
+            keepAwake(incomingPlayer);
             ensureSharedSessionId(incomingPlayer);
             incomingPlayer.setAudioAttributes(new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)

@@ -3026,7 +3026,12 @@ export default function App() {
   const ART   = ROW_H - 20;       // 10px above and below
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
-  const pullOffset = refreshing ? 46 : pullDist;
+  // A line above the songs while one is on its way from or to another device.
+  // A fixed height, and counted with the pull-to-refresh space, so the rows
+  // drawn still match where the list is scrolled to.
+  const SYNC_BAR_H = 50;
+  const syncMoving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
+  const pullOffset = (refreshing ? 46 : pullDist) + (syncMoving ? SYNC_BAR_H : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
@@ -3657,6 +3662,18 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
+              {syncMoving && (
+                <div style={{ height: SYNC_BAR_H, boxSizing: "border-box", padding: "4px 16px 8px 19px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
+                    <span style={{ fontWeight: 700, color: TH.text, flexShrink: 0 }}>{t("Syncing songs between your devices")}</span>
+                    <span style={{ color: TH.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{syncMoving.name}</span>
+                  </div>
+                  <div style={{ height: 3, background: TH.border, borderRadius: 2, marginTop: 7, overflow: "hidden" }}>
+                    <div style={{ width: `${syncMoving.total > 0 ? Math.min(100, Math.round(syncMoving.done / syncMoving.total * 100)) : 0}%`, height: "100%", background: TH.accent, transition: "width 0.3s" }} />
+                  </div>
+                </div>
+              )}
+
               {displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
                   <IC.Heart filled={false} size={28} />
@@ -3753,7 +3770,7 @@ export default function App() {
                     {sync.songs.note === "phone-full"
                       ? t("Not enough room. Free up {size} to get them all.", { size: fmtBytes(Math.max(0, (sync.songs.needBytes ?? 0) - Math.max(0, (sync.songs.freeBytes ?? 0) - 500 * 1024 * 1024))) })
                       : sync.songs.note === "wifi" ? t("They come in on wifi.")
-                      : sync.songs.waitingOn.length ? t("They come in when MPTree is open on {phones}.", { phones: sync.songs.waitingOn.join(", ") })
+                      : sync.songs.waitingOn.length ? t("Still on {phones}. Open MPTree there to bring them here.", { phones: sync.songs.waitingOn.join(", ") })
                       : t("On their way.")}
                   </div>
                   {sync.songs.absent.slice(0, 200).map(a => (
@@ -4181,6 +4198,7 @@ export default function App() {
               return lines.join("\n\n") || null;
             }}
             deleted={signedIn ? sync.deleted : undefined}
+            deletedLoading={signedIn && !sync.deletedLoaded && !sync.problem}
             onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
             onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
             onTogglePlay={togglePlay}

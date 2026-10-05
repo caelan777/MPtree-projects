@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
+import { Loading } from "./Loading";
 import { Switch } from "./Switch";
 import { useAccountPro, useTrial, hasPro } from "../pro";
 import {
@@ -19,9 +20,6 @@ const Svg = ({ children, size = 20 }: { children: ReactNode; size?: number }) =>
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
 );
 export const CloudIcon = () => <Svg size={19}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></Svg>;
-const Phones = () => <Svg size={18}><rect x="2" y="4" width="10" height="16" rx="2"/><rect x="14" y="7" width="8" height="13" rx="2"/></Svg>;
-const Heart = () => <Svg size={18}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></Svg>;
-const Music = () => <Svg size={18}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></Svg>;
 
 type Props = {
   pro: boolean;
@@ -94,27 +92,29 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const card = { background: T.dim, borderRadius: 14, padding: "14px 16px", marginTop: 10 } as const;
   const small = { fontSize: 13, color: T.textSub, lineHeight: 1.5 } as const;
   const link = { ...btn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
-  const point = (icon: ReactNode, text: string) => (
-    <div key={text} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "7px 0", fontSize: 14.5, color: T.text, lineHeight: 1.45 }}>
-      <span style={{ display: "flex", color: T.muted, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-      <span>{text}</span>
-    </div>
-  );
-
   // What the account is, for anyone not signed in yet.
+  // Signed out: the same picture as signed in without Pro, so the two pages
+  // of one story look like it.
   const intro = (
-    <div style={{ ...card, marginTop: 0, padding: "16px 16px 10px" }}>
-      <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 6 }}>{t("Your music on all your devices")}</div>
-      {point(<Phones />, tn(MAX, "Sign in on up to {n} device.", "Sign in on up to {n} devices."))}
-      {point(<Heart />, t("Playlists, likes and settings are the same on all of them."))}
-      {point(<Music />, t("Your songs are copied between your devices, over wifi."))}
+    <div style={{ textAlign: "center", padding: "30px 8px 10px" }}>
+      <SyncPicture T={T} />
+      <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginTop: 22, letterSpacing: "-0.01em" }}>
+        {t("All your songs, on all your devices")}
+      </div>
+      <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.55, margin: "8px auto 0", maxWidth: 380 }}>
+        {tn(MAX, "Sign in on up to {n} device. Your songs, playlists, likes and settings are the same on all of them.", "Sign in on up to {n} devices. Your songs, playlists, likes and settings are the same on all of them.")}
+      </div>
     </div>
   );
 
   let body: ReactNode;
   let bottom: ReactNode;
 
-  if (!native) {
+  if (!s.ready) {
+    // Only just opened: whether there is an account here is not read yet.
+    body = <Loading T={T} />;
+    bottom = null;
+  } else if (!native) {
     body = intro;
     bottom = <div style={{ ...small, textAlign: "center" }}>{t("Sign in with Google in the MPTree app on your phone.")}</div>;
   } else if (s.phase === "limit") {
@@ -146,7 +146,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       </>
     );
   } else if (s.phase === "on") {
-    const status = s.pausedNoPro ? t("Paused")
+    const status = s.pausedNoPro ? ""
       : s.problem === "offline" ? t("Waiting for internet")
       : s.problem === "signin" ? t("Sign in again to keep syncing")
       : s.problem === "drive" ? t("Could not reach Google Drive. Trying again soon.")
@@ -173,9 +173,13 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
         </div>
 
         {s.pausedNoPro ? (
-          <div style={card}>
-            <div style={{ fontSize: 14, color: T.text, lineHeight: 1.5 }}>
-              {t("Syncing is part of MPTree Pro, so it has stopped. Nothing is lost, and it carries on when Pro is back.")}
+          <div style={{ textAlign: "center", padding: "30px 8px 10px" }}>
+            <SyncPicture T={T} />
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginTop: 22, letterSpacing: "-0.01em" }}>
+              {t("All your songs, on all your devices")}
+            </div>
+            <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.55, margin: "8px auto 0", maxWidth: 360 }}>
+              {t("To start syncing your songs between your devices, buy MPTree Pro, or sign in to a Google account that has Pro.")}
             </div>
           </div>
         ) : (
@@ -200,8 +204,11 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           </div>
         )}
 
+        {!s.pausedNoPro && (<>
         <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Your devices ({n} of {max})", { n: realDevices.length, max: MAX })}</div>
-        <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
+        {s.devices.length === 0 && !s.problem
+          ? <Loading T={T} />
+          : <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />}
 
         <button onClick={() => setMobileData(!s.mobileData)}
           style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginTop: 16 }}>
@@ -223,6 +230,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
             t("Everything is kept in your own Google Drive, in a folder only MPTree can open."),
           ].map(x => <div key={x} style={{ ...small, color: T.text, padding: "5px 0" }}>{x}</div>)}
         </div>
+        </>)}
 
         {(__PRO_TEST__ || import.meta.env.DEV) && !s.pausedNoPro && (
           <div style={{ ...card, marginTop: 20 }}>
@@ -244,7 +252,10 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     );
     bottom = (
       <>
-        {s.pausedNoPro && <button onClick={onOpenPro} style={{ ...btn, marginBottom: 8 }}>{t("Get MPTree Pro")}</button>}
+        {s.pausedNoPro && <button onClick={onOpenPro} style={{ ...btn, marginBottom: 8 }}>{t("Buy MPTree Pro")}</button>}
+        {s.problem === "drive" && s.problemDetail && (
+          <div style={{ fontSize: 11.5, color: T.muted, margin: "-2px 2px 10px", lineHeight: 1.4, userSelect: "text", wordBreak: "break-word" }}>{s.problemDetail}</div>
+        )}
         {s.problem === "signin" && <button onClick={doSignIn} style={{ ...btn, marginBottom: 8 }}>{t("Sign in again")}</button>}
         {confirmOut ? (
           <div style={{ ...card, marginTop: 0 }}>
@@ -301,6 +312,35 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   );
 }
 
+/** A phone and a computer with songs going between them: what the account
+ *  does once Pro is on. Shown where the sync status would be without it. */
+function SyncPicture({ T }: { T: T }) {
+  const dot = (delay: number, back = false) => (
+    <span style={{
+      position: "absolute", top: back ? 15 : 3, left: 0, width: 6, height: 6, borderRadius: "50%", background: T.text,
+      animation: `${back ? "mpSyncBack" : "mpSyncGo"} 2.4s linear ${delay}s infinite`, opacity: 0,
+    }} />
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, color: T.text }} aria-hidden="true">
+      <style>{`
+        @keyframes mpSyncGo   { 0% { transform: translateX(0); opacity: 0; } 15%, 85% { opacity: 1; } 100% { transform: translateX(74px); opacity: 0; } }
+        @keyframes mpSyncBack { 0% { transform: translateX(74px); opacity: 0; } 15%, 85% { opacity: 1; } 100% { transform: translateX(0); opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .mp-sync span { animation: none !important; opacity: 0.5 !important; } }
+      `}</style>
+      <svg width="46" height="76" viewBox="0 0 46 76" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="40" height="70" rx="8" /><line x1="18" y1="64" x2="28" y2="64" />
+      </svg>
+      <div className="mp-sync" style={{ position: "relative", width: 80, height: 24 }}>
+        {dot(0)}{dot(0.8)}{dot(1.6)}{dot(0.4, true)}{dot(1.2, true)}{dot(2, true)}
+      </div>
+      <svg width="104" height="76" viewBox="0 0 104 76" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="14" y="8" width="76" height="50" rx="6" /><line x1="3" y1="68" x2="101" y2="68" />
+      </svg>
+    </div>
+  );
+}
+
 /** One plain line about the songs, or the song on its way. */
 function SongStatus({ s, T }: { s: SyncState; T: T }) {
   const g = s.songs;
@@ -320,16 +360,19 @@ function SongStatus({ s, T }: { s: SyncState; T: T }) {
           {g.moving.total > 0 ? `${mb(g.moving.done)} / ${mb(g.moving.total)} MB` : ""}
           {g.missing > 1 ? " · " + tn(g.missing - 1, "{n} more after this", "{n} more after this") : ""}
         </div>
-        <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{t("Keep MPTree open until the song is done.")}</div>
+        <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{t("Keep MPTree open to keep syncing songs between your devices.")}</div>
       </>
     );
   }
+  // Only just opened: who else is on the account is not known yet, so there
+  // is nothing true to say about the songs.
+  if (!s.devices.length && !s.problem) return <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.45 }}>{t("Loading…")}</div>;
   let line: string;
   if (!others.length) line = t("Sign in on another device and your songs go there too.");
   else if (g.note === "phone-full") line = t("This device is full. Free up {size} to get the rest.", { size: fmtBytes(Math.max(0, (g.needBytes ?? 0) - Math.max(0, (g.freeBytes ?? 0) - 500 * 1024 * 1024))) });
   else if (g.note === "mobile-limit") line = t("Today's mobile data for songs is used up. The rest waits for wifi.");
   else if (g.note === "wifi" && (g.missing || g.theyMiss)) line = t("Waiting for wifi.");
-  else if (g.missing && g.waitingOn.length) line = tn(g.missing, "{n} song comes in when you open MPTree on {phone}.", "{n} songs come in when you open MPTree on {phone}.", { phone: g.waitingOn.join(", ") });
+  else if (g.missing && g.waitingOn.length) line = tn(g.missing, "{n} song is still on {phone}. Open MPTree there to bring it here.", "{n} songs are still on {phone}. Open MPTree there to bring them here.", { phone: g.waitingOn.join(", ") });
   else if (g.missing) line = tn(g.missing, "{n} song on its way to this device.", "{n} songs on their way to this device.");
   else if (g.theyMiss) line = tn(g.theyMiss, "{n} song still going to your other devices.", "{n} songs still going to your other devices.");
   else line = t("All your songs are on this device.");

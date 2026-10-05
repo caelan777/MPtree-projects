@@ -42,6 +42,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @CapacitorPlugin(
         name = "MusicScanner",
+        // Without these the answer to Android's "allow MPTree to delete?" never
+        // reaches this plugin: Capacitor hands an activity result only to the
+        // plugin that lists its request code. The delete then never finished,
+        // and had to be pressed a second time.
+        requestCodes = { 51234, 51235 },
         permissions = {
                 @Permission(strings = { Manifest.permission.READ_MEDIA_AUDIO }, alias = "audio33"),
                 @Permission(strings = { Manifest.permission.READ_EXTERNAL_STORAGE }, alias = "audioLegacy")

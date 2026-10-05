@@ -221,7 +221,7 @@ export function runTransfer(dc: RTCDataChannel, session: Session, hooks: Transfe
       void sendAll(msg.fps ?? []);
     } else if (msg.t === "file" && msg.fp) {
       const tid = "rtc-" + msg.fp;
-      incoming = { fp: msg.fp, tid, size: msg.size ?? 0, name: msg.name ?? "song.mp3", got: 0, buf: [], bufLen: 0, failed: false };
+      incoming = { fp: msg.fp, tid, size: msg.size ?? 0, name: (msg.name ?? "song.mp3").split(/[\\/]/).pop() || "song.mp3", got: 0, buf: [], bufLen: 0, failed: false };
       writing = writing.then(() => Sync.beginFile({ tid })).catch(() => { if (incoming) incoming.failed = true; });
     } else if (msg.t === "end" && incoming && incoming.fp === msg.fp) {
       flush(true);
