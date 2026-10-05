@@ -89,7 +89,7 @@ build run `npm run build:test` and `npx cap sync android` again.
 - This PC runs close to its memory limit. Add
   `-Dorg.gradle.jvmargs="-Xmx900m -XX:MaxMetaspaceSize=384m" -Dorg.gradle.workers.max=2`
   and stop the preview servers first. The emulator may not start.
-- Next versionCode: **44**. 43 is test build 26. 42 was a Play bundle that was never uploaded and is now out of date: build a new one.
+- Next versionCode: **45**. 43 and 44 are test builds 26 and 27. 42 was a Play bundle that was never uploaded and is now out of date: build a new one.
 - Releases: `"/c/Program Files/GitHub CLI/gh.exe"` is signed in. Tag
   `v1.2.0-pro-test.N`, asset name `MPTree-pro-test.apk`, then update
   `Website/test.html`.
