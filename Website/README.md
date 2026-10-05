@@ -123,8 +123,9 @@ One-time setup, in the Cloudflare dashboard, on the Pages project:
    of that product count.
 4. In Lemon Squeezy, Settings, Webhooks: add `https://mp-tree.net/api/pay`
    with the same secret, for the events `order_created` and `order_refunded`.
-5. Put the product's checkout link in `CHECKOUT_URL` in
-   `Desktop/src/desktop/BillingDesktop.ts` and build the app. Until then the
+5. Put the product's checkout link in `VITE_CHECKOUT_URL`, in `Desktop/.env.local`
+   (not in the repository; read by
+   `Desktop/src/desktop/BillingDesktop.ts`), and build the app. Without it the
    Windows app does not sell Pro.
 
 A new deploy is needed after steps 2 and 3 before the functions see them.
