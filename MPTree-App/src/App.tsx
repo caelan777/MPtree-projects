@@ -78,6 +78,12 @@ function toFileUri(uri: string): string {
   return uri.startsWith("file://") ? uri : `file://${uri}`;
 }
 
+/** How long a row says a song is. A cut that is two markers on its source is
+ *  as long as what lies between them, not as long as the source. */
+function rowLength(s: Song): number {
+  return s.isCut && s.cutTo != null ? Math.max(0, s.cutTo - (s.cutFrom ?? 0)) : s.duration ?? 0;
+}
+
 // Fire-and-forget haptic feedback. Wrapped so every call site can use it
 // without a .catch() — devices/browsers without haptics support (or a plain
 // web preview) just silently no-op instead of throwing.
@@ -2319,7 +2325,10 @@ export default function App() {
     await beforeDeleteForever([s]);
     // Ask the device to actually delete the file. On Android 11+ this shows a
     // system confirmation dialog; if the user declines, keep the song in the bin.
-    const deleted = await deleteFileAtUri(s.uri);
+    // A cut that is two markers on its source has no file of its own: its
+    // path is the original song's. Deleting "the file" took the original away
+    // with the cut.
+    const deleted = s.isCut ? true : await deleteFileAtUri(s.uri);
     if (!deleted) {
       showToast(t("Delete cancelled"));
       return;
@@ -2343,8 +2352,10 @@ export default function App() {
     await beforeDeleteForever(toDelete);
     // All files in one go, with one question from Android. Track which
     // actually went, so a declined question leaves those songs in the bin.
-    const gone = await deleteFilesAtUris(toDelete.map(s => s.uri));
-    const deletedIds = new Set(toDelete.filter(s => gone.has(s.uri)).map(s => s.id));
+    // The cuts that are two markers on their source go from the bin and
+    // nothing else: see handleDeleteForever.
+    const gone = await deleteFilesAtUris(toDelete.filter(s => !s.isCut).map(s => s.uri));
+    const deletedIds = new Set(toDelete.filter(s => s.isCut || gone.has(s.uri)).map(s => s.id));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
     setRemovedSongs(remaining);
@@ -3743,7 +3754,7 @@ export default function App() {
                                 <span style={{ fontSize: 12, fontWeight: "600", color: isActive ? TH.accent : TH.muted, flexShrink: 0 }}>{idx + 1}</span>
                                 */}
                                 <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist || t("Unknown Artist")}</span>
-                                {song.duration != null && song.duration > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>}
+                                {rowLength(song) > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(rowLength(song))}</span>}
                               </div>
                             </div>
                             {!selectMode && liked && (

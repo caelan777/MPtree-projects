@@ -169,6 +169,7 @@ export const NL: Record<string, string> = {
   "End": "Eind",
   "Stop preview": "Voorbeeld stoppen",
   "Preview the cut": "Knipsel beluisteren",
+  "Keeps {len}": "Bewaart {len}",
   "Save as": "Opslaan als",
   "Saved as a new track. The original stays unchanged.": "Wordt opgeslagen als nieuw nummer. Het origineel blijft zoals het is.",
   "Save cut track": "Knipsel opslaan",

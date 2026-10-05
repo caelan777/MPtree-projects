@@ -84,6 +84,9 @@ const KEY_SKIP = "mptree_sync_skip";
 const KEY_ALIAS = "mptree_sync_alias";
 /** Songs moved over mobile data today. */
 const KEY_MOBILE = "mptree_sync_mobile";
+/** Devices this one took the place of because it most likely was them, before
+ *  a reinstall. What they deleted for good is taken over on the next round. */
+const KEY_INHERIT = "mptree_sync_inherit";
 
 /** A phone counts as open when it said so this recently. */
 const ONLINE_MS = 60_000;
@@ -251,6 +254,7 @@ let pending: Pending = { del: {}, restore: [] };
 let dirtySince = 0;
 let skip = new Set<string>();
 let alias: Record<string, string> = {};
+let inherit: string[] = [];
 
 const saveReceived = () => writeJson(KEY_RECEIVED, Object.fromEntries(receivedPaths));
 const saveGone = () => writeJson(KEY_GONE, gone);
@@ -378,6 +382,7 @@ export async function prepareSync(): Promise<void> {
   dirtySince = await readJson<number>(KEY_DIRTY) ?? 0;
   skip = new Set(await readJson<string[]>(KEY_SKIP) ?? []);
   alias = await readJson<Record<string, string>>(KEY_ALIAS) ?? {};
+  inherit = await readJson<string[]>(KEY_INHERIT) ?? [];
   if (stored) {
     set({
       phase: "on", deviceId, ready: true,
@@ -475,6 +480,7 @@ async function nextJoinStep(): Promise<"ok" | "limit" | "failed"> {
     const myName = await phoneName();
     const stale = devices.find(d => baseName(d.name) === myName && Date.now() - (d.lastActive ?? d.addedAt) > STALE_DEVICE);
     if (stale) {
+      await standsInFor(stale.id);
       devices = devices.filter(d => d.id !== stale.id);
       await saveDevices(devices);
       await forgetPhoneFiles(stale.id);
@@ -486,6 +492,33 @@ async function nextJoinStep(): Promise<"ok" | "limit" | "failed"> {
     return "limit";
   }
   return finishJoin();
+}
+
+/** This device takes the place of `id`, which was most likely itself before a
+ *  reinstall under another id. Remembered until the next round, which is where
+ *  the library is at hand (inheritDeletions). */
+async function standsInFor(id: string): Promise<void> {
+  if (!id || id === deviceId || inherit.includes(id)) return;
+  inherit = [...inherit, id];
+  await writeJson(KEY_INHERIT, inherit);
+}
+
+/** What was deleted for good on the devices this one stands in for stays
+ *  deleted here. Without this a reinstall under a new id (another build, app
+ *  data cleared) looked like a new device, and every song thrown away on the
+ *  old one came back from the others. A song that is on this device now is
+ *  left alone: it is here, whatever was done before. */
+async function inheritDeletions(known: LibDoc | null): Promise<void> {
+  if (!inherit.length || !known) return;
+  let changed = false;
+  for (const [fp, rec] of Object.entries(known.songs)) {
+    if (myInv[fp] || pending.del[fp] || rec.del?.[deviceId]) continue;
+    const at = Math.max(0, ...inherit.map(id => rec.del?.[id] ?? 0));
+    if (at) { pending.del[fp] = at; changed = true; }
+  }
+  inherit = [];
+  await Preferences.remove({ key: KEY_INHERIT }).catch(() => {});
+  if (changed) await savePending();
 }
 
 async function phoneName(): Promise<string> {
@@ -509,6 +542,7 @@ async function finishJoin(): Promise<"ok" | "failed"> {
     // most likely this one from before a reinstall: it makes way.
     const before = devices.find(d => !d.test && baseName(d.name) === name && Date.now() - (d.lastActive ?? d.addedAt) > QUIET_DEVICE);
     if (before) {
+      await standsInFor(before.id);
       devices.splice(devices.indexOf(before), 1);
       await forgetPhoneFiles(before.id);
     }
@@ -796,7 +830,7 @@ async function libraryCycle(): Promise<void> {
     const scanned = await scanAll();
     const base0 = await readJson<Base>(KEY_BASE);
     const base = base0 && base0.deviceId === deviceId && base0.email === stored?.email ? base0 : null;
-    await fingerprint(scanned, lib.removed, !base);
+    await fingerprint(scanned, lib.removed, !base, base);
     await noticeVanished(base, scanned);
     buildShared(scanned);
     findDoubles();
@@ -809,6 +843,7 @@ async function libraryCycle(): Promise<void> {
     if (base) { const had = new Set(base.keys); for (const k of local.speaks) if (!had.has(k)) fresh.add(k); }
     const remote = await readFile<LibDoc>(LIB);
     const known = remote ?? base?.doc ?? null;
+    await inheritDeletions(known);
     for (const [fp, at] of Object.entries(pending.del)) { markDeleted(local, known, [fp], deviceId, at); fresh.delete(fp); }
     markRestored(local, known, pending.restore);
     for (const fp of pending.restore) fresh.delete(fp);
@@ -926,7 +961,42 @@ async function recallAliases(items: { path: string; size: number; fp: string }[]
 }
 
 /** `recall`: this phone has no base, so it may be back from a reinstall. */
-async function fingerprint(scanned: Song[], removed: Song[], recall = false) {
+/** Songs whose disk is not there right now. They count as this device's, but
+ *  cannot be read, so they are not sent anywhere. */
+let awayFps = new Set<string>();
+
+/** Songs that were here last round and that the scan no longer lists, but
+ *  whose file is still on this device (a folder MPTree no longer looks in, a
+ *  file the scanner skips now) or whose disk is not there at the moment (a
+ *  stick taken out, a card removed, a share that is offline). They are still
+ *  this device's songs. Counting them as deleted would put every one of them
+ *  in the bin on all the other devices, and leaving them out of the list of
+ *  what this device has would fetch them all again from those devices. */
+async function keepUnscanned(base: Base | null): Promise<void> {
+  awayFps = new Set();
+  if (!base?.files) return;
+  const lost = Object.entries(base.files).filter(([fp, path]) => path && !myInv[fp] && !pending.del[fp]);
+  if (!lost.length) return;
+  // Could not be asked: then nothing is concluded. A song is only counted as
+  // deleted when its file is known to be gone from a disk that is there.
+  let states: string[] = [];
+  try { states = (await Sync.pathStates({ paths: lost.map(([, path]) => path) })).states ?? []; } catch { /* all unknown */ }
+  const stateOf = (i: number) => states[i] === "here" || states[i] === "gone" ? states[i] : "away";
+  if (lost.every((_, i) => stateOf(i) === "gone")) return;
+  // What this device said about them last: the round before, or, the first
+  // round after a start, its own list in the account.
+  const before = Object.keys(shared).length ? shared : (await readFile<InvFile>(inv(deviceId)).catch(() => null))?.fps ?? {};
+  lost.forEach(([fp, path], i) => {
+    const was = before[fp];
+    if (!was || stateOf(i) === "gone") return;
+    myInv[fp] = was;
+    pathByFp.set(fp, path);
+    fpByPath.set(path, fp);
+    if (stateOf(i) === "away") awayFps.add(fp);
+  });
+}
+
+async function fingerprint(scanned: Song[], removed: Song[], recall = false, base: Base | null = null) {
   const byPath = new Map<string, Song>();
   for (const s of scanned) byPath.set(s.uri, s);
   // A cut track's file is its source; it has to be known for the cut's key.
@@ -948,6 +1018,7 @@ async function fingerprint(scanned: Song[], removed: Song[], recall = false) {
       real ? s.title : undefined, real && s.artist && s.artist !== "<unknown>" ? s.artist : undefined,
     ];
   }
+  await keepUnscanned(base);
   // Songs that came here from another phone, wherever they are now.
   let moved = false;
   for (const [fp, p] of receivedPaths) {
@@ -1386,7 +1457,7 @@ async function songsCycle(relist = false): Promise<void> {
 const find = (fp: string) => {
   const path = pathByFp.get(fp);
   const v = myInv[fp];
-  if (notSharedFps.has(fp)) return null;
+  if (notSharedFps.has(fp) || awayFps.has(fp)) return null;
   return path && v ? { fp, path, size: v[0], name: v[1] } : null;
 };
 

@@ -24,7 +24,7 @@ android {
         // 23 to 32: Pro test builds 11 to 20, the MPTree account.
         // 33, 35, 37, 39, 41: Pro test builds 21 to 25. 42 was a 1.2.0 bundle for Play that was never uploaded.
         // 43, 44: Pro test builds 26 and 27.
-        versionCode 44
+        versionCode 45
         versionName "1.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

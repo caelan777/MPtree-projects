@@ -164,6 +164,47 @@ public class SyncPlugin extends Plugin {
         return Long.toString(size, 36) + "-" + Long.toHexString(crc.getValue());
     }
 
+    // ── Is a song the scan no longer lists really gone? ──────────────────────
+    /** { paths } to { states }: for each path "here" (the file is there), "gone"
+     *  (it is not, but the storage it was on is) or "away" (that storage is not
+     *  there now: a memory card taken out). The engine asks before it concludes
+     *  a song was deleted, because that puts it in the bin on every device. */
+    @PluginMethod
+    public void pathStates(PluginCall call) {
+        JSArray paths = call.getArray("paths");
+        io.execute(() -> {
+            try {
+                JSArray out = new JSArray();
+                java.util.Map<String, Boolean> volumes = new java.util.HashMap<>();
+                for (int i = 0; paths != null && i < paths.length(); i++) {
+                    String p = paths.getString(i);
+                    if (p.startsWith("file://")) p = p.substring("file://".length());
+                    String volume = volumeOf(p);
+                    Boolean there = volumes.get(volume);
+                    if (there == null) { there = new File(volume).exists(); volumes.put(volume, there); }
+                    out.put(!there ? "away" : new File(p).isFile() ? "here" : "gone");
+                }
+                JSObject r = new JSObject();
+                r.put("states", out);
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Could not look: " + e.getMessage());
+            }
+        });
+    }
+
+    /** /storage/emulated/0 for the phone's own storage, /storage/1A2B-3C4D for
+     *  a memory card. */
+    private static String volumeOf(String path) {
+        String[] parts = path.split("/");
+        if (parts.length > 3 && "storage".equals(parts[1])) {
+            return "emulated".equals(parts[2]) && parts.length > 4
+                    ? "/storage/emulated/" + parts[3]
+                    : "/storage/" + parts[2];
+        }
+        return "/";
+    }
+
     /** { paths } to { items: [{ path, size, fp }] }. Files that cannot be read
      *  are left out. Answers from a cache for files that have not changed. */
     @PluginMethod

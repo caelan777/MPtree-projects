@@ -135,7 +135,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
 
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginBottom: 18 }}>
             <span>{fmt(0)}</span>
-            <span style={{ color: T.text, fontWeight: 700 }}>Keeps {fmt(endMs - startMs)}</span>
+            <span style={{ color: T.text, fontWeight: 700 }}>{t("Keeps {len}", { len: fmt(endMs - startMs) })}</span>
             <span>{fmt(total)}</span>
           </div>
 
