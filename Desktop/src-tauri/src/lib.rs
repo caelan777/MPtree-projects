@@ -668,6 +668,9 @@ fn floating(app: &tauri::App, label: &str, page: &str, w: f64, h: f64) -> tauri:
         .inner_size(w, h)
         .decorations(false)
         .transparent(true)
+        // Said out loud as well: while it repaints for a press, WebView2
+        // filled the ring around the button with its own white.
+        .background_color(tauri::window::Color(0, 0, 0, 0))
         .shadow(false)
         .resizable(false)
         .always_on_top(true)
