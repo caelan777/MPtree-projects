@@ -10,6 +10,7 @@
  *   PRO                    KV namespace binding
  *   LEMON_WEBHOOK_SECRET   the signing secret typed into the webhook's settings
  *   LEMON_PRODUCT_ID       optional: only orders of this product count
+ *   LEMON_ALLOW_TEST       optional: "1" lets test-mode payments count too
  */
 const TAG = /^[0-9a-f]{64}$/;
 
@@ -39,6 +40,10 @@ export async function onRequestPost({ request, env }) {
 
   let event;
   try { event = JSON.parse(body); } catch { return new Response("bad body", { status: 400 }); }
+  // A payment made in Lemon Squeezy's test mode costs nothing: a test card
+  // pays for it. It is signed like a real one, so without this a test checkout
+  // would hand out real Pro. Answered 200 so it is not sent again.
+  if (event?.meta?.test_mode && env.LEMON_ALLOW_TEST !== "1") return new Response("ok");
   const name = event?.meta?.event_name;
   const order = String(event?.data?.id ?? "");
   const attrs = event?.data?.attributes ?? {};

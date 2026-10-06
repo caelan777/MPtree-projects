@@ -119,7 +119,9 @@ One-time setup, in the Cloudflare dashboard, on the Pages project:
 1. Storage and databases, KV: create a namespace, for example `mptree-pro`.
 2. Pages project, Settings, Bindings: add a KV binding named `PRO` to it.
 3. Settings, Variables and secrets: add the secret `LEMON_WEBHOOK_SECRET`, a
-   long random text you make up. Optional: `LEMON_PRODUCT_ID`, so only orders
+   long random text you make up. Optional: `LEMON_ALLOW_TEST` set to `1` while trying the checkout in
+   test mode (without it test payments are ignored; take it out again before
+   the shop opens), and `LEMON_PRODUCT_ID`, so only orders
    of that product count.
 4. In Lemon Squeezy, Settings, Webhooks: add `https://mp-tree.net/api/pay`
    with the same secret, for the events `order_created` and `order_refunded`.
