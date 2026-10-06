@@ -729,6 +729,22 @@ export default function App() {
 
   // ── Sync refs ─────────────────────────────────────────────────────────────
   useEffect(() => { queueRef.current = queue; }, [queue]);
+  // A song that left the library (moved to the bin, deleted, or deleted on
+  // another device) leaves the queue too. It used to stay in it unless it was
+  // the one playing, so the player came round to it later and played it.
+  useEffect(() => {
+    if (!libraryReady || !songs.length) return;
+    const have = new Set(songs.map(s => s.id));
+    const q = queueRef.current;
+    if (!q.some(s => !have.has(s.id))) return;
+    const kept = q.filter(s => have.has(s.id));
+    queueRef.current = kept;
+    setQueue(kept);
+    // With the playing song itself gone, whoever removed it starts the next
+    // one and hands the player its queue then.
+    const idx = currentSong ? kept.findIndex(s => s.id === currentSong.id) : -1;
+    if (idx >= 0) AudioPlayer.setQueue({ tracks: kept.map(toNativeTrack), currentIndex: idx }).catch(() => {});
+  }, [songs, libraryReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { curRef.current = currentSong; }, [currentSong]);
   useEffect(() => { playModeRef.current = playMode; }, [playMode]);
   useEffect(() => { removedRef.current = removedSongs; }, [removedSongs]);
