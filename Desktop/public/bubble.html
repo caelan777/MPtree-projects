@@ -6,7 +6,9 @@
   html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
   /* The window is cut to this circle in lib.rs (make_round); keep the two in step. */
   button {
-    width: 56px; height: 56px; margin: 4px; padding: 0; border-radius: 50%; cursor: pointer;
+    /* As large as the circle the window is cut to, so no strip of bare window
+       is left around it: WebView2 painted that strip white on a press. */
+    width: 60px; height: 60px; margin: 2px; padding: 0; border-radius: 50%; cursor: pointer;
     border: 1px solid rgba(255, 255, 255, 0.28); background: #0b0b0d; touch-action: none;
     display: flex; align-items: center; justify-content: center;
     outline: none; -webkit-tap-highlight-color: transparent;
