@@ -9,8 +9,8 @@ brand and a feel but stay simple under the hood.
 ## Vision
 
 - Android app ✅ (exists)
-- Desktop app (Windows prototype exists, Tauri)
-- Official website (planned, also the download/update hub)
+- Desktop app ✅ (Windows, Tauri: an early release, downloaded from the website)
+- Official website ✅ (mp-tree.net, also the download/update hub)
 - Shared branding across all surfaces
 - Modern UI, fast performance, easy updates
 
@@ -94,7 +94,7 @@ npx cap open android # open android/ in Android Studio to build/run the APK
 - **Android icons and splashes are generated.** Run `node Branding/build-assets.mjs`, then
   `npx capacitor-assets generate --android`. Don't hand-edit files under `android/.../res/`.
 - **Naming is unified on MPTree** as of 2026-07-27 (first-public-release prep). App id and
-  Java package are `com.caelan.mptree`, `package.json` is `mptree` at `0.1.0`, Android
+  Java package are `com.caelan.mptree`, `package.json` is `mptree` (1.2.1 in October 2026), Android
   `versionName` matches. Anyone running a pre-rename build has a separate app on device and
   must reinstall; there is no upgrade path across an app id change.
 - **Release signing** reads `android/keystore.properties` (gitignored, along with `*.jks`).
@@ -108,5 +108,7 @@ npx cap open android # open android/ in Android Studio to build/run the APK
 
 ## Current focus
 
-Near-term order (see roadmap): **1) repo cleanup → 2) documentation → 3) brand →
-4) website → 5) desktop prototype (Tauri).** Not writing shared packages yet.
+The five phases of the roadmap are done: the Android app is on Google Play and the
+website, the site is live, and Windows is out as an early release. What is open now is in
+the "Where things stand" part at the top of [docs/roadmap.md](docs/roadmap.md): opening the
+Windows shop for Pro, and finishing the Windows app. Still not writing shared packages.

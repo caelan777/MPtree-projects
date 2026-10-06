@@ -1,6 +1,33 @@
 # MPTree Roadmap
 
-_Last updated: 2026-07-26_
+_Last updated: 2026-10-06_
+
+## Where things stand (October 2026)
+
+Everything below this part is the plan as it was written in July, kept for the reasoning.
+All five phases are done, and some of what it says has been overtaken:
+
+- **Android** is on Google Play (1.2.1) and on the website (1.1.0, behind Play). MPTree Pro
+  is a one-time purchase; with it comes the MPTree account, which syncs the library and the
+  songs between devices through the person's own Google Drive. See `docs/account.md`.
+- **The website** is live at mp-tree.net on Cloudflare Pages.
+- **Windows** is out as an early release (0.1.2), a Tauri window around a copy of the
+  Android interface. The audio is the WebView's own, not Rust. See `Desktop/README.md`.
+- The in-app download from the web was removed for Google Play, and the app does not
+  update itself over the air: Play updates the Play build, and the website build and the
+  Windows app say when a newer version is out.
+
+Open, in the order it matters:
+
+1. **Pro on Windows.** A web checkout (Lemon Squeezy, `functions/api/`) is built and waits
+   for the shop to be approved. Before it opens: the test webhook goes, the test purchases
+   are emptied from the store, and one real purchase and refund is done.
+2. **The website's Android download** is two versions behind Google Play.
+3. **Windows, to stop being "early":** a signed installer, updates that install themselves,
+   remembering the window size, telling wifi from a metered connection.
+4. **Tests for the sync rules** added in October (a disk that is away, deletions taken
+   over after a reinstall).
+5. The small things listed under "Known and left open" in `docs/handoff.md`.
 
 ## Vision
 
