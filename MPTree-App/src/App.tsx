@@ -22,8 +22,6 @@ import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
-import { TransferSheet } from "./components/TransferSheet";
-import { WidgetsSheet, type WidgetBasic, type WidgetKind } from "./components/WidgetsSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
@@ -741,11 +739,6 @@ export default function App() {
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [widgetsOpen, setWidgetsOpen] = useState(false);
-  // Black or white for the plain widget. null until it has been read, so the
-  // choice already made is not written over with the default on the way in.
-  const [widgetBasic, setWidgetBasic] = useState<WidgetBasic | null>(null);
   const sync = useSync();
   useEffect(() => { loadLook(); loadPro(); }, []);
 
@@ -754,22 +747,6 @@ export default function App() {
   // off overlay and colour the bar to match the theme. No-ops on web.
   // The bar takes the ground colour, which a Pro shade can change.
   const TH = paletteFor(theme, look.dark, look.light);
-
-  // The home-screen widgets are drawn by Android and cannot ask the window
-  // anything, so what they need is written down for them: whether Pro is on,
-  // black or white for the plain one, and the colours of the look in use.
-  useEffect(() => {
-    Preferences.get({ key: "mptree_widget_basic" })
-      .then(r => setWidgetBasic(r.value === "white" ? "white" : "black"))
-      .catch(() => setWidgetBasic("black"));
-  }, []);
-  useEffect(() => {
-    if (!widgetBasic) return;
-    const value = JSON.stringify({ pro, basic: widgetBasic, card: TH.card, bg: TH.bg, text: TH.text, muted: TH.muted });
-    Preferences.set({ key: "mptree_widget", value })
-      .then(() => System.refreshWidgets())
-      .catch(() => {});
-  }, [pro, widgetBasic, TH.card, TH.bg, TH.text, TH.muted]);
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -1699,9 +1676,6 @@ export default function App() {
   const handleExportOpen = useCallback(() => {
     setBackupSheet({ kind: "exportInfo" });
   }, []);
-  // "Back up to Google Drive" is the same backup, with the share sheet opened
-  // on it when it is done; Drive is one of the places that sheet offers.
-  const driveAfterExportRef = useRef(false);
 
   /** Called when user taps "Start backup" in ExportInfoSheet */
   const doExport = useCallback(async (backupName: string, opts: BackupOptions) => {
@@ -1806,7 +1780,6 @@ export default function App() {
         jsonUri:     result.jsonUri,
         failedCount: result.failedCount > 0 ? result.failedCount : undefined,
       });
-      if (driveAfterExportRef.current) { driveAfterExportRef.current = false; void handleShareBackup(); }
     } catch (e: any) {
       if (e?.isStorageFull) {
         exportJsonUriRef.current = e.jsonUri ?? "";
@@ -2628,8 +2601,6 @@ export default function App() {
       }
       if (showOnboarding)      { finishOnboarding(); return; }
       if (proOpen)             { setProOpen(false); return; }
-      if (transferOpen)        { setTransferOpen(false); return; }
-      if (widgetsOpen)         { setWidgetsOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       if (lookOpen)            { endPreview(); setLookOpen(false); return; }
@@ -3336,14 +3307,6 @@ export default function App() {
                     </button>
                   )}
                 </div>
-                {/* Everything that brings music or data in or out, on one page. */}
-                <button
-                  onClick={() => { setTransferOpen(true); hapticImpact("light"); }}
-                  aria-label={t("Import, export & backup")}
-                  tabIndex={page === "songs" ? undefined : -1}
-                  style={{ width: 40, height: 40, borderRadius: 10, background: CT.accent, border: "none", color: CT.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                  <IC.Plus />
-                </button>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -4154,7 +4117,6 @@ export default function App() {
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
-            onOpenWidgets={() => setWidgetsOpen(true)}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
@@ -4166,7 +4128,8 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onOpenTransfer={() => setTransferOpen(true)}
+            onExport={handleExportOpen}
+            onImportOpen={handleImportOpen}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4206,34 +4169,6 @@ export default function App() {
             onClose={() => setCleanupOpen(false)}
             T={TH} />
         )}
-        {widgetsOpen && (
-          <WidgetsSheet
-            pro={pro} basic={widgetBasic ?? "black"}
-            onSetBasic={v => { setWidgetBasic(v); Preferences.set({ key: "mptree_widget_basic", value: v }).catch(() => {}); }}
-            onPin={(kind: WidgetKind) => {
-              System.pinWidget({ kind })
-                .then(r => showToast(r.supported
-                  ? t("Confirm on your home screen to add it")
-                  : t("Your home screen does not let apps add widgets. Hold an empty spot on it and choose Widgets.")))
-                .catch(() => {});
-            }}
-            onOpenPro={() => setProOpen(true)}
-            onClose={() => setWidgetsOpen(false)}
-            T={TH} />
-        )}
-
-        {transferOpen && (
-          <TransferSheet
-            pro={pro} binCount={removedSongs.length}
-            onExport={() => { driveAfterExportRef.current = false; handleExportOpen(); }}
-            onImport={handleImportOpen}
-            onDriveBackup={() => { driveAfterExportRef.current = true; handleExportOpen(); }}
-            onOpenAccount={() => setAccountOpen(true)}
-            onOpenBin={() => setBinOpen(true)}
-            onClose={() => setTransferOpen(false)}
-            T={TH} />
-        )}
-
         {accountOpen && (
           <AccountSheet
             pro={pro}

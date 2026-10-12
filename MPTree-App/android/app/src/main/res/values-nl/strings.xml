@@ -7,15 +7,4 @@
     <string name="action_pause">Pauze</string>
     <string name="action_next">Volgende</string>
     <string name="not_playing">Speelt niets</string>
-    <string name="widget_play_or_pause">Afspelen of pauzeren</string>
-    <string name="widget_basic">MPTree</string>
-    <string name="widget_vinyl">MPTree-plaat</string>
-    <string name="widget_pod">MPTree-zakspeler</string>
-    <string name="widget_player">MPTree-speler</string>
-    <string name="widget_basic_desc">Titel, artiest en de drie knoppen, in zwart of wit.</string>
-    <string name="widget_vinyl_desc">Een plaat met de hoes als label. MPTree Pro.</string>
-    <string name="widget_pod_desc">Een kleine speler met een klikwiel. MPTree Pro.</string>
-    <string name="widget_player_desc">De hoes, hoe ver het nummer is, en de knoppen. MPTree Pro.</string>
-    <string name="widget_pro_title">MPTree Pro</string>
-    <string name="widget_pro_body">Open MPTree om deze widget te ontgrendelen</string>
 </resources>

@@ -303,7 +303,6 @@ public class MusicPlayerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        running = true;
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         createNotificationChannel();
         setupMediaSession();
@@ -325,9 +324,6 @@ public class MusicPlayerService extends Service {
 
     @Override
     public void onDestroy() {
-        running = false;
-        // Their buttons would speak to nobody now; drawn again, they open MPTree.
-        Widgets.updateAll(this);
         positionHandler.removeCallbacks(positionTicker);
         crossfadeHandler.removeCallbacks(crossfadeTicker);
         mainHandler.removeCallbacksAndMessages(null);
@@ -1078,42 +1074,16 @@ public class MusicPlayerService extends Service {
         }
     }
 
-    /** True while the service exists: a widget's buttons have someone to tell. */
-    public static volatile boolean running = false;
-
-    // What the widgets were last drawn for. The whole widget is only sent
-    // again when one of these changes; in between, once a second, only how
-    // far the song is.
-    private String  widgetPath;
-    private boolean widgetPlaying;
-    private int     widgetDuration = -1;
-
     private void pushWidgetUpdate() {
-        widgetPath = currentPath; widgetPlaying = isPlaying; widgetDuration = getDuration();
-        Widgets.updateAll(this);
-    }
-
-    private void pushWidgetProgress(String path, boolean playing, int position, int duration) {
-        boolean same = playing == widgetPlaying && duration == widgetDuration
-                && (path == null ? widgetPath == null : path.equals(widgetPath));
-        if (same) Widgets.updateProgress(this, position, duration);
-        else pushWidgetUpdate();
-    }
-
-    /** The cover as a small file the widgets read, or no file when there is none. */
-    private void writeWidgetArt(Bitmap art) {
-        File out = new File(getCacheDir(), Widgets.ART_FILE);
-        if (art == null) { out.delete(); return; }
-        try (java.io.FileOutputStream os = new java.io.FileOutputStream(out)) {
-            int side = Math.min(art.getWidth(), art.getHeight());
-            Bitmap square = Bitmap.createBitmap(art, (art.getWidth() - side) / 2, (art.getHeight() - side) / 2, side, side);
-            Bitmap small  = Bitmap.createScaledBitmap(square, Widgets.ART_PX, Widgets.ART_PX, true);
-            small.compress(Bitmap.CompressFormat.JPEG, 88, os);
-            if (small != square) small.recycle();
-            if (square != art) square.recycle();
-        } catch (Exception e) {
-            out.delete();
-        }
+        try {
+            Intent updateIntent = new Intent(this, NowPlayingWidgetProvider.class);
+            updateIntent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+            AppWidgetManager mgr = AppWidgetManager.getInstance(this);
+            int[] ids = mgr.getAppWidgetIds(
+                    new android.content.ComponentName(this, NowPlayingWidgetProvider.class));
+            updateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
+            sendBroadcast(updateIntent);
+        } catch (Exception ignored) {}
     }
 
     private void persistNowPlaying() {
@@ -1121,7 +1091,6 @@ public class MusicPlayerService extends Service {
         final String  title    = currentTitle;
         final String  artist   = currentArtist;
         final int     position = getCurrentPosition();
-        final int     duration = getDuration();
         final boolean playing  = isPlaying;
         final long    now      = System.currentTimeMillis();
 
@@ -1138,16 +1107,14 @@ public class MusicPlayerService extends Service {
                     obj.put("title",     title);
                     obj.put("artist",    artist);
                     obj.put("position",  position);
-                    obj.put("duration",  duration);
                     obj.put("isPlaying", playing);
                     obj.put("updatedAt", now);
                     ed.putString("mptree_native_now_playing", obj.toString());
                 }
-                // commit, not apply: the widgets read this back straight away.
-                ed.commit();
+                ed.apply();
             } catch (Exception ignored) {}
 
-            mainHandler.post(() -> pushWidgetProgress(path, playing, position, duration));
+            mainHandler.post(this::pushWidgetUpdate);
         });
     }
 
@@ -1276,9 +1243,6 @@ public class MusicPlayerService extends Service {
         final Bitmap stale = currentTrackArt;
         currentTrackArt     = null;
         currentTrackArtPath = null;
-        // The widgets too: the last song's cover under this song's name is
-        // worse than no cover for a moment.
-        new File(getCacheDir(), Widgets.ART_FILE).delete();
         if (stale != null && stale != cachedLogoArt) {
             // Recycle on the art thread to avoid touching it while in use.
             artExecutor.execute(() -> { try { stale.recycle(); } catch (Exception ignored) {} });
@@ -1292,7 +1256,6 @@ public class MusicPlayerService extends Service {
                     : null;
             if (decoded == null) decoded = decodeEmbeddedArt(path);
             final Bitmap ready = decoded;
-            if (path.equals(currentPath)) writeWidgetArt(ready);
             mainHandler.post(() -> {
                 // If the track changed again while we were decoding, drop this result.
                 if (path.equals(currentPath)) {
@@ -1301,7 +1264,6 @@ public class MusicPlayerService extends Service {
                     // Refresh surfaces now that real art is available.
                     updateMediaSessionMetadata();
                     showNotification();
-                    pushWidgetUpdate();
                 } else if (ready != null) {
                     ready.recycle();
                 }

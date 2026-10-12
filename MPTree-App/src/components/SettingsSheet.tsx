@@ -21,6 +21,7 @@ const Svg = ({ children }: { children: ReactNode }) => (
 );
 
 const DownloadIcon = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
+const UploadIcon   = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></Svg>;
 const GlobeIcon    = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></Svg>;
 const BellIcon     = () => <Svg><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Svg>;
 const TextIcon     = () => <Svg><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></Svg>;
@@ -32,7 +33,6 @@ const MailIcon     = () => <Svg><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 
 const StarIcon     = () => <Svg><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Svg>;
 const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Svg>;
 const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
-const GridIcon     = () => <Svg><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/></Svg>;
 const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
 const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 
@@ -46,7 +46,7 @@ const rowStyle = (T: T): React.CSSProperties => ({
   cursor: "pointer", color: T.text, fontFamily: "inherit", textAlign: "left",
 });
 
-export function Row({ icon, label, sub, right, onClick, first, T }: {
+function Row({ icon, label, sub, right, onClick, first, T }: {
   icon: ReactNode; label: string; sub?: string; right?: ReactNode; onClick: () => void; first?: boolean; T: T;
 }) {
   return (
@@ -63,7 +63,7 @@ export function Row({ icon, label, sub, right, onClick, first, T }: {
   );
 }
 
-export function ProTag({ T }: { T: T }) {
+function ProTag({ T }: { T: T }) {
   return (
     <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: T.playBtnFg, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
       PRO
@@ -89,7 +89,6 @@ type SettingsSheetProps = {
   pro: boolean;
   onOpenPro: () => void;
   onOpenLook: () => void;
-  onOpenWidgets: () => void;
   onOpenAccount: () => void;
   onOpenCleanup: () => void;
   /** How many probable non-songs the library holds, shown on the row. */
@@ -100,8 +99,10 @@ type SettingsSheetProps = {
   onOpenAudioEffects: () => void;
   /** Re-runs the first-launch spotlight tour. */
   onShowTutorial: () => void;
-  /** Opens the page with every way in and out: backup, restore, rescan, sync. */
-  onOpenTransfer: () => void;
+  /** Opens the pre-export info sheet */
+  onExport: () => void;
+  /** Opens the pre-import info sheet */
+  onImportOpen: () => void;
   /** Opens the support/tip page in the browser. */
   // ── Sleep timer ──
   /** Absolute epoch-ms deadline for a fixed-clock sleep timer, or null. */
@@ -134,9 +135,9 @@ type SettingsSheetProps = {
 
 export function SettingsSheet({
   theme, hidden, binCount,
-  pro, onOpenPro, onOpenLook, onOpenWidgets, onOpenAccount, onOpenCleanup, cleanupCount,
+  pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onOpenAudioEffects, onShowTutorial,
-  onOpenTransfer,
+  onExport, onImportOpen,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, duckOthers, onSetMix,
@@ -299,12 +300,6 @@ export function SettingsSheet({
             sub={t("Shades, header card, record and app icon.")}
             right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
-          <Row T={T}
-            onClick={onOpenWidgets}
-            icon={<GridIcon />}
-            label={t("Widgets")}
-            sub={t("Four for your home screen.")}
-          />
           {/* Size: text and rows together. One control rather than two: a
               bigger font in a row that stays the same height is a row that
               clips. */}
@@ -452,7 +447,8 @@ export function SettingsSheet({
         </Section>
 
         <Section T={T} title={t("Backup & Restore")}>
-          <Row T={T} first onClick={onOpenTransfer} icon={<DownloadIcon />} label={t("Import, export & backup")} />
+          <Row T={T} first onClick={onExport} icon={<DownloadIcon />} label={t("Export backup")} />
+          <Row T={T} onClick={onImportOpen} icon={<UploadIcon />} label={t("Restore backup")} />
         </Section>
 
         <Section T={T} title={t("Help")}>

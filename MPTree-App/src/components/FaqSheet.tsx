@@ -23,7 +23,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How do I back up my playlists and likes?",
-    a: "The + next to the search field, then Export backup. It saves a folder in Downloads with your playlists, likes, names and photos. On a new phone, copy that folder over and use the + and Restore backup.",
+    a: "Settings > Export backup. It saves a folder in Downloads with your playlists, likes, names and photos. On a new phone, copy that folder over and use Settings > Restore backup.",
   },
   {
     q: "Does MPTree need the internet?",

@@ -22,7 +22,6 @@ import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
-import { TransferSheet } from "./components/TransferSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
@@ -775,7 +774,6 @@ export default function App() {
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [transferOpen, setTransferOpen] = useState(false);
   const sync = useSync();
   // Windows: Pro bought in the web checkout belongs to the account signed in.
   const syncEmail = sync.phase === "on" ? sync.account?.email : undefined;
@@ -2751,7 +2749,6 @@ export default function App() {
       }
       if (showOnboarding)      { finishOnboarding(); return; }
       if (proOpen)             { setProOpen(false); return; }
-      if (transferOpen)        { setTransferOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       if (lookOpen)            { endPreview(); setLookOpen(false); return; }
@@ -2791,7 +2788,7 @@ export default function App() {
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
       const ctrl = e.ctrlKey || e.metaKey;
-      const layerOpen = backupSheet.kind !== "closed" || proOpen || accountOpen || transferOpen || eqOpen || lookOpen || cleanupOpen || binOpen
+      const layerOpen = backupSheet.kind !== "closed" || proOpen || accountOpen || eqOpen || lookOpen || cleanupOpen || binOpen
         || settingsOpen || !!cutSong || !!removeSong || removeMultiConfirm || !!editSong || playerExpanded || filterOpen
         || !!menuSong || multiAddOpen || bulkEditOpen || !!lyricsSong || !!welcome;
 
@@ -3595,14 +3592,6 @@ export default function App() {
                     </button>
                   )}
                 </div>
-                {/* Everything that brings music or data in or out, on one page. */}
-                <button
-                  onClick={() => { setTransferOpen(true); hapticImpact("light"); }}
-                  aria-label={t("Import, export & backup")}
-                  tabIndex={page === "songs" ? undefined : -1}
-                  style={{ width: 40, height: 40, borderRadius: 10, background: CT.accent, border: "none", color: CT.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                  <IC.Plus />
-                </button>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -3956,14 +3945,6 @@ export default function App() {
             {wide && (
               <div style={{ flexShrink: 0, padding: "14px 24px 0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  {/* Everything that brings music or data in or out, on one page. */}
-                  <button
-                    onClick={() => setTransferOpen(true)}
-                    aria-label={t("Import, export & backup")}
-                    title={t("Import, export & backup")}
-                    style={{ width: 38, height: 38, borderRadius: 10, background: TH.accent, border: "none", color: TH.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                    <IC.Plus />
-                  </button>
                   <div data-tour="d-search" style={{ flex: 1, maxWidth: 420, display: "flex", alignItems: "center", background: TH.surface, borderRadius: 10, padding: "0 12px", height: 38, gap: 8, border: `1px solid ${TH.border}` }}>
                     {IC.Search(TH.muted)}
                     <input ref={deskSearchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: TH.text, fontSize: 14, minWidth: 0, fontFamily: "inherit" }} />
@@ -4571,7 +4552,8 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onOpenTransfer={() => setTransferOpen(true)}
+            onExport={handleExportOpen}
+            onImportOpen={handleImportOpen}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4611,19 +4593,6 @@ export default function App() {
             onClose={() => setCleanupOpen(false)}
             T={TH} />
         )}
-        {transferOpen && (
-          <TransferSheet
-            pro={pro} binCount={removedSongs.length}
-            onExport={handleExportOpen}
-            onImport={handleImportOpen}
-            onOpenAccount={() => setAccountOpen(true)}
-            onOpenBin={() => setBinOpen(true)}
-            onMusicFolder={isDesktop ? pickMusicFolder : undefined}
-            musicFolder={desktopFolder}
-            onClose={() => setTransferOpen(false)}
-            T={TH} />
-        )}
-
         {accountOpen && (
           <AccountSheet
             pro={pro}

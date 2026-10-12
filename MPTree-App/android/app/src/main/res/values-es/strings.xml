@@ -7,15 +7,4 @@
     <string name="action_pause">Pausa</string>
     <string name="action_next">Siguiente</string>
     <string name="not_playing">No suena nada</string>
-    <string name="widget_play_or_pause">Reproducir o pausar</string>
-    <string name="widget_basic">MPTree</string>
-    <string name="widget_vinyl">Disco de MPTree</string>
-    <string name="widget_pod">Reproductor de bolsillo MPTree</string>
-    <string name="widget_player">Reproductor MPTree</string>
-    <string name="widget_basic_desc">Título, artista y los tres botones, en negro o blanco.</string>
-    <string name="widget_vinyl_desc">Un disco con la portada como etiqueta. MPTree Pro.</string>
-    <string name="widget_pod_desc">Un reproductor pequeño con rueda. MPTree Pro.</string>
-    <string name="widget_player_desc">La portada, por dónde va la canción y los botones. MPTree Pro.</string>
-    <string name="widget_pro_title">MPTree Pro</string>
-    <string name="widget_pro_body">Abre MPTree para desbloquear este widget</string>
 </resources>

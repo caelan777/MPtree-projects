@@ -196,37 +196,6 @@ public class SystemPlugin extends Plugin {
         }
     }
 
-    /** The widgets redraw: Pro, the look or black and white changed in the app. */
-    @PluginMethod
-    public void refreshWidgets(PluginCall call) {
-        Widgets.updateAll(getContext());
-        call.resolve();
-    }
-
-    /**
-     * Asks the home screen to place one of the widgets, so nobody has to find
-     * the widget list. Android 8 and up, and only where the launcher allows it;
-     * supported:false means "add it from your home screen instead".
-     */
-    @PluginMethod
-    public void pinWidget(PluginCall call) {
-        String kind = call.getString("kind", "basic");
-        int index = "vinyl".equals(kind) ? Widgets.VINYL : "pod".equals(kind) ? Widgets.POD
-                : "player".equals(kind) ? Widgets.PLAYER : Widgets.BASIC;
-        JSObject ret = new JSObject();
-        boolean asked = false;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                android.appwidget.AppWidgetManager mgr = android.appwidget.AppWidgetManager.getInstance(getContext());
-                if (mgr.isRequestPinAppWidgetSupported()) {
-                    asked = mgr.requestPinAppWidget(new ComponentName(getContext(), Widgets.PROVIDERS[index]), null, null);
-                }
-            } catch (Exception ignored) { /* answered as not supported */ }
-        }
-        ret.put("supported", asked);
-        call.resolve(ret);
-    }
-
     /** An extra home-screen shortcut with the person's own photo on it. */
     @PluginMethod
     public void pinPhotoShortcut(PluginCall call) {
