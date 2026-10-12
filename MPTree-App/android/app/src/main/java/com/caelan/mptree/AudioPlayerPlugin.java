@@ -83,6 +83,9 @@ public class AudioPlayerPlugin extends Plugin {
                 JSObject data = new JSObject();
                 data.put("isPlaying", playerService.isCurrentlyPlaying());
                 data.put("path", playerService.getCurrentPath());
+                // A cut and its source are one file; the place in the queue
+                // tells them apart.
+                data.put("index", playerService.getQueueIndex());
                 notifyListeners("stateChange", data);
             });
         }
@@ -145,7 +148,7 @@ public class AudioPlayerPlugin extends Plugin {
         String artist = getStringOrDefault(call, "artist", "Unknown");
         if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
         try {
-            playerService.play(path, title, artist);
+            playerService.play(path, title, artist, call.getInt("cutFrom", 0), call.getInt("cutTo", 0));
             call.resolve();
         } catch (Exception e) {
             call.reject("Playback failed: " + e.getMessage(), e);
@@ -247,7 +250,9 @@ public class AudioPlayerPlugin extends Plugin {
                             t.optString("path", ""),
                             t.optString("title", "Unknown"),
                             t.optString("artist", "Unknown"),
-                            t.optBoolean("isCut", false)
+                            t.optBoolean("isCut", false),
+                            t.optInt("cutFrom", 0),
+                            t.optInt("cutTo", 0)
                     ));
                 }
             } catch (JSONException e) {

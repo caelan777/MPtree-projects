@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { T } from "../themes";
-import { t, tn, phoneLang, type LangPref } from "../i18n";
+import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
 import { Logo } from "./Logo";
 import { Switch } from "./Switch";
 import { LanguageSheet } from "./LanguageSheet";
@@ -51,7 +51,7 @@ export function WelcomeScreen({
   const [langOpen, setLangOpen] = useState(false);
   const [hole, setHole] = useState<{ x: number; y: number } | null>(null);
 
-  const langName = (lang === "auto" ? phoneLang() : lang) === "nl" ? "Nederlands" : "English";
+  const langName = LANG_NAMES[lang === "auto" ? phoneLang() : lang];
 
   const card: React.CSSProperties = {
     display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",

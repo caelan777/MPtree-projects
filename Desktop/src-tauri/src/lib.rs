@@ -422,6 +422,17 @@ mod win {
         pub fn WaitForSingleObject(handle: isize, ms: u32) -> u32;
         pub fn GetLastError() -> u32;
     }
+    #[link(name = "comctl32")]
+    extern "system" {
+        pub fn SetWindowSubclass(hwnd: isize, proc: SubclassProc, id: usize, data: usize) -> i32;
+        pub fn DefSubclassProc(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> isize;
+    }
+    pub type SubclassProc = unsafe extern "system" fn(isize, u32, usize, isize, usize, usize) -> isize;
+    pub const WM_NCPAINT: u32 = 0x0085;
+    pub const WM_NCACTIVATE: u32 = 0x0086;
+    /// Two messages Windows keeps to itself, for drawing a title bar and frame.
+    pub const WM_NCUAHDRAWCAPTION: u32 = 0x00AE;
+    pub const WM_NCUAHDRAWFRAME: u32 = 0x00AF;
     #[link(name = "user32")]
     extern "system" {
         pub fn AllowSetForegroundWindow(process: u32) -> i32;
@@ -447,6 +458,29 @@ fn make_round(window: &tauri::WebviewWindow, left: f64, top: f64, size: f64) {
 }
 #[cfg(not(windows))]
 fn make_round(_window: &tauri::WebviewWindow, _left: f64, _top: f64, _size: f64) {}
+
+/// A window without decorations still has a title bar as far as Windows is
+/// concerned, and one cut to a shape gets it drawn the old way: straight onto
+/// the window, in white, whenever a press makes it the active one. This keeps
+/// Windows from drawing any of it.
+#[cfg(windows)]
+unsafe extern "system" fn no_frame(hwnd: isize, msg: u32, wparam: usize, lparam: isize, _id: usize, _data: usize) -> isize {
+    match msg {
+        win::WM_NCPAINT | win::WM_NCUAHDRAWCAPTION | win::WM_NCUAHDRAWFRAME => 0,
+        // -1: note the change, draw nothing.
+        win::WM_NCACTIVATE => win::DefSubclassProc(hwnd, msg, wparam, -1),
+        _ => win::DefSubclassProc(hwnd, msg, wparam, lparam),
+    }
+}
+
+#[cfg(windows)]
+fn no_frame_drawing(window: &tauri::WebviewWindow) {
+    if let Ok(hwnd) = window.hwnd() {
+        unsafe { win::SetWindowSubclass(hwnd.0 as isize, no_frame, 1, 0) };
+    }
+}
+#[cfg(not(windows))]
+fn no_frame_drawing(_window: &tauri::WebviewWindow) {}
 
 /// The screen without the taskbar, in logical pixels: (x, y, width, height).
 /// A taskbar set to hide itself takes no room in Windows' own answer and then
@@ -663,7 +697,7 @@ fn on_main_event(app: &tauri::AppHandle, event: &WindowEvent) {
 }
 
 fn floating(app: &tauri::App, label: &str, page: &str, w: f64, h: f64) -> tauri::Result<tauri::WebviewWindow> {
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
         .title("MPTree")
         .inner_size(w, h)
         .decorations(false)
@@ -676,8 +710,58 @@ fn floating(app: &tauri::App, label: &str, page: &str, w: f64, h: f64) -> tauri:
         .always_on_top(true)
         .skip_taskbar(true)
         .focused(false)
+        // A press must not make it the active window: that takes the focus
+        // from MPTree, and has Windows repaint the frame it does not have.
+        .focusable(false)
         .visible(false)
-        .build()
+        .build()?;
+    no_frame_drawing(&window);
+    Ok(window)
+}
+
+// ── Backup ─────────────────────────────────────────────────────────────────
+// A backup is a folder in Downloads: one JSON file, and the songs next to it
+// in "music" when they were asked for. The same shape the phone writes, so a
+// backup made on one can be restored on the other.
+
+fn backup_dir(app: &tauri::AppHandle, folder: &str) -> Result<PathBuf, String> {
+    Ok(app.path().download_dir().map_err(|e| e.to_string())?.join(sync::safe_name(folder)))
+}
+
+/// A full disk is told apart from every other failure: the window stops the
+/// backup for it, where it only counts a file it could not read.
+fn backup_error(e: std::io::Error) -> String {
+    match e.raw_os_error() {
+        Some(39) | Some(112) => format!("ENOSPC: {e}"),
+        _ => e.to_string(),
+    }
+}
+
+/// Writes one text file into the backup folder and answers where it is.
+#[tauri::command]
+fn backup_write(app: tauri::AppHandle, folder: String, name: String, text: String) -> Result<String, String> {
+    let dir = backup_dir(&app, &folder)?;
+    std::fs::create_dir_all(&dir).map_err(backup_error)?;
+    let file = dir.join(sync::safe_name(&name));
+    std::fs::write(&file, text).map_err(backup_error)?;
+    Ok(file.to_string_lossy().into_owned())
+}
+
+/// Copies one song into the backup's music folder.
+#[tauri::command]
+async fn backup_copy(app: tauri::AppHandle, folder: String, from: String) -> Result<(), String> {
+    let dir = backup_dir(&app, &folder)?.join("music");
+    std::fs::create_dir_all(&dir).map_err(backup_error)?;
+    let from = PathBuf::from(from);
+    let name = from.file_name().ok_or("no file name")?;
+    std::fs::copy(&from, dir.join(name)).map_err(backup_error)?;
+    Ok(())
+}
+
+/// Shows the backup folder in Explorer.
+#[tauri::command]
+fn backup_reveal(app: tauri::AppHandle, folder: String) -> Result<(), String> {
+    open::that(backup_dir(&app, &folder)?).map_err(|e| e.to_string())
 }
 
 // ── One MPTree at a time ───────────────────────────────────────────────────
@@ -754,6 +838,14 @@ pub fn run() {
             let bubble = floating(app, "bubble", "bubble.html", 132.0, BUBBLE)?;
             let _ = bubble.set_position(LogicalPosition::new(saved.x, saved.y));
             make_round(&bubble, 2.0, 2.0, BUBBLE - 4.0);
+            // The circle is cut in real pixels, so a screen with another
+            // scale needs it cut again.
+            let round = bubble.clone();
+            bubble.on_window_event(move |event| {
+                if let WindowEvent::ScaleFactorChanged { .. } = event {
+                    make_round(&round, 2.0, 2.0, BUBBLE - 4.0);
+                }
+            });
             let dismiss = floating(app, "dismiss", "dismiss.html", DISMISS_W, DISMISS_H)?;
             make_round(&dismiss, (DISMISS_W - DISMISS_D) / 2.0 - 2.0, (DISMISS_H - DISMISS_D) / 2.0 - 2.0, DISMISS_D + 4.0);
 
@@ -767,6 +859,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             scan, album_art, lyrics, trash_files, cut_track,
+            backup_write, backup_copy, backup_reveal,
             bubble_click, bubble_drag, shortcut_get, shortcut_set, shortcut_style, mini_hide, is_mini,
             account::google_sign_in, account::google_cancel_sign_in, account::google_token, account::google_clear_token,
             account::google_sign_out, account::google_available,

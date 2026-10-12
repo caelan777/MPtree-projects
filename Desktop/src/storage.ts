@@ -3,7 +3,8 @@ import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { CapacitorZip } from "@capgo/capacitor-zip";
 import type { Song, FilterId, PlayMode, Playlist, Theme } from "./types";
 // Registered once in plugins.ts; see the note there.
-import { MusicScanner } from "./plugins";
+import { MusicScanner, isDesktop } from "./plugins";
+import { invoke } from "@tauri-apps/api/core";
 
 // ─── Keys ─────────────────────────────────────────────────────────────────────
 
@@ -363,6 +364,8 @@ export async function exportBackup(
   onProgress?: (done: number, total: number) => void,
   cancelRef?: { current: boolean },
 ): Promise<ExportResult> {
+  if (isDesktop) return exportBackupDesktop(data, songPaths, backupName, onProgress, cancelRef);
+
   const backupFolder = `Download/${backupName}`;
   const musicSubdir  = `${backupFolder}/music`;
   const withMusic    = songPaths.length > 0;
@@ -435,6 +438,53 @@ export async function exportBackup(
 
   return { folderName: backupName, jsonUri, failedCount };
 }
+
+/**
+ * The same backup on Windows, where there is no Capacitor file system: the
+ * Rust side writes into Downloads/<name>, in the layout the phone uses.
+ */
+async function exportBackupDesktop(
+  data: BackupData,
+  songPaths: string[],
+  backupName: string,
+  onProgress?: (done: number, total: number) => void,
+  cancelRef?: { current: boolean },
+): Promise<ExportResult> {
+  const withMusic = songPaths.length > 0;
+  data.includeMusic = withMusic;
+  data.musicDir     = withMusic ? `Download/${backupName}` : undefined;
+  data.musicFiles   = withMusic ? songPaths : undefined;
+
+  // JSON first, so a backup that stops halfway can still be restored.
+  const jsonUri = await invoke<string>("backup_write", {
+    folder: backupName,
+    name:   `mptree_backup_${data.exportedAt}.json`,
+    text:   JSON.stringify(data, null, 2),
+  });
+
+  let done = 0;
+  let failedCount = 0;
+  for (const from of songPaths) {
+    if (cancelRef?.current) break;
+    try {
+      await invoke("backup_copy", { folder: backupName, from });
+    } catch (e) {
+      if (isStorageFullError(e)) {
+        throw Object.assign(new Error("ENOSPC"), {
+          isStorageFull: true, copiedCount: done, jsonUri, folderName: backupName,
+        });
+      }
+      failedCount++;
+    }
+    done++;
+    onProgress?.(done, songPaths.length);
+  }
+  return { folderName: backupName, jsonUri, failedCount };
+}
+
+/** Windows: the backup folder, shown in Explorer. */
+export const revealBackupFolder = (backupName: string) =>
+  invoke("backup_reveal", { folder: backupName });
 
 // ── Zip the whole backup folder (JSON + music) for sharing ────────────────────
 

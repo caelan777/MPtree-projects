@@ -22,10 +22,12 @@ import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { CutTrackSheet } from "./components/CutTrackSheet";
+import { TransferSheet } from "./components/TransferSheet";
+import { WidgetsSheet, type WidgetBasic, type WidgetKind } from "./components/WidgetsSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
-import { applyLang, t, tn, fmtBytes, type LangPref } from "./i18n";
+import { applyLang, isLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
@@ -524,7 +526,7 @@ export default function App() {
     const sz: UiSize = size === "small" || size === "large" ? size : "medium";
     setUiSize(sz);
     System.setTextZoom({ factor: SIZE_TABLE[sz].text }).catch(() => {});
-    const l: LangPref = lang === "en" || lang === "nl" ? lang : "auto";
+    const l: LangPref = isLang(lang) ? lang : "auto";
     applyLang(l); setLangPref(l);
     setUpdateNotices(notices !== "0");
     setMixOthers(mix === "true");
@@ -739,6 +741,11 @@ export default function App() {
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [widgetsOpen, setWidgetsOpen] = useState(false);
+  // Black or white for the plain widget. null until it has been read, so the
+  // choice already made is not written over with the default on the way in.
+  const [widgetBasic, setWidgetBasic] = useState<WidgetBasic | null>(null);
   const sync = useSync();
   useEffect(() => { loadLook(); loadPro(); }, []);
 
@@ -747,6 +754,22 @@ export default function App() {
   // off overlay and colour the bar to match the theme. No-ops on web.
   // The bar takes the ground colour, which a Pro shade can change.
   const TH = paletteFor(theme, look.dark, look.light);
+
+  // The home-screen widgets are drawn by Android and cannot ask the window
+  // anything, so what they need is written down for them: whether Pro is on,
+  // black or white for the plain one, and the colours of the look in use.
+  useEffect(() => {
+    Preferences.get({ key: "mptree_widget_basic" })
+      .then(r => setWidgetBasic(r.value === "white" ? "white" : "black"))
+      .catch(() => setWidgetBasic("black"));
+  }, []);
+  useEffect(() => {
+    if (!widgetBasic) return;
+    const value = JSON.stringify({ pro, basic: widgetBasic, card: TH.card, bg: TH.bg, text: TH.text, muted: TH.muted });
+    Preferences.set({ key: "mptree_widget", value })
+      .then(() => System.refreshWidgets())
+      .catch(() => {});
+  }, [pro, widgetBasic, TH.card, TH.bg, TH.text, TH.muted]);
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -773,6 +796,7 @@ export default function App() {
     title:  metaRef.current[t.id]?.customName ?? t.title,
     artist: metaRef.current[t.id]?.customArtist ?? (!isMissingArtist(t.artist) ? t.artist : "Unknown"),
     isCut:  !!t.isCut,
+    ...(t.isCut ? { cutFrom: Math.round(t.cutFrom ?? 0), cutTo: Math.round(t.cutTo ?? 0) } : null),
   }), []);
 
   // ── flushSession ──────────────────────────────────────────────────────────
@@ -1190,7 +1214,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
 
-  // ── Position polling + cut track boundary ─────────────────────────────────
+  // ── Position polling ─────────────────────────────────
   useEffect(() => {
     if (!isPlaying || !currentSong) return;
     let tick = 0;
@@ -1200,18 +1224,8 @@ export default function App() {
         const { position, duration: dur } = await AudioPlayer.getState();
         setCurrentTime(position); currentTimeRef.current = position;
         if (dur > 0) setDuration(dur);
-        const cs = curRef.current;
-        if (cs?.isCut && cs.cutTo != null && position >= cs.cutTo - 300) {
-          await AudioPlayer.pause(); setPlaying(false);
-          const q = queueRef.current; const idx = q.findIndex(s => s.id === cs.id);
-          if (playModeRef.current === "repeat") {
-            AudioPlayer.seekTo({ milliseconds: cs.cutFrom ?? 0 }).catch(() => {});
-            setCurrentTime(cs.cutFrom ?? 0);
-            setTimeout(() => AudioPlayer.resume().catch(() => {}), 50); setPlaying(true);
-          } else if (idx !== -1 && idx < q.length - 1) { playSong(q[idx + 1], q); }
-          else { setPlaying(false); setCurrentTime(0); loadedRef.current = false; }
-          return;
-        }
+        // A cut's end is the service's to keep, like the end of any file:
+        // this poll stops when the screen goes off, and the service does not.
         tick++;
         if (tick % 5 === 0) flushSession();
       } catch { /* ignore */ }
@@ -1237,17 +1251,21 @@ export default function App() {
   //
   // This keeps UI and native perfectly in lock-step without the old 800ms race
   // guard.
-  const syncToNativePath = useCallback((path: string, nativeIsPlaying: boolean) => {
+  const syncToNativePath = useCallback((path: string, nativeIsPlaying: boolean, index?: number) => {
     const cs = curRef.current;
+    const q = queueRef.current;
+    // The service also says where in the queue it is. A cut and its source
+    // are the same file, so only that tells them apart.
+    const at = index != null && index >= 0 ? q[index] : undefined;
+    const exact = at && at.uri === path ? at : null;
     // Same track still playing — just reconcile the play/pause flag.
-    if (cs && path === cs.uri) {
+    if (cs && path === cs.uri && (!exact || exact.id === cs.id)) {
       setPlaying(nativeIsPlaying);
       return;
     }
     // Native moved to a different track. Find it in the current queue first
     // (covers shuffle + normal), then fall back to the display list.
-    const q = queueRef.current;
-    let next = q.find(s => s.uri === path) ?? null;
+    let next = exact ?? q.find(s => s.uri === path) ?? null;
     let sourceList = q;
     if (!next) {
       const list = displayListRef.current;
@@ -1306,9 +1324,9 @@ export default function App() {
     }).then(l => { listener = l; });
 
     // Primary sync channel: adopt whatever native is actually playing.
-    AudioPlayer.addListener("stateChange", ({ isPlaying: nip, path }) => {
+    AudioPlayer.addListener("stateChange", ({ isPlaying: nip, path, index }) => {
       if (!path) { setPlaying(nip); return; }
-      syncToNativePath(path, nip);
+      syncToNativePath(path, nip, index);
     }).then(l => { stateListener = l; });
 
     return () => { listener?.remove(); stateListener?.remove(); };
@@ -1358,6 +1376,10 @@ export default function App() {
 
 
   // ── Playback ──────────────────────────────────────────────────────────────
+  // What the service needs to play only a cut's part of its file.
+  const cutBounds = (s: Song) =>
+    s.isCut ? { cutFrom: Math.round(s.cutFrom ?? 0), cutTo: Math.round(s.cutTo ?? 0) } : null;
+
   const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
     // Starting a track makes the app scroll to it. Flag that here, in the click
     // handler itself, rather than relying on the effect that performs the
@@ -1368,10 +1390,8 @@ export default function App() {
       setQueue(q); setCurrent(s); setCurrentTime(0); setDuration(0); setPlaying(true); loadedRef.current = true;
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
       const artist = artistOverride ?? getMeta(s).customArtist ?? (s.artist && s.artist.toLowerCase() !== "<unknown>" ? s.artist : "Unknown");
-      await AudioPlayer.play({ path: s.uri, title, artist });
-      if (s.isCut && s.cutFrom && s.cutFrom > 0) {
-        await AudioPlayer.seekTo({ milliseconds: s.cutFrom }); setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom;
-      }
+      await AudioPlayer.play({ path: s.uri, title, artist, ...cutBounds(s) });
+      if (s.isCut && s.cutFrom && s.cutFrom > 0) { setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom; }
       const idx = q.findIndex(x => x.id === s.id);
       AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: idx }).catch(() => {});
       setMeta(prev => {
@@ -1385,7 +1405,7 @@ export default function App() {
     if (!currentSong) return;
     try {
       if (!loadedRef.current) {
-        await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown" });
+        await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown", ...cutBounds(currentSong) });
         const seekTarget = currentSong.isCut && currentTime <= (currentSong.cutFrom ?? 0) ? (currentSong.cutFrom ?? 0) : currentTime;
         if (seekTarget > 0) await AudioPlayer.seekTo({ milliseconds: seekTarget });
         loadedRef.current = true; setPlaying(true); return;
@@ -1398,7 +1418,7 @@ export default function App() {
   const seekTo = async (ms: number) => {
     if (!currentSong) return;
     try {
-      if (!loadedRef.current) { await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown" }); await AudioPlayer.pause(); loadedRef.current = true; }
+      if (!loadedRef.current) { await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown", ...cutBounds(currentSong) }); await AudioPlayer.pause(); loadedRef.current = true; }
       await AudioPlayer.seekTo({ milliseconds: ms });
     } catch { /* ignore */ }
   };
@@ -2388,14 +2408,8 @@ export default function App() {
 
   // ── Cut track ─────────────────────────────────────────────────────────────
   const openCutSheet = async (song: Song) => {
-    let dur = song.duration ?? 0;
-    if (!dur) {
-      try {
-        if (currentSong?.id === song.id) { const d = await AudioPlayer.getDuration(); dur = d.duration; }
-        else { await AudioPlayer.play({ path: song.uri }); await AudioPlayer.pause(); const d = await AudioPlayer.getDuration(); dur = d.duration; }
-      } catch { /* ignore */ }
-    }
-    setCutDuration(dur); setCutSong(song); setMenuSong(null);
+    // A file that never said how long it is gets asked by the sheet itself.
+    setCutDuration(song.duration ?? 0); setCutSong(song); setMenuSong(null);
   };
 
   const saveCutTrack = async (song: Song, startMs: number, endMs: number, newName: string) => {
@@ -2610,6 +2624,8 @@ export default function App() {
       }
       if (showOnboarding)      { finishOnboarding(); return; }
       if (proOpen)             { setProOpen(false); return; }
+      if (transferOpen)        { setTransferOpen(false); return; }
+      if (widgetsOpen)         { setWidgetsOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       if (lookOpen)            { endPreview(); setLookOpen(false); return; }
@@ -3316,6 +3332,14 @@ export default function App() {
                     </button>
                   )}
                 </div>
+                {/* Everything that brings music or data in or out, on one page. */}
+                <button
+                  onClick={() => { setTransferOpen(true); hapticImpact("light"); }}
+                  aria-label={t("Import, export & backup")}
+                  tabIndex={page === "songs" ? undefined : -1}
+                  style={{ width: 40, height: 40, borderRadius: 10, background: CT.accent, border: "none", color: CT.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                  <IC.Plus />
+                </button>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -4126,6 +4150,7 @@ export default function App() {
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
+            onOpenWidgets={() => setWidgetsOpen(true)}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
@@ -4137,8 +4162,7 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onExport={handleExportOpen}
-            onImportOpen={handleImportOpen}
+            onOpenTransfer={() => setTransferOpen(true)}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4178,6 +4202,34 @@ export default function App() {
             onClose={() => setCleanupOpen(false)}
             T={TH} />
         )}
+        {widgetsOpen && (
+          <WidgetsSheet
+            pro={pro} basic={widgetBasic ?? "black"}
+            onSetBasic={v => { setWidgetBasic(v); Preferences.set({ key: "mptree_widget_basic", value: v }).catch(() => {}); }}
+            onPin={(kind: WidgetKind) => {
+              System.pinWidget({ kind })
+                .then(r => showToast(r.supported
+                  ? t("Confirm on your home screen to add it")
+                  : t("Your home screen does not let apps add widgets. Hold an empty spot on it and choose Widgets.")))
+                .catch(() => {});
+            }}
+            onOpenPro={() => setProOpen(true)}
+            onClose={() => setWidgetsOpen(false)}
+            T={TH} />
+        )}
+
+        {transferOpen && (
+          <TransferSheet
+            pro={pro} binCount={removedSongs.length}
+            onExport={handleExportOpen}
+            onImport={handleImportOpen}
+            onRescan={() => { scanMusic().then(list => showToast(tn(list.length, "{n} song in the library", "{n} songs in the library"))).catch(() => {}); }}
+            onOpenAccount={() => setAccountOpen(true)}
+            onOpenBin={() => setBinOpen(true)}
+            onClose={() => setTransferOpen(false)}
+            T={TH} />
+        )}
+
         {accountOpen && (
           <AccountSheet
             pro={pro}

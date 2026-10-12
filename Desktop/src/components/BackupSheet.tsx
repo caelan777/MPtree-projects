@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { isWide, fullPage } from "../themes";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
+import { isDesktop } from "../plugins";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -419,7 +420,7 @@ function ExportSuccessSheet({
             boxSizing: "border-box",
           }}
         >
-          <ShareIcon /> Share backup
+          {isDesktop ? t("Open the folder") : <><ShareIcon /> {t("Share backup")}</>}
         </button>
         <button
           onClick={onDone}

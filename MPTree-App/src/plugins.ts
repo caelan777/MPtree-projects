@@ -48,7 +48,9 @@ export type MusicScannerPlugin = {
 };
 
 export type AudioPlayerPlugin = {
-  play(options: { path: string; title?: string; artist?: string }): Promise<void>;
+  /** cutFrom and cutTo: only this part of the file is played (a cut that is
+   *  not a file of its own). The service starts and ends there by itself. */
+  play(options: { path: string; title?: string; artist?: string; cutFrom?: number; cutTo?: number }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   getCurrentPosition(): Promise<{ position: number }>;
@@ -57,8 +59,8 @@ export type AudioPlayerPlugin = {
   getCurrentSong(): Promise<{ path: string; isPlaying: boolean }>;
   seekTo(options: { milliseconds: number }): Promise<void>;
   addListener(event: "trackComplete", handler: () => void): Promise<{ remove(): void }>;
-  addListener(event: "stateChange", handler: (data: { isPlaying: boolean; path: string }) => void): Promise<{ remove(): void }>;
-  setQueue(options: { tracks: { path: string; title: string; artist: string; isCut?: boolean }[]; currentIndex: number }): Promise<void>;
+  addListener(event: "stateChange", handler: (data: { isPlaying: boolean; path: string; index?: number }) => void): Promise<{ remove(): void }>;
+  setQueue(options: { tracks: { path: string; title: string; artist: string; isCut?: boolean; cutFrom?: number; cutTo?: number }[]; currentIndex: number }): Promise<void>;
   setPlayMode(options: { mode: string }): Promise<void>;
   setCrossfadeDuration(options: { milliseconds: number }): Promise<void>;
   setPlaybackSpeed(options: { speed: number }): Promise<void>;
@@ -97,6 +99,11 @@ export type SystemPlugin = {
    *  it. Resolves supported:false when the launcher cannot pin shortcuts. The
    *  launcher shows its own confirmation; this does not wait for it. */
   pinPhotoShortcut(options: { dataUrl: string; label: string }): Promise<{ supported: boolean }>;
+  /** Redraws the home-screen widgets, after "mptree_widget" was written. */
+  refreshWidgets(): Promise<void>;
+  /** Asks the launcher to place one of the widgets. supported:false when it
+   *  cannot (Android 7, or a launcher that does not allow it). */
+  pinWidget(options: { kind: "basic" | "vinyl" | "pod" | "player" }): Promise<{ supported: boolean }>;
 };
 
 /** Google Play Billing, for MPTree Pro. Only works in a build Play installed. */
@@ -156,6 +163,8 @@ const SystemWeb: SystemPlugin = {
   getAppIcon:        async () => ({ icon: "classic" }),
   setAppIcon:        async () => {},
   pinPhotoShortcut:  async () => ({ supported: false }),
+  refreshWidgets:    async () => {},
+  pinWidget:         async () => ({ supported: false }),
 };
 
 const BillingWeb: BillingPlugin = {

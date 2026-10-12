@@ -416,7 +416,7 @@ function ExportSuccessSheet({
             boxSizing: "border-box",
           }}
         >
-          <ShareIcon /> Share backup
+          <ShareIcon /> {t("Share backup")}
         </button>
         <button
           onClick={onDone}

@@ -7,7 +7,7 @@ import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { ShortcutsSheet } from "../desktop/ShortcutsSheet";
-import { t, tn, phoneLang, type LangPref } from "../i18n";
+import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
 import { useTrial, useOwnsPro, trialTimeLeft } from "../pro";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
@@ -22,7 +22,6 @@ const Svg = ({ children }: { children: ReactNode }) => (
 );
 
 const DownloadIcon = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
-const UploadIcon   = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></Svg>;
 const GlobeIcon    = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></Svg>;
 const BellIcon     = () => <Svg><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Svg>;
 const LayersIcon   = () => <Svg><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Svg>;
@@ -47,7 +46,7 @@ const rowStyle = (T: T): React.CSSProperties => ({
   cursor: "pointer", color: T.text, fontFamily: "inherit", textAlign: "left",
 });
 
-function Row({ icon, label, sub, right, onClick, first, T }: {
+export function Row({ icon, label, sub, right, onClick, first, T }: {
   icon: ReactNode; label: string; sub?: string; right?: ReactNode; onClick: () => void; first?: boolean; T: T;
 }) {
   return (
@@ -64,7 +63,7 @@ function Row({ icon, label, sub, right, onClick, first, T }: {
   );
 }
 
-function ProTag({ T }: { T: T }) {
+export function ProTag({ T }: { T: T }) {
   return (
     <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: T.playBtnFg, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
       PRO
@@ -106,10 +105,8 @@ type SettingsSheetProps = {
   onOpenAudioEffects: () => void;
   /** Re-runs the first-launch spotlight tour. */
   onShowTutorial: () => void;
-  /** Opens the pre-export info sheet */
-  onExport: () => void;
-  /** Opens the pre-import info sheet */
-  onImportOpen: () => void;
+  /** Opens the page with every way in and out: backup, restore, rescan, sync. */
+  onOpenTransfer: () => void;
   /** Opens the support/tip page in the browser. */
   // ── Sleep timer ──
   /** Absolute epoch-ms deadline for a fixed-clock sleep timer, or null. */
@@ -145,7 +142,7 @@ export function SettingsSheet({
   theme, hidden, binCount,
   pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
   onToggleTheme, onViewBin, onMusicFolder, musicFolder, onToggleShortcut, shortcutOn, onOpenAudioEffects, onShowTutorial,
-  onExport, onImportOpen,
+  onOpenTransfer,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, duckOthers, onSetMix,
@@ -216,8 +213,8 @@ export function SettingsSheet({
   const row = rowStyle(T);
 
   const langLabel = lang === "auto"
-    ? t("Windows ({name})", { name: phoneLang() === "nl" ? "Nederlands" : "English" })
-    : lang === "nl" ? "Nederlands" : "English";
+    ? t("Windows ({name})", { name: LANG_NAMES[phoneLang()] })
+    : LANG_NAMES[lang];
 
   return (
     // Everything opened from here opens on top of it, and closing that comes
@@ -439,8 +436,7 @@ export function SettingsSheet({
         </Section>
 
         <Section T={T} title={t("Backup & Restore")}>
-          <Row T={T} first onClick={onExport} icon={<DownloadIcon />} label={t("Export backup")} />
-          <Row T={T} onClick={onImportOpen} icon={<UploadIcon />} label={t("Restore backup")} />
+          <Row T={T} first onClick={onOpenTransfer} icon={<DownloadIcon />} label={t("Import, export & backup")} />
         </Section>
 
         <Section T={T} title={t("Help")}>

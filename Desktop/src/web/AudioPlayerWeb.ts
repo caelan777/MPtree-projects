@@ -68,9 +68,9 @@ export class AudioPlayerWeb extends WebPlugin {
     this.notifyListeners("stateChange", { isPlaying: true, path: this.path });
   }
 
-  async play(options: { path: string; title?: string; artist?: string }): Promise<void> {
+  async play(options: { path: string; title?: string; artist?: string; cutFrom?: number }): Promise<void> {
     this.path = options.path;
-    this.position = 0;
+    this.position = options.cutFrom ?? 0;
     this.playing = true;
     const i = this.queue.findIndex(t => t.path === options.path);
     if (i >= 0) this.index = i;

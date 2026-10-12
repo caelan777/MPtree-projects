@@ -111,11 +111,30 @@
         />
 
         <!--  ── Home-screen widget (Now Playing) ──────────────────────────  -->
-        <receiver android:name=".NowPlayingWidgetProvider" android:exported="false">
+        <receiver android:name=".NowPlayingWidgetProvider" android:exported="false" android:label="@string/widget_basic">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/now_playing_widget_info" />
+        </receiver>
+        <!--  The three below are part of MPTree Pro; without it they say so (Widgets.java).  -->
+        <receiver android:name=".VinylWidgetProvider" android:exported="false" android:label="@string/widget_vinyl">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/vinyl_widget_info" />
+        </receiver>
+        <receiver android:name=".PodWidgetProvider" android:exported="false" android:label="@string/widget_pod">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/pod_widget_info" />
+        </receiver>
+        <receiver android:name=".PlayerWidgetProvider" android:exported="false" android:label="@string/widget_player">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/player_widget_info" />
         </receiver>
 
         <!--  ── File provider (unchanged) ────────────────────────────────  -->

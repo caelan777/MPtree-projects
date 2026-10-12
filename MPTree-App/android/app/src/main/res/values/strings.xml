@@ -13,4 +13,17 @@
     <string name="action_pause">Pause</string>
     <string name="action_next">Next</string>
     <string name="not_playing">Not playing</string>
+    <!-- Home-screen widgets: their names in the widget picker, and the
+         little they say themselves. -->
+    <string name="widget_play_or_pause">Play or pause</string>
+    <string name="widget_basic">MPTree</string>
+    <string name="widget_vinyl">MPTree record</string>
+    <string name="widget_pod">MPTree pocket player</string>
+    <string name="widget_player">MPTree player</string>
+    <string name="widget_basic_desc">Title, artist and the three buttons, in black or white.</string>
+    <string name="widget_vinyl_desc">A record with the cover as its label. MPTree Pro.</string>
+    <string name="widget_pod_desc">A small player with a click wheel. MPTree Pro.</string>
+    <string name="widget_player_desc">The cover, how far the song is, and the buttons. MPTree Pro.</string>
+    <string name="widget_pro_title">MPTree Pro</string>
+    <string name="widget_pro_body">Open MPTree to unlock this widget</string>
 </resources>

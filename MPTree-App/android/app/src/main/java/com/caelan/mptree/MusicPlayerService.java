@@ -172,13 +172,33 @@ public class MusicPlayerService extends Service {
     public static class Track {
         public final String path, title, artist;
         public final boolean isCut;
-        public Track(String path, String title, String artist, boolean isCut) {
+        /** A cut that is not a file of its own: the part of `path` to play, in
+         *  milliseconds. cutTo is 0 when there is no such part. */
+        public final int cutFrom, cutTo;
+        public Track(String path, String title, String artist, boolean isCut, int cutFrom, int cutTo) {
             this.path = path; this.title = title; this.artist = artist; this.isCut = isCut;
+            this.cutFrom = Math.max(0, cutFrom); this.cutTo = Math.max(0, cutTo);
+        }
+        public Track(String path, String title, String artist, boolean isCut) {
+            this(path, title, artist, isCut, 0, 0);
         }
         public Track(String path, String title, String artist) {
             this(path, title, artist, false);
         }
     }
+
+    // The part of the current file that is being played, when it is a cut.
+    // JS used to keep to these by itself, and could not: its seek to the start
+    // arrived while the file was still loading and was dropped, and its watch
+    // on the end stops when the screen goes off.
+    private int curCutFrom = 0, curCutTo = 0;
+    /** A seek asked for while the file was loading; done once it has loaded. */
+    private int pendingSeekMs = -1;
+    /** Pause was asked while the file was loading: load it, do not start it. */
+    private boolean holdOnPrepared = false;
+    private static final int CUT_POLL_MS = 200;
+
+    public int getQueueIndex() { return nativeQueueIndex; }
 
     private final java.util.List<Track> nativeQueue = new java.util.ArrayList<>();
     private int nativeQueueIndex = -1;
@@ -199,6 +219,26 @@ public class MusicPlayerService extends Service {
                 persistNowPlaying();
                 positionHandler.postDelayed(this, 1000);
             }
+        }
+    };
+
+    // Ends a cut at its end marker, the way a file ends at its last sample.
+    private final Handler cutHandler = new Handler(Looper.getMainLooper());
+    private final Runnable cutTicker = new Runnable() {
+        @Override public void run() {
+            if (!isPlaying || curCutTo <= 0) return;
+            if (!isPreparing && mediaPlayer != null) {
+                int position;
+                try { position = mediaPlayer.getCurrentPosition(); } catch (Exception e) { position = 0; }
+                if (position >= curCutTo - CUT_POLL_MS / 2) {
+                    // The file itself plays on, so it has to be stopped here;
+                    // when there is a next track, play() replaces this player.
+                    try { mediaPlayer.pause(); } catch (Exception ignored) {}
+                    advanceForCompletion();
+                    return;
+                }
+            }
+            cutHandler.postDelayed(this, CUT_POLL_MS);
         }
     };
 
@@ -263,6 +303,7 @@ public class MusicPlayerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        running = true;
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         createNotificationChannel();
         setupMediaSession();
@@ -284,6 +325,9 @@ public class MusicPlayerService extends Service {
 
     @Override
     public void onDestroy() {
+        running = false;
+        // Their buttons would speak to nobody now; drawn again, they open MPTree.
+        Widgets.updateAll(this);
         positionHandler.removeCallbacks(positionTicker);
         crossfadeHandler.removeCallbacks(crossfadeTicker);
         mainHandler.removeCallbacksAndMessages(null);
@@ -589,7 +633,23 @@ public class MusicPlayerService extends Service {
     }
 
     public void play(String path, String title, String artist, boolean isAutoAdvance) throws Exception {
+        play(path, title, artist, isAutoAdvance, 0, 0);
+    }
+
+    public void play(String path, String title, String artist, int cutFrom, int cutTo) throws Exception {
+        play(path, title, artist, false, cutFrom, cutTo);
+    }
+
+    private void play(String path, String title, String artist, boolean isAutoAdvance,
+                      int cutFrom, int cutTo) throws Exception {
         if (path == null || path.isEmpty()) throw new IllegalArgumentException("path is empty");
+
+        // A start without an end is allowed: the cut sheet listens from a
+        // point and stops by itself.
+        curCutTo      = cutTo > cutFrom ? cutTo : 0;
+        curCutFrom    = Math.max(0, cutFrom);
+        pendingSeekMs = curCutFrom > 0 ? curCutFrom : -1;
+        holdOnPrepared = false;
 
         if (!isAutoAdvance) cancelCrossfade();
 
@@ -623,6 +683,16 @@ public class MusicPlayerService extends Service {
             isPreparing = false;
             try {
                 mp.setVolume(1f, 1f);
+                if (pendingSeekMs > 0) mp.seekTo(pendingSeekMs);
+                pendingSeekMs = -1;
+                if (holdOnPrepared) {
+                    holdOnPrepared = false;
+                    updateMediaSessionMetadata();
+                    updatePlaybackState(PlaybackState.STATE_PAUSED);
+                    persistNowPlaying();
+                    notifyStateChange();
+                    return;
+                }
                 mp.start();
                 applyPlaybackSpeed(mp); // keep user's speed across track changes
                 isPlaying = true;
@@ -691,6 +761,9 @@ public class MusicPlayerService extends Service {
         // Whoever pauses, it is no longer "paused by another app" unless the
         // focus listener says so right after this.
         pausedByFocus = false;
+        // Loading still: there is nothing to pause yet, and it used to start
+        // playing a moment later all the same.
+        if (mediaPlayer != null && isPreparing) { holdOnPrepared = true; return; }
         if (mediaPlayer != null && isPlaying) {
             try { mediaPlayer.pause(); } catch (Exception ignored) {}
             if (incomingPlayer != null) { try { incomingPlayer.pause(); } catch (Exception ignored) {} }
@@ -703,12 +776,14 @@ public class MusicPlayerService extends Service {
             persistNowPlaying();
             positionHandler.removeCallbacks(positionTicker);
             crossfadeHandler.removeCallbacks(crossfadeTicker);
+            cutHandler.removeCallbacks(cutTicker);
             notifyStateChange();
         }
     }
 
     public void resume() {
         pausedByFocus = false;
+        if (mediaPlayer != null && isPreparing) { holdOnPrepared = false; return; }
         if (mediaPlayer != null && !isPlaying && !isPreparing) {
             // Resuming used to skip this, so after another app had paused MPTree,
             // play started it again without focus: the other app kept playing
@@ -731,6 +806,8 @@ public class MusicPlayerService extends Service {
         positionHandler.post(positionTicker);
         crossfadeHandler.removeCallbacks(crossfadeTicker);
         crossfadeHandler.postDelayed(crossfadeTicker, CROSSFADE_POLL_MS);
+        cutHandler.removeCallbacks(cutTicker);
+        if (curCutTo > 0) cutHandler.postDelayed(cutTicker, CUT_POLL_MS);
     }
 
     public int getCurrentPosition() {
@@ -752,7 +829,10 @@ public class MusicPlayerService extends Service {
     }
 
     public void seekTo(int ms) {
-        if (mediaPlayer != null && !isPreparing) {
+        if (mediaPlayer != null && isPreparing) {
+            // Not yet possible: kept, and done as soon as the file has loaded.
+            pendingSeekMs = ms;
+        } else if (mediaPlayer != null) {
             try { mediaPlayer.seekTo(ms); } catch (Exception ignored) {}
         }
         cancelCrossfade();
@@ -896,6 +976,8 @@ public class MusicPlayerService extends Service {
                     currentPath   = next.path;
                     currentTitle  = next.title;
                     currentArtist = next.artist;
+                    // Cuts are never faded into, so this one is a whole file.
+                    curCutFrom = 0; curCutTo = 0;
                     for (int i = 0; i < nativeQueue.size(); i++) {
                         if (nativeQueue.get(i) == next) { nativeQueueIndex = i; break; }
                     }
@@ -983,7 +1065,10 @@ public class MusicPlayerService extends Service {
 
         Track t = nativeQueue.get(next);
         try {
-            play(t.path, t.title, t.artist, true);
+            play(t.path, t.title, t.artist, true, t.cutFrom, t.cutTo);
+            // play() looks the track up by its file, and a cut shares its file
+            // with the song it was cut from.
+            nativeQueueIndex = next;
             // NOTE: no onTrackComplete() here — see FIX 4 above. JS syncs via
             // the stateChange fired from the new track's onPrepared callback.
         } catch (Exception ignored) {
@@ -993,16 +1078,42 @@ public class MusicPlayerService extends Service {
         }
     }
 
+    /** True while the service exists: a widget's buttons have someone to tell. */
+    public static volatile boolean running = false;
+
+    // What the widgets were last drawn for. The whole widget is only sent
+    // again when one of these changes; in between, once a second, only how
+    // far the song is.
+    private String  widgetPath;
+    private boolean widgetPlaying;
+    private int     widgetDuration = -1;
+
     private void pushWidgetUpdate() {
-        try {
-            Intent updateIntent = new Intent(this, NowPlayingWidgetProvider.class);
-            updateIntent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-            AppWidgetManager mgr = AppWidgetManager.getInstance(this);
-            int[] ids = mgr.getAppWidgetIds(
-                    new android.content.ComponentName(this, NowPlayingWidgetProvider.class));
-            updateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
-            sendBroadcast(updateIntent);
-        } catch (Exception ignored) {}
+        widgetPath = currentPath; widgetPlaying = isPlaying; widgetDuration = getDuration();
+        Widgets.updateAll(this);
+    }
+
+    private void pushWidgetProgress(String path, boolean playing, int position, int duration) {
+        boolean same = playing == widgetPlaying && duration == widgetDuration
+                && (path == null ? widgetPath == null : path.equals(widgetPath));
+        if (same) Widgets.updateProgress(this, position, duration);
+        else pushWidgetUpdate();
+    }
+
+    /** The cover as a small file the widgets read, or no file when there is none. */
+    private void writeWidgetArt(Bitmap art) {
+        File out = new File(getCacheDir(), Widgets.ART_FILE);
+        if (art == null) { out.delete(); return; }
+        try (java.io.FileOutputStream os = new java.io.FileOutputStream(out)) {
+            int side = Math.min(art.getWidth(), art.getHeight());
+            Bitmap square = Bitmap.createBitmap(art, (art.getWidth() - side) / 2, (art.getHeight() - side) / 2, side, side);
+            Bitmap small  = Bitmap.createScaledBitmap(square, Widgets.ART_PX, Widgets.ART_PX, true);
+            small.compress(Bitmap.CompressFormat.JPEG, 88, os);
+            if (small != square) small.recycle();
+            if (square != art) square.recycle();
+        } catch (Exception e) {
+            out.delete();
+        }
     }
 
     private void persistNowPlaying() {
@@ -1010,6 +1121,7 @@ public class MusicPlayerService extends Service {
         final String  title    = currentTitle;
         final String  artist   = currentArtist;
         final int     position = getCurrentPosition();
+        final int     duration = getDuration();
         final boolean playing  = isPlaying;
         final long    now      = System.currentTimeMillis();
 
@@ -1026,14 +1138,16 @@ public class MusicPlayerService extends Service {
                     obj.put("title",     title);
                     obj.put("artist",    artist);
                     obj.put("position",  position);
+                    obj.put("duration",  duration);
                     obj.put("isPlaying", playing);
                     obj.put("updatedAt", now);
                     ed.putString("mptree_native_now_playing", obj.toString());
                 }
-                ed.apply();
+                // commit, not apply: the widgets read this back straight away.
+                ed.commit();
             } catch (Exception ignored) {}
 
-            mainHandler.post(this::pushWidgetUpdate);
+            mainHandler.post(() -> pushWidgetProgress(path, playing, position, duration));
         });
     }
 
@@ -1162,6 +1276,9 @@ public class MusicPlayerService extends Service {
         final Bitmap stale = currentTrackArt;
         currentTrackArt     = null;
         currentTrackArtPath = null;
+        // The widgets too: the last song's cover under this song's name is
+        // worse than no cover for a moment.
+        new File(getCacheDir(), Widgets.ART_FILE).delete();
         if (stale != null && stale != cachedLogoArt) {
             // Recycle on the art thread to avoid touching it while in use.
             artExecutor.execute(() -> { try { stale.recycle(); } catch (Exception ignored) {} });
@@ -1175,6 +1292,7 @@ public class MusicPlayerService extends Service {
                     : null;
             if (decoded == null) decoded = decodeEmbeddedArt(path);
             final Bitmap ready = decoded;
+            if (path.equals(currentPath)) writeWidgetArt(ready);
             mainHandler.post(() -> {
                 // If the track changed again while we were decoding, drop this result.
                 if (path.equals(currentPath)) {
@@ -1183,6 +1301,7 @@ public class MusicPlayerService extends Service {
                     // Refresh surfaces now that real art is available.
                     updateMediaSessionMetadata();
                     showNotification();
+                    pushWidgetUpdate();
                 } else if (ready != null) {
                     ready.recycle();
                 }
