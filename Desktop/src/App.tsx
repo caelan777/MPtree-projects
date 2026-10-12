@@ -4616,7 +4616,6 @@ export default function App() {
             pro={pro} binCount={removedSongs.length}
             onExport={handleExportOpen}
             onImport={handleImportOpen}
-            onRescan={() => { scanMusic().then(list => showToast(tn(list.length, "{n} song in the library", "{n} songs in the library"))).catch(() => {}); }}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenBin={() => setBinOpen(true)}
             onMusicFolder={isDesktop ? pickMusicFolder : undefined}

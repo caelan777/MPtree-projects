@@ -1699,6 +1699,9 @@ export default function App() {
   const handleExportOpen = useCallback(() => {
     setBackupSheet({ kind: "exportInfo" });
   }, []);
+  // "Back up to Google Drive" is the same backup, with the share sheet opened
+  // on it when it is done; Drive is one of the places that sheet offers.
+  const driveAfterExportRef = useRef(false);
 
   /** Called when user taps "Start backup" in ExportInfoSheet */
   const doExport = useCallback(async (backupName: string, opts: BackupOptions) => {
@@ -1803,6 +1806,7 @@ export default function App() {
         jsonUri:     result.jsonUri,
         failedCount: result.failedCount > 0 ? result.failedCount : undefined,
       });
+      if (driveAfterExportRef.current) { driveAfterExportRef.current = false; void handleShareBackup(); }
     } catch (e: any) {
       if (e?.isStorageFull) {
         exportJsonUriRef.current = e.jsonUri ?? "";
@@ -4221,9 +4225,9 @@ export default function App() {
         {transferOpen && (
           <TransferSheet
             pro={pro} binCount={removedSongs.length}
-            onExport={handleExportOpen}
+            onExport={() => { driveAfterExportRef.current = false; handleExportOpen(); }}
             onImport={handleImportOpen}
-            onRescan={() => { scanMusic().then(list => showToast(tn(list.length, "{n} song in the library", "{n} songs in the library"))).catch(() => {}); }}
+            onDriveBackup={() => { driveAfterExportRef.current = true; handleExportOpen(); }}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenBin={() => setBinOpen(true)}
             onClose={() => setTransferOpen(false)}

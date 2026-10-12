@@ -8,7 +8,7 @@ import { CloudIcon } from "./AccountSheet";
 
 // ─── IMPORT, EXPORT & BACKUP ─────────────────────────────────────────────────
 // Every way music and data get into MPTree or out of it, on one page. These
-// were spread over Settings, the account sheet and a pull on the list; the
+// were spread over Settings and the account sheet; the
 // plus button next to the search field opens them together.
 //
 // It only gathers what exists. Each row closes this page and opens the thing
@@ -22,7 +22,6 @@ const Svg = ({ children }: { children: ReactNode }) => (
 );
 const DownloadIcon = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
 const UploadIcon   = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></Svg>;
-const RefreshIcon  = () => <Svg><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></Svg>;
 const FolderIcon   = () => <Svg><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></Svg>;
 
 type TransferSheetProps = {
@@ -30,7 +29,8 @@ type TransferSheetProps = {
   binCount: number;
   onExport: () => void;
   onImport: () => void;
-  onRescan: () => void;
+  /** Android only: make a backup and hand it to the share sheet, for Drive. */
+  onDriveBackup?: () => void;
   onOpenAccount: () => void;
   onOpenBin: () => void;
   /** Windows only: pick the folder the library is read from. */
@@ -41,7 +41,7 @@ type TransferSheetProps = {
 };
 
 export function TransferSheet({
-  pro, binCount, onExport, onImport, onRescan, onOpenAccount, onOpenBin,
+  pro, binCount, onExport, onImport, onDriveBackup, onOpenAccount, onOpenBin,
   onMusicFolder, musicFolder, onClose, T,
 }: TransferSheetProps) {
   const lbl = makeSH(T).lbl;
@@ -56,6 +56,11 @@ export function TransferSheet({
       <Row T={T} first onClick={go(onExport)} icon={<DownloadIcon />}
         label={t("Export backup")}
         sub={t("Playlists, likes and settings in a file, with or without the songs.")} />
+      {onDriveBackup && (
+        <Row T={T} onClick={go(onDriveBackup)} icon={<CloudIcon />}
+          label={t("Back up to Google Drive")}
+          sub={t("Makes a backup, then lets you send it to Drive.")} />
+      )}
       <Row T={T} onClick={go(onImport)} icon={<UploadIcon />}
         label={t("Restore backup")}
         sub={t("Bring back what a backup file holds.")} />
@@ -66,10 +71,7 @@ export function TransferSheet({
           label={t("Music folder")}
           sub={musicFolder || t("All of this computer")} />
       )}
-      <Row T={T} first={!onMusicFolder} onClick={go(onRescan)} icon={<RefreshIcon />}
-        label={t("Search for new songs")}
-        sub={t("Looks again for audio files that were added or taken away.")} />
-      <Row T={T} onClick={go(onOpenBin)} icon={<IC.Bin />}
+      <Row T={T} first={!onMusicFolder} onClick={go(onOpenBin)} icon={<IC.Bin />}
         label={t("Removed songs")}
         sub={t("Put a removed song back in the library.")}
         right={chevron(binCount > 0 && <span style={{ fontSize: 13, color: T.muted }}>{binCount}</span>)} />

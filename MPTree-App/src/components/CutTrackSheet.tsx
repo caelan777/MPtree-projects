@@ -8,17 +8,12 @@ import { AudioPlayer } from "../plugins";
 // ─── CUT TRACK SHEET ─────────────────────────────────────────────────────────
 // Pick the piece of a song you want to keep, and save it as its own track.
 //
-// One bar, two grips. It used to be a bar that could not be touched with two
-// separate sliders under it, each running the whole length of the song, and
-// nothing tied the three together. Now the grips sit on the bar itself, the
-// time of each is written above it, and the small buttons move a grip by a
-// tenth of a second for the last bit of precision a finger does not have.
+// One bar with two grips, one button to hear the piece, a name, and Save.
+// Nothing else: buttons to move a grip by a tenth of a second and a second
+// way of listening were here for a while, and made a small job look like a
+// big one. The grips move in tenths, which a finger on the bar can reach.
 //
-// Nothing plays until it is asked to. Listening is from the start of the piece
-// or to its last seconds, because those are the two edges being judged.
-
-// Which formats come out as a file of their own on this platform.
-const FILE_FORMATS = "MP3 and AAC";
+// Nothing plays until it is asked to.
 
 type CutTrackSheetProps = {
   song: Song;
@@ -30,11 +25,9 @@ type CutTrackSheetProps = {
 
 const MIN_LEN = 1000;
 const STEP = 100;
-const TAIL = 3000;
-const GRIP = 26;
+const GRIP = 28;
 
 type Grip = "start" | "end";
-type Listening = "start" | "tail" | null;
 
 const fmt = (ms: number) => {
   const tenths = Math.max(0, Math.round(ms / 100));
@@ -51,8 +44,8 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
   const fallbackName = t("{title} (cut)", { title: song.title });
   const [newName, setNewName] = useState(fallbackName);
   const [playheadMs, setPlayheadMs] = useState<number | null>(null);
-  const [listening, setListening] = useState<Listening>(null);
-  const listeningRef = useRef<Listening>(null);
+  const [listening, setListening] = useState(false);
+  const listeningRef = useRef(false);
   useEffect(() => { listeningRef.current = listening; }, [listening]);
   const bar = useRef<HTMLDivElement>(null);
   const held = useRef<Grip | null>(null);
@@ -80,7 +73,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
   useEffect(() => () => { if (listeningRef.current) AudioPlayer.pause().catch(() => {}); }, []);
 
   const stop = async () => {
-    setListening(null);
+    setListening(false);
     setPlayheadMs(null);
     await AudioPlayer.pause().catch(() => {});
   };
@@ -99,14 +92,13 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
     return () => clearInterval(iv);
   }, [listening, endMs]);
 
-  const listen = async (what: Exclude<Listening, null>) => {
-    if (listening === what) { await stop(); return; }
-    const from = what === "start" ? startMs : Math.max(startMs, endMs - TAIL);
-    setPlayheadMs(from);
-    setListening(what);
+  const listen = async () => {
+    if (listening) { await stop(); return; }
+    setPlayheadMs(startMs);
+    setListening(true);
     try {
-      await AudioPlayer.play({ path: song.uri, title: song.title, artist: song.artist, cutFrom: Math.round(from) });
-    } catch { setListening(null); setPlayheadMs(null); }
+      await AudioPlayer.play({ path: song.uri, title: song.title, artist: song.artist, cutFrom: Math.round(startMs) });
+    } catch { setListening(false); setPlayheadMs(null); }
   };
 
   const move = (grip: Grip, ms: number) => {
@@ -151,42 +143,9 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
     <div style={{
       position: "absolute", top: 0, left: `${pct(ms)}%`,
       transform: `translateX(${align === "left" ? "-20%" : "-80%"})`,
-      fontSize: 13, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+      fontSize: 14, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
     }}>{fmt(ms)}</div>
   );
-
-  const nudgeBtn: React.CSSProperties = {
-    width: 44, height: 36, borderRadius: 10, background: T.surface, border: `1px solid ${T.border}`,
-    color: T.text, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
-    fontVariantNumeric: "tabular-nums",
-  };
-  const nudgeRow = (which: Grip, name: string, ms: number) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-      <span style={{ flex: 1, fontSize: 14, color: T.textSub, fontWeight: 600 }}>{name}</span>
-      <button aria-label={t("{name}: 0.1 s earlier", { name })} onClick={() => move(which, ms - STEP)} style={nudgeBtn}>−0.1</button>
-      <span style={{ width: 64, textAlign: "center", fontSize: 16, color: T.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmt(ms)}</span>
-      <button aria-label={t("{name}: 0.1 s later", { name })} onClick={() => move(which, ms + STEP)} style={nudgeBtn}>+0.1</button>
-    </div>
-  );
-
-  const listenBtn = (what: Exclude<Listening, null>, text: string) => {
-    const on = listening === what;
-    return (
-      <button
-        onClick={() => listen(what)}
-        disabled={!ready}
-        style={{
-          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          padding: "11px 6px", borderRadius: 12, fontSize: 13.5, fontWeight: 700, fontFamily: "inherit",
-          background: on ? T.accent : T.surface, color: on ? T.playBtnFg : T.text,
-          border: `1px solid ${on ? T.accent : T.border}`, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.45,
-        }}
-      >
-        {on ? <IC.Pause /> : <IC.Play />}
-        {on ? t("Stop") : text}
-      </button>
-    );
-  };
 
   return (
     <div style={sh.overlay}>
@@ -203,7 +162,7 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
         </div>
 
         <div style={{ padding: "0 20px" }}>
-          <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>
             {t("Drag the two grips to the part you want to keep.")}
           </div>
 
@@ -212,11 +171,11 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
             <div
               ref={bar}
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-              style={{ position: "relative", height: 74, touchAction: "none", cursor: ready ? "pointer" : "default" }}
+              style={{ position: "relative", height: 76, touchAction: "none", cursor: ready ? "pointer" : "default" }}
             >
               {label(startMs, "left")}
               {label(endMs, "right")}
-              <div style={{ position: "absolute", left: 0, right: 0, top: 28, height: 46 }}>
+              <div style={{ position: "absolute", left: 0, right: 0, top: 28, height: 48 }}>
                 <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 10, borderRadius: 5, background: T.dim, transform: "translateY(-50%)" }} />
                 <div style={{ position: "absolute", top: "50%", left: `${pct(startMs)}%`, width: `${pct(endMs) - pct(startMs)}%`, height: 10, background: T.accent, transform: "translateY(-50%)" }} />
                 {playheadMs != null && (
@@ -228,26 +187,24 @@ export function CutTrackSheet({ song, totalMs, onSave, onClose, T }: CutTrackShe
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.muted, marginTop: 2 }}>
-            <span>{fmt(0)}</span>
-            <span style={{ color: T.text, fontWeight: 700 }}>{t("Keeps {len}", { len: fmt(endMs - startMs) })}</span>
-            <span>{fmt(total)}</span>
-          </div>
-
-          {nudgeRow("start", t("Start"), startMs)}
-          {nudgeRow("end", t("End"), endMs)}
-
-          <div style={sh.lbl}>{t("Listen")}</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {listenBtn("start", t("From the start"))}
-            {listenBtn("tail", t("The last 3 seconds"))}
-          </div>
+          <button
+            onClick={listen}
+            disabled={!ready}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              width: "100%", marginTop: 6, padding: "12px 0", borderRadius: 12,
+              fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+              background: listening ? T.accent : T.surface, color: listening ? T.playBtnFg : T.text,
+              border: `1px solid ${listening ? T.accent : T.border}`,
+              cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.45,
+            }}
+          >
+            {listening ? <IC.Pause /> : <IC.Play />}
+            {listening ? t("Stop") : t("Listen ({len})", { len: fmt(endMs - startMs) })}
+          </button>
 
           <div style={sh.lbl}>{t("Save as")}</div>
           <input value={newName} onChange={e => setNewName(e.target.value)} style={sh.inp} />
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 10, lineHeight: 1.6 }}>
-            {t("{formats} become a new file in Music/MPTree. Other formats are kept as a cut inside MPTree. The original stays unchanged.", { formats: t(FILE_FORMATS) })}
-          </div>
         </div>
 
         <div style={{ padding: "20px 20px 0" }}>
