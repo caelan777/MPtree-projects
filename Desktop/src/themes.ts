@@ -99,6 +99,15 @@ const LIGHT_SHADES: Record<LightShade, Partial<T>> = {
     chipBg:"#dee9dc", chipBorder:"#c4d4c1", chipColor:"#30372e",
     playBtnBg:"#181c17", playBtnFg:"#eef5ec", sliderBg:"#bbccb7",
   },
+  // Lantern's green, as a ground. Only a header card wears it (the Lantern
+  // page), which is why it is not among the colours of the app.
+  lantern: {
+    accent:"#04140b", surface:"#2ed07e", card:"#2bca79", bg:"#35e08a",
+    muted:"#0a5230", dim:"#27bd71", border:"#1fae65", text:"#04140b", textSub:"#0a4a2b",
+    sheetBg:"#3fe592", playerBg:"#35e08a", inputBg:"#2bca79",
+    chipBg:"#2ed07e", chipBorder:"#1fae65", chipColor:"#052a17",
+    playBtnBg:"#04140b", playBtnFg:"#35e08a", sliderBg:"#1fae65",
+  },
 };
 
 /** The palette for a ground and the shades picked for it. */

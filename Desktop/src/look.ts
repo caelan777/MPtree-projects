@@ -15,17 +15,31 @@ import { Preferences } from "@capacitor/preferences";
 export const FLOWER_RECORDS = ["daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet", "dahlia", "oxeye", "night", "branch", "posy"] as const;
 export type FlowerRecord = typeof FLOWER_RECORDS[number];
 export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS as readonly string[]).includes(v);
-export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | "lantern" | FlowerRecord;
+/** The records of the Lantern style, drawn in lantern.ts. */
+export const LANTERN_RECORDS = ["lantern", "lantern-rings", "lantern-core", "lantern-dash", "lantern-solid", "lantern-burst"] as const;
+export type LanternRecord = typeof LANTERN_RECORDS[number];
+export const isLanternRecord = (v: string): v is LanternRecord => (LANTERN_RECORDS as readonly string[]).includes(v);
+export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | LanternRecord | FlowerRecord;
 /** How the app itself wears flowers: not at all, or one of Aviela's ways. */
 export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
-export type Flowers    = "none" | typeof FLOWER_KINDS[number];
+export type AvielaFlowers = typeof FLOWER_KINDS[number];
+/** The same for Lantern: how the app carries its light. */
+export const LANTERN_LIGHTS = ["glow", "beams", "rings", "edge", "sparks", "aura"] as const;
+export type LanternLight = typeof LANTERN_LIGHTS[number];
+/** What a style draws on the app: nothing, Aviela's flowers or Lantern's
+ *  light. Named after the flowers, which were first. */
+export type Flowers    = "none" | AvielaFlowers | LanternLight;
+const isDecor = (v: string): boolean => (FLOWER_KINDS as readonly string[]).includes(v) || (LANTERN_LIGHTS as readonly string[]).includes(v);
 export type DarkShade  = "classic" | "amoled" | "graphite" | "lantern";
-export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
+/** "lantern" is only ever a header card: the green one on the Lantern page. */
+export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage" | "lantern";
 export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
 
+/** The header cards Lantern comes with: its own, black, green or white. */
+export const LANTERN_CARDS: readonly CardShade[] = ["default", "dark:amoled", "light:lantern", "light:classic"];
 /** The header cards Aviela comes with: white, pink or black. */
 export const AVIELA_CARDS: readonly CardShade[] = ["light:classic", "light:pink", "dark:classic"];
 
@@ -40,7 +54,9 @@ export type Look = {
   flowers: Flowers;
   /** What was last picked on the Aviela page, so coming back to the style
    *  brings back the same record, the same flowers and the same header card. */
-  aviela: { record: FlowerRecord; flowers: Exclude<Flowers, "none">; card: CardShade };
+  aviela: { record: FlowerRecord; flowers: AvielaFlowers; card: CardShade };
+  /** And the same for the Lantern page. */
+  lantern: { record: LanternRecord; light: "none" | LanternLight; card: CardShade };
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
@@ -50,6 +66,7 @@ export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
   flowers: "none", aviela: { record: "daisy", flowers: "sprig", card: "light:classic" },
+  lantern: { record: "lantern", light: "glow", card: "default" },
 };
 
 /** What anyone gets without Pro. */
@@ -100,12 +117,15 @@ export async function loadLook(): Promise<Look> {
       // Picture disc used to be one of the records; it is the tap now.
       if ((stored.vinyl as string) === "picture") look = { ...look, photoDisc: true };
       for (const k of ["vinylDark", "vinylLight"] as const) {
-        if (!(["classic", "white", "smoke", "marble", "lantern"] as string[]).includes(look[k]) && !isFlowerRecord(look[k])) look = { ...look, [k]: "classic" };
+        if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k]) && !isLanternRecord(look[k])) look = { ...look, [k]: "classic" };
       }
-      if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
+      if (look.flowers !== "none" && !isDecor(look.flowers)) look = { ...look, flowers: "none" };
       // Test build 35 had two kinds that are gone, and no card of Aviela's own.
       look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, ...look.aviela } };
       if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
+      look = { ...look, lantern: { ...DEFAULT_LOOK.lantern, ...look.lantern } };
+      const lit = look.lantern.light;
+      if (!isLanternRecord(look.lantern.record) || !(lit === "none" || (LANTERN_LIGHTS as readonly string[]).includes(lit)) || !LANTERN_CARDS.includes(look.lantern.card)) look = { ...look, lantern: DEFAULT_LOOK.lantern };
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode.
       if (!(["classic", "amoled", "graphite", "lantern"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };

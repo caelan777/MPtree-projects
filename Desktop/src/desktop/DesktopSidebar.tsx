@@ -4,7 +4,7 @@ import { Logo } from "../components/Logo";
 import { IC } from "../components/Icons";
 import { t } from "../i18n";
 import type { Flowers } from "../look";
-import { cardFlowers, cornerFlowers, logoFlower, type Tone } from "../flowers";
+import { cardFlowers, cornerFlowers, logoFlower, settingsHalo, type Tone } from "../flowers";
 
 const NoteIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -66,6 +66,7 @@ export function DesktopSidebar({ T, ground, flowers, flowerTone, page, onPage, o
 }) {
   // Folded, there is no room for them.
   const inCard = mini ? null : cardFlowers(flowers, flowerTone);
+  const halo = settingsHalo(flowers);
   const inCorner = mini ? null : cornerFlowers(flowers, flowerTone);
   return (
     <nav data-tour="d-sidebar" style={{
@@ -79,8 +80,8 @@ export function DesktopSidebar({ T, ground, flowers, flowerTone, page, onPage, o
       {inCard && <div aria-hidden="true" style={{
         ...inCard,
         ...(flowers === "sprig" || flowers === "lines" ? { backgroundPosition: "right top 196px" } : null),
-        // Round Settings, which is at the bottom here.
-        ...(flowers === "bloom" ? { backgroundPosition: "left -56px bottom -15px" } : null),
+        // Round Settings, which is at the bottom here: 34 in, 75 up.
+        ...(halo ? { backgroundPosition: `left ${34 - halo / 2}px bottom ${75 - halo / 2}px` } : null),
       }} />}
       {inCorner && <div aria-hidden="true" style={inCorner} />}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: mini ? "0 0 8px" : "0 0 14px 8px", color: T.text, flexDirection: mini ? "column" : "row" }}>
