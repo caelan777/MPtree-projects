@@ -76,7 +76,12 @@ export function DesktopSidebar({ T, ground, flowers, flowerTone, page, onPage, o
       ["--dhover" as string]: T.card,
     }}>
       {/* The sprig comes in under the list rather than over the name. */}
-      {inCard && <div aria-hidden="true" style={{ ...inCard, ...(flowers === "sprig" || flowers === "lines" ? { backgroundPosition: "right top 196px" } : null) }} />}
+      {inCard && <div aria-hidden="true" style={{
+        ...inCard,
+        ...(flowers === "sprig" || flowers === "lines" ? { backgroundPosition: "right top 196px" } : null),
+        // Round Settings, which is at the bottom here.
+        ...(flowers === "bloom" ? { backgroundPosition: "left -56px bottom -15px" } : null),
+      }} />}
       {inCorner && <div aria-hidden="true" style={inCorner} />}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: mini ? "0 0 8px" : "0 0 14px 8px", color: T.text, flexDirection: mini ? "column" : "row" }}>
         <span style={{ position: "relative", display: "flex" }}>

@@ -242,7 +242,8 @@ function drawCard(kind: CardKind, p: Paint): string {
       flower(22, 20, 7, { n: 5, fill: p.main, heart: GOLD }) + flower(96, 12, 5.5, { n: 5, fill: p.deep, heart: WHITE, turn: 30 })
       + flower(132, 58, 7, { n: 5, fill: p.soft, heart: p.deep, turn: 12 }) + flower(58, 70, 6, { n: 5, fill: p.deep, heart: WHITE })
       + `<circle cx="70" cy="34" r="1.6" fill="${p.deep}"/><circle cx="118" cy="86" r="1.6" fill="${p.main}"/><circle cx="14" cy="62" r="1.6" fill="${p.deep}"/>`);
-    // One very large flower behind everything, more a tint than a picture.
+    // One very large flower, more a tint than a picture, with the settings
+    // button as its heart.
     case "bloom": return css(180, 180, flower(90, 90, 88, { n: 8, fill: p.pale, heart: p.paleHeart, wide: 0.4 }));
     // A small bunch in two opposite corners. Drawn for the top right; the
     // bottom left is the same picture turned round.
@@ -272,7 +273,9 @@ export function cardFlowers(kind: Flowers, tone: Tone): CSSProperties | null {
     case "daisies":  return { ...layer, backgroundImage: cardArt(kind, tone), backgroundRepeat: "repeat-x", backgroundSize: "36px 20px", backgroundPosition: "left 2px bottom" };
     case "vine":     return { ...layer, backgroundImage: cardArt(kind, tone), backgroundRepeat: "repeat-x", backgroundSize: "96px 20px", backgroundPosition: "left top" };
     case "confetti": return { ...layer, backgroundImage: cardArt(kind, tone), backgroundRepeat: "repeat", backgroundSize: "150px 96px" };
-    case "bloom":    return { ...layer, backgroundImage: cardArt(kind, tone), backgroundSize: "180px 180px", backgroundPosition: "right -56px top -52px" };
+    case "bloom":    return { ...layer, backgroundImage: cardArt(kind, tone),
+      // The settings button sits 32 from the right and from the top of the card.
+      backgroundSize: "180px 180px", backgroundPosition: "right -57.3px top -58px" };
     case "corners":  return { ...layer, backgroundImage: cardArt(kind, tone), backgroundSize: "78px 52px", backgroundPosition: "right top" };
     default:         return null;
   }

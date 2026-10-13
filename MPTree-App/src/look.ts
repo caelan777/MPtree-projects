@@ -15,11 +15,11 @@ import { Preferences } from "@capacitor/preferences";
 export const FLOWER_RECORDS = ["daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet", "dahlia", "oxeye", "night", "branch", "posy"] as const;
 export type FlowerRecord = typeof FLOWER_RECORDS[number];
 export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS as readonly string[]).includes(v);
-export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | FlowerRecord;
+export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | "lantern" | FlowerRecord;
 /** How the app itself wears flowers: not at all, or one of Aviela's ways. */
 export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
 export type Flowers    = "none" | typeof FLOWER_KINDS[number];
-export type DarkShade  = "classic" | "amoled" | "graphite";
+export type DarkShade  = "classic" | "amoled" | "graphite" | "lantern";
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
 export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
 /** The header card follows the app ("default") or wears any shade of either
@@ -100,7 +100,7 @@ export async function loadLook(): Promise<Look> {
       // Picture disc used to be one of the records; it is the tap now.
       if ((stored.vinyl as string) === "picture") look = { ...look, photoDisc: true };
       for (const k of ["vinylDark", "vinylLight"] as const) {
-        if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k])) look = { ...look, [k]: "classic" };
+        if (!(["classic", "white", "smoke", "marble", "lantern"] as string[]).includes(look[k]) && !isFlowerRecord(look[k])) look = { ...look, [k]: "classic" };
       }
       if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
       // Test build 35 had two kinds that are gone, and no card of Aviela's own.
@@ -108,7 +108,7 @@ export async function loadLook(): Promise<Look> {
       if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode.
-      if (!(["classic", "amoled", "graphite"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
+      if (!(["classic", "amoled", "graphite", "lantern"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
       for (const k of ["cardDark", "cardLight"] as const) {
         if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
       }

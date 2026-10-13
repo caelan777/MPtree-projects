@@ -20,6 +20,9 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 // one tap. Custom has every choice on its own, in groups: colour, header card,
 // record.
 //
+// Two styles carry a name instead of their colours: Aviela and Lantern, which
+// is black lit in green.
+//
 // One style has a page of its own. Aviela is pink with a white header card and
 // flowers, and which flowers is a choice: its records, the ways for the app to
 // wear them, and a header card in white, pink or black. Tapping it puts it on
@@ -331,6 +334,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
 
   const DARKS: { id: DarkShade; label: string }[] = [
     { id: "classic", label: t("Black") }, { id: "amoled", label: "AMOLED" }, { id: "graphite", label: t("Graphite") },
+    { id: "lantern", label: "Lantern" },
   ];
   const LIGHTS: { id: LightShade; label: string }[] = [
     { id: "classic", label: t("White") }, { id: "paper", label: t("Paper") }, { id: "stone", label: t("Stone") },
@@ -342,7 +346,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   ];
   const VINYLS: { id: VinylSkin; label: string }[] = [
     { id: "classic", label: t("Black") }, { id: "white", label: t("White") },
-    { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") },
+    { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") }, { id: "lantern", label: "Lantern" },
   ];
   const RECORD_NAMES: Record<FlowerRecord, string> = {
     daisy: t("Daisy ring"), bloom: t("One bloom"), blossom: t("Blossom"), lines: t("Line drawing"), wreath: t("Wreath"),
@@ -360,6 +364,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   const PRESETS: Preset[] = [
     { id: "black",          mode: "dark",  shade: "classic", card: "default",       vinyl: "classic", name: t("Black"), free: true },
     { id: "white",          mode: "light", shade: "classic", card: "default",       vinyl: "white",   name: t("White"), free: true },
+    { id: "lantern",        mode: "dark",  shade: "lantern", card: "default",       vinyl: "lantern", name: "Lantern" },
     { id: "paper-graphite", mode: "light", shade: "paper",   card: "dark:graphite", vinyl: "smoke",   name: pair("Paper", "Graphite") },
     { id: "stone-black",    mode: "light", shade: "stone",   card: "dark:classic",  vinyl: "classic", name: pair("Stone", "Black") },
   ];

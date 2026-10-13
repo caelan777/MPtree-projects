@@ -53,6 +53,14 @@ const DARK_SHADES: Record<DarkShade, Partial<T>> = {
     inputBg:"#2d2e33", chipBg:"#222327", chipBorder:"#35363c", chipColor:"#d2d3d8",
     sliderBg:"#35363c", overlayBg:"rgba(10,10,12,0.72)",
   },
+  // Lantern: black with a green light in it. The one dark shade with a colour
+  // for its accent, asked for by name, the way pink was for light.
+  lantern: {
+    accent:"#35e08a", bg:"#040806", surface:"#0b1410", card:"#0d1813", playerBg:"#08100c", sheetBg:"#0d1712",
+    muted:"#6f9480", textSub:"#6f9480", text:"#eafff2", dim:"#16261d", border:"#1d3327",
+    inputBg:"#16261d", chipBg:"#0d1712", chipBorder:"#1d3327", chipColor:"#c9e9d6",
+    playBtnBg:"#35e08a", playBtnFg:"#04140b", sliderBg:"#1d3327", overlayBg:"rgba(2,8,5,0.78)",
+  },
 };
 
 const LIGHT_SHADES: Record<LightShade, Partial<T>> = {

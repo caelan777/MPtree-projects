@@ -73,6 +73,24 @@ const MARBLE = "data:image/svg+xml," + encodeURIComponent(
   "</feComponentTransfer></filter>" +
   "<rect width='400' height='400' filter='url(#m)'/></svg>");
 
+// Lantern: black, lit from the middle in green, with six beams so there is
+// something to see turn. Drawn once, like the marble.
+const LANTERN_GREEN = "#35e08a";
+const LANTERN = (() => {
+  let s = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'>"
+    + "<defs><radialGradient id='g'><stop offset='0' stop-color='" + LANTERN_GREEN + "' stop-opacity='0.6'/>"
+    + "<stop offset='0.5' stop-color='" + LANTERN_GREEN + "' stop-opacity='0.13'/>"
+    + "<stop offset='1' stop-color='" + LANTERN_GREEN + "' stop-opacity='0'/></radialGradient></defs>"
+    + "<rect width='400' height='400' fill='#050d09'/><rect width='400' height='400' fill='url(#g)'/>";
+  for (let i = 0; i < 6; i++) s += "<path d='M200 200L188 4L212 4Z' transform='rotate(" + i * 60 + " 200 200)' fill='" + LANTERN_GREEN + "' opacity='" + (i % 2 ? 0.1 : 0.2) + "'/>";
+  for (let r = 68; r <= 190; r += 7) s += "<circle cx='200' cy='200' r='" + r + "' fill='none' stroke='" + LANTERN_GREEN + "' stroke-opacity='0.1' stroke-width='1.1'/>";
+  for (const [r, w, o] of [[96, 2.5, 0.9], [150, 1.5, 0.55], [190, 3, 0.8]]) {
+    s += "<circle cx='200' cy='200' r='" + r + "' fill='none' stroke='" + LANTERN_GREEN + "' stroke-opacity='" + o * 0.2 + "' stroke-width='" + w * 4 + "'/>"
+      + "<circle cx='200' cy='200' r='" + r + "' fill='none' stroke='" + LANTERN_GREEN + "' stroke-opacity='" + o + "' stroke-width='" + w + "'/>";
+  }
+  return "data:image/svg+xml," + encodeURIComponent(s + "</svg>");
+})();
+
 const GROOVES =
   "repeating-radial-gradient(circle at center, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.22) 2.6px, rgba(0,0,0,0) 3.3px)";
 const SHEEN =
@@ -99,7 +117,8 @@ export const SpinningDisc = memo(function SpinningDisc({
 
   // Aviela's records are drawn, grooves and all, so they only get the sheen.
   const flower = skin !== "picture" && isFlowerRecord(skin) ? skin : null;
-  const recordSrc = flower ? recordArt(flower) : skin === "marble" ? MARBLE : skin === "picture" ? customPhoto! : "/vinyl.webp";
+  const lantern = skin === "lantern";
+  const recordSrc = flower ? recordArt(flower) : lantern ? LANTERN : skin === "marble" ? MARBLE : skin === "picture" ? customPhoto! : "/vinyl.webp";
   const recordFilter =
     skin === "white" ? "invert(1) grayscale(1) brightness(1.08)"
     : skin === "smoke" ? "grayscale(1) brightness(1.9) contrast(0.75)"
@@ -107,8 +126,8 @@ export const SpinningDisc = memo(function SpinningDisc({
   const drawn = skin === "marble" || skin === "picture";
   // The pale records get a black label, the rest a white one.
   const pale = skin === "white" || skin === "marble";
-  const labelBg = flower ? RECORD_LABEL[flower].bg : pale ? "#000" : "#fff";
-  const labelInk = flower ? RECORD_LABEL[flower].ink : pale ? "#fff" : "#000";
+  const labelBg = flower ? RECORD_LABEL[flower].bg : lantern ? LANTERN_GREEN : pale ? "#000" : "#fff";
+  const labelInk = flower ? RECORD_LABEL[flower].ink : lantern ? "#04140b" : pale ? "#fff" : "#000";
   // On a picture disc the picture is the record, so the label goes back to
   // the mark rather than showing the same picture twice.
   const labelPhoto = skin === "picture" ? undefined : customPhoto;
@@ -123,7 +142,8 @@ export const SpinningDisc = memo(function SpinningDisc({
       position: "relative", borderRadius: "50%", cursor: tappable ? "pointer" : undefined,
       WebkitTapHighlightColor: "transparent",
       // Static: the shadow stays put while the record turns.
-      boxShadow: skin === "smoke" || (flower && !DARK_RECORDS.includes(flower)) ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
+      boxShadow: lantern ? "0 6px 24px rgba(0,0,0,0.4), 0 0 26px rgba(53,224,138,0.22)"
+        : skin === "smoke" || (flower && !DARK_RECORDS.includes(flower)) ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
       // Nothing inside affects layout outside, so a spinning frame cannot make
       // the parent reflow.
       contain: "layout paint",
@@ -147,11 +167,11 @@ export const SpinningDisc = memo(function SpinningDisc({
           backfaceVisibility: "hidden",
         }}
       />
-      {(drawn || flower) && (
+      {(drawn || flower || lantern) && (
         <div aria-hidden="true" style={{
           gridArea: "1 / 1", width: "100%", height: "100%", borderRadius: "50%",
-          background: flower ? SHEEN : `${SHEEN}, ${GROOVES}`,
-          boxShadow: flower
+          background: flower || lantern ? SHEEN : `${SHEEN}, ${GROOVES}`,
+          boxShadow: flower || lantern
             ? `inset 0 0 0 ${Math.max(1, Math.round(size * 0.008))}px rgba(32,24,27,0.22)`
             : `inset 0 0 0 ${Math.max(2, Math.round(size * 0.018))}px rgba(0,0,0,0.85)`,
           pointerEvents: "none",
