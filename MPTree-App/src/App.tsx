@@ -32,14 +32,15 @@ import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
-import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf } from "./flowers";
+import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
+import { LANTERN_GREEN } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
   prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
-import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack } from "./look";
+import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -518,10 +519,9 @@ export default function App() {
   const [langPref, setLangPref]       = useState<LangPref>("auto");
   const [updateNotices, setUpdateNotices] = useState(true);
   const [mixOthers, setMixOthers]     = useState(false);
-  const [duckOthers, setDuckOthers]   = useState(false);
   // Read at start, and again when the MPTree account brings settings from
   // another phone.
-  const applyPrefs = ([size, lang, notices, mix, duck]: (string | null)[]) => {
+  const applyPrefs = ([size, lang, notices, mix]: (string | null)[]) => {
     const sz: UiSize = size === "small" || size === "large" ? size : "medium";
     setUiSize(sz);
     System.setTextZoom({ factor: SIZE_TABLE[sz].text }).catch(() => {});
@@ -529,16 +529,20 @@ export default function App() {
     applyLang(l); setLangPref(l);
     setUpdateNotices(notices !== "0");
     setMixOthers(mix === "true");
-    setDuckOthers(mix === "true" && duck === "true");
-    AudioPlayer.setMixMode({ mix: mix === "true", duck: mix === "true" && duck === "true" }).catch(() => {});
+    // There was an option to turn the other app down as well. It is gone,
+    // so nothing is ever asked to be quieter.
+    AudioPlayer.setMixMode({ mix: mix === "true", duck: false }).catch(() => {});
   };
   const loadPrefs = useCallback(() => {
-    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others", "mptree_duck_others"];
+    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others"];
     return Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
       .then(prefs => applyPrefs(prefs));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { loadPrefs(); }, [loadPrefs]);
+  // Whoever had "turn other apps down" on: the service reads this before the
+  // app is up, so it is switched off where it is kept too.
+  useEffect(() => { Preferences.set({ key: "mptree_duck_others", value: "false" }).catch(() => {}); }, []);
 
   const changeUiSize = (s: UiSize) => {
     setUiSize(s);
@@ -558,16 +562,13 @@ export default function App() {
     if (!on) setUpdateInfo(null);
     Preferences.set({ key: NOTICES_KEY, value: on ? "1" : "0" }).catch(() => {});
   };
-  const changeMix = (mix: boolean, duck: boolean) => {
-    const d = mix && duck;
+  const changeMix = (mix: boolean) => {
     setMixOthers(mix);
-    setDuckOthers(d);
     hapticImpact("light");
-    AudioPlayer.setMixMode({ mix, duck: d }).catch(() => {});
-    // Stored as the strings the native service reads straight out of the same
+    AudioPlayer.setMixMode({ mix, duck: false }).catch(() => {});
+    // Stored as the string the native service reads straight out of the same
     // preferences file, before the WebView is even up.
-    Preferences.set({ key: "mptree_mix_others",  value: mix ? "true" : "false" }).catch(() => {});
-    Preferences.set({ key: "mptree_duck_others", value: d   ? "true" : "false" }).catch(() => {});
+    Preferences.set({ key: "mptree_mix_others", value: mix ? "true" : "false" }).catch(() => {});
   };
   const openExternal = (url: string, failMsg: string) => {
     System.openExternal({ url }).catch(() => showToast(failMsg));
@@ -747,7 +748,13 @@ export default function App() {
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
   // off overlay and colour the bar to match the theme. No-ops on web.
   // The bar takes the ground colour, which a Pro shade can change.
-  const TH = paletteFor(theme, look.dark, look.light);
+  // Shuffle and selection are violet, except in the two styles with a name,
+  // which bring their own colour for them: pink in Aviela, green in Lantern.
+  // Aviela is on while there are flowers, Lantern while its record is.
+  const styleTint = look.flowers !== "none" ? AVIELA_PINK
+    : isLanternRecord(theme === "dark" ? look.vinylDark : look.vinylLight) ? LANTERN_GREEN : null;
+  const tinted = <P extends { violet: string }>(p: P): P => (styleTint ? { ...p, violet: styleTint } : p);
+  const TH = tinted(paletteFor(theme, look.dark, look.light));
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -2035,7 +2042,7 @@ export default function App() {
   // seconds later, in one go.
   useEffect(() => {
     if (syncStarted.current) syncChanged();
-  }, [songs, removedSongs, meta, playlists, theme, uiSize, langPref, updateNotices, mixOthers, duckOthers, look,
+  }, [songs, removedSongs, meta, playlists, theme, uiSize, langPref, updateNotices, mixOthers, look,
       filter, playMode, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
 
   // ── Hooks ─────────────────────────────────────────────────────────────────
@@ -2948,7 +2955,8 @@ export default function App() {
   // The header card's own palette: the app's, or a Pro shade picked for the
   // card alone. Everything inside the card and the folded logo button is drawn
   // with CT rather than TH. Paint only, never a dimension. See cardPalette.
-  const CT = cardPalette(theme === "dark" ? look.cardDark : look.cardLight, TH);
+  const ownCard = cardPalette(theme === "dark" ? look.cardDark : look.cardLight, TH);
+  const CT = ownCard === TH ? TH : tinted(ownCard);
   // Aviela's flowers on the card take their colours from the card's ground.
   const flowerTone = toneOf(theme === "dark" ? look.cardDark : look.cardLight, theme === "dark", look.light);
   const CARD_SKIN: React.CSSProperties = {
@@ -3009,7 +3017,7 @@ export default function App() {
   const selectBarH = selectMode ? 100 : 0;
   const bottomH    = playerH + selectBarH;
   const modeBg     = playMode === "shuffle" ? TH.violet : playMode === "repeat" ? TH.repeat : TH.dim;
-  const modeShadow = playMode === "shuffle" ? "0 0 16px rgba(124,58,237,0.45)" : playMode === "repeat" ? "0 0 16px rgba(14,165,233,0.4)" : "none";
+  const modeShadow = playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : playMode === "repeat" ? "0 0 16px rgba(14,165,233,0.4)" : "none";
   const filterLabel = FILTER_OPTIONS.find((o: { id: FilterId; label: string }) => o.id === filter)?.label ?? "Sort";
   const filterText = t(filterLabel);
   const selectedSongs = displayList.filter(s => selected.has(s.id));
@@ -3899,7 +3907,7 @@ export default function App() {
                   onMouseDown={onShufflePressStart} onMouseUp={onShufflePressEnd}
                   onMouseLeave={() => { if (shufflePressTimer.current) clearTimeout(shufflePressTimer.current); }}
                   onClick={onShuffleClick}
-                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
+                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
                   {playMode === "repeat" ? <IC.Repeat /> : <IC.Shuffle />}
                 </button>
               </div>
@@ -4149,7 +4157,7 @@ export default function App() {
             lang={langPref} onSetLang={changeLang}
             updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
-            mixOthers={mixOthers} duckOthers={duckOthers} onSetMix={changeMix}
+            mixOthers={mixOthers} onSetMix={changeMix}
             onFeedback={sendFeedback}
             onRate={__DISTRIBUTION__ === "play"
               ? () => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))
@@ -4173,8 +4181,9 @@ export default function App() {
                 song={lookSong}
                 dispName={dispName(lookSong)}
                 dispArtist={dispArtist(lookSong)}
-                customPhoto={nowPlayingPhoto(lookSong)}
-                backdropPhoto={nowPlayingPhoto(lookSong)}
+                // No cover here, even when the song has one: with a cover the
+                // record can be the cover itself, and the record is what is
+                // being chosen.
                 isPlaying={true}
                 currentTime={currentTime}
                 duration={duration}

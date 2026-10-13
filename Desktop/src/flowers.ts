@@ -15,6 +15,10 @@ import type { CardShade, FlowerRecord, Flowers, LightShade } from "./look";
 const INK = "#20181b", BLUSH = "#ffeaf4", PETAL = "#ffd5e6", PINK = "#f7bbd1", ROSE = "#ee8fb4";
 const WHITE = "#ffffff", GOLD = "#f3c14b";
 
+/** What shuffle and selection wear in Aviela, where everywhere else they are
+ *  violet. A pink strong enough to carry a white icon. */
+export const AVIELA_PINK = "#e8559a";
+
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** One petal: from 0,0 straight up, `len` long. `wide` is its width as a

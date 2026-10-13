@@ -2,7 +2,8 @@ import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffe
 import { isWide } from "../themes";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
-import { isMissingArtist, readCoverPhoto } from "../utils";
+import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX } from "../utils";
+import { CropSheet } from "./CropSheet";
 import { AlbumArt } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar } from "./MultiSelectBar";
@@ -611,6 +612,8 @@ export const PlaylistsView: React.FC<Props> = ({
   }, []);
 
   // ── Cover photo ───────────────────────────────────────────────────────────
+  // The picked photo waits here until it has been cropped.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const pickCoverPhoto = useCallback(() => {
     coverInputRef.current?.click();
   }, []);
@@ -619,12 +622,16 @@ export const PlaylistsView: React.FC<Props> = ({
     const file = e.target.files?.[0];
     e.target.value = ""; // allow picking the same file again later
     if (!file || !activePlaylist) return;
-    readCoverPhoto(file).then(dataUrl => {
-      onPlaylistsChange(playlists.map(p =>
-        p.id === activePlaylist.id ? { ...p, coverPhoto: dataUrl } : p
-      ));
-    }).catch(() => {});
-  }, [activePlaylist, playlists, onPlaylistsChange]);
+    readCoverPhoto(file, CROP_SOURCE_PX).then(setCropSrc).catch(() => {});
+  }, [activePlaylist]);
+
+  const keepCroppedCover = (dataUrl: string) => {
+    setCropSrc(null);
+    if (!activePlaylist) return;
+    onPlaylistsChange(playlists.map(p =>
+      p.id === activePlaylist.id ? { ...p, coverPhoto: dataUrl } : p
+    ));
+  };
 
   const removeCoverPhoto = useCallback(() => {
     if (!activePlaylist) return;
@@ -688,6 +695,12 @@ export const PlaylistsView: React.FC<Props> = ({
         onChange={onCoverFileChosen}
         style={{ display: "none" }}
       />
+      {/* On the page itself rather than in here: this view slides, and a
+          fixed layer inside something that moves would move with it. */}
+      {cropSrc && createPortal(
+        <CropSheet src={cropSrc} T={t} onCancel={() => setCropSrc(null)} onUse={keepCroppedCover} />,
+        document.body,
+      )}
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       {/* Only rendered for detail/smartDetail/addSongs — the "list" view's

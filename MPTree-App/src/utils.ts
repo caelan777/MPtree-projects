@@ -85,6 +85,9 @@ export function extractDominantColor(imageUrl: string): Promise<string | null> {
 // turns megabytes into tens of kilobytes.
 const COVER_MAX_PX = 640;
 const COVER_QUALITY = 0.82;
+/** A photo on its way to being cropped is read larger than a cover is kept,
+ *  so that what is left after zooming in is still sharp. */
+export const CROP_SOURCE_PX = 1600;
 
 export function readCoverPhoto(file: File, maxPx = COVER_MAX_PX): Promise<string> {
   return new Promise((resolve, reject) => {

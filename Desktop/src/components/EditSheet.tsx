@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
-import { readCoverPhoto } from "../utils";
+import { readCoverPhoto, CROP_SOURCE_PX } from "../utils";
+import { CropSheet } from "./CropSheet";
 
 // ─── EDIT SHEET ──────────────────────────────────────────────────────────────
 //
@@ -38,6 +39,8 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
   const [genre,  setGenre]  = useState(initGenre);
   // undefined = unchanged, null = cleared, string = new photo
   const [photo,  setPhoto]  = useState<string | null | undefined>(undefined);
+  // A photo that was just picked, waiting to be cropped before it counts.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const sh = makeSH(T);
 
   // "Photo" in the song menu opens this sheet aimed at one field, so the picker
@@ -88,7 +91,7 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
                 <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                   const f = e.target.files?.[0];
                   if (!f) return;
-                  readCoverPhoto(f).then(setPhoto).catch(() => {});
+                  e.target.value = ""; readCoverPhoto(f, CROP_SOURCE_PX).then(setCropSrc).catch(() => {});
                 }} />
               </label>
               <button
@@ -104,7 +107,7 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
               <input ref={pickerRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
                 const f = e.target.files?.[0];
                 if (!f) return;
-                readCoverPhoto(f).then(setPhoto).catch(() => {});
+                e.target.value = ""; readCoverPhoto(f, CROP_SOURCE_PX).then(setCropSrc).catch(() => {});
               }} />
             </label>
           )}
@@ -113,6 +116,9 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
           <button onClick={handleSave} style={sh.saveBtn}>{t("Save")}</button>
         </div>
       </div>
+      {cropSrc && (
+        <CropSheet src={cropSrc} T={T} onCancel={() => setCropSrc(null)} onUse={d => { setPhoto(d); setCropSrc(null); }} />
+      )}
     </div>
   );
 }

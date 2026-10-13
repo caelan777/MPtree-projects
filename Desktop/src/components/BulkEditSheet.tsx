@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { t, tn } from "../i18n";
 import { IC } from "./Icons";
-import { readCoverPhoto } from "../utils";
+import { readCoverPhoto, CROP_SOURCE_PX } from "../utils";
+import { CropSheet } from "./CropSheet";
 
 // ─── BULK EDIT SHEET ─────────────────────────────────────────────────────────
 //
@@ -34,6 +35,8 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
   const [genre,  setGenre]  = useState("");
   // undefined = untouched, null = clear it, string = this new photo
   const [photo,  setPhoto]  = useState<string | null | undefined>(undefined);
+  // A photo that was just picked, waiting to be cropped before it counts.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [clearArtist, setClearArtist] = useState(false);
   const [clearGenre,  setClearGenre]  = useState(false);
   const pickerRef = useRef<HTMLInputElement | null>(null);
@@ -124,7 +127,7 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
                   onChange={e => {
                     const f = e.target.files?.[0];
                     if (!f) return;
-                    readCoverPhoto(f).then(setPhoto).catch(() => {});
+                    e.target.value = ""; readCoverPhoto(f, CROP_SOURCE_PX).then(setCropSrc).catch(() => {});
                   }}
                 />
               </label>
@@ -143,6 +146,9 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
           </button>
         </div>
       </div>
+      {cropSrc && (
+        <CropSheet src={cropSrc} T={T} onCancel={() => setCropSrc(null)} onUse={d => { setPhoto(d); setCropSrc(null); }} />
+      )}
     </div>
   );
 }

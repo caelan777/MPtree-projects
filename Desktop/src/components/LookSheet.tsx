@@ -341,7 +341,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
 
   const DARKS: { id: DarkShade; label: string }[] = [
     { id: "classic", label: t("Black") }, { id: "graphite", label: t("Graphite") },
-    { id: "lantern", label: "Lantern" },
   ];
   const LIGHTS: { id: LightShade; label: string }[] = [
     { id: "classic", label: t("White") }, { id: "paper", label: t("Paper") }, { id: "stone", label: t("Stone") },
@@ -353,7 +352,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   ];
   const VINYLS: { id: VinylSkin; label: string }[] = [
     { id: "classic", label: t("Black") }, { id: "white", label: t("White") },
-    { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") }, { id: "lantern", label: "Lantern" },
+    { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") },
   ];
   const RECORD_NAMES: Record<FlowerRecord, string> = {
     daisy: t("Daisy ring"), bloom: t("One bloom"), blossom: t("Blossom"), lines: t("Line drawing"), wreath: t("Wreath"),
@@ -425,6 +424,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   };
   const colourNames: Record<string, string> = Object.fromEntries([
     ...DARKS.map(d => [`dark:${d.id}`, d.label]), ...LIGHTS.map(l => [`light:${l.id}`, l.label]),
+    // Lantern's own dark green is only on its page, not under Custom.
+    ["dark:lantern", "Lantern"],
   ]);
   const colourNow = `${theme}:${dark ? look.dark : look.light}`;
   const lanternOn = (LANTERN_RECORDS as readonly string[]).includes(vinyl) && look.flowers === "none";

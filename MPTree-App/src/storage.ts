@@ -216,7 +216,7 @@ export interface BackupParts {
 // Pro is not in here: that belongs to the Google account, not the backup.
 const SETTINGS_KEYS = [
   "mptree_ui_size", "mptree_lang", "mptree_update_notices",
-  "mptree_mix_others", "mptree_duck_others", "mptree_auto_collapse",
+  "mptree_mix_others", "mptree_auto_collapse",
   "mptree_logo_pos", "mptree_look",
 ];
 const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];

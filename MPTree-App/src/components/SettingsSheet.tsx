@@ -26,7 +26,6 @@ const GlobeIcon    = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="2" y1=
 const BellIcon     = () => <Svg><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Svg>;
 const TextIcon     = () => <Svg><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></Svg>;
 const LayersIcon   = () => <Svg><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Svg>;
-const ArrowDownIcon= () => <Svg><polyline points="7 13 12 18 17 13"/><line x1="12" y1="6" x2="12" y2="18"/></Svg>;
 const PlayIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></Svg>;
 const HelpIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>;
 const MailIcon     = () => <Svg><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></Svg>;
@@ -122,8 +121,7 @@ type SettingsSheetProps = {
   onSetUpdateNotices: (on: boolean) => void;
   // ── Other apps ──
   mixOthers: boolean;
-  duckOthers: boolean;
-  onSetMix: (mix: boolean, duck: boolean) => void;
+  onSetMix: (mix: boolean) => void;
   // ── Help ──
   onFeedback: () => void;
   /** Absent outside the Play build: a sideloaded copy cannot be rated on Play. */
@@ -140,7 +138,7 @@ export function SettingsSheet({
   onExport, onImportOpen,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
-  mixOthers, duckOthers, onSetMix,
+  mixOthers, onSetMix,
   onFeedback, onRate, onPrivacy,
   onClose, T,
 }: SettingsSheetProps) {
@@ -354,21 +352,12 @@ export function SettingsSheet({
         <Section T={T} title={t("Audio")}>
           <Row T={T} first onClick={onOpenAudioEffects} icon={<IC.EQ />} label={t("Audio Effects")} />
           <Row T={T}
-            onClick={() => onSetMix(!mixOthers, mixOthers ? false : duckOthers)}
+            onClick={() => onSetMix(!mixOthers)}
             icon={<LayersIcon />}
             label={t("Play alongside other apps")}
             sub={t("Keep playing when another app, like a video, makes sound.")}
             right={<Switch on={mixOthers} T={T} />}
           />
-          {mixOthers && (
-            <Row T={T}
-              onClick={() => onSetMix(true, !duckOthers)}
-              icon={<ArrowDownIcon />}
-              label={t("Turn other apps down") + " · " + t("Experimental")}
-              sub={t("Most apps turn themselves back up on the next video.")}
-              right={<Switch on={duckOthers} T={T} />}
-            />
-          )}
         </Section>
 
         <Section T={T} title={t("Sleep Timer")}>
