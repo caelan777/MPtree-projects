@@ -32,7 +32,7 @@ import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
-import { groundFlowers, cardFlowers, logoFlower } from "./flowers";
+import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf } from "./flowers";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
@@ -3172,6 +3172,8 @@ export default function App() {
   // card alone. Everything inside the card and the folded logo button is drawn
   // with CT rather than TH. Paint only, never a dimension. See cardPalette.
   const CT = cardPalette(theme === "dark" ? look.cardDark : look.cardLight, TH);
+  // Aviela's flowers on the card take their colours from the card's ground.
+  const flowerTone = toneOf(theme === "dark" ? look.cardDark : look.cardLight, theme === "dark", look.light);
   const CARD_SKIN: React.CSSProperties = {
     background: CT.playerBg,
     border: `1px solid ${CT.border}`,
@@ -3384,7 +3386,7 @@ export default function App() {
         <TitleBar T={TH} />
         {wide && (
           <DesktopSidebar
-            T={CT} ground={CT === TH ? TH.bg : CT.playerBg} flowers={look.flowers}
+            T={CT} ground={CT === TH ? TH.bg : CT.playerBg} flowers={look.flowers} flowerTone={flowerTone}
             page={page} onPage={setPage} onSettings={() => setSettingsOpen(true)}
             mini={sideMini} onMini={setSideMini}
             binCount={removedSongs.length} onBin={() => setBinOpen(true)}
@@ -3470,9 +3472,9 @@ export default function App() {
         >
           {/* Aviela's flowers, behind what the card holds. Laid over the card,
               not in it, so its measured height is untouched. */}
-          {cardFlowers(look.flowers) && (
-            <div aria-hidden="true" style={{ ...cardFlowers(look.flowers), opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
-          )}
+          {[cardFlowers(look.flowers, flowerTone), cornerFlowers(look.flowers, flowerTone)].map((layer, i) => layer && (
+            <div key={i} aria-hidden="true" style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
+          ))}
           {/* Full header. Kept mounted and at its natural width while collapsed
               (just clipped) so it never reflows — a reflow would corrupt the
               measured height the card animates to. */}

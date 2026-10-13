@@ -4,7 +4,7 @@ import { Logo } from "../components/Logo";
 import { IC } from "../components/Icons";
 import { t } from "../i18n";
 import type { Flowers } from "../look";
-import { cardFlowers, logoFlower } from "../flowers";
+import { cardFlowers, cornerFlowers, logoFlower, type Tone } from "../flowers";
 
 const NoteIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -51,21 +51,22 @@ const label = (T: T): React.CSSProperties => ({
 
 /** The left column of the wide layout. Stands where the Songs / Playlists
  *  switch and the settings cog stand in the phone header. */
-export function DesktopSidebar({ T, ground, flowers, page, onPage, onSettings, account, onAccount, mini, onMini, binCount, onBin }: {
+export function DesktopSidebar({ T, ground, flowers, flowerTone, page, onPage, onSettings, account, onAccount, mini, onMini, binCount, onBin }: {
   /** Folded to its icons, and the button that folds and unfolds it. */
   mini: boolean; onMini: (mini: boolean) => void;
   binCount: number; onBin: () => void;
   /** The header card's palette (Personalise): on Windows the sidebar is what
    *  wears it, since the wide layout has no header card. */
   /** Aviela's flowers, which the sidebar wears where the header card would. */
-  flowers: Flowers;
+  flowers: Flowers; flowerTone: Tone;
   T: T; ground: string; page: "songs" | "playlists"; onPage: (p: "songs" | "playlists") => void; onSettings: () => void;
   /** The MPTree account that is signed in, if one is. */
   account?: { name: string; email: string; photo?: string } | null;
   onAccount: () => void;
 }) {
   // Folded, there is no room for them.
-  const inCard = mini ? null : cardFlowers(flowers);
+  const inCard = mini ? null : cardFlowers(flowers, flowerTone);
+  const inCorner = mini ? null : cornerFlowers(flowers, flowerTone);
   return (
     <nav data-tour="d-sidebar" style={{
       position: "relative", zIndex: 0,
@@ -75,7 +76,8 @@ export function DesktopSidebar({ T, ground, flowers, page, onPage, onSettings, a
       ["--dhover" as string]: T.card,
     }}>
       {/* The sprig comes in under the list rather than over the name. */}
-      {inCard && <div aria-hidden="true" style={{ ...inCard, ...(flowers === "sprig" ? { backgroundPosition: "right top 196px" } : null) }} />}
+      {inCard && <div aria-hidden="true" style={{ ...inCard, ...(flowers === "sprig" || flowers === "lines" ? { backgroundPosition: "right top 196px" } : null) }} />}
+      {inCorner && <div aria-hidden="true" style={inCorner} />}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: mini ? "0 0 8px" : "0 0 14px 8px", color: T.text, flexDirection: mini ? "column" : "row" }}>
         <span style={{ position: "relative", display: "flex" }}>
           <Logo size={30} color={T.text} />

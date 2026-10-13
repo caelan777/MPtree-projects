@@ -6,10 +6,10 @@ import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { usePro } from "../pro";
 import {
-  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, FREE, FLOWER_RECORDS, FLOWER_KINDS,
+  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers,
 } from "../look";
-import { groundFlowers, cardFlowers, logoFlower } from "../flowers";
+import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
@@ -18,9 +18,9 @@ import { groundFlowers, cardFlowers, logoFlower } from "../flowers";
 // record.
 //
 // One style has a page of its own. Aviela is pink with a white header card and
-// flowers, and which flowers is a choice: eight records and six ways for the
-// app to wear them. Tapping it puts it on and opens that page, laid out like
-// Custom, with a way back.
+// flowers, and which flowers is a choice: its records, the ways for the app to
+// wear them, and a header card in white, pink or black. Tapping it puts it on
+// and opens that page, laid out like Custom, with a way back.
 //
 // There is no dark or light to choose here. A colour is dark or it is light,
 // and picking one puts the app in that mode; the header card and the record
@@ -154,21 +154,25 @@ function Row({ title, aside, children, T, framed }: { title: string; aside?: Rea
 
 /** The app in Aviela, small, wearing one kind of flowers. Drawn at twice the
  *  size and halved, so the flowers are the real ones, only smaller. */
-function FlowerScreen({ kind }: { kind: Exclude<Flowers, "none"> }) {
+function FlowerScreen({ kind, card, tone }: { kind: Exclude<Flowers, "none">; card: T; tone: Tone }) {
   const app = SHADE_PREVIEW.light("pink");
-  const inCard = cardFlowers(kind);
+  const inCard = cardFlowers(kind, tone);
+  const inCorner = cornerFlowers(kind, tone);
   return (
     <div style={{ width: 92, height: 64, borderRadius: 13, overflow: "hidden", border: `1px solid ${app.border}`, boxSizing: "border-box" }}>
       <div style={{ width: 184, height: 128, transform: "scale(0.5)", transformOrigin: "top left", position: "relative", backgroundColor: app.bg, ...groundFlowers(kind) }}>
-        <div style={{ position: "absolute", left: 10, right: 10, top: 10, height: 62, borderRadius: 16, background: "#fff", border: `1px solid ${app.border}`, overflow: "hidden", boxSizing: "border-box", zIndex: 0 }}>
+        <div style={{ position: "absolute", left: 10, right: 10, top: 10, height: 62, borderRadius: 16, background: card.playerBg, border: `1px solid ${card.border}`, overflow: "hidden", boxSizing: "border-box", zIndex: 0 }}>
           {inCard && <div style={inCard} />}
-          <div style={{ position: "absolute", left: 14, top: 13, width: 26, height: 22, borderRadius: 4, background: app.text }}>
+          {inCorner && <div style={inCorner} />}
+          <div style={{ position: "absolute", left: 14, top: 13, width: 26, height: 22, borderRadius: 4, background: card.text }}>
             {kind === "mark" && <span style={{ position: "absolute", right: -13, top: -7, width: 19, height: 19, backgroundImage: logoFlower(), backgroundSize: "contain" }} />}
           </div>
-          <div style={{ position: "absolute", left: 14, bottom: 11, width: 44, height: 6, borderRadius: 3, background: app.muted }} />
+          <div style={{ position: "absolute", left: 14, bottom: 11, width: 44, height: 6, borderRadius: 3, background: card.muted }} />
         </div>
-        <div style={{ position: "absolute", left: 16, top: 88, width: 80, height: 9, borderRadius: 5, background: app.text }} />
-        <div style={{ position: "absolute", left: 16, top: 106, width: 52, height: 7, borderRadius: 4, background: app.muted }} />
+        {kind !== "meadow" && <>
+          <div style={{ position: "absolute", left: 16, top: 88, width: 80, height: 9, borderRadius: 5, background: app.text }} />
+          <div style={{ position: "absolute", left: 16, top: 106, width: 52, height: 7, borderRadius: 4, background: app.muted }} />
+        </>}
       </div>
     </div>
   );
@@ -219,12 +223,14 @@ function AppCopy({ stamp, width, height, scale }: { stamp: string; width: number
 
 /** A whole look in one tile: the app's colour, the header card on it, and
  *  its record in the corner. */
-function Swatch({ app, card, vinyl, flowers = "none" }: { app: T; card: T; vinyl: VinylSkin; flowers?: Flowers }) {
-  const inCard = cardFlowers(flowers);
+function Swatch({ app, card, vinyl, flowers = "none", tone = "white" }: { app: T; card: T; vinyl: VinylSkin; flowers?: Flowers; tone?: Tone }) {
+  const inCard = cardFlowers(flowers, tone);
+  // The corner pictures are larger than this little card, so they are halved.
+  const halved = flowers === "sprig" || flowers === "lines" ? { backgroundSize: "65px 42px" } : flowers === "corners" ? { backgroundSize: "39px 26px" } : null;
   return (
     <div style={{ height: 76, borderRadius: 12, backgroundColor: app.bg, ...groundFlowers(flowers), border: `1px solid ${app.border}`, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", left: 7, right: 7, top: 7, height: 24, borderRadius: 8, background: card.playerBg, border: `1px solid ${card.border}`, boxSizing: "border-box", overflow: "hidden", zIndex: 0 }}>
-        {inCard && <div style={{ ...inCard, backgroundSize: "65px 42px" }} />}
+        {inCard && <div style={{ ...inCard, ...halved }} />}
         <div style={{ position: "absolute", left: 7, top: 8, width: 18, height: 6, borderRadius: 3, background: card.text }} />
         <div style={{ position: "absolute", right: 7, top: 7, width: 22, height: 8, borderRadius: 4, background: card.accent }} />
       </div>
@@ -317,12 +323,16 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
     { id: "classic", label: t("Black") }, { id: "white", label: t("White") },
     { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") },
   ];
-  const AVIELA_RECORDS: { id: FlowerRecord; label: string }[] = [
-    t("Daisy ring"), t("One bloom"), t("Blossom"), t("Line drawing"), t("Wreath"), t("Loose petals"), t("Small flowers"), t("Bouquet"),
-  ].map((label, i) => ({ id: FLOWER_RECORDS[i], label }));
-  const AVIELA_FLOWERS: { id: Exclude<Flowers, "none">; label: string }[] = [
-    t("Sprig"), t("Flower print"), t("Garland"), t("One flower"), t("Falling petals"), t("Big bloom"),
-  ].map((label, i) => ({ id: FLOWER_KINDS[i], label }));
+  const RECORD_NAMES: Record<FlowerRecord, string> = {
+    daisy: t("Daisy ring"), bloom: t("One bloom"), blossom: t("Blossom"), lines: t("Line drawing"), wreath: t("Wreath"),
+    petals: t("Loose petals"), ditsy: t("Small flowers"), bouquet: t("Bouquet"), dahlia: t("Dahlia"), oxeye: t("One daisy"),
+    night: t("Night garden"), branch: t("Blossom branch"), posy: t("Posy"),
+  };
+  const FLOWER_NAMES: Record<Exclude<Flowers, "none">, string> = {
+    sprig: t("Sprig"), garland: t("Garland"), mark: t("One flower"), bloom: t("Big bloom"), vine: t("Vine"),
+    corners: t("Both corners"), confetti: t("Scattered"), lines: t("Drawn"), daisies: t("Daisy chain"), meadow: t("Meadow"),
+  };
+  const AVIELA_CARD_NAMES = [t("White"), t("Pink"), t("Black")];
   // Whole looks: a colour, a header card and a record that belong together.
   // Named after the app's colour, then the header card's where it differs.
   const pair = (a: string, b: string) => `${t(a)} · ${t(b)}`;
@@ -352,13 +362,15 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
     pick(p.vinyl === FREE.vinyl, { vinylDark: p.vinyl, vinylLight: p.vinyl });
   };
 
-  // Aviela: pink, a white header card, and the flowers last picked for it.
-  const AVIELA_CARD: CardShade = "light:classic";
-  const avielaOn = !dark && look.light === "pink" && card === AVIELA_CARD && look.flowers !== "none";
+  // Aviela: pink, with the record, the flowers and the header card last
+  // picked for it.
+  const avielaOn = !dark && look.light === "pink" && look.flowers !== "none";
   const wearAviela = (a: Look["aviela"]) => pick(false, {
-    light: "pink", cardDark: AVIELA_CARD, cardLight: AVIELA_CARD,
+    light: "pink", cardDark: a.card, cardLight: a.card,
     vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a,
   });
+  const avielaCard = cardPalette(look.aviela.card, SHADE_PREVIEW.light("pink"));
+  const avielaTone = toneOf(look.aviela.card, false, "pink");
   const openAviela = () => {
     if (pro) kept.current = "light";
     if (dark) onSetTheme("light");
@@ -441,11 +453,11 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
             <>
               <Group T={T}>
                 <Row T={T} framed title={t("Record")}>
-                  {AVIELA_RECORDS.map(v => (
-                    <Tile key={v.id} T={T} label={v.label} selected={avielaOn && vinyl === v.id} locked={!pro}
-                      onClick={() => wearAviela({ ...look.aviela, record: v.id })}>
+                  {FLOWER_RECORDS.map(id => (
+                    <Tile key={id} T={T} label={RECORD_NAMES[id]} selected={avielaOn && vinyl === id} locked={!pro}
+                      onClick={() => wearAviela({ ...look.aviela, record: id })}>
                       <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
-                        <SpinningDisc size={60} skin={v.id} />
+                        <SpinningDisc size={60} skin={id} />
                       </div>
                     </Tile>
                   ))}
@@ -454,10 +466,21 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
 
               <Group T={T}>
                 <Row T={T} framed title={t("Flowers in the app")}>
-                  {AVIELA_FLOWERS.map(fl => (
-                    <Tile key={fl.id} T={T} label={fl.label} selected={avielaOn && look.flowers === fl.id} locked={!pro}
-                      onClick={() => wearAviela({ ...look.aviela, flowers: fl.id })}>
-                      <FlowerScreen kind={fl.id} />
+                  {FLOWER_KINDS.map(id => (
+                    <Tile key={id} T={T} label={FLOWER_NAMES[id]} selected={avielaOn && look.flowers === id} locked={!pro}
+                      onClick={() => wearAviela({ ...look.aviela, flowers: id })}>
+                      <FlowerScreen kind={id} card={avielaCard} tone={avielaTone} />
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
+
+              <Group T={T}>
+                <Row T={T} framed title={t("Header card")}>
+                  {AVIELA_CARDS.map((c, i) => (
+                    <Tile key={c} T={T} label={AVIELA_CARD_NAMES[i]} selected={avielaOn && card === c} locked={!pro}
+                      onClick={() => wearAviela({ ...look.aviela, card: c })}>
+                      <Card p={cardPalette(c, SHADE_PREVIEW.light("pink"))} />
                     </Tile>
                   ))}
                 </Row>
@@ -480,8 +503,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
                       transition: "border-color 0.15s ease",
                     }}
                   >
-                    <Swatch app={app} card={cardPalette(aviela ? AVIELA_CARD : p.card, app)} vinyl={aviela ? look.aviela.record : p.vinyl}
-                      flowers={aviela ? look.aviela.flowers : undefined} />
+                    <Swatch app={app} card={aviela ? avielaCard : cardPalette(p.card, app)} vinyl={aviela ? look.aviela.record : p.vinyl}
+                      flowers={aviela ? look.aviela.flowers : undefined} tone={avielaTone} />
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 4px 2px" }}>
                       <span style={{ fontSize: 13, fontWeight: on ? 700 : 500, color: on ? T.text : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aviela ? "Aviela" : p.name}</span>
                       <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>

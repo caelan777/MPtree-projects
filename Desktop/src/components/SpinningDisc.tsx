@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Logo } from "./Logo";
 import { t } from "../i18n";
 import { useLook, useVinyl, saveLook, isFlowerRecord, type VinylSkin } from "../look";
-import { recordArt, RECORD_LABEL } from "../flowers";
+import { recordArt, RECORD_LABEL, DARK_RECORDS } from "../flowers";
 
 // ─── SPINNING DISC ───────────────────────────────────────────────────────────
 // The record for the expanded player: the real vinyl.webp turning on its
@@ -123,7 +123,7 @@ export const SpinningDisc = memo(function SpinningDisc({
       position: "relative", borderRadius: "50%", cursor: tappable ? "pointer" : undefined,
       WebkitTapHighlightColor: "transparent",
       // Static: the shadow stays put while the record turns.
-      boxShadow: skin === "smoke" || (flower && flower !== "wreath") ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
+      boxShadow: skin === "smoke" || (flower && !DARK_RECORDS.includes(flower)) ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
       // Nothing inside affects layout outside, so a spinning frame cannot make
       // the parent reflow.
       contain: "layout paint",

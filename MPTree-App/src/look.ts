@@ -12,12 +12,12 @@ import { Preferences } from "@capacitor/preferences";
 // whole look. The app icon is one for both.
 
 /** The records of the Aviela style, drawn in flowers.ts. */
-export const FLOWER_RECORDS = ["daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet"] as const;
+export const FLOWER_RECORDS = ["daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet", "dahlia", "oxeye", "night", "branch", "posy"] as const;
 export type FlowerRecord = typeof FLOWER_RECORDS[number];
 export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS as readonly string[]).includes(v);
 export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | FlowerRecord;
-/** How the app itself wears flowers: not at all, or one of Aviela's six ways. */
-export const FLOWER_KINDS = ["sprig", "print", "garland", "mark", "petals", "bloom"] as const;
+/** How the app itself wears flowers: not at all, or one of Aviela's ways. */
+export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
 export type Flowers    = "none" | typeof FLOWER_KINDS[number];
 export type DarkShade  = "classic" | "amoled" | "graphite";
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
@@ -25,6 +25,9 @@ export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
+
+/** The header cards Aviela comes with: white, pink or black. */
+export const AVIELA_CARDS: readonly CardShade[] = ["light:classic", "light:pink", "dark:classic"];
 
 export type Look = {
   vinylDark: VinylSkin;
@@ -36,8 +39,8 @@ export type Look = {
   icon: AppIcon;
   flowers: Flowers;
   /** What was last picked on the Aviela page, so coming back to the style
-   *  brings back the same record and the same flowers. */
-  aviela: { record: FlowerRecord; flowers: Exclude<Flowers, "none"> };
+   *  brings back the same record, the same flowers and the same header card. */
+  aviela: { record: FlowerRecord; flowers: Exclude<Flowers, "none">; card: CardShade };
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
@@ -46,7 +49,7 @@ export type Look = {
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
-  flowers: "none", aviela: { record: "daisy", flowers: "sprig" },
+  flowers: "none", aviela: { record: "daisy", flowers: "sprig", card: "light:classic" },
 };
 
 /** What anyone gets without Pro. */
@@ -100,7 +103,9 @@ export async function loadLook(): Promise<Look> {
         if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k])) look = { ...look, [k]: "classic" };
       }
       if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
-      if (!look.aviela || !isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
+      // Test build 35 had two kinds that are gone, and no card of Aviela's own.
+      look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, ...look.aviela } };
+      if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode.
       if (!(["classic", "amoled", "graphite"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
