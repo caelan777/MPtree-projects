@@ -8,8 +8,8 @@ import { Logo } from "./Logo";
 import { SpinningDisc } from "./SpinningDisc";
 import { usePro } from "../pro";
 import {
-  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_LIGHTS, LANTERN_CARDS,
-  type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type LanternLight,
+  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
+  type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour,
 } from "../look";
 import { isDesktop } from "../plugins";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
@@ -22,10 +22,10 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 //
 // Two styles carry a name and have a page of their own. Aviela is pink with
 // flowers, and which flowers is a choice: its records, the ways for the app to
-// wear them, and a header card in white, pink or black. Lantern is black lit
-// in green, with its own records, ways for the app to carry the light, and
-// header cards. Tapping one puts it on and opens its page, laid out like
-// Custom, with a way back.
+// wear them, and a header card in white, pink or black. Lantern is green
+// light: its own records and header cards, on any of the app's usual colours,
+// black unless another is picked. Tapping one puts it on and opens its page,
+// laid out like Custom, with a way back.
 //
 // There is no dark or light to choose here. A colour is dark or it is light,
 // and picking one puts the app in that mode; the header card and the record
@@ -340,7 +340,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   };
 
   const DARKS: { id: DarkShade; label: string }[] = [
-    { id: "classic", label: t("Black") }, { id: "amoled", label: "AMOLED" }, { id: "graphite", label: t("Graphite") },
+    { id: "classic", label: t("Black") }, { id: "graphite", label: t("Graphite") },
     { id: "lantern", label: "Lantern" },
   ];
   const LIGHTS: { id: LightShade; label: string }[] = [
@@ -369,10 +369,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
     "lantern": t("Beams"), "lantern-rings": t("Rings"), "lantern-core": t("Glow"),
     "lantern-dash": t("Charge"), "lantern-solid": t("Green"), "lantern-burst": t("Burst"),
   };
-  const LIGHT_NAMES: Record<"none" | LanternLight, string> = {
-    none: t("Plain"), glow: t("Glow"), beams: t("Beams"), rings: t("Rings"), edge: t("Line of light"), sparks: t("Sparks"), aura: t("Aura"),
-  };
-  const LANTERN_CARD_NAMES = ["Lantern", t("Black"), t("Green"), t("White")];
+  const LANTERN_CARD_NAMES = ["Lantern", t("Green"), t("Black"), t("White")];
   // Whole looks: a colour, a header card and a record that belong together.
   // Named after the app's colour, then the header card's where it differs.
   const pair = (a: string, b: string) => `${t(a)} · ${t(b)}`;
@@ -419,19 +416,30 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
     setPage("aviela");
   };
 
-  // Lantern: black lit in green, with the record, the light and the header
-  // card last picked for it.
-  const lanternOn = dark && look.dark === "lantern";
-  const wearLantern = (l: Look["lantern"]) => pick(false, {
-    dark: "lantern", cardDark: l.card, cardLight: l.card,
-    vinylDark: l.record, vinylLight: l.record, flowers: l.light, lantern: l,
-  });
-  const lanternApp = SHADE_PREVIEW.dark("lantern");
+  // Lantern: the record, the header card and the colour last picked for it.
+  // What makes it Lantern is the record, so that is what tells whether it is on.
+  const shadeOf = (c: AppColour) => c.split(":") as [Theme, string];
+  const paletteOf = (c: AppColour) => {
+    const [mode, shade] = shadeOf(c);
+    return mode === "dark" ? SHADE_PREVIEW.dark(shade as DarkShade) : SHADE_PREVIEW.light(shade as LightShade);
+  };
+  const colourNames: Record<string, string> = Object.fromEntries([
+    ...DARKS.map(d => [`dark:${d.id}`, d.label]), ...LIGHTS.map(l => [`light:${l.id}`, l.label]),
+  ]);
+  const colourNow = `${theme}:${dark ? look.dark : look.light}`;
+  const lanternOn = (LANTERN_RECORDS as readonly string[]).includes(vinyl) && look.flowers === "none";
+  const wearLantern = (l: Look["lantern"]) => {
+    const [mode, shade] = shadeOf(l.colour);
+    if (pro) kept.current = mode;
+    if (mode !== theme) onSetTheme(mode);
+    pick(false, {
+      ...(mode === "dark" ? { dark: shade as DarkShade } : { light: shade as LightShade }),
+      cardDark: l.card, cardLight: l.card, vinylDark: l.record, vinylLight: l.record, flowers: "none", lantern: l,
+    });
+  };
+  const lanternApp = paletteOf(look.lantern.colour);
   const lanternCard = cardPalette(look.lantern.card, lanternApp);
-  const lanternTone = toneOf(look.lantern.card, true, look.light);
   const openLantern = () => {
-    if (pro) kept.current = "dark";
-    if (!dark) onSetTheme("dark");
     wearLantern(look.lantern);
     setPage("lantern");
   };
@@ -447,7 +455,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   const STYLES: StyleTile[] = [
     ...PRESETS.slice(0, 2).map(presetTile),
     { key: "aviela", name: "Aviela", app: avielaApp, card: avielaCard, vinyl: look.aviela.record, flowers: look.aviela.flowers, tone: avielaTone, on: avielaOn, free: false },
-    { key: "lantern", name: "Lantern", app: lanternApp, card: lanternCard, vinyl: look.lantern.record, flowers: look.lantern.light, tone: lanternTone, on: lanternOn, free: false },
+    { key: "lantern", name: "Lantern", app: lanternApp, card: lanternCard, vinyl: look.lantern.record, flowers: "none", tone: "white", on: lanternOn, free: false },
     ...PRESETS.slice(2).map(presetTile),
   ];
 
@@ -575,22 +583,22 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
               </Group>
 
               <Group T={T}>
-                <Row T={T} framed title={t("Light in the app")}>
-                  {(["none", ...LANTERN_LIGHTS] as const).map(id => (
-                    <Tile key={id} T={T} label={LIGHT_NAMES[id]} selected={lanternOn && look.flowers === id} locked={!pro}
-                      onClick={() => wearLantern({ ...look.lantern, light: id })}>
-                      <FlowerScreen kind={id} app={lanternApp} card={lanternCard} tone={lanternTone} />
+                <Row T={T} framed title={isWide() ? t("Sidebar") : t("Header card")}>
+                  {LANTERN_CARDS.map((c, i) => (
+                    <Tile key={c} T={T} label={LANTERN_CARD_NAMES[i]} selected={lanternOn && card === c} locked={!pro}
+                      onClick={() => wearLantern({ ...look.lantern, card: c })}>
+                      <Card p={cardPalette(c, lanternApp)} />
                     </Tile>
                   ))}
                 </Row>
               </Group>
 
               <Group T={T}>
-                <Row T={T} framed title={isWide() ? t("Sidebar") : t("Header card")}>
-                  {LANTERN_CARDS.map((c, i) => (
-                    <Tile key={c} T={T} label={LANTERN_CARD_NAMES[i]} selected={lanternOn && card === c} locked={!pro}
-                      onClick={() => wearLantern({ ...look.lantern, card: c })}>
-                      <Card p={cardPalette(c, lanternApp)} />
+                <Row T={T} framed title={t("Colour")}>
+                  {LANTERN_COLOURS.map(c => (
+                    <Tile key={c} T={T} label={colourNames[c]} selected={lanternOn && colourNow === c} locked={!pro}
+                      onClick={() => wearLantern({ ...look.lantern, colour: c })}>
+                      <Screen p={paletteOf(c)} />
                     </Tile>
                   ))}
                 </Row>

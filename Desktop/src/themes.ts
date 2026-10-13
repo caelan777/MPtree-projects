@@ -35,17 +35,11 @@ export type T = typeof DARK;
 
 // ─── SHADES (Pro) ────────────────────────────────────────────────────────────
 // Other takes on the same two grounds. Each is still black and white in spirit:
-// a darker dark, a softer dark, a warmer light, a cooler light. Only the
+// a softer dark, a warmer light, a cooler light. Only the
 // neutrals move; the accent keeps inverting with the ground, and violet, rose
 // and sky keep their one job each.
 const DARK_SHADES: Record<DarkShade, Partial<T>> = {
   classic: {},
-  // True black everywhere, for OLED screens: the pixels are off.
-  amoled: {
-    surface:"#0a0a0a", card:"#000000", playerBg:"#000000", sheetBg:"#0a0a0a",
-    dim:"#161616", border:"#1f1f1f", inputBg:"#161616",
-    chipBg:"#0a0a0a", chipBorder:"#1f1f1f", sliderBg:"#1f1f1f",
-  },
   // Charcoal instead of black: easier on the eyes in a lit room.
   graphite: {
     bg:"#17181b", surface:"#202125", card:"#1d1e22", playerBg:"#1b1c20", sheetBg:"#222327",

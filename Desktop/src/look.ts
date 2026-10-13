@@ -23,14 +23,9 @@ export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | LanternRecor
 /** How the app itself wears flowers: not at all, or one of Aviela's ways. */
 export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
 export type AvielaFlowers = typeof FLOWER_KINDS[number];
-/** The same for Lantern: how the app carries its light. */
-export const LANTERN_LIGHTS = ["glow", "beams", "rings", "edge", "sparks", "aura"] as const;
-export type LanternLight = typeof LANTERN_LIGHTS[number];
-/** What a style draws on the app: nothing, Aviela's flowers or Lantern's
- *  light. Named after the flowers, which were first. */
-export type Flowers    = "none" | AvielaFlowers | LanternLight;
-const isDecor = (v: string): boolean => (FLOWER_KINDS as readonly string[]).includes(v) || (LANTERN_LIGHTS as readonly string[]).includes(v);
-export type DarkShade  = "classic" | "amoled" | "graphite" | "lantern";
+/** What Aviela draws on the app, or nothing. */
+export type Flowers    = "none" | AvielaFlowers;
+export type DarkShade  = "classic" | "graphite" | "lantern";
 /** "lantern" is only ever a header card: the green one on the Lantern page. */
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage" | "lantern";
 export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
@@ -38,8 +33,14 @@ export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
 
-/** The header cards Lantern comes with: its own, black, green or white. */
-export const LANTERN_CARDS: readonly CardShade[] = ["default", "dark:amoled", "light:lantern", "light:classic"];
+/** The header cards Lantern comes with: its own dark green, green, black or white. */
+export const LANTERN_CARDS: readonly CardShade[] = ["dark:lantern", "light:lantern", "dark:classic", "light:classic"];
+/** A colour of the app with its mode, written the way a header card's is. */
+export type AppColour = Exclude<CardShade, "default">;
+/** The colours Lantern can be worn on: the usual ones, and its own. */
+export const LANTERN_COLOURS: readonly AppColour[] = [
+  "dark:classic", "dark:graphite", "light:classic", "light:paper", "light:stone", "light:pink", "light:sage", "dark:lantern",
+];
 /** The header cards Aviela comes with: white, pink or black. */
 export const AVIELA_CARDS: readonly CardShade[] = ["light:classic", "light:pink", "dark:classic"];
 
@@ -55,8 +56,9 @@ export type Look = {
   /** What was last picked on the Aviela page, so coming back to the style
    *  brings back the same record, the same flowers and the same header card. */
   aviela: { record: FlowerRecord; flowers: AvielaFlowers; card: CardShade };
-  /** And the same for the Lantern page. */
-  lantern: { record: LanternRecord; light: "none" | LanternLight; card: CardShade };
+  /** And the same for the Lantern page: its record, its header card and the
+   *  colour of the app under them. */
+  lantern: { record: LanternRecord; card: CardShade; colour: AppColour };
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
@@ -66,7 +68,7 @@ export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
   flowers: "none", aviela: { record: "daisy", flowers: "sprig", card: "light:classic" },
-  lantern: { record: "lantern", light: "glow", card: "default" },
+  lantern: { record: "lantern", card: "dark:lantern", colour: "dark:classic" },
 };
 
 /** What anyone gets without Pro. */
@@ -119,17 +121,22 @@ export async function loadLook(): Promise<Look> {
       for (const k of ["vinylDark", "vinylLight"] as const) {
         if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k]) && !isLanternRecord(look[k])) look = { ...look, [k]: "classic" };
       }
-      if (look.flowers !== "none" && !isDecor(look.flowers)) look = { ...look, flowers: "none" };
+      // Test build 38 had light on the card for Lantern; that is gone.
+      if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
       // Test build 35 had two kinds that are gone, and no card of Aviela's own.
       look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, ...look.aviela } };
       if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
-      look = { ...look, lantern: { ...DEFAULT_LOOK.lantern, ...look.lantern } };
-      const lit = look.lantern.light;
-      if (!isLanternRecord(look.lantern.record) || !(lit === "none" || (LANTERN_LIGHTS as readonly string[]).includes(lit)) || !LANTERN_CARDS.includes(look.lantern.card)) look = { ...look, lantern: DEFAULT_LOOK.lantern };
+      {
+        const l = { ...DEFAULT_LOOK.lantern, ...look.lantern };
+        const ok = isLanternRecord(l.record) && LANTERN_CARDS.includes(l.card) && LANTERN_COLOURS.includes(l.colour);
+        look = { ...look, lantern: ok ? { record: l.record, card: l.card, colour: l.colour } : DEFAULT_LOOK.lantern };
+      }
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
-      // Test builds 2 and 3 had plum and pink for dark mode.
-      if (!(["classic", "amoled", "graphite", "lantern"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
+      // Test builds 2 and 3 had plum and pink for dark mode, and there was an
+      // AMOLED black until October 2026: black is the nearest to all of them.
+      if (!(["classic", "graphite", "lantern"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
       for (const k of ["cardDark", "cardLight"] as const) {
+        if (String(look[k]) === "dark:amoled") look = { ...look, [k]: "dark:classic" };
         if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
       }
       // The first test build had one card skin (glass, line...) for both modes.

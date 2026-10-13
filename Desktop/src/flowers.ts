@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import type { CardShade, FlowerRecord, Flowers, LightShade } from "./look";
-import { cardLight, groundLight, lanternHalo } from "./lantern";
 
 // ─── AVIELA ──────────────────────────────────────────────────────────────────
 // The flowers of the Aviela style: its records, and the ways the app itself
@@ -195,18 +194,17 @@ export function recordArt(skin: FlowerRecord): string {
 // the card's: pink ones would be lost on a pink card.
 
 /** The header card's ground, as far as flowers care. */
-export type Tone = "white" | "pink" | "black" | "green";
+export type Tone = "white" | "pink" | "black";
 
 export function toneOf(card: CardShade, appIsDark: boolean, light: LightShade): Tone {
   if (card === "default") return appIsDark ? "black" : light === "pink" ? "pink" : "white";
-  return card.startsWith("dark:") ? "black" : card === "light:pink" ? "pink" : card === "light:lantern" ? "green" : "white";
+  return card.startsWith("dark:") ? "black" : card === "light:pink" ? "pink" : "white";
 }
 
 type Paint = { daisy: string; main: string; soft: string; deep: string; leaf: string; stem: string; pale: string; paleHeart: string; line: string };
 const PAINT: Record<Tone, Paint> = {
   white: { daisy: PETAL, main: PINK,  soft: PETAL,     deep: ROSE, leaf: PETAL,     stem: PINK,      pale: BLUSH,     paleHeart: PETAL,     line: INK },
   pink:  { daisy: WHITE, main: WHITE, soft: "#fff6fa", deep: ROSE, leaf: PINK,      stem: "#f1a3c0", pale: "#fff3f9", paleHeart: PETAL,     line: INK },
-  green: { daisy: WHITE, main: WHITE, soft: "#eafff2", deep: "#0d5c36", leaf: "#1fae65", stem: "#1fae65", pale: "#3fe592", paleHeart: "#2bca79", line: INK },
   black: { daisy: WHITE, main: PINK,  soft: ROSE,      deep: PETAL, leaf: "#9c5873", stem: "#9c5873", pale: "#22151a", paleHeart: "#351f28", line: PINK },
 };
 
@@ -264,9 +262,8 @@ function cardArt(kind: CardKind, tone: Tone): string {
   return made;
 }
 
-/** What is drawn on the header card, behind what it holds: Aviela's flowers,
- *  or Lantern's light. Null when this kind has nothing there. Paint only: it
- *  is laid over the card, never in it. */
+/** What is drawn on the header card, behind what it holds. Null when this kind
+ *  has nothing there. Paint only: it is laid over the card, never in it. */
 export function cardFlowers(kind: Flowers, tone: Tone): CSSProperties | null {
   const layer: CSSProperties = { position: "absolute", inset: 0, zIndex: -1, pointerEvents: "none", backgroundRepeat: "no-repeat" };
   switch (kind) {
@@ -280,7 +277,7 @@ export function cardFlowers(kind: Flowers, tone: Tone): CSSProperties | null {
       // The settings button sits 32 from the right and from the top of the card.
       backgroundSize: "180px 180px", backgroundPosition: "right -57.3px top -58px" };
     case "corners":  return { ...layer, backgroundImage: cardArt(kind, tone), backgroundSize: "78px 52px", backgroundPosition: "right top" };
-    default:         return cardLight(kind, tone);
+    default:         return null;
   }
 }
 
@@ -318,10 +315,10 @@ export function groundFlowers(kind: Flowers): CSSProperties {
   switch (kind) {
     case "bloom":  return { backgroundImage: BIG_BLOOM(), backgroundRepeat: "no-repeat", backgroundSize: "420px 420px", backgroundPosition: "right -150px bottom 60px" };
     case "meadow": return { backgroundImage: MEADOW(), backgroundRepeat: "repeat-x", backgroundSize: "184px 156px", backgroundPosition: "left bottom" };
-    default:       return groundLight(kind);
+    default:       return {};
   }
 }
 
 /** For what is drawn round the settings button: how wide it is. The Windows
  *  sidebar has that button somewhere else and moves the picture there. */
-export const settingsHalo = (kind: Flowers): number | null => (kind === "bloom" ? 180 : lanternHalo(kind));
+export const settingsHalo = (kind: Flowers): number | null => (kind === "bloom" ? 180 : null);
