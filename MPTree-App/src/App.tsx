@@ -4152,6 +4152,7 @@ export default function App() {
           <LookSheet
             theme={theme} onSetTheme={setTheme}
             topGap={cardBottom + 10}
+            sample={displayList.slice(0, 3).map(s => ({ title: dispName(s), artist: dispArtist(s) }))}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
             onClose={() => setLookOpen(false)}

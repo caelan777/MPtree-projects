@@ -17,7 +17,8 @@ import { System } from "../plugins";
 // the Dark/Light switch on its top edge, and each mode keeps its own three. The
 // app icon, below the frame, is one for both. The sheet stops short of the
 // header card and does not dim it, so a change to the card shows on the real
-// one.
+// one. Everything else that is picked shows in the live preview at the top of
+// the sheet (LivePreview below).
 //
 // Without Pro a locked option can still be tapped: it shows everywhere as a
 // preview and goes back when the sheet closes. Only the app icon cannot be
@@ -28,6 +29,8 @@ type LookSheetProps = {
   onSetTheme: (t: Theme) => void;
   /** Where the header card ends, so the sheet can start below it. */
   topGap: number;
+  /** The first songs of the list, so the preview shows the person's own. */
+  sample: { title: string; artist: string }[];
   onNeedPro: () => void;
   onToast: (msg: string) => void;
   onClose: () => void;
@@ -87,6 +90,136 @@ function Card({ p }: { p: T }) {
       </div>
       <div style={{ position: "absolute", left: 9, right: 9, top: 32, height: 12, borderRadius: 4, background: p.surface, border: `1px solid ${p.border}` }} />
       <div style={{ position: "absolute", left: 9, top: 50, width: 22, height: 4, borderRadius: 2, background: p.muted }} />
+    </div>
+  );
+}
+
+// ─── THE LIVE PREVIEW ────────────────────────────────────────────────────────
+// What the choices add up to. The sheet covers the app, so apart from the
+// header card nothing that is picked here could be seen until it was closed:
+// a colour was a tile, the record another tile, and the two never met. These
+// two small screens are the list and the player in the colours, the card and
+// the record that are picked right now, and they stay put while the options
+// scroll under them.
+//
+// It is the app drawn again, small. If the real list or player changes shape,
+// this wants the same change.
+
+type Sample = { title: string; artist: string };
+
+const bar = (width: number, height: number, color: string) => (
+  <div style={{ width, height, borderRadius: height / 2, background: color, flexShrink: 0 }} />
+);
+
+const Mark = ({ size, color }: { size: number; color: string }) => (
+  <svg width={size} height={size} viewBox="0 0 1000 1000" style={{ display: "block", flexShrink: 0 }}>
+    <path d={MARK_PATH} fill={color} fillRule="evenodd" />
+  </svg>
+);
+
+function LivePreview({ T, card, vinyl, wide, sample }: {
+  /** The app's colours, and the header card's (or the sidebar's on Windows). */
+  T: T; card: T; vinyl: VinylSkin; wide: boolean; sample: Sample[];
+}) {
+  const screen: React.CSSProperties = {
+    flex: 1, maxWidth: 196, height: 176, borderRadius: 16, overflow: "hidden", position: "relative",
+    border: `1px solid ${T.border}`, transition: "background 0.2s, border-color 0.2s",
+  };
+  const clip: React.CSSProperties = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+
+  const song = (s: Sample | undefined, i: number) => (
+    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px" }}>
+      <div style={{ width: 18, height: 18, borderRadius: 5, background: T.dim, flexShrink: 0 }} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        {s ? (
+          <>
+            <div style={{ ...clip, fontSize: 8.5, fontWeight: 700, color: T.text, lineHeight: 1.25 }}>{s.title}</div>
+            <div style={{ ...clip, fontSize: 7.5, color: T.muted, lineHeight: 1.25 }}>{s.artist}</div>
+          </>
+        ) : (
+          <>{bar(54, 5, T.text)}<div style={{ height: 3 }} />{bar(34, 4, T.muted)}</>
+        )}
+      </div>
+    </div>
+  );
+  const songs = <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>{[0, 1, 2].map(i => song(sample[i], i))}</div>;
+
+  // The small player at the foot of the list.
+  const mini = (
+    <div style={{
+      position: "absolute", left: 5, right: 5, bottom: 5, height: 22, borderRadius: 9, boxSizing: "border-box",
+      background: T.playerBg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 6, padding: "0 7px",
+    }}>
+      <div style={{ width: 12, height: 12, borderRadius: 3, background: T.dim }} />
+      {bar(38, 4, T.text)}
+      <div style={{ flex: 1 }} />
+      <div style={{ width: 12, height: 12, borderRadius: 6, background: T.accent }} />
+    </div>
+  );
+
+  return (
+    <div aria-hidden="true" style={{ flexShrink: 0, display: "flex", justifyContent: "center", gap: 10, padding: "2px 16px 12px", borderBottom: `1px solid ${T.border}` }}>
+      {/* The list. */}
+      <div style={{ ...screen, background: T.bg, display: "flex", flexDirection: wide ? "row" : "column" }}>
+        {wide ? (
+          <div style={{ width: 44, flexShrink: 0, background: card.playerBg, borderRight: `1px solid ${card.border}`, padding: "9px 7px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 8, transition: "background 0.2s" }}>
+            <Mark size={13} color={card.text} />
+            {bar(28, 4, card.text)}
+            {bar(22, 4, card.muted)}
+            {bar(24, 4, card.muted)}
+          </div>
+        ) : (
+          <div style={{ margin: "5px 5px 0", borderRadius: 10, background: card.playerBg, border: `1px solid ${card.border}`, padding: 6, transition: "background 0.2s" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <Mark size={13} color={card.text} />
+              <div style={{ width: 44, height: 11, borderRadius: 6, background: card.surface, border: `1px solid ${card.border}`, boxSizing: "border-box", padding: 1 }}>
+                <div style={{ width: 20, height: "100%", borderRadius: 5, background: card.accent }} />
+              </div>
+              <div style={{ width: 9, height: 9, borderRadius: 5, border: `1.5px solid ${card.muted}`, boxSizing: "border-box" }} />
+            </div>
+            <div style={{ height: 12, borderRadius: 4, background: card.surface, border: `1px solid ${card.border}`, marginTop: 5, boxSizing: "border-box" }} />
+          </div>
+        )}
+        {songs}
+        {mini}
+      </div>
+
+      {/* The player, with the record. */}
+      <div style={{ ...screen, background: T.playerBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <SpinningDisc size={94} skin={vinyl} />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, maxWidth: "84%" }}>
+          {sample[0]
+            ? <div style={{ ...clip, maxWidth: "100%", fontSize: 9, fontWeight: 700, color: T.text }}>{sample[0].title}</div>
+            : bar(60, 5, T.text)}
+          {bar(36, 4, T.muted)}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 4, background: T.muted }} />
+          <div style={{ width: 20, height: 20, borderRadius: 10, background: T.accent }} />
+          <div style={{ width: 8, height: 8, borderRadius: 4, background: T.muted }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The icon where it will sit: a row of a home screen, with MPTree in it. */
+function HomeRow({ icon, T }: { icon: AppIcon; T: T }) {
+  const other = (i: number) => (
+    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+      <div style={{ width: 44, height: 44, borderRadius: "26%", background: T.dim }} />
+      {bar(26, 4, T.dim)}
+    </div>
+  );
+  return (
+    <div aria-hidden="true" style={{ margin: "10px 16px 0", borderRadius: 16, background: T.surface, border: `1px solid ${T.border}`, padding: "12px 0 10px", display: "flex", justifyContent: "center", gap: 18 }}>
+      {other(0)}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+        <IconArt icon={icon} size={44} />
+        <span style={{ fontSize: 9, color: T.text, lineHeight: "8px", paddingTop: 2 }}>MPTree</span>
+      </div>
+      {other(1)}
+      {other(2)}
     </div>
   );
 }
@@ -194,7 +327,7 @@ function squareIcon(file: File): Promise<string> {
   });
 }
 
-export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClose, T }: LookSheetProps) {
+export function LookSheet({ theme, onSetTheme, topGap, sample, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
@@ -312,6 +445,8 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
           <button onClick={close} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
+        <LivePreview T={T} card={cardPalette(card, T)} vinyl={vinyl} wide={false} sample={sample} />
+
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
           <div style={{ position: "relative", margin: "24px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, padding: "10px 0 12px" }}>
           <div style={{ position: "absolute", top: -18, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
@@ -371,6 +506,7 @@ export function LookSheet({ theme, onSetTheme, topGap, onNeedPro, onToast, onClo
               </div>
             </Tile>
           </Row>
+          <HomeRow icon={icon} T={T} />
           <input ref={photoInput} type="file" accept="image/*" style={{ display: "none" }}
             onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
         </div>

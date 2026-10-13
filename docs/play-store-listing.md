@@ -8,6 +8,39 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.2 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.2.aab`
+(versionCode 50; test build 32 took 51, so a rebuilt bundle is 52). Nothing new to declare: no new permission, and the data safety
+answers for 1.2.0 still hold. The `es-ES` block is only of use once the listing
+itself has a Spanish translation in the console.
+
+```
+<en-GB>
+MPTree now speaks Spanish. Pick it in Settings, Language.
+Cutting a song is simpler: one bar with two grips, and a button to hear the piece before you save it.
+Fixes.
+A cut now plays only the part you cut, also with the screen off.
+A song that is moved to the bin or deleted leaves the queue, so it is not played when its turn comes.
+</en-GB>
+<nl-NL>
+MPTree spreekt nu Spaans. Kies het in Instellingen, Taal.
+Een nummer knippen is eenvoudiger: één balk met twee grepen, en een knop om het stuk te beluisteren voor je het opslaat.
+Verbeteringen.
+Een knipsel speelt nu alleen het stuk dat je hebt geknipt, ook met het scherm uit.
+Een nummer dat naar de prullenbak gaat of verwijderd wordt, verdwijnt uit de wachtrij en wordt dus niet meer gespeeld als het aan de beurt is.
+</nl-NL>
+<es-ES>
+MPTree ahora habla español. Elígelo en Ajustes, Idioma.
+Recortar una canción es más sencillo: una barra con dos tiradores y un botón para escuchar el trozo antes de guardarlo.
+Correcciones.
+Un recorte ahora reproduce solo la parte que recortaste, también con la pantalla apagada.
+Una canción que va a la papelera o se elimina sale de la cola, así que ya no suena cuando le toca.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.1 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.1.aab`
