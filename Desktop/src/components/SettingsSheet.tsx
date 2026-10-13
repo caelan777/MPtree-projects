@@ -267,8 +267,8 @@ export function SettingsSheet({
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {trial.state === "live" && !ownsPro ? t("Free week, {time} left.", { time: trialTimeLeft(trial.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : trial.state === "unused" ? t("Records, shades, icons and more. Try it free for a week.")
-                  : t("Records, shades, icons and more. Pay once.")}
+                  : trial.state === "unused" ? t("Records, shades and more. Try it free for a week.")
+                  : t("Records, shades and more. Pay once.")}
               </span>
             </span>
             <IC.ChevronR />

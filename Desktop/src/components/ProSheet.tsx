@@ -25,7 +25,6 @@ const Svg = ({ children }: { children: ReactNode }) => (
 const RecordIcon = () => <Svg><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 5a7 7 0 0 1 7 7"/></Svg>;
 const ShadeIcon  = () => <Svg><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/></Svg>;
 const CardIcon   = () => <Svg><rect x="3" y="4" width="18" height="8" rx="3"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="21" x2="14" y2="21"/></Svg>;
-const IconIcon   = () => <Svg><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></Svg>;
 const SyncIcon   = () => <Svg><rect x="2" y="5" width="8" height="14" rx="2"/><rect x="14" y="5" width="8" height="14" rx="2"/><path d="M10.5 10h3"/><path d="M12.5 8.5 14 10l-1.5 1.5"/><path d="M13.5 14h-3"/><path d="M11.5 12.5 10 14l1.5 1.5"/></Svg>;
 const BroomIcon  = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 
@@ -106,7 +105,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     { icon: <RecordIcon />, title: t("Records"),      body: t("White, smoke and marble records for the player.") },
     { icon: <ShadeIcon />,  title: t("Shades"),       body: t("AMOLED and graphite for dark mode. Paper, stone, pink and sage for light.") },
     { icon: <CardIcon />,   title: t("Header card"),  body: t("Give the card at the top a colour of its own, from either mode.") },
-    { icon: <IconIcon />,   title: t("App icon"),     body: t("Four icons for your home screen, or one with your own photo.") },
     { icon: <BroomIcon />,  title: t("Clean up"),     body: t("Finds voice notes, WhatsApp audio and clips under a minute, and bins them in one go.") },
   ];
 

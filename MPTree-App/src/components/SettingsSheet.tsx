@@ -264,8 +264,8 @@ export function SettingsSheet({
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {trial.state === "live" && !ownsPro ? t("Free week, {time} left.", { time: trialTimeLeft(trial.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : trial.state === "unused" ? t("Records, shades, icons and more. Try it free for a week.")
-                  : t("Records, shades, icons and more. Pay once.")}
+                  : trial.state === "unused" ? t("Records, shades and more. Try it free for a week.")
+                  : t("Records, shades and more. Pay once.")}
               </span>
             </span>
             <IC.ChevronR />
@@ -297,7 +297,7 @@ export function SettingsSheet({
             onClick={onOpenLook}
             icon={<BrushIcon />}
             label={t("Personalise")}
-            sub={t("Shades, header card, record and app icon.")}
+            sub={t("Styles, shades, header card and record.")}
             right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
           {/* Size: text and rows together. One control rather than two: a

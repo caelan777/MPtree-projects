@@ -3,6 +3,8 @@ import type { T } from "../themes";
 import { Logo } from "../components/Logo";
 import { IC } from "../components/Icons";
 import { t } from "../i18n";
+import type { Flowers } from "../look";
+import { cardFlowers, logoFlower } from "../flowers";
 
 const NoteIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -49,26 +51,36 @@ const label = (T: T): React.CSSProperties => ({
 
 /** The left column of the wide layout. Stands where the Songs / Playlists
  *  switch and the settings cog stand in the phone header. */
-export function DesktopSidebar({ T, ground, page, onPage, onSettings, account, onAccount, mini, onMini, binCount, onBin }: {
+export function DesktopSidebar({ T, ground, flowers, page, onPage, onSettings, account, onAccount, mini, onMini, binCount, onBin }: {
   /** Folded to its icons, and the button that folds and unfolds it. */
   mini: boolean; onMini: (mini: boolean) => void;
   binCount: number; onBin: () => void;
   /** The header card's palette (Personalise): on Windows the sidebar is what
    *  wears it, since the wide layout has no header card. */
+  /** Aviela's flowers, which the sidebar wears where the header card would. */
+  flowers: Flowers;
   T: T; ground: string; page: "songs" | "playlists"; onPage: (p: "songs" | "playlists") => void; onSettings: () => void;
   /** The MPTree account that is signed in, if one is. */
   account?: { name: string; email: string; photo?: string } | null;
   onAccount: () => void;
 }) {
+  // Folded, there is no room for them.
+  const inCard = mini ? null : cardFlowers(flowers);
   return (
     <nav data-tour="d-sidebar" style={{
+      position: "relative", zIndex: 0,
       gridColumn: 1, gridRow: 1, display: "flex", flexDirection: "column", gap: 2, minHeight: 0,
       padding: mini ? "16px 8px 12px" : "16px 12px 12px", borderRight: `1px solid ${T.border}`, background: ground,
       // Hover takes its colour from this palette, not the page's.
       ["--dhover" as string]: T.card,
     }}>
+      {/* The sprig comes in under the list rather than over the name. */}
+      {inCard && <div aria-hidden="true" style={{ ...inCard, ...(flowers === "sprig" ? { backgroundPosition: "right top 196px" } : null) }} />}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: mini ? "0 0 8px" : "0 0 14px 8px", color: T.text, flexDirection: mini ? "column" : "row" }}>
-        <Logo size={30} color={T.text} />
+        <span style={{ position: "relative", display: "flex" }}>
+          <Logo size={30} color={T.text} />
+          {flowers === "mark" && <span aria-hidden="true" style={{ position: "absolute", right: -6, top: -3, width: 14, height: 14, backgroundImage: logoFlower(), backgroundSize: "contain", pointerEvents: "none" }} />}
+        </span>
         {!mini && <span style={{ flex: 1, fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em" }}>MPTree</span>}
         <button
           onClick={() => onMini(!mini)} className="dnav"

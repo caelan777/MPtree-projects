@@ -32,13 +32,14 @@ import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
+import { groundFlowers, cardFlowers, logoFlower } from "./flowers";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
   prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
-import { useLook, loadLook, endPreview, setLookMode, getLook } from "./look";
+import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack } from "./look";
 import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -2603,7 +2604,7 @@ export default function App() {
       if (proOpen)             { setProOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
-      if (lookOpen)            { endPreview(); setLookOpen(false); return; }
+      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
@@ -3147,7 +3148,7 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ background: TH.bg, color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative" }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...groundFlowers(look.flowers), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative" }}>
 
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
         {/* Everything up top lives in one rounded card that floats ABOVE the
@@ -3182,6 +3183,11 @@ export default function App() {
             transition: move("width", "height", "border-radius"),
           }}
         >
+          {/* Aviela's flowers, behind what the card holds. Laid over the card,
+              not in it, so its measured height is untouched. */}
+          {cardFlowers(look.flowers) && (
+            <div aria-hidden="true" style={{ ...cardFlowers(look.flowers), opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
+          )}
           {/* Full header. Kept mounted and at its natural width while collapsed
               (just clipped) so it never reflows — a reflow would corrupt the
               measured height the card animates to. */}
@@ -3208,9 +3214,12 @@ export default function App() {
               aria-label={t("Collapse header")}
               data-tour="logo"
               // Hidden while the mark flies in to take its place.
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", color: CT.text, opacity: logoFlight === "home" ? 0 : 1 }}
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", position: "relative", color: CT.text, opacity: logoFlight === "home" ? 0 : 1 }}
             >
               <Logo size={48} color={CT.text} />
+              {look.flowers === "mark" && (
+                <span aria-hidden="true" style={{ position: "absolute", right: -7, top: 1, width: 19, height: 19, backgroundImage: logoFlower(), backgroundSize: "contain", pointerEvents: "none" }} />
+              )}
             </button>
           </div>
 
@@ -4198,7 +4207,6 @@ export default function App() {
               />
             ) : undefined}
             onNeedPro={() => setProOpen(true)}
-            onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
           );

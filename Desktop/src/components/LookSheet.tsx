@@ -4,20 +4,26 @@ import { makeSH, cardPalette, SHADE_PREVIEW, type T, isWide, fullPage } from "..
 import type { Theme } from "../types";
 import { t } from "../i18n";
 import { IC } from "./Icons";
-import { MARK_PATH, Logo } from "./Logo";
+import { Logo } from "./Logo";
 import { SpinningDisc } from "./SpinningDisc";
 import { usePro } from "../pro";
 import {
-  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, FREE,
-  type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type AppIcon,
+  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, FREE, FLOWER_RECORDS, FLOWER_KINDS,
+  type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers,
 } from "../look";
-import { System, isDesktop } from "../plugins";
+import { isDesktop } from "../plugins";
+import { groundFlowers, cardFlowers, logoFlower } from "../flowers";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
 // like at the top, and under it two tabs. Styles are whole looks, picked with
 // one tap. Custom has every choice on its own, in groups: colour, header card,
-// record, app icon.
+// record.
+//
+// One style has a page of its own. Aviela is pink with a white header card and
+// flowers, and which flowers is a choice: eight records and six ways for the
+// app to wear them. Tapping it puts it on and opens that page, laid out like
+// Custom, with a way back.
 //
 // There is no dark or light to choose here. A colour is dark or it is light,
 // and picking one puts the app in that mode; the header card and the record
@@ -28,8 +34,7 @@ import { System, isDesktop } from "../plugins";
 // the real player sheet, handed in by App. Both are shrunk with a transform.
 //
 // Without Pro a locked option can still be tapped: it shows everywhere as a
-// preview and goes back when the page closes. Only the app icon cannot be
-// previewed, because it is the phone's home screen, not MPTree.
+// preview and goes back when the page closes.
 
 type LookSheetProps = {
   theme: Theme;
@@ -38,41 +43,9 @@ type LookSheetProps = {
    *  player is not a sheet (the wide window on Windows). */
   player?: ReactNode;
   onNeedPro: () => void;
-  onToast: (msg: string) => void;
   onClose: () => void;
   T: T;
 };
-
-// The launcher icons, drawn the way Branding/build-alt-icons.mjs draws them for
-// Android. Change one, change the other.
-function IconArt({ icon, size }: { icon: AppIcon; size: number }) {
-  const markAt = (w: number, color: string) => {
-    const off = (108 - w) / 2;
-    return (
-      <g transform={`translate(${off} ${off}) scale(${w / 1000})`}>
-        <path d={MARK_PATH} fill={color} fillRule="evenodd" />
-      </g>
-    );
-  };
-  const rings = [];
-  for (let r = 20; r <= 60; r += 2.5) rings.push(<circle key={r} cx="54" cy="54" r={r} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth="0.5" />);
-  return (
-    // The ring keeps a white icon visible on a white sheet.
-    <svg width={size} height={size} viewBox="0 0 108 108" style={{ display: "block", borderRadius: "26%", boxShadow: "0 0 0 1px rgba(128,128,128,0.35)" }}>
-      {icon === "classic" && <><rect width="108" height="108" fill="#000" />{markAt(52, "#fff")}</>}
-      {icon === "light"   && <><rect width="108" height="108" fill="#fff" />{markAt(52, "#000")}</>}
-      {icon === "vinyl"   && <>
-        <rect width="108" height="108" fill="#0b0b0b" />{rings}
-        <circle cx="54" cy="54" r="34" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.8" />
-        <circle cx="54" cy="54" r="17" fill="#fff" />{markAt(20, "#000")}
-      </>}
-      {icon === "stamp"   && <>
-        <rect width="108" height="108" fill="#fff" />
-        <circle cx="54" cy="54" r="29" fill="#000" />{markAt(30, "#fff")}
-      </>}
-    </svg>
-  );
-}
 
 /** A little screen in a palette: the header card, two rows, the play button. */
 function Screen({ p }: { p: T }) {
@@ -189,6 +162,28 @@ function Row({ title, aside, children, T, framed }: { title: string; aside?: Rea
   );
 }
 
+/** The app in Aviela, small, wearing one kind of flowers. Drawn at twice the
+ *  size and halved, so the flowers are the real ones, only smaller. */
+function FlowerScreen({ kind }: { kind: Exclude<Flowers, "none"> }) {
+  const app = SHADE_PREVIEW.light("pink");
+  const inCard = cardFlowers(kind);
+  return (
+    <div style={{ width: 92, height: 64, borderRadius: 13, overflow: "hidden", border: `1px solid ${app.border}`, boxSizing: "border-box" }}>
+      <div style={{ width: 184, height: 128, transform: "scale(0.5)", transformOrigin: "top left", position: "relative", backgroundColor: app.bg, ...groundFlowers(kind) }}>
+        <div style={{ position: "absolute", left: 10, right: 10, top: 10, height: 62, borderRadius: 16, background: "#fff", border: `1px solid ${app.border}`, overflow: "hidden", boxSizing: "border-box", zIndex: 0 }}>
+          {inCard && <div style={inCard} />}
+          <div style={{ position: "absolute", left: 14, top: 13, width: 26, height: 22, borderRadius: 4, background: app.text }}>
+            {kind === "mark" && <span style={{ position: "absolute", right: -13, top: -7, width: 19, height: 19, backgroundImage: logoFlower(), backgroundSize: "contain" }} />}
+          </div>
+          <div style={{ position: "absolute", left: 14, bottom: 11, width: 44, height: 6, borderRadius: 3, background: app.muted }} />
+        </div>
+        <div style={{ position: "absolute", left: 16, top: 88, width: 80, height: 9, borderRadius: 5, background: app.text }} />
+        <div style={{ position: "absolute", left: 16, top: 106, width: 52, height: 7, borderRadius: 4, background: app.muted }} />
+      </div>
+    </div>
+  );
+}
+
 // ─── THE APP, SMALL ──────────────────────────────────────────────────────────
 
 /**
@@ -232,17 +227,20 @@ function AppCopy({ stamp, width, height, scale }: { stamp: string; width: number
   );
 }
 
-/** A whole look in one tile: the app's colour, with the header card on it. */
-function Swatch({ app, card }: { app: T; card: T }) {
+/** A whole look in one tile: the app's colour, the header card on it, and
+ *  its record in the corner. */
+function Swatch({ app, card, vinyl, flowers = "none" }: { app: T; card: T; vinyl: VinylSkin; flowers?: Flowers }) {
+  const inCard = cardFlowers(flowers);
   return (
-    <div style={{ height: 76, borderRadius: 12, background: app.bg, border: `1px solid ${app.border}`, position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", left: 7, right: 7, top: 7, height: 24, borderRadius: 8, background: card.playerBg, border: `1px solid ${card.border}`, boxSizing: "border-box" }}>
+    <div style={{ height: 76, borderRadius: 12, backgroundColor: app.bg, ...groundFlowers(flowers), border: `1px solid ${app.border}`, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: 7, right: 7, top: 7, height: 24, borderRadius: 8, background: card.playerBg, border: `1px solid ${card.border}`, boxSizing: "border-box", overflow: "hidden", zIndex: 0 }}>
+        {inCard && <div style={{ ...inCard, backgroundSize: "65px 42px" }} />}
         <div style={{ position: "absolute", left: 7, top: 8, width: 18, height: 6, borderRadius: 3, background: card.text }} />
         <div style={{ position: "absolute", right: 7, top: 7, width: 22, height: 8, borderRadius: 4, background: card.accent }} />
       </div>
       <div style={{ position: "absolute", left: 10, top: 42, width: 46, height: 5, borderRadius: 3, background: app.text }} />
       <div style={{ position: "absolute", left: 10, top: 53, width: 30, height: 4, borderRadius: 2, background: app.muted }} />
-      <div style={{ position: "absolute", right: 9, bottom: 9, width: 16, height: 16, borderRadius: 8, background: app.accent }} />
+      <div style={{ position: "absolute", right: 7, bottom: 6 }}><SpinningDisc size={30} skin={vinyl} /></div>
     </div>
   );
 }
@@ -262,17 +260,22 @@ function Group({ children, T }: { children: ReactNode; T: T }) {
   );
 }
 
-type Preset = { id: string; mode: Theme; shade: DarkShade | LightShade; card: CardShade; free?: boolean; name: string };
+type Preset = { id: string; mode: Theme; shade: DarkShade | LightShade; card: CardShade; vinyl: VinylSkin; free?: boolean; name: string };
 type Tab = "styles" | "custom";
 
-export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
+export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
   const previewing = isPreviewing();
   const dark = theme === "dark";
-  const [icon, setIcon] = useState<AppIcon>(look.icon);
   const [tab, setTab] = useState<Tab>("styles");
+  // Aviela's own page, over the tabs. The phone's back button leaves it first.
+  const [page, setPage] = useState<"main" | "aviela">("main");
+  useEffect(() => {
+    setLookBack(page === "aviela" ? () => setPage("main") : null);
+    return () => setLookBack(null);
+  }, [page]);
 
   // The round button that floats on the screen (Windows): which look it wears.
   // Kept by the app itself, not in the look, because it is a window of its own.
@@ -291,11 +294,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     const measure = () => setWin({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, []);
-
-  // What the launcher actually has, which is the truth if the two ever differ.
-  useEffect(() => {
-    System.getAppIcon().then(r => setIcon(r.icon as AppIcon)).catch(() => {});
   }, []);
 
   // A colour brings its mode with it, so trying a locked colour changes the
@@ -325,19 +323,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     pick(free, patch);
   };
 
-  const pickIcon = async (next: AppIcon) => {
-    if (next !== FREE.icon && !pro) { onNeedPro(); return; }
-    if (next === icon) return;
-    try {
-      await System.setAppIcon({ icon: next });
-      setIcon(next);
-      saveLook({ icon: next });
-      onToast(t("Icon changed"));
-    } catch {
-      onToast(t("This phone did not let MPTree change its icon"));
-    }
-  };
-
   const DARKS: { id: DarkShade; label: string }[] = [
     { id: "classic", label: t("Black") }, { id: "amoled", label: "AMOLED" }, { id: "graphite", label: t("Graphite") },
   ];
@@ -353,21 +338,20 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     { id: "classic", label: t("Black") }, { id: "white", label: t("White") },
     { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") },
   ];
-  const ICONS: { id: AppIcon; label: string }[] = [
-    { id: "classic", label: t("Classic") }, { id: "light", label: t("Light") },
-    { id: "vinyl", label: t("Record") }, { id: "stamp", label: t("Stamp") },
-  ];
-  // Whole looks: the app's colour, then the header card's where it differs.
+  const AVIELA_RECORDS: { id: FlowerRecord; label: string }[] = [
+    t("Daisy ring"), t("One bloom"), t("Blossom"), t("Line drawing"), t("Wreath"), t("Loose petals"), t("Small flowers"), t("Bouquet"),
+  ].map((label, i) => ({ id: FLOWER_RECORDS[i], label }));
+  const AVIELA_FLOWERS: { id: Exclude<Flowers, "none">; label: string }[] = [
+    t("Sprig"), t("Flower print"), t("Garland"), t("One flower"), t("Falling petals"), t("Big bloom"),
+  ].map((label, i) => ({ id: FLOWER_KINDS[i], label }));
+  // Whole looks: a colour, a header card and a record that belong together.
+  // Named after the app's colour, then the header card's where it differs.
   const pair = (a: string, b: string) => `${t(a)} · ${t(b)}`;
   const PRESETS: Preset[] = [
-    { id: "black",         mode: "dark",  shade: "classic",  card: "default",       name: t("Black"), free: true },
-    { id: "white",         mode: "light", shade: "classic",  card: "default",       name: t("White"), free: true },
-    { id: "pink-black",    mode: "light", shade: "pink",     card: "dark:amoled",   name: pair("Pink", "Black") },
-    { id: "black-pink",    mode: "dark",  shade: "amoled",   card: "light:pink",    name: pair("Black", "Pink") },
-    { id: "sage-graphite", mode: "light", shade: "sage",     card: "dark:graphite", name: pair("Sage", "Graphite") },
-    { id: "graphite-sage", mode: "dark",  shade: "graphite", card: "light:sage",    name: pair("Graphite", "Sage") },
-    { id: "paper",         mode: "light", shade: "paper",    card: "default",       name: t("Paper") },
-    { id: "stone-black",   mode: "light", shade: "stone",    card: "dark:classic",  name: pair("Stone", "Black") },
+    { id: "black",          mode: "dark",  shade: "classic", card: "default",       vinyl: "classic", name: t("Black"), free: true },
+    { id: "white",          mode: "light", shade: "classic", card: "default",       vinyl: "white",   name: t("White"), free: true },
+    { id: "paper-graphite", mode: "light", shade: "paper",   card: "dark:graphite", vinyl: "smoke",   name: pair("Paper", "Graphite") },
+    { id: "stone-black",    mode: "light", shade: "stone",   card: "dark:classic",  vinyl: "classic", name: pair("Stone", "Black") },
   ];
 
   // The header card and the record are one choice, written for both modes, so
@@ -378,11 +362,30 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, { vinylDark: v, vinylLight: v });
 
   const presetOn = (p: Preset) =>
-    theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card;
-  const pickPreset = (p: Preset) => pickIn(p.mode, !!p.free, {
-    ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }),
-    cardDark: p.card, cardLight: p.card,
+    theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card && vinyl === p.vinyl && look.flowers === "none";
+  // Each part is kept or only shown on its own, so White keeps its colour for
+  // everyone while its white record is still a Pro record.
+  const pickPreset = (p: Preset) => {
+    if (pro || p.free) kept.current = p.mode;
+    if (p.mode !== theme) onSetTheme(p.mode);
+    pick(p.shade === "classic", { flowers: "none", ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }) });
+    pick(p.card === FREE.card, { cardDark: p.card, cardLight: p.card });
+    pick(p.vinyl === FREE.vinyl, { vinylDark: p.vinyl, vinylLight: p.vinyl });
+  };
+
+  // Aviela: pink, a white header card, and the flowers last picked for it.
+  const AVIELA_CARD: CardShade = "light:classic";
+  const avielaOn = !dark && look.light === "pink" && card === AVIELA_CARD && look.flowers !== "none";
+  const wearAviela = (a: Look["aviela"]) => pick(false, {
+    light: "pink", cardDark: AVIELA_CARD, cardLight: AVIELA_CARD,
+    vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a,
   });
+  const openAviela = () => {
+    if (pro) kept.current = "light";
+    if (dark) onSetTheme("light");
+    wearAviela(look.aviela);
+    setPage("aviela");
+  };
 
   // ── The two small screens ──
   const wide = isWide();
@@ -423,7 +426,14 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         onClick={e => e.stopPropagation()}
       >
         <div style={{ ...sh.hdr, padding: "14px 20px 10px" }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Personalise")}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+            {page === "aviela" && (
+              <button onClick={() => setPage("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
+              </button>
+            )}
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{page === "aviela" ? "Aviela" : t("Personalise")}</span>
+          </div>
           <button onClick={close} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
@@ -440,21 +450,50 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           )}
         </div>
 
-        <div role="tablist" style={{ flexShrink: 0, display: "flex", gap: 2, margin: "0 16px", padding: 3, borderRadius: 21, background: T.surface, border: `1px solid ${T.border}` }}>
-          {tabBtn("styles", t("Styles"))}
-          {tabBtn("custom", t("Custom"))}
-        </div>
+        {page === "main" && (
+          <div role="tablist" style={{ flexShrink: 0, display: "flex", gap: 2, margin: "0 16px", padding: 3, borderRadius: 21, background: T.surface, border: `1px solid ${T.border}` }}>
+            {tabBtn("styles", t("Styles"))}
+            {tabBtn("custom", t("Custom"))}
+          </div>
+        )}
 
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
-          {tab === "styles" ? (
+          {page === "aviela" ? (
+            <>
+              <Group T={T}>
+                <Row T={T} framed title={t("Record")}>
+                  {AVIELA_RECORDS.map(v => (
+                    <Tile key={v.id} T={T} label={v.label} selected={avielaOn && vinyl === v.id} locked={!pro}
+                      onClick={() => wearAviela({ ...look.aviela, record: v.id })}>
+                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
+                        <SpinningDisc size={60} skin={v.id} />
+                      </div>
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
+
+              <Group T={T}>
+                <Row T={T} framed title={t("Flowers in the app")}>
+                  {AVIELA_FLOWERS.map(fl => (
+                    <Tile key={fl.id} T={T} label={fl.label} selected={avielaOn && look.flowers === fl.id} locked={!pro}
+                      onClick={() => wearAviela({ ...look.aviela, flowers: fl.id })}>
+                      <FlowerScreen kind={fl.id} />
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
+            </>
+          ) : tab === "styles" ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, padding: "14px 16px 0" }}>
-              {PRESETS.map(p => {
-                const app = p.mode === "dark" ? SHADE_PREVIEW.dark(p.shade as DarkShade) : SHADE_PREVIEW.light(p.shade as LightShade);
-                const on = presetOn(p);
+              {[...PRESETS.slice(0, 2), "aviela" as const, ...PRESETS.slice(2)].map(p => {
+                const aviela = p === "aviela";
+                const app = aviela ? SHADE_PREVIEW.light("pink") : p.mode === "dark" ? SHADE_PREVIEW.dark(p.shade as DarkShade) : SHADE_PREVIEW.light(p.shade as LightShade);
+                const on = aviela ? avielaOn : presetOn(p);
                 return (
                   <button
-                    key={p.id}
-                    onClick={() => pickPreset(p)}
+                    key={aviela ? p : p.id}
+                    onClick={() => (aviela ? openAviela() : pickPreset(p))}
                     aria-pressed={on}
                     style={{
                       padding: 4, borderRadius: 17, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
@@ -462,10 +501,15 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                       transition: "border-color 0.15s ease",
                     }}
                   >
-                    <Swatch app={app} card={cardPalette(p.card, app)} />
+                    <Swatch app={app} card={cardPalette(aviela ? AVIELA_CARD : p.card, app)} vinyl={aviela ? look.aviela.record : p.vinyl}
+                      flowers={aviela ? look.aviela.flowers : undefined} />
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 4px 2px" }}>
-                      <span style={{ fontSize: 13, fontWeight: on ? 700 : 500, color: on ? T.text : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-                      {!pro && !p.free && <Lock T={T} />}
+                      <span style={{ fontSize: 13, fontWeight: on ? 700 : 500, color: on ? T.text : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aviela ? "Aviela" : p.name}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
+                        {!pro && !(!aviela && p.free) && <Lock T={T} />}
+                        {/* Aviela opens a page of its own. */}
+                        {aviela && <IC.ChevronR />}
+                      </span>
                     </div>
                   </button>
                 );
@@ -477,13 +521,13 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                 <Row T={T} framed title={t("Colour")}>
                   {DARKS.map(d => (
                     <Tile key={`d-${d.id}`} T={T} label={d.label} selected={dark && look.dark === d.id} locked={!pro && d.id !== FREE.dark}
-                      onClick={() => pickIn("dark", d.id === FREE.dark, { dark: d.id })}>
+                      onClick={() => pickIn("dark", d.id === FREE.dark, { dark: d.id, flowers: "none" })}>
                       <Screen p={SHADE_PREVIEW.dark(d.id)} />
                     </Tile>
                   ))}
                   {LIGHTS.map(l => (
                     <Tile key={`l-${l.id}`} T={T} label={l.label} selected={!dark && look.light === l.id} locked={!pro && l.id !== FREE.light}
-                      onClick={() => pickIn("light", l.id === FREE.light, { light: l.id })}>
+                      onClick={() => pickIn("light", l.id === FREE.light, { light: l.id, flowers: "none" })}>
                       <Screen p={SHADE_PREVIEW.light(l.id)} />
                     </Tile>
                   ))}
@@ -537,17 +581,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                 </Group>
               )}
 
-              {!isDesktop && (
-              <Group T={T}>
-                <Row T={T} framed title={t("App icon")}>
-                  {ICONS.map(i => (
-                    <Tile key={i.id} T={T} label={i.label} selected={icon === i.id} locked={!pro && i.id !== FREE.icon} onClick={() => pickIcon(i.id)}>
-                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}><IconArt icon={i.id} size={58} /></div>
-                    </Tile>
-                  ))}
-                </Row>
-              </Group>
-              )}
             </>
           )}
         </div>

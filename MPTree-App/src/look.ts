@@ -11,7 +11,14 @@ import { Preferences } from "@capacitor/preferences";
 // its own header card and its own record, so switching modes switches the
 // whole look. The app icon is one for both.
 
-export type VinylSkin  = "classic" | "white" | "smoke" | "marble";
+/** The records of the Aviela style, drawn in flowers.ts. */
+export const FLOWER_RECORDS = ["daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet"] as const;
+export type FlowerRecord = typeof FLOWER_RECORDS[number];
+export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS as readonly string[]).includes(v);
+export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | FlowerRecord;
+/** How the app itself wears flowers: not at all, or one of Aviela's six ways. */
+export const FLOWER_KINDS = ["sprig", "print", "garland", "mark", "petals", "bloom"] as const;
+export type Flowers    = "none" | typeof FLOWER_KINDS[number];
 export type DarkShade  = "classic" | "amoled" | "graphite";
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage";
 export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
@@ -27,6 +34,10 @@ export type Look = {
   cardDark: CardShade;
   cardLight: CardShade;
   icon: AppIcon;
+  flowers: Flowers;
+  /** What was last picked on the Aviela page, so coming back to the style
+   *  brings back the same record and the same flowers. */
+  aviela: { record: FlowerRecord; flowers: Exclude<Flowers, "none"> };
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
@@ -35,6 +46,7 @@ export type Look = {
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
+  flowers: "none", aviela: { record: "daisy", flowers: "sprig" },
 };
 
 /** What anyone gets without Pro. */
@@ -85,8 +97,10 @@ export async function loadLook(): Promise<Look> {
       // Picture disc used to be one of the records; it is the tap now.
       if ((stored.vinyl as string) === "picture") look = { ...look, photoDisc: true };
       for (const k of ["vinylDark", "vinylLight"] as const) {
-        if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k])) look = { ...look, [k]: "classic" };
+        if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k])) look = { ...look, [k]: "classic" };
       }
+      if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
+      if (!look.aviela || !isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode.
       if (!(["classic", "amoled", "graphite"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
@@ -130,6 +144,17 @@ export function endPreview(): void {
   if (!preview) return;
   preview = null;
   emit();
+}
+
+// The Personalise page's own step back, out of a style's page, while it has
+// one. The phone's back button asks here before it closes the page.
+let back: (() => void) | null = null;
+export function setLookBack(step: (() => void) | null): void { back = step; }
+/** True when the page took the step back itself. */
+export function lookBack(): boolean {
+  if (!back) return false;
+  back();
+  return true;
 }
 
 /** Losing Pro (a refund, or locking a test build again) puts the free look

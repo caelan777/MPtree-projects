@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { Logo } from "./Logo";
 import { t } from "../i18n";
-import { useLook, useVinyl, saveLook, type VinylSkin } from "../look";
+import { useLook, useVinyl, saveLook, isFlowerRecord, type VinylSkin } from "../look";
+import { recordArt, RECORD_LABEL } from "../flowers";
 
 // ─── SPINNING DISC ───────────────────────────────────────────────────────────
 // The record for the expanded player: the real vinyl.webp turning on its
@@ -96,7 +97,9 @@ export const SpinningDisc = memo(function SpinningDisc({
   const label = Math.round(size * 0.24);
   const mark = Math.round(label * 0.5);
 
-  const recordSrc = skin === "marble" ? MARBLE : skin === "picture" ? customPhoto! : "/vinyl.webp";
+  // Aviela's records are drawn, grooves and all, so they only get the sheen.
+  const flower = skin !== "picture" && isFlowerRecord(skin) ? skin : null;
+  const recordSrc = flower ? recordArt(flower) : skin === "marble" ? MARBLE : skin === "picture" ? customPhoto! : "/vinyl.webp";
   const recordFilter =
     skin === "white" ? "invert(1) grayscale(1) brightness(1.08)"
     : skin === "smoke" ? "grayscale(1) brightness(1.9) contrast(0.75)"
@@ -104,8 +107,8 @@ export const SpinningDisc = memo(function SpinningDisc({
   const drawn = skin === "marble" || skin === "picture";
   // The pale records get a black label, the rest a white one.
   const pale = skin === "white" || skin === "marble";
-  const labelBg = pale ? "#000" : "#fff";
-  const labelInk = pale ? "#fff" : "#000";
+  const labelBg = flower ? RECORD_LABEL[flower].bg : pale ? "#000" : "#fff";
+  const labelInk = flower ? RECORD_LABEL[flower].ink : pale ? "#fff" : "#000";
   // On a picture disc the picture is the record, so the label goes back to
   // the mark rather than showing the same picture twice.
   const labelPhoto = skin === "picture" ? undefined : customPhoto;
@@ -120,7 +123,7 @@ export const SpinningDisc = memo(function SpinningDisc({
       position: "relative", borderRadius: "50%", cursor: tappable ? "pointer" : undefined,
       WebkitTapHighlightColor: "transparent",
       // Static: the shadow stays put while the record turns.
-      boxShadow: skin === "smoke" ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
+      boxShadow: skin === "smoke" || (flower && flower !== "wreath") ? "0 6px 24px rgba(0,0,0,0.22)" : "0 6px 24px rgba(0,0,0,0.4)",
       // Nothing inside affects layout outside, so a spinning frame cannot make
       // the parent reflow.
       contain: "layout paint",
@@ -144,11 +147,13 @@ export const SpinningDisc = memo(function SpinningDisc({
           backfaceVisibility: "hidden",
         }}
       />
-      {drawn && (
+      {(drawn || flower) && (
         <div aria-hidden="true" style={{
           gridArea: "1 / 1", width: "100%", height: "100%", borderRadius: "50%",
-          background: `${SHEEN}, ${GROOVES}`,
-          boxShadow: `inset 0 0 0 ${Math.max(2, Math.round(size * 0.018))}px rgba(0,0,0,0.85)`,
+          background: flower ? SHEEN : `${SHEEN}, ${GROOVES}`,
+          boxShadow: flower
+            ? `inset 0 0 0 ${Math.max(1, Math.round(size * 0.008))}px rgba(32,24,27,0.22)`
+            : `inset 0 0 0 ${Math.max(2, Math.round(size * 0.018))}px rgba(0,0,0,0.85)`,
           pointerEvents: "none",
         }} />
       )}

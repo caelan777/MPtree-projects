@@ -227,7 +227,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, marginBottom: 2 }}>{t("Good to know")}</div>
           {[
             t("Deleting a song permanently only takes it off this device. You can get it back in the bin, under Permanently deleted."),
-            t("Language, text size, audio effects and the app icon are set per device."),
+            t("Language, text size and audio effects are set per device."),
             t("Voice notes and short clips stay on the device they are on."),
             t("Everything is kept in your own Google Drive, in a folder only MPTree can open."),
           ].map(x => <div key={x} style={{ ...small, color: T.text, padding: "5px 0" }}>{x}</div>)}
