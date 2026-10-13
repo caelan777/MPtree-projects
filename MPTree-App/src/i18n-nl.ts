@@ -416,6 +416,8 @@ export const NL: Record<string, string> = {
   "Record": "Plaat",
   "Stamp": "Stempel",
   "Personalise": "Personaliseren",
+  "Show the player": "Speler tonen",
+  "Show the list": "Lijst tonen",
   "Your photo": "Je foto",
   "Chat app": "Chat-app",
   "Recording": "Opname",

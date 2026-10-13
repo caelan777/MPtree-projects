@@ -417,6 +417,8 @@ export const ES: Record<string, string> = {
   "Record": "Disco",
   "Stamp": "Sello",
   "Personalise": "Personalizar",
+  "Show the player": "Mostrar el reproductor",
+  "Show the list": "Mostrar la lista",
   "Your photo": "Tu foto",
   "Chat app": "App de chat",
   "Recording": "Grabación",
