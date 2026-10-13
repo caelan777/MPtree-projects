@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { makeSH, type T } from "../themes";
-import type { Theme } from "../types";
 import { IC } from "./Icons";
 import { Switch } from "./Switch";
 import { FaqSheet } from "./FaqSheet";
@@ -81,7 +80,6 @@ function Section({ title, children, T }: { title: string; children: ReactNode; T
 }
 
 type SettingsSheetProps = {
-  theme: Theme;
   /** Kept open but out of sight while Personalise is up: that sheet needs the
    *  header card visible and undimmed, and closing it comes back here. */
   hidden?: boolean;
@@ -94,7 +92,6 @@ type SettingsSheetProps = {
   /** How many probable non-songs the library holds, shown on the row. */
   cleanupCount: number;
   binCount: number;
-  onToggleTheme: () => void;
   onViewBin: () => void;
   /** Windows only: pick the folder the library is read from. */
   onMusicFolder?: () => void;
@@ -140,9 +137,9 @@ type SettingsSheetProps = {
 };
 
 export function SettingsSheet({
-  theme, hidden, binCount,
+  hidden, binCount,
   pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
-  onToggleTheme, onViewBin, onMusicFolder, musicFolder, onToggleShortcut, shortcutOn, onOpenAudioEffects, onShowTutorial,
+  onViewBin, onMusicFolder, musicFolder, onToggleShortcut, shortcutOn, onOpenAudioEffects, onShowTutorial,
   onExport, onImportOpen,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   lang, onSetLang, updateNotices, onSetUpdateNotices,
@@ -287,14 +284,10 @@ export function SettingsSheet({
         </Section>
 
         <Section T={T} title={t("Appearance")}>
+          {/* Dark or light is not picked here any more: a colour under
+              Personalise is one or the other, and brings its mode with it. */}
           <Row T={T}
             first
-            onClick={onToggleTheme}
-            icon={theme === "dark" ? <IC.Moon /> : <IC.Sun />}
-            label={theme === "dark" ? t("Dark mode") : t("Light mode")}
-            right={<Switch on={theme === "light"} T={T} />}
-          />
-          <Row T={T}
             onClick={onOpenLook}
             icon={<BrushIcon />}
             label={t("Personalise")}

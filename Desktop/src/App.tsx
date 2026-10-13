@@ -808,7 +808,6 @@ export default function App() {
   const dispName   = (s: Song) => getMeta(s).customName   || s.title;
   const dispArtist = (s: Song) =>
     getMeta(s).customArtist || (!isMissingArtist(s.artist) ? s.artist : "");
-  const dispGenre  = (s: Song) => getMeta(s).customGenre || s.genre || "";
   const isLiked    = (s: Song) => !!getMeta(s).liked;
   const showToast  = (m: string, action?: ToastAction) => setToast({ msg: m, action });
   const showError  = useCallback((m: string) => setToast({ msg: "⚠ " + m }), []);
@@ -2385,9 +2384,6 @@ export default function App() {
         const cur = { ...(next[id] || {}) };
         if (u.customArtist !== undefined) {
           if (u.customArtist === null) delete cur.customArtist; else cur.customArtist = u.customArtist;
-        }
-        if (u.customGenre !== undefined) {
-          if (u.customGenre === null) delete cur.customGenre; else cur.customGenre = u.customGenre;
         }
         if (changedPhoto) {
           if (u.customPhoto === null) delete cur.customPhoto; else cur.customPhoto = u.customPhoto!;
@@ -4545,13 +4541,13 @@ export default function App() {
             T={TH}
           />
         )}
-        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} genre={dispGenre(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
+        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
         {removeSong && <ConfirmSheet title={t("Remove song")} body={t("\"{name}\" will be moved to the bin. You can restore it from Settings.", { name: dispName(removeSong) })} confirmLabel={t("Move to bin")} onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
           <SettingsSheet
-            theme={theme} binCount={removedSongs.length}
+            binCount={removedSongs.length}
             pro={pro}
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
@@ -4559,7 +4555,6 @@ export default function App() {
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
-            onToggleTheme={() => setTheme(t => t === "dark" ? "light" : "dark")}
             onViewBin={() => setBinOpen(true)}
             onMusicFolder={isDesktop ? pickMusicFolder : undefined}
             onToggleShortcut={isDesktop ? () => { const on = !shortcutOn; setShortcutOn(on); invoke("shortcut_set", { enabled: on }).catch(() => {}); } : undefined}

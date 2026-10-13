@@ -7,7 +7,7 @@ import { CropSheet } from "./CropSheet";
 
 // ─── BULK EDIT SHEET ─────────────────────────────────────────────────────────
 //
-// Edit artist, genre and cover for a whole selection at once. Title is
+// Edit artist and cover for a whole selection at once. Title is
 // deliberately absent: a title is the one field that is genuinely per-song, and
 // setting fifty songs to the same name is never what anyone wants.
 //
@@ -18,7 +18,6 @@ import { CropSheet } from "./CropSheet";
 
 export type BulkEdit = {
   customArtist?: string | null;
-  customGenre?:  string | null;
   customPhoto?:  string | null;
 };
 
@@ -32,24 +31,20 @@ type BulkEditSheetProps = {
 export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps) {
   const sh = makeSH(T);
   const [artist, setArtist] = useState("");
-  const [genre,  setGenre]  = useState("");
   // undefined = untouched, null = clear it, string = this new photo
   const [photo,  setPhoto]  = useState<string | null | undefined>(undefined);
   // A photo that was just picked, waiting to be cropped before it counts.
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [clearArtist, setClearArtist] = useState(false);
-  const [clearGenre,  setClearGenre]  = useState(false);
   const pickerRef = useRef<HTMLInputElement | null>(null);
 
   const artistChange = clearArtist ? null : (artist.trim() || undefined);
-  const genreChange  = clearGenre  ? null : (genre.trim()  || undefined);
-  const nothingToDo = artistChange === undefined && genreChange === undefined && photo === undefined;
+  const nothingToDo = artistChange === undefined && photo === undefined;
 
   const handleSave = () => {
     if (nothingToDo) return;
     onSave({
       ...(artistChange !== undefined ? { customArtist: artistChange } : {}),
-      ...(genreChange  !== undefined ? { customGenre:  genreChange  } : {}),
       ...(photo        !== undefined ? { customPhoto:  photo        } : {}),
     });
   };
@@ -94,15 +89,6 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
             style={{ ...sh.inp, opacity: clearArtist ? 0.5 : 1 }}
           />
           {toggle(clearArtist, setClearArtist, t("Clear artist instead"))}
-
-          <div style={sh.lbl}>{t("Genre")}</div>
-          <input
-            value={genre} disabled={clearGenre}
-            onChange={e => setGenre(e.target.value)}
-            placeholder={clearGenre ? t("Will be cleared") : t("Leave blank to keep")}
-            style={{ ...sh.inp, opacity: clearGenre ? 0.5 : 1 }}
-          />
-          {toggle(clearGenre, setClearGenre, t("Clear genre instead"))}
 
           <div style={sh.lbl}>{t("Cover photo")}</div>
           {photo ? (

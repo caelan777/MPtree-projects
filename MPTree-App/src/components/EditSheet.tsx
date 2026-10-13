@@ -18,7 +18,6 @@ import { CropSheet } from "./CropSheet";
 type EditSheetProps = {
   name: string;
   artist: string;
-  genre: string;
   currentPhoto?: string;
   /** Open straight onto the photo picker. Used by the menu's "Photo" button,
    *  which is the same edit, just aimed at one field. */
@@ -26,17 +25,15 @@ type EditSheetProps = {
   onSave: (u: {
     customName?:   string;
     customArtist?: string;
-    customGenre?:  string;
     customPhoto?:  string | null;
   }) => void;
   onClose: () => void;
   T: T;
 };
 
-export function EditSheet({ name: initName, artist: initArtist, genre: initGenre, currentPhoto, focusPhoto = false, onSave, onClose, T }: EditSheetProps) {
+export function EditSheet({ name: initName, artist: initArtist, currentPhoto, focusPhoto = false, onSave, onClose, T }: EditSheetProps) {
   const [name,   setName]   = useState(initName);
   const [artist, setArtist] = useState(initArtist);
-  const [genre,  setGenre]  = useState(initGenre);
   // undefined = unchanged, null = cleared, string = new photo
   const [photo,  setPhoto]  = useState<string | null | undefined>(undefined);
   // A photo that was just picked, waiting to be cropped before it counts.
@@ -59,7 +56,6 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
     onSave({
       customName:   name.trim()   || undefined,
       customArtist: artist.trim() || undefined,
-      customGenre:  genre.trim()  || undefined,
       // Only include in payload if something actually changed
       ...(photo !== undefined ? { customPhoto: photo } : {}),
     });
@@ -78,8 +74,6 @@ export function EditSheet({ name: initName, artist: initArtist, genre: initGenre
           <input value={name} onChange={e => setName(e.target.value)} style={sh.inp} />
           <div style={sh.lbl}>{t("Artist")}</div>
           <input value={artist} onChange={e => setArtist(e.target.value)} placeholder={t("Add artist name…")} style={sh.inp} />
-          <div style={sh.lbl}>{t("Genre")}</div>
-          <input value={genre} onChange={e => setGenre(e.target.value)} placeholder={t("Add a genre…")} style={sh.inp} />
           <div style={sh.lbl}>{t("Cover photo")}</div>
 
           {previewPhoto ? (

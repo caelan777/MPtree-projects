@@ -382,9 +382,21 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   // The header card and the record are one choice, written for both modes, so
   // they stay when a colour of the other mode is picked.
   const card = dark ? look.cardDark : look.cardLight;
-  const setCard = (c: CardShade) => pick(c === FREE.card, { cardDark: c, cardLight: c });
   const vinyl = dark ? look.vinylDark : look.vinylLight;
-  const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, { vinylDark: v, vinylLight: v });
+
+  // The two styles with a name. Aviela is on while there are flowers; what
+  // makes Lantern is its record, so that is what tells whether it is on.
+  const avielaOn = !dark && look.light === "pink" && look.flowers !== "none";
+  const lanternOn = (LANTERN_RECORDS as readonly string[]).includes(vinyl) && look.flowers === "none";
+  // Under Custom a named style does not outlive a pick. Everything it brought
+  // goes back to plain first, and the pick is made on that: otherwise half of
+  // Aviela or of Lantern is left standing round the one thing that changed.
+  const plain = (): Partial<Look> => (avielaOn || lanternOn ? {
+    flowers: "none", cardDark: "default", cardLight: "default", vinylDark: "classic", vinylLight: "classic",
+    ...(dark ? { dark: "classic" as const } : { light: "classic" as const }),
+  } : {});
+  const setCard = (c: CardShade) => pick(c === FREE.card, { ...plain(), cardDark: c, cardLight: c });
+  const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, { ...plain(), vinylDark: v, vinylLight: v });
 
   const presetOn = (p: Preset) =>
     theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card && vinyl === p.vinyl && look.flowers === "none";
@@ -400,7 +412,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
 
   // Aviela: pink, with the record, the flowers and the header card last
   // picked for it.
-  const avielaOn = !dark && look.light === "pink" && look.flowers !== "none";
   const wearAviela = (a: Look["aviela"]) => pick(false, {
     light: "pink", cardDark: a.card, cardLight: a.card,
     vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a,
@@ -416,7 +427,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   };
 
   // Lantern: the record, the header card and the colour last picked for it.
-  // What makes it Lantern is the record, so that is what tells whether it is on.
   const shadeOf = (c: AppColour) => c.split(":") as [Theme, string];
   const paletteOf = (c: AppColour) => {
     const [mode, shade] = shadeOf(c);
@@ -428,7 +438,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
     ["dark:lantern", "Lantern"],
   ]);
   const colourNow = `${theme}:${dark ? look.dark : look.light}`;
-  const lanternOn = (LANTERN_RECORDS as readonly string[]).includes(vinyl) && look.flowers === "none";
   const wearLantern = (l: Look["lantern"]) => {
     const [mode, shade] = shadeOf(l.colour);
     if (pro) kept.current = mode;
@@ -635,13 +644,13 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
                 <Row T={T} framed title={t("Colour")}>
                   {DARKS.map(d => (
                     <Tile key={`d-${d.id}`} T={T} label={d.label} selected={dark && look.dark === d.id} locked={!pro && d.id !== FREE.dark}
-                      onClick={() => pickIn("dark", d.id === FREE.dark, { dark: d.id, flowers: "none" })}>
+                      onClick={() => pickIn("dark", d.id === FREE.dark, { ...plain(), dark: d.id, flowers: "none" })}>
                       <Screen p={SHADE_PREVIEW.dark(d.id)} />
                     </Tile>
                   ))}
                   {LIGHTS.map(l => (
                     <Tile key={`l-${l.id}`} T={T} label={l.label} selected={!dark && look.light === l.id} locked={!pro && l.id !== FREE.light}
-                      onClick={() => pickIn("light", l.id === FREE.light, { light: l.id, flowers: "none" })}>
+                      onClick={() => pickIn("light", l.id === FREE.light, { ...plain(), light: l.id, flowers: "none" })}>
                       <Screen p={SHADE_PREVIEW.light(l.id)} />
                     </Tile>
                   ))}
