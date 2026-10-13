@@ -13,22 +13,29 @@ import {
 import { System } from "../plugins";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
-// Colour, header card and record belong to a mode: they sit in one frame with
-// the Dark/Light switch on its top edge, and each mode keeps its own three. The
-// app icon, below the frame, is one for both. The page takes the whole screen;
-// what is picked shows on the small phone at the top of it (LivePreview below).
-// It used to stop short of the header card so the real one stayed in view, and
-// that showed one choice out of three.
+// Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
+// like at the top, and under it two tabs. Styles are whole looks, picked with
+// one tap. Custom has every choice on its own, in groups: colour, header card,
+// record, app icon.
+//
+// There is no dark or light to choose here. A colour is dark or it is light,
+// and picking one puts the app in that mode; the header card and the record
+// are one choice, kept for both.
+//
+// The pictures at the top are not drawings. One is a copy of the app as it is
+// on screen right now, taken again after every change (AppCopy); the other is
+// the real player sheet, handed in by App. Both are shrunk with a transform.
 //
 // Without Pro a locked option can still be tapped: it shows everywhere as a
-// preview and goes back when the sheet closes. Only the app icon cannot be
+// preview and goes back when the page closes. Only the app icon cannot be
 // previewed, because it is the phone's home screen, not MPTree.
 
 type LookSheetProps = {
   theme: Theme;
   onSetTheme: (t: Theme) => void;
-  /** The first songs of the list, so the preview shows the person's own. */
-  sample: { title: string; artist: string }[];
+  /** The real player sheet, for the second small screen. Left out where the
+   *  player is not a sheet (the wide window on Windows). */
+  player?: ReactNode;
   onNeedPro: () => void;
   onToast: (msg: string) => void;
   onClose: () => void;
@@ -88,159 +95,6 @@ function Card({ p }: { p: T }) {
       </div>
       <div style={{ position: "absolute", left: 9, right: 9, top: 32, height: 12, borderRadius: 4, background: p.surface, border: `1px solid ${p.border}` }} />
       <div style={{ position: "absolute", left: 9, top: 50, width: 22, height: 4, borderRadius: 2, background: p.muted }} />
-    </div>
-  );
-}
-
-// ─── THE LIVE PREVIEW ────────────────────────────────────────────────────────
-// A small phone with MPTree on it, in the colour, the card and the record
-// that are picked right now. Personalise takes the whole screen, so this is
-// the only place a choice can be seen, and everything that is tapped shows
-// here at once. It stays put while the options scroll under it.
-//
-// The phone shows the list, and turns to the player when a record is picked,
-// because that is where the record lives. A tap on it turns it over by hand.
-//
-// It is the app drawn again, small. If the real list or player changes shape,
-// this wants the same change.
-
-type Sample = { title: string; artist: string };
-type PhoneView = "list" | "player";
-
-const bar = (width: number, height: number, color: string) => (
-  <div style={{ width, height, borderRadius: height / 2, background: color, flexShrink: 0 }} />
-);
-
-const Mark = ({ size, color }: { size: number; color: string }) => (
-  <svg width={size} height={size} viewBox="0 0 1000 1000" style={{ display: "block", flexShrink: 0 }}>
-    <path d={MARK_PATH} fill={color} fillRule="evenodd" />
-  </svg>
-);
-
-function LivePreview({ T, card, vinyl, wide, sample, view, onTurn }: {
-  /** The app's colours, and the header card's (or the sidebar's on Windows). */
-  T: T; card: T; vinyl: VinylSkin; wide: boolean; sample: Sample[];
-  view: PhoneView; onTurn: () => void;
-}) {
-  const W = 172, H = 300;
-  const clip: React.CSSProperties = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
-  const now = sample[0];
-
-  const song = (s: Sample | undefined, i: number) => (
-    <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 9px", background: i === 0 ? T.surface : "transparent" }}>
-      <div style={{ width: 22, height: 22, borderRadius: 6, background: T.dim, flexShrink: 0 }} />
-      <div style={{ minWidth: 0, flex: 1 }}>
-        {s ? (
-          <>
-            <div style={{ ...clip, fontSize: 9.5, fontWeight: 700, color: T.text, lineHeight: 1.25 }}>{s.title}</div>
-            <div style={{ ...clip, fontSize: 8, color: T.muted, lineHeight: 1.25 }}>{s.artist}</div>
-          </>
-        ) : (
-          <>{bar(62, 5, T.text)}<div style={{ height: 4 }} />{bar(38, 4, T.muted)}</>
-        )}
-      </div>
-    </div>
-  );
-
-  const list = (
-    <div style={{ position: "absolute", inset: 0, background: T.bg, display: "flex", flexDirection: wide ? "row" : "column" }}>
-      {wide ? (
-        <div style={{ width: 46, flexShrink: 0, background: card.playerBg, borderRight: `1px solid ${card.border}`, padding: "12px 8px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 9 }}>
-          <Mark size={15} color={card.text} />
-          {bar(28, 4, card.text)}
-          {bar(22, 4, card.muted)}
-          {bar(24, 4, card.muted)}
-        </div>
-      ) : (
-        <div style={{ margin: "7px 6px 4px", borderRadius: 12, background: card.playerBg, border: `1px solid ${card.border}`, padding: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <Mark size={17} color={card.text} />
-            <div style={{ width: 62, height: 14, borderRadius: 7, background: card.surface, border: `1px solid ${card.border}`, boxSizing: "border-box", padding: 1 }}>
-              <div style={{ width: 29, height: "100%", borderRadius: 6, background: card.accent }} />
-            </div>
-            <div style={{ width: 11, height: 11, borderRadius: 6, border: `1.5px solid ${card.muted}`, boxSizing: "border-box" }} />
-          </div>
-          <div style={{ height: 15, borderRadius: 5, background: card.surface, border: `1px solid ${card.border}`, marginTop: 7, boxSizing: "border-box" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-            {bar(28, 4, card.muted)}
-            <div style={{ width: 40, height: 10, borderRadius: 5, border: `1px solid ${card.border}`, boxSizing: "border-box" }} />
-          </div>
-        </div>
-      )}
-      <div style={{ flex: 1, minWidth: 0, paddingTop: wide ? 6 : 0 }}>{[0, 1, 2, 3, 4].map(i => song(sample[i], i))}</div>
-      {/* The small player at the foot of the list. */}
-      <div style={{
-        position: "absolute", left: 6, right: 6, bottom: 7, height: 30, borderRadius: 11, boxSizing: "border-box",
-        background: T.playerBg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 7, padding: "0 8px",
-      }}>
-        <div style={{ width: 17, height: 17, borderRadius: 4, background: T.dim, flexShrink: 0 }} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          {now ? <div style={{ ...clip, fontSize: 8.5, fontWeight: 700, color: T.text }}>{now.title}</div> : bar(48, 4, T.text)}
-        </div>
-        <div style={{ width: 17, height: 17, borderRadius: 9, background: T.accent, flexShrink: 0 }} />
-      </div>
-    </div>
-  );
-
-  const player = (
-    <div style={{ position: "absolute", inset: 0, background: T.playerBg, display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 14px 0", boxSizing: "border-box" }}>
-      {bar(26, 4, T.dim)}
-      <div style={{ marginTop: 18 }}><SpinningDisc size={128} skin={vinyl} /></div>
-      <div style={{ marginTop: 16, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-        {now ? <div style={{ ...clip, maxWidth: "100%", fontSize: 11, fontWeight: 700, color: T.text }}>{now.title}</div> : bar(80, 6, T.text)}
-        {now ? <div style={{ ...clip, maxWidth: "100%", fontSize: 9, color: T.muted }}>{now.artist}</div> : bar(48, 4, T.muted)}
-      </div>
-      <div style={{ marginTop: 14, width: "100%", height: 3, borderRadius: 2, background: T.dim, overflow: "hidden" }}>
-        <div style={{ width: "38%", height: "100%", background: T.text }} />
-      </div>
-      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 18 }}>
-        <div style={{ width: 10, height: 10, borderRadius: 5, background: T.muted }} />
-        <div style={{ width: 30, height: 30, borderRadius: 15, background: T.accent }} />
-        <div style={{ width: 10, height: 10, borderRadius: 5, background: T.muted }} />
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "2px 16px 12px", borderBottom: `1px solid ${T.border}` }}>
-      <button
-        onClick={onTurn}
-        aria-label={view === "list" ? t("Show the player") : t("Show the list")}
-        style={{
-          width: W, height: H, padding: 0, cursor: "pointer", position: "relative", overflow: "hidden", display: "block",
-          borderRadius: 26, border: `3px solid ${T.dim}`, background: T.bg, boxSizing: "content-box",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.25)", fontFamily: "inherit", textAlign: "left",
-        }}
-      >
-        {view === "list" ? list : player}
-      </button>
-      {/* Which of its two faces is showing; the phone itself is the switch. */}
-      <div aria-hidden="true" style={{ display: "flex", gap: 5, marginTop: 9 }}>
-        {(["list", "player"] as PhoneView[]).map(v => (
-          <div key={v} style={{ width: view === v ? 14 : 5, height: 5, borderRadius: 3, background: view === v ? T.text : T.dim, transition: "width 0.2s, background 0.2s" }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The icon where it will sit: a row of a home screen, with MPTree in it. */
-function HomeRow({ icon, T }: { icon: AppIcon; T: T }) {
-  const other = (i: number) => (
-    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-      <div style={{ width: 44, height: 44, borderRadius: "26%", background: T.dim }} />
-      {bar(26, 4, T.dim)}
-    </div>
-  );
-  return (
-    <div aria-hidden="true" style={{ margin: "10px 16px 0", borderRadius: 16, background: T.surface, border: `1px solid ${T.border}`, padding: "12px 0 10px", display: "flex", justifyContent: "center", gap: 18 }}>
-      {other(0)}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-        <IconArt icon={icon} size={44} />
-        <span style={{ fontSize: 9, color: T.text, lineHeight: "8px", paddingTop: 2 }}>MPTree</span>
-      </div>
-      {other(1)}
-      {other(2)}
     </div>
   );
 }
@@ -327,53 +181,129 @@ function Row({ title, aside, children, T, framed }: { title: string; aside?: Rea
   );
 }
 
-/** Square-crops and shrinks a picked photo to what a launcher icon uses. */
-function squareIcon(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const S = 432;
-      const c = document.createElement("canvas");
-      c.width = S; c.height = S;
-      const ctx = c.getContext("2d");
-      if (!ctx) { reject(new Error("no canvas")); return; }
-      const side = Math.min(img.width, img.height);
-      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL("image/png"));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable image")); };
-    img.src = url;
-  });
+// ─── THE APP, SMALL ──────────────────────────────────────────────────────────
+
+/**
+ * A copy of the app as it is on screen: the same elements with the same
+ * styles, cloned and shrunk. Nearly every style in MPTree is written on the
+ * element itself, so a clone looks exactly like what it was cloned from. It is
+ * taken again whenever `stamp` changes, which is whenever the look does.
+ *
+ * The pages lying over the app (this one, and Settings under it) are left out.
+ */
+function AppCopy({ stamp, width, height, scale }: { stamp: string; width: number; height: number; scale: number }) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let second = 0;
+    // Two frames on: the app has drawn its new colours by then.
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        const app = document.querySelector<HTMLElement>("[data-app-shell]");
+        const into = host.current;
+        if (!app || !into) return;
+        const copy = app.cloneNode(true) as HTMLElement;
+        copy.removeAttribute("data-app-shell");
+        copy.querySelectorAll<HTMLElement>("*").forEach(n => {
+          if (n.style.position === "fixed" && Number(n.style.zIndex) >= 400) n.remove();
+        });
+        copy.style.minHeight = "0";
+        copy.style.height = "100%";
+        into.replaceChildren(copy);
+      });
+    });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [stamp, width, height]);
+  // The transform also makes this the box that the app's fixed pieces (the
+  // small player, the shuffle button) are placed in, so they land where they
+  // are on the real screen.
+  return (
+    <div ref={host} style={{
+      position: "absolute", top: 0, left: 0, width, height, overflow: "hidden",
+      transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none",
+    }} />
+  );
 }
 
-export function LookSheet({ theme, onSetTheme, sample, onNeedPro, onToast, onClose, T }: LookSheetProps) {
+/** A whole look in one tile: the app's colour, with the header card on it. */
+function Swatch({ app, card }: { app: T; card: T }) {
+  return (
+    <div style={{ height: 76, borderRadius: 12, background: app.bg, border: `1px solid ${app.border}`, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: 7, right: 7, top: 7, height: 24, borderRadius: 8, background: card.playerBg, border: `1px solid ${card.border}`, boxSizing: "border-box" }}>
+        <div style={{ position: "absolute", left: 7, top: 8, width: 18, height: 6, borderRadius: 3, background: card.text }} />
+        <div style={{ position: "absolute", right: 7, top: 7, width: 22, height: 8, borderRadius: 4, background: card.accent }} />
+      </div>
+      <div style={{ position: "absolute", left: 10, top: 42, width: 46, height: 5, borderRadius: 3, background: app.text }} />
+      <div style={{ position: "absolute", left: 10, top: 53, width: 30, height: 4, borderRadius: 2, background: app.muted }} />
+      <div style={{ position: "absolute", right: 9, bottom: 9, width: 16, height: 16, borderRadius: 8, background: app.accent }} />
+    </div>
+  );
+}
+
+const Lock = ({ T }: { T: T }) => (
+  <span style={{ width: 20, height: 20, borderRadius: 10, background: T.sheetBg, border: `1px solid ${T.border}`, display: "grid", placeItems: "center", color: T.muted, flexShrink: 0 }}>
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+  </span>
+);
+
+/** A group of choices, as a panel with its name on top. */
+function Group({ children, T }: { children: ReactNode; T: T }) {
+  return (
+    <div style={{ margin: "12px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, paddingBottom: 12 }}>
+      {children}
+    </div>
+  );
+}
+
+type Preset = { id: string; mode: Theme; shade: DarkShade | LightShade; card: CardShade; free?: boolean; name: string };
+type Tab = "styles" | "custom";
+
+export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
   const previewing = isPreviewing();
   const dark = theme === "dark";
-  const photoInput = useRef<HTMLInputElement>(null);
   const [icon, setIcon] = useState<AppIcon>(look.icon);
-  // Which face of the small phone shows: the list, or the player once a
-  // record is picked.
-  const [phone, setPhone] = useState<PhoneView>("list");
+  const [tab, setTab] = useState<Tab>("styles");
+
+  // The window's size, which the small copies are a fraction of.
+  const [win, setWin] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const measure = () => setWin({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   // What the launcher actually has, which is the truth if the two ever differ.
   useEffect(() => {
     System.getAppIcon().then(r => setIcon(r.icon as AppIcon)).catch(() => {});
   }, []);
 
+  // A colour brings its mode with it, so trying a locked colour changes the
+  // mode too, and that has to go back with it. `kept` is the mode that was
+  // really chosen: the one the page opened in, or a free or Pro pick since.
+  const kept = useRef<Theme>(theme);
+  const now = useRef({ pro, theme });
+  useEffect(() => { now.current = { pro, theme }; }, [pro, theme]);
+  useEffect(() => () => {
+    if (!now.current.pro && now.current.theme !== kept.current) onSetTheme(kept.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Bought Pro while trying something: keep what is showing.
-  useEffect(() => { if (pro) keepPreview(); }, [pro]);
+  useEffect(() => { if (pro) { kept.current = theme; keepPreview(); } }, [pro, theme]);
 
   const close = () => { endPreview(); onClose(); };
 
   /** Free picks and Pro picks are kept; the rest is shown as a preview. */
   const pick = (free: boolean, patch: Partial<Look>) => {
     if (pro || free) saveLook(patch); else previewLook(patch);
-    setPhone("vinylDark" in patch || "vinylLight" in patch ? "player" : "list");
+  };
+  /** A pick that decides the mode as well: a colour, or a whole style. */
+  const pickIn = (mode: Theme, free: boolean, patch: Partial<Look>) => {
+    if (pro || free) kept.current = mode;
+    if (mode !== theme) onSetTheme(mode);
+    pick(free, patch);
   };
 
   const pickIcon = async (next: AppIcon) => {
@@ -386,19 +316,6 @@ export function LookSheet({ theme, onSetTheme, sample, onNeedPro, onToast, onClo
       onToast(t("Icon changed"));
     } catch {
       onToast(t("This phone did not let MPTree change its icon"));
-    }
-  };
-
-  const pickPhoto = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      const dataUrl = await squareIcon(file);
-      const r = await System.pinPhotoShortcut({ dataUrl, label: "MPTree" });
-      onToast(r.supported
-        ? t("Confirm on your home screen to add it")
-        : t("Your home screen does not let apps add shortcuts"));
-    } catch {
-      onToast(t("That photo could not be read"));
     }
   };
 
@@ -421,41 +338,62 @@ export function LookSheet({ theme, onSetTheme, sample, onNeedPro, onToast, onClo
     { id: "classic", label: t("Classic") }, { id: "light", label: t("Light") },
     { id: "vinyl", label: t("Record") }, { id: "stamp", label: t("Stamp") },
   ];
+  // Whole looks: the app's colour, then the header card's where it differs.
+  const pair = (a: string, b: string) => `${t(a)} · ${t(b)}`;
+  const PRESETS: Preset[] = [
+    { id: "black",         mode: "dark",  shade: "classic",  card: "default",       name: t("Black"), free: true },
+    { id: "white",         mode: "light", shade: "classic",  card: "default",       name: t("White"), free: true },
+    { id: "pink-black",    mode: "light", shade: "pink",     card: "dark:amoled",   name: pair("Pink", "Black") },
+    { id: "black-pink",    mode: "dark",  shade: "amoled",   card: "light:pink",    name: pair("Black", "Pink") },
+    { id: "sage-graphite", mode: "light", shade: "sage",     card: "dark:graphite", name: pair("Sage", "Graphite") },
+    { id: "graphite-sage", mode: "dark",  shade: "graphite", card: "light:sage",    name: pair("Graphite", "Sage") },
+    { id: "paper",         mode: "light", shade: "paper",    card: "default",       name: t("Paper") },
+    { id: "stone-black",   mode: "light", shade: "stone",    card: "dark:classic",  name: pair("Stone", "Black") },
+  ];
 
-  // Card and record, like the colour, are the ones of the mode that is on.
+  // The header card and the record are one choice, written for both modes, so
+  // they stay when a colour of the other mode is picked.
   const card = dark ? look.cardDark : look.cardLight;
-  const setCard = (c: CardShade) => pick(c === FREE.card, dark ? { cardDark: c } : { cardLight: c });
+  const setCard = (c: CardShade) => pick(c === FREE.card, { cardDark: c, cardLight: c });
   const vinyl = dark ? look.vinylDark : look.vinylLight;
-  const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, dark ? { vinylDark: v } : { vinylLight: v });
+  const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, { vinylDark: v, vinylLight: v });
 
-  const modeSwitch = (
-    <div role="radiogroup" aria-label={t("Mode")} style={{ display: "flex", gap: 2, background: T.surface, borderRadius: 17, padding: 2, border: `1px solid ${T.border}` }}>
-      {(["dark", "light"] as Theme[]).map(m => (
-        <button
-          key={m}
-          role="radio"
-          aria-checked={theme === m}
-          aria-label={m === "dark" ? t("Dark") : t("Light")}
-          onClick={() => onSetTheme(m)}
-          style={{
-            height: 30, display: "flex", alignItems: "center", gap: 6, padding: "0 13px",
-            borderRadius: 15, border: "none", cursor: "pointer", fontFamily: "inherit",
-            fontSize: 13, fontWeight: 700,
-            background: theme === m ? T.accent : "transparent",
-            color: theme === m ? T.playBtnFg : T.muted,
-            transition: "background 0.2s, color 0.2s",
-          }}
-        >
-          <span style={{ display: "grid", transform: "scale(0.78)", margin: "0 -2px" }}>{m === "dark" ? <IC.Moon /> : <IC.Sun />}</span>
-          {m === "dark" ? t("Dark") : t("Light")}
-        </button>
-      ))}
-    </div>
+  const presetOn = (p: Preset) =>
+    theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card;
+  const pickPreset = (p: Preset) => pickIn(p.mode, !!p.free, {
+    ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }),
+    cardDark: p.card, cardLight: p.card,
+  });
+
+  // ── The two small screens ──
+  const wide = false;
+  const panes = player ? 2 : 1;
+  const room = (wide ? 520 : win.w - 32) - (panes - 1) * 12;
+  const scale = Math.min(Math.min(330, win.h * 0.38) / win.h, room / panes / win.w);
+  const pane: React.CSSProperties = {
+    width: Math.round(win.w * scale), height: Math.round(win.h * scale), flexShrink: 0,
+    position: "relative", overflow: "hidden", borderRadius: 16, background: T.bg,
+    border: `1px solid ${T.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+  };
+  const stamp = `${theme}|${JSON.stringify(look)}`;
+
+  const tabBtn = (id: Tab, name: string) => (
+    <button
+      role="tab"
+      aria-selected={tab === id}
+      onClick={() => setTab(id)}
+      style={{
+        flex: 1, height: 36, borderRadius: 18, border: "none", cursor: "pointer", fontFamily: "inherit",
+        fontSize: 14, fontWeight: 700,
+        background: tab === id ? T.accent : "transparent", color: tab === id ? T.playBtnFg : T.muted,
+        transition: "background 0.2s, color 0.2s",
+      }}
+    >
+      {name}
+    </button>
   );
 
   return (
-    // No dimming: the header card above the sheet is part of what is being
-    // changed, so it has to show in its real colours.
     <div style={{ position: "fixed", inset: 0, zIndex: 420, display: "flex", alignItems: "flex-end" }} onClick={close}>
       <div
         style={{
@@ -470,71 +408,107 @@ export function LookSheet({ theme, onSetTheme, sample, onNeedPro, onToast, onClo
           <button onClick={close} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
-        <LivePreview T={T} card={cardPalette(card, T)} vinyl={vinyl} wide={false} sample={sample}
-          view={phone} onTurn={() => setPhone(p => (p === "list" ? "player" : "list"))} />
+        <div aria-hidden="true" style={{ flexShrink: 0, display: "flex", justifyContent: "center", gap: 12, padding: "2px 16px 14px" }}>
+          <div style={pane}>
+            <AppCopy stamp={stamp} width={win.w} height={win.h} scale={scale} />
+          </div>
+          {player && (
+            <div style={pane}>
+              <div style={{ position: "absolute", top: 0, left: 0, width: win.w, height: win.h, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }}>
+                {player}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div role="tablist" style={{ flexShrink: 0, display: "flex", gap: 2, margin: "0 16px", padding: 3, borderRadius: 21, background: T.surface, border: `1px solid ${T.border}` }}>
+          {tabBtn("styles", t("Styles"))}
+          {tabBtn("custom", t("Custom"))}
+        </div>
 
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
-          <div style={{ position: "relative", margin: "24px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, padding: "10px 0 12px" }}>
-          <div style={{ position: "absolute", top: -18, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
-            <div style={{ background: T.sheetBg, padding: "0 8px" }}>{modeSwitch}</div>
-          </div>
-          <Row T={T} framed title={t("Colour")}>
-            {dark
-              ? DARKS.map(d => (
-                <Tile key={d.id} T={T} label={d.label} selected={look.dark === d.id} locked={!pro && d.id !== FREE.dark}
-                  onClick={() => pick(d.id === FREE.dark, { dark: d.id })}>
-                  <Screen p={SHADE_PREVIEW.dark(d.id)} />
-                </Tile>
-              ))
-              : LIGHTS.map(l => (
-                <Tile key={l.id} T={T} label={l.label} selected={look.light === l.id} locked={!pro && l.id !== FREE.light}
-                  onClick={() => pick(l.id === FREE.light, { light: l.id })}>
-                  <Screen p={SHADE_PREVIEW.light(l.id)} />
-                </Tile>
-              ))}
-          </Row>
+          {tab === "styles" ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, padding: "14px 16px 0" }}>
+              {PRESETS.map(p => {
+                const app = p.mode === "dark" ? SHADE_PREVIEW.dark(p.shade as DarkShade) : SHADE_PREVIEW.light(p.shade as LightShade);
+                const on = presetOn(p);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => pickPreset(p)}
+                    aria-pressed={on}
+                    style={{
+                      padding: 4, borderRadius: 17, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                      background: "transparent", border: `2px solid ${on ? T.accent : "transparent"}`,
+                      transition: "border-color 0.15s ease",
+                    }}
+                  >
+                    <Swatch app={app} card={cardPalette(p.card, app)} />
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 4px 2px" }}>
+                      <span style={{ fontSize: 13, fontWeight: on ? 700 : 500, color: on ? T.text : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                      {!pro && !p.free && <Lock T={T} />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              <Group T={T}>
+                <Row T={T} framed title={t("Colour")}>
+                  {DARKS.map(d => (
+                    <Tile key={`d-${d.id}`} T={T} label={d.label} selected={dark && look.dark === d.id} locked={!pro && d.id !== FREE.dark}
+                      onClick={() => pickIn("dark", d.id === FREE.dark, { dark: d.id })}>
+                      <Screen p={SHADE_PREVIEW.dark(d.id)} />
+                    </Tile>
+                  ))}
+                  {LIGHTS.map(l => (
+                    <Tile key={`l-${l.id}`} T={T} label={l.label} selected={!dark && look.light === l.id} locked={!pro && l.id !== FREE.light}
+                      onClick={() => pickIn("light", l.id === FREE.light, { light: l.id })}>
+                      <Screen p={SHADE_PREVIEW.light(l.id)} />
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
 
-          <Row T={T} framed title={t("Header card")}>
-            {/* Default follows the app's colour; every other card is its own. */}
-            <Tile T={T} label={t("Default")} selected={card === "default"} onClick={() => setCard("default")}>
-              <Card p={T} />
-            </Tile>
-            {CARDS.map(c => (
-              <Tile key={c.id} T={T} label={c.label} selected={card === c.id} locked={!pro} onClick={() => setCard(c.id)}>
-                <Card p={cardPalette(c.id, T)} />
-              </Tile>
-            ))}
-          </Row>
+              <Group T={T}>
+                <Row T={T} framed title={t("Header card")}>
+                  {/* Default follows the app's colour; every other card is its own. */}
+                  <Tile T={T} label={t("Default")} selected={card === "default"} onClick={() => setCard("default")}>
+                    <Card p={T} />
+                  </Tile>
+                  {CARDS.map(c => (
+                    <Tile key={c.id} T={T} label={c.label} selected={card === c.id} locked={!pro} onClick={() => setCard(c.id)}>
+                      <Card p={cardPalette(c.id, T)} />
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
 
-          <Row T={T} framed title={t("Record")}>
-            {VINYLS.map(v => (
-              <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && v.id !== FREE.vinyl}
-                onClick={() => setVinyl(v.id)}>
-                <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
-                  <SpinningDisc size={60} skin={v.id} />
-                </div>
-              </Tile>
-            ))}
-          </Row>
-          </div>
+              <Group T={T}>
+                <Row T={T} framed title={t("Record")}>
+                  {VINYLS.map(v => (
+                    <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && v.id !== FREE.vinyl}
+                      onClick={() => setVinyl(v.id)}>
+                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
+                        <SpinningDisc size={60} skin={v.id} />
+                      </div>
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
 
-          <Row T={T} title={t("App icon")}>
-            {ICONS.map(i => (
-              <Tile key={i.id} T={T} label={i.label} selected={icon === i.id} locked={!pro && i.id !== FREE.icon} onClick={() => pickIcon(i.id)}>
-                <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}><IconArt icon={i.id} size={58} /></div>
-              </Tile>
-            ))}
-            <Tile T={T} label={t("Your photo")} selected={false} locked={!pro} onClick={() => pro ? photoInput.current?.click() : onNeedPro()}>
-              <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
-                <div style={{ width: 58, height: 58, borderRadius: "26%", border: `1.5px dashed ${T.muted}`, display: "grid", placeItems: "center", color: T.muted }}>
-                  <IC.Photo />
-                </div>
-              </div>
-            </Tile>
-          </Row>
-          <HomeRow icon={icon} T={T} />
-          <input ref={photoInput} type="file" accept="image/*" style={{ display: "none" }}
-            onChange={e => { pickPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+              <Group T={T}>
+                <Row T={T} framed title={t("App icon")}>
+                  {ICONS.map(i => (
+                    <Tile key={i.id} T={T} label={i.label} selected={icon === i.id} locked={!pro && i.id !== FREE.icon} onClick={() => pickIcon(i.id)}>
+                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}><IconArt icon={i.id} size={58} /></div>
+                    </Tile>
+                  ))}
+                </Row>
+              </Group>
+            </>
+          )}
         </div>
 
         {/* Only while a locked option is showing: the way to keep it. The

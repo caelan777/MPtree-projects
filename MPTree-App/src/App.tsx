@@ -3147,7 +3147,7 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div style={{ background: TH.bg, color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative" }}>
+      <div data-app-shell style={{ background: TH.bg, color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative" }}>
 
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
         {/* Everything up top lives in one rounded card that floats ABOVE the
@@ -4148,15 +4148,61 @@ export default function App() {
             T={TH} />
         )}
 
-        {lookOpen && (
+        {lookOpen && (() => {
+          // What the small player shows: the song that is on, or the first.
+          const lookSong = currentSong ?? displayList[0];
+          return (
           <LookSheet
             theme={theme} onSetTheme={setTheme}
-            sample={displayList.slice(0, 5).map(s => ({ title: dispName(s), artist: dispArtist(s) }))}
+            // The real player, for the small screen next to the copy of the
+            // list. Its buttons do nothing there; it is only looked at.
+            player={lookSong ? (
+              <PlayerExpandSheet
+                onNoCover={() => {}}
+                song={lookSong}
+                dispName={dispName(lookSong)}
+                dispArtist={dispArtist(lookSong)}
+                customPhoto={nowPlayingPhoto(lookSong)}
+                backdropPhoto={nowPlayingPhoto(lookSong)}
+                isPlaying={true}
+                currentTime={currentTime}
+                duration={duration}
+                playMode={playMode}
+                isLiked={isLiked(lookSong)}
+                playbackSpeed={playbackSpeed}
+                onPlaybackSpeedChange={() => {}}
+                upNextQueue={queue}
+                playNextQueue={playNextQueue}
+                getDispName={dispName}
+                getDispArtist={dispArtist}
+                getCustomPhoto={s => getMeta(s).customPhoto}
+                onTogglePlay={() => {}}
+                onSkip={() => {}}
+                onCycleMode={() => {}}
+                onSeek={() => {}}
+                onSeekStart={() => {}}
+                onSeekEnd={() => {}}
+                onToggleLike={() => {}}
+                onRemove={() => {}}
+                onShare={() => {}}
+                lyrics={getMeta(lookSong).customLyrics}
+                onAddLyrics={() => {}}
+                onPlayNextReorder={() => {}}
+                onSkipCurrentUpNext={() => {}}
+                onOpenMenu={() => {}}
+                onClose={() => {}}
+                dragProgress={null}
+                dragSettling={false}
+                skipEnter={true}
+                T={TH}
+              />
+            ) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
-        )}
+          );
+        })()}
         {cleanupOpen && (
           <CleanupSheet
             suspects={cleanupSuspects}

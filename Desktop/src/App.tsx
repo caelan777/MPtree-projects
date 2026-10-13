@@ -3378,7 +3378,7 @@ export default function App() {
         .dscroll::-webkit-scrollbar-thumb { background: ${TH.dim}; border-radius: 6px; border: 3px solid ${TH.bg}; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div style={{ background: TH.bg, color: TH.text, minHeight: `calc(100vh - ${TITLE_H}px)`, height: `calc(100vh - ${TITLE_H}px)`, marginTop: TITLE_H, display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", ...(wide ? { display: "grid", height: `calc(100vh - ${TITLE_H}px)`, gridTemplateColumns: wide && panelFits && currentSong ? `${sideW}px minmax(0, 1fr) ${panelOpen ? panelW : 44}px` : `${sideW}px minmax(0, 1fr)`, gridTemplateRows: "minmax(0, 1fr) auto" } : null) }}>
+      <div data-app-shell style={{ background: TH.bg, color: TH.text, minHeight: `calc(100vh - ${TITLE_H}px)`, height: `calc(100vh - ${TITLE_H}px)`, marginTop: TITLE_H, display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", ...(wide ? { display: "grid", height: `calc(100vh - ${TITLE_H}px)`, gridTemplateColumns: wide && panelFits && currentSong ? `${sideW}px minmax(0, 1fr) ${panelOpen ? panelW : 44}px` : `${sideW}px minmax(0, 1fr)`, gridTemplateRows: "minmax(0, 1fr) auto" } : null) }}>
 
         <TitleBar T={TH} />
         {wide && (
@@ -4572,15 +4572,61 @@ export default function App() {
             T={TH} />
         )}
 
-        {lookOpen && (
+        {lookOpen && (() => {
+          // What the small player shows: the song that is on, or the first.
+          const lookSong = currentSong ?? displayList[0];
+          return (
           <LookSheet
             theme={theme} onSetTheme={setTheme}
-            sample={displayList.slice(0, 5).map(s => ({ title: dispName(s), artist: dispArtist(s) }))}
+            // The real player, for the small screen next to the copy of the
+            // list. Its buttons do nothing there; it is only looked at.
+            player={!wide && lookSong ? (
+              <PlayerExpandSheet
+                onNoCover={() => {}}
+                song={lookSong}
+                dispName={dispName(lookSong)}
+                dispArtist={dispArtist(lookSong)}
+                customPhoto={nowPlayingPhoto(lookSong)}
+                backdropPhoto={nowPlayingPhoto(lookSong)}
+                isPlaying={true}
+                currentTime={currentTime}
+                duration={duration}
+                playMode={playMode}
+                isLiked={isLiked(lookSong)}
+                playbackSpeed={playbackSpeed}
+                onPlaybackSpeedChange={() => {}}
+                upNextQueue={queue}
+                playNextQueue={playNextQueue}
+                getDispName={dispName}
+                getDispArtist={dispArtist}
+                getCustomPhoto={s => getMeta(s).customPhoto}
+                onTogglePlay={() => {}}
+                onSkip={() => {}}
+                onCycleMode={() => {}}
+                onSeek={() => {}}
+                onSeekStart={() => {}}
+                onSeekEnd={() => {}}
+                onToggleLike={() => {}}
+                onRemove={() => {}}
+                onShare={() => {}}
+                lyrics={getMeta(lookSong).customLyrics}
+                onAddLyrics={() => {}}
+                onPlayNextReorder={() => {}}
+                onSkipCurrentUpNext={() => {}}
+                onOpenMenu={() => {}}
+                onClose={() => {}}
+                dragProgress={null}
+                dragSettling={false}
+                skipEnter={true}
+                T={TH}
+              />
+            ) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
-        )}
+          );
+        })()}
         {cleanupOpen && (
           <CleanupSheet
             suspects={cleanupSuspects}
