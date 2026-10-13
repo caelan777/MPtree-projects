@@ -1251,9 +1251,7 @@ public class MusicPlayerService extends Service {
         artExecutor.execute(() -> {
             // A cover the user picked wins over whatever is embedded in the file.
             File custom = customArtFile(path);
-            Bitmap decoded = custom != null
-                    ? BitmapFactory.decodeFile(custom.getAbsolutePath())
-                    : null;
+            Bitmap decoded = custom != null ? decodeCustomArt(custom) : null;
             if (decoded == null) decoded = decodeEmbeddedArt(path);
             final Bitmap ready = decoded;
             mainHandler.post(() -> {
@@ -1321,6 +1319,28 @@ public class MusicPlayerService extends Service {
             } finally {
                 try { in.close(); } catch (Exception ignored) {}
             }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** A cover the user picked, read no larger than the lock screen shows it.
+     *  The app keeps covers small already; this is for one that is not, so a
+     *  large file never becomes a large bitmap. Off the main thread only. */
+    private Bitmap decodeCustomArt(File file) {
+        try {
+            String at = file.getAbsolutePath();
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(at, bounds);
+
+            int sample = 1;
+            int longest = Math.max(bounds.outWidth, bounds.outHeight);
+            while (longest / sample > ART_MAX_PX) sample *= 2;
+
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            return BitmapFactory.decodeFile(at, opts);
         } catch (Exception e) {
             return null;
         }

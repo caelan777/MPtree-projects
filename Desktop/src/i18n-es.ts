@@ -696,4 +696,9 @@ export const ES: Record<string, string> = {
   "Drag the photo to move it. Use the slider to zoom.": "Arrastra la foto para moverla. Usa el control para acercar.",
   "Zoom": "Zoom",
   "Use this": "Usar esta",
+  "Are you afraid?": "¿Tienes miedo?",
+  "Yes": "Sí",
+  "No": "No",
+  "Lantern is locked for {n} more day.": "Lantern sigue bloqueado {n} día más.",
+  "Lantern is locked for {n} more days.": "Lantern sigue bloqueado {n} días más.",
 };

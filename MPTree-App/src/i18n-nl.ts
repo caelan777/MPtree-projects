@@ -629,4 +629,9 @@ export const NL: Record<string, string> = {
   "Drag the photo to move it. Use the slider to zoom.": "Sleep de foto om hem te verplaatsen. Zoom met de schuif.",
   "Zoom": "Zoom",
   "Use this": "Deze gebruiken",
+  "Are you afraid?": "Ben je bang?",
+  "Yes": "Ja",
+  "No": "Nee",
+  "Lantern is locked for {n} more day.": "Lantern zit nog {n} dag op slot.",
+  "Lantern is locked for {n} more days.": "Lantern zit nog {n} dagen op slot.",
 };

@@ -699,6 +699,12 @@ export default function App() {
   const scrollRef    = useRef<HTMLDivElement>(null);
   const songRowRefs  = useRef<Map<string, HTMLDivElement>>(new Map());
   const queueRef     = useRef<Song[]>([]);
+  // The list the queue was drawn from, in its own order: the library as it is
+  // shown, a playlist, a selection. Shuffle from the player shuffles this, and
+  // turning shuffle off goes back to it. Both used to take the whole library,
+  // so a playlist turned into everything the moment the mode button was
+  // touched, which is the only way to reach repeat.
+  const playContextRef = useRef<Song[] | null>(null);
   const curRef       = useRef<Song | null>(null);
   const playModeRef  = useRef<PlayMode>("off");
   const filterRef    = useRef<FilterId>("newest");
@@ -1584,6 +1590,7 @@ export default function App() {
     // Nothing playing: there is no "next" to sit after, so just start it.
     if (!cur) {
       const q = [song];
+      playContextRef.current = q;
       setQueue(q);
       playSong(song, q);
       return;
@@ -1625,6 +1632,7 @@ export default function App() {
 
     const cur = curRef.current;
     if (!cur) {
+      playContextRef.current = chosen;
       setQueue(chosen);
       playSong(chosen[0], chosen);
       return;
@@ -1688,27 +1696,48 @@ export default function App() {
     if (playMode === "repeat") { setPlayMode("off"); showToast(t("Repeat off")); return; }
     if (!displayList.length) return;
     openChrome();
-    const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playSong(q[0], q);
+    const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; playSong(q[0], q);
     showToast(isFavFilter ? t("Shuffling favorites") : t("Shuffling all songs"));
+  };
+
+  /** What is being played from, in its own order, without what has gone to
+   *  the bin since. */
+  const playContext = (): Song[] => {
+    const from = playContextRef.current?.length ? playContextRef.current
+      : queueRef.current.length ? queueRef.current : displayList;
+    const binned = new Set(removedSongs.map(s => s.id));
+    const seen = new Set<string>();
+    return from.filter(s => !binned.has(s.id) && !seen.has(s.id) && !!seen.add(s.id));
+  };
+  /** The queue as it should be around the song that is on: that song, then
+   *  whatever was put on "Play next", then the rest. Changing the mode never
+   *  loses or reorders what someone lined up by hand. */
+  const requeue = (cur: Song, rest: Song[]) => {
+    const all = queueRef.current;
+    const lined = playNextQueueRef.current
+      .map(id => all.find(s => s.id === id))
+      .filter((s): s is Song => !!s && s.id !== cur.id);
+    const held = new Set([cur.id, ...lined.map(s => s.id)]);
+    const q = [cur, ...lined, ...rest.filter(s => !held.has(s.id))];
+    setQueue(q);
+    AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
+  };
+  const shuffleFromHere = (cur: Song) => requeue(cur, buildShuffleQ(playContext()));
+  const backInOrder = (cur: Song) => {
+    const from = playContext();
+    const idx = from.findIndex(s => s.id === cur.id);
+    requeue(cur, idx >= 0 ? from.slice(idx + 1) : from);
   };
 
   const toggleShuffleFromPlayer = () => {
     if (playMode === "shuffle") {
       setPlayMode("off");
-      setPlayNextQueue([]);
-      playNextQueueRef.current = [];
-      if (currentSong) {
-        const idx = displayList.findIndex(s => s.id === currentSong.id);
-        const orderedQ = idx >= 0 ? displayList.slice(idx) : displayList;
-        setQueue(orderedQ);
-        AudioPlayer.setQueue({ tracks: orderedQ.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
-      }
+      if (currentSong) backInOrder(currentSong);
       showToast(t("Shuffle off, continuing in order")); return;
     }
     if (!currentSong) return;
-    const rest = buildShuffleQ(displayList.filter(s => s.id !== currentSong.id));
-    const q = [currentSong, ...rest]; setPlayMode("shuffle"); setQueue(q);
-    AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
+    setPlayMode("shuffle");
+    shuffleFromHere(currentSong);
     showToast(t("Shuffle on"));
   };
 
@@ -1717,11 +1746,13 @@ export default function App() {
     hapticImpact("light");
     if (playMode === "off") {
       if (!currentSong) return;
-      const rest = buildShuffleQ(displayList.filter(s => s.id !== currentSong.id));
-      const q = [currentSong, ...rest]; setPlayMode("shuffle"); setQueue(q);
-      AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: 0 }).catch(() => {});
+      setPlayMode("shuffle");
+      shuffleFromHere(currentSong);
       showToast(t("Shuffle on"));
     } else if (playMode === "shuffle") {
+      // Repeat is reached by way of shuffle. Whoever only wanted repeat should
+      // not be left with a shuffled queue, so the order comes back here.
+      if (currentSong) backInOrder(currentSong);
       setPlayMode("repeat"); showToast(t("Repeat on"));
     } else {
       setPlayMode("off"); showToast(t("Repeat off"));
@@ -2305,9 +2336,11 @@ export default function App() {
     // a song silently played the library sequentially from that point.
     if (playMode === "shuffle") {
       const q = [song, ...buildShuffleQ(displayList.filter(s => s.id !== song.id))];
+      playContextRef.current = displayList;
       setQueue(q); playSong(song, q);
       return;
     }
+    playContextRef.current = displayList;
     setQueue(displayList); playSong(song, displayList);
   };
 
@@ -2366,6 +2399,7 @@ export default function App() {
     if (!chosen.length) return;
     const shuffled = [...chosen].sort(() => Math.random() - 0.5);
     setPlayMode("shuffle");
+    playContextRef.current = chosen;
     setQueue(shuffled);
     playSong(shuffled[0], shuffled);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2681,6 +2715,7 @@ export default function App() {
     // Stay on the Playlists tab. The queue is set to the playlist's songs below,
     // so playback and skip stay inside the playlist; there is no reason to yank
     // the user back to the Songs tab.
+    playContextRef.current = playlistSongs;
     if (shuffle) {
       const q = shuffleArray(playlistSongs);
       setPlayMode("shuffle");
@@ -4260,7 +4295,7 @@ export default function App() {
                 data-tour="shuffle" className="dshuffle"
                 aria-label={isFavFilter ? t("Shuffle favorites") : t("Shuffle all")} title={isFavFilter ? t("Shuffle favorites") : t("Shuffle all")}
                 onClick={() => {
-                  const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playSong(q[0], q);
+                  const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; playSong(q[0], q);
                   showToast(isFavFilter ? t("Shuffling favorites") : t("Shuffling all songs"));
                 }}
                 style={{
@@ -4331,7 +4366,7 @@ export default function App() {
               meta={meta}
               onPlaylistsChange={handlePlaylistsChange}
               onPlayPlaylist={handlePlayPlaylist}
-              onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playSong(song, list); }}
+              onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
               currentSongId={currentSong?.id ?? null}
               isPlaying={isPlaying}
               onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
@@ -4637,6 +4672,7 @@ export default function App() {
               />
             ) : undefined}
             onNeedPro={() => setProOpen(true)}
+            onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
           );
@@ -4646,7 +4682,7 @@ export default function App() {
             suspects={cleanupSuspects}
             meta={meta}
             onBin={ids => { setCleanupOpen(false); removeMany(ids); }}
-            onPlay={(song, list) => { setPlayMode("off"); playSong(song, list); }}
+            onPlay={(song, list) => { setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}
@@ -4714,7 +4750,7 @@ export default function App() {
             deleted={signedIn ? sync.deleted : undefined}
             deletedLoading={signedIn && !sync.deletedLoaded && !sync.problem}
             onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
-            onPlaySong={(song, list) => { setPlayMode("off"); playSong(song, list); }}
+            onPlaySong={(song, list) => { setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}

@@ -189,6 +189,36 @@ export function lookBack(): boolean {
   return true;
 }
 
+// ─── Lantern's question ──────────────────────────────────────────────────────
+// Putting Lantern on asks one thing first (LanternGate). Whoever answers that
+// they are afraid cannot wear it for a week. Kept on this device only: it is
+// a moment, not a setting, and has no business following the account around.
+const AFRAID_KEY = "mptree_lantern_afraid";
+const AFRAID_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+let afraidUntil = 0;
+
+/** How many days Lantern is still shut for; 0 when it is open. */
+export function lanternLockDays(): number {
+  return Math.max(0, Math.ceil((afraidUntil - Date.now()) / DAY_MS));
+}
+export async function loadLanternLock(): Promise<number> {
+  try {
+    const { value } = await Preferences.get({ key: AFRAID_KEY });
+    afraidUntil = Number(value) || 0;
+  } catch { /* open, then */ }
+  return lanternLockDays();
+}
+export function lockLantern(): number {
+  afraidUntil = Date.now() + AFRAID_DAYS * DAY_MS;
+  Preferences.set({ key: AFRAID_KEY, value: String(afraidUntil) }).catch(() => {});
+  return lanternLockDays();
+}
+export function unlockLantern(): void {
+  afraidUntil = 0;
+  Preferences.remove({ key: AFRAID_KEY }).catch(() => {});
+}
+
 /** Losing Pro (a refund, or locking a test build again) puts the free look
  *  back. The picture disc tap is free, so it stays as it was. */
 export function resetLook(): void {

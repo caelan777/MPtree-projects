@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { makeSH, cardPalette, SHADE_PREVIEW, type T, isWide, fullPage } from "../themes";
 import type { Theme } from "../types";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import { SpinningDisc } from "./SpinningDisc";
+import { LanternGate } from "./LanternGate";
 import { usePro } from "../pro";
 import {
-  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
+  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, loadLanternLock, lanternLockDays, lockLantern, unlockLantern, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour,
 } from "../look";
 import { isDesktop } from "../plugins";
@@ -26,6 +27,9 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 // light: its own records and header cards, on any of the app's usual colours,
 // black unless another is picked. Tapping one puts it on and opens its page,
 // laid out like Custom, with a way back.
+//
+// Lantern asks something first, of whoever has Pro: a ring comes up with "Are
+// you afraid?" (LanternGate). No lets them in. Yes shuts Lantern for a week.
 //
 // There is no dark or light to choose here. A colour is dark or it is light,
 // and picking one puts the app in that mode; the header card and the record
@@ -45,6 +49,7 @@ type LookSheetProps = {
    *  player is not a sheet (the wide window on Windows). */
   player?: ReactNode;
   onNeedPro: () => void;
+  onToast: (msg: string) => void;
   onClose: () => void;
   T: T;
 };
@@ -273,12 +278,14 @@ type Tab = "styles" | "custom";
 type StyleTile = {
   key: string; name: string; app: T; card: T; vinyl: VinylSkin; flowers: Flowers; tone: Tone;
   on: boolean; free: boolean;
+  /** Shut for now, Pro or not: Lantern after a yes. */
+  shut?: boolean;
   /** The preset behind it. Without one it is a named style, which opens a
    *  page of its own. */
   preset?: Preset;
 };
 
-export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: LookSheetProps) {
+export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
@@ -288,10 +295,15 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   // A named style's own page, over the tabs. The phone's back button leaves
   // it first.
   const [page, setPage] = useState<"main" | "aviela" | "lantern">("main");
+  // Lantern's question, while it is being asked, and how many days Lantern is
+  // still shut for after a yes.
+  const [asking, setAsking] = useState(false);
+  const [shutDays, setShutDays] = useState(0);
+  useEffect(() => { loadLanternLock().then(setShutDays).catch(() => {}); }, []);
   useEffect(() => {
-    setLookBack(page !== "main" ? () => setPage("main") : null);
+    setLookBack(asking ? () => setAsking(false) : page !== "main" ? () => setPage("main") : null);
     return () => setLookBack(null);
-  }, [page]);
+  }, [page, asking]);
 
   // The round button that floats on the screen (Windows): which look it wears.
   // Kept by the app itself, not in the look, because it is a window of its own.
@@ -449,9 +461,29 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   };
   const lanternApp = paletteOf(look.lantern.colour);
   const lanternCard = cardPalette(look.lantern.card, lanternApp);
-  const openLantern = () => {
+  const enterLantern = () => {
     wearLantern(look.lantern);
     setPage("lantern");
+  };
+  const openLantern = () => {
+    // Already on, or only being tried without Pro: straight in.
+    if (lanternOn || !pro) { enterLantern(); return; }
+    const days = lanternLockDays();
+    setShutDays(days);
+    if (days > 0) {
+      // A test build is for trying this more than once a week.
+      if (__PRO_TEST__) { unlockLantern(); setShutDays(0); onToast("Test build: Lantern is open again."); return; }
+      onToast(tn(days, "Lantern is locked for {n} more day.", "Lantern is locked for {n} more days."));
+      return;
+    }
+    setAsking(true);
+  };
+  const answerAfraid = (afraid: boolean) => {
+    setAsking(false);
+    if (!afraid) { enterLantern(); return; }
+    const days = lockLantern();
+    setShutDays(days);
+    onToast(tn(days, "Lantern is locked for {n} more day.", "Lantern is locked for {n} more days."));
   };
 
   const presetTile = (p: Preset): StyleTile => {
@@ -465,7 +497,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
   const STYLES: StyleTile[] = [
     ...PRESETS.slice(0, 2).map(presetTile),
     { key: "aviela", name: "Aviela", app: avielaApp, card: avielaCard, vinyl: look.aviela.record, flowers: look.aviela.flowers, tone: avielaTone, on: avielaOn, free: false },
-    { key: "lantern", name: "Lantern", app: lanternApp, card: lanternCard, vinyl: look.lantern.record, flowers: "none", tone: "white", on: lanternOn, free: false },
+    { key: "lantern", name: "Lantern", app: lanternApp, card: lanternCard, vinyl: look.lantern.record, flowers: "none", tone: "white", on: lanternOn, free: false, shut: pro && shutDays > 0 && !lanternOn },
     ...PRESETS.slice(2).map(presetTile),
   ];
 
@@ -631,7 +663,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 4px 2px" }}>
                     <span style={{ fontSize: 13, fontWeight: s.on ? 700 : 500, color: s.on ? T.text : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</span>
                     <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
-                      {!pro && !s.free && <Lock T={T} />}
+                      {((!pro && !s.free) || s.shut) && <Lock T={T} />}
                       {!s.preset && <IC.ChevronR />}
                     </span>
                   </div>
@@ -710,6 +742,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onClose, T }: 
 
         {/* Only while a locked option is showing: the way to keep it. The
             Pro page has the free week too. */}
+        {asking && <LanternGate onYes={() => answerAfraid(true)} onNo={() => answerAfraid(false)} />}
+
         {previewing && !pro && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
             <button onClick={onNeedPro} style={sh.saveBtn}>
