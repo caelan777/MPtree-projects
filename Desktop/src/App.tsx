@@ -33,7 +33,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
-import { LANTERN_GREEN } from "./lantern";
+import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
@@ -797,7 +797,11 @@ export default function App() {
   // Aviela is on while there are flowers, Lantern while its record is.
   const styleTint = look.flowers !== "none" ? AVIELA_PINK
     : isLanternRecord(theme === "dark" ? look.vinylDark : look.vinylLight) ? LANTERN_GREEN : null;
-  const tinted = <P extends { violet: string }>(p: P): P => (styleTint ? { ...p, violet: styleTint } : p);
+  // Lantern goes further and lights the accent too (lanternAccent).
+  const tinted = <P extends { violet: string; bg: string; accent: string }>(p: P): P => {
+    if (!styleTint) return p;
+    return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
+  };
   const TH = tinted(paletteFor(theme, look.dark, look.light));
   const statusBarColor = TH.bg;
   useEffect(() => {
@@ -3216,7 +3220,10 @@ export default function App() {
   const CARD_SKIN: React.CSSProperties = {
     background: CT.playerBg,
     border: `1px solid ${CT.border}`,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+    // Lantern's own dark card has a little of its light round it.
+    boxShadow: (theme === "dark" ? look.cardDark : look.cardLight) === "dark:lantern"
+      ? `0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px ${LANTERN_GREEN}2e, 0 0 26px ${LANTERN_GREEN}24`
+      : "0 8px 32px rgba(0,0,0,0.45)",
   };
 
   // Where the logo's own options panel and the collapse hint go. Both belong to

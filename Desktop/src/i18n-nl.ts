@@ -431,7 +431,6 @@ export const NL: Record<string, string> = {
   "{n} voice note or clip found": "{n} spraakbericht of fragment gevonden",
   "{n} voice notes or clips found": "{n} spraakberichten of fragmenten gevonden",
   "{n} moved to the bin": "{n} naar de prullenbak",
-  "White, smoke and marble records for the player.": "Witte, rook- en marmeren platen voor de speler.",
   "Give the card at the top a colour of its own, from either mode.": "Geef de bovenste kaart een eigen kleur, uit donker of licht.",
   "Pink": "Roze",
   "Sage": "Salie",
@@ -701,4 +700,5 @@ export const NL: Record<string, string> = {
   "No": "Nee",
   "Lantern is locked for {n} more day.": "Lantern zit nog {n} dag op slot.",
   "Lantern is locked for {n} more days.": "Lantern zit nog {n} dagen op slot.",
+  "Smoke and marble records for the player.": "Rook- en marmeren platen voor de speler.",
 };

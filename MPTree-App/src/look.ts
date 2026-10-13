@@ -74,6 +74,10 @@ export const DEFAULT_LOOK: Look = {
 /** What anyone gets without Pro. */
 export const FREE = { vinyl: "classic", dark: "classic", light: "classic", card: "default", icon: "classic" } as const;
 
+/** The records anyone may have: the black one, and the white one that goes
+ *  with the White style, which is free as a whole. */
+export const isFreeVinyl = (v: VinylSkin): boolean => v === "classic" || v === "white";
+
 const KEY = "mptree_look";
 
 // The saved look, and while the Personalise sheet is open, a preview of what is
@@ -223,5 +227,7 @@ export function unlockLantern(): void {
  *  back. The picture disc tap is free, so it stays as it was. */
 export function resetLook(): void {
   preview = null;
-  saveLook({ ...DEFAULT_LOOK, photoDisc: look.photoDisc });
+  // The white record is free, so it is not taken off either.
+  const kept = (v: VinylSkin): VinylSkin => (isFreeVinyl(v) ? v : DEFAULT_LOOK.vinylDark);
+  saveLook({ ...DEFAULT_LOOK, vinylDark: kept(look.vinylDark), vinylLight: kept(look.vinylLight), photoDisc: look.photoDisc });
 }

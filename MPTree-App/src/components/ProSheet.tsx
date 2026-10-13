@@ -91,7 +91,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
 
   const features: { icon: ReactNode; title: string; body: string }[] = [
     { icon: <SyncIcon />,   title: t("Account & sync"), body: t("Playlists, likes and settings saved in your account, and all your songs on up to three devices.") },
-    { icon: <RecordIcon />, title: t("Records"),      body: t("White, smoke and marble records for the player.") },
+    { icon: <RecordIcon />, title: t("Records"),      body: t("Smoke and marble records for the player.") },
     { icon: <ShadeIcon />,  title: t("Shades"),       body: t("Graphite for dark mode. Paper, stone, pink and sage for light.") },
     { icon: <CardIcon />,   title: t("Header card"),  body: t("Give the card at the top a colour of its own, from either mode.") },
     { icon: <BroomIcon />,  title: t("Clean up"),     body: t("Finds voice notes, WhatsApp audio and clips under a minute, and bins them in one go.") },

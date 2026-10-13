@@ -9,7 +9,7 @@ import { SpinningDisc } from "./SpinningDisc";
 import { LanternGate } from "./LanternGate";
 import { usePro } from "../pro";
 import {
-  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, loadLanternLock, lanternLockDays, lockLantern, unlockLantern, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
+  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour,
 } from "../look";
 import { isDesktop } from "../plugins";
@@ -408,18 +408,18 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     ...(dark ? { dark: "classic" as const } : { light: "classic" as const }),
   } : {});
   const setCard = (c: CardShade) => pick(c === FREE.card, { ...plain(), cardDark: c, cardLight: c });
-  const setVinyl = (v: VinylSkin) => pick(v === FREE.vinyl, { ...plain(), vinylDark: v, vinylLight: v });
+  const setVinyl = (v: VinylSkin) => pick(isFreeVinyl(v), { ...plain(), vinylDark: v, vinylLight: v });
 
   const presetOn = (p: Preset) =>
     theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card && vinyl === p.vinyl && look.flowers === "none";
-  // Each part is kept or only shown on its own, so White keeps its colour for
-  // everyone while its white record is still a Pro record.
+  // Each part is kept or only shown on its own: what is free in a style is
+  // kept by everyone, what is not is only shown without Pro.
   const pickPreset = (p: Preset) => {
     if (pro || p.free) kept.current = p.mode;
     if (p.mode !== theme) onSetTheme(p.mode);
     pick(p.shade === "classic", { flowers: "none", ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }) });
     pick(p.card === FREE.card, { cardDark: p.card, cardLight: p.card });
-    pick(p.vinyl === FREE.vinyl, { vinylDark: p.vinyl, vinylLight: p.vinyl });
+    pick(isFreeVinyl(p.vinyl), { vinylDark: p.vinyl, vinylLight: p.vinyl });
   };
 
   // Aviela: pink, with the record, the flowers and the header card last
@@ -706,7 +706,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
               <Group T={T}>
                 <Row T={T} framed title={t("Record")}>
                   {VINYLS.map(v => (
-                    <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && v.id !== FREE.vinyl}
+                    <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && !isFreeVinyl(v.id)}
                       onClick={() => setVinyl(v.id)}>
                       <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
                         <SpinningDisc size={60} skin={v.id} />

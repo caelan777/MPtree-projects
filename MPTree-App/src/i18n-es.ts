@@ -430,7 +430,6 @@ export const ES: Record<string, string> = {
   "{n} voice note or clip found": "{n} nota de voz o clip encontrado",
   "{n} voice notes or clips found": "{n} notas de voz o clips encontrados",
   "{n} moved to the bin": "{n} movidos a la papelera",
-  "White, smoke and marble records for the player.": "Discos blanco, humo y mármol para el reproductor.",
   "Give the card at the top a colour of its own, from either mode.": "Dale a la tarjeta de arriba un color propio, del modo oscuro o del claro.",
   "Pink": "Rosa",
   "Sage": "Salvia",
@@ -634,4 +633,5 @@ export const ES: Record<string, string> = {
   "No": "No",
   "Lantern is locked for {n} more day.": "Lantern sigue bloqueado {n} día más.",
   "Lantern is locked for {n} more days.": "Lantern sigue bloqueado {n} días más.",
+  "Smoke and marble records for the player.": "Discos humo y mármol para el reproductor.",
 };
