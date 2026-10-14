@@ -50,10 +50,12 @@ export default defineConfig(({ mode }) => ({
     //   npm run build:play    → play  (the Play Store AAB)
     //   npm run build:demo    → demo  (the try-it-in-your-browser copy on the
     //                                  website, which has nothing to update)
+    //   npm run build:store   → store (the Microsoft Store package, which the
+    //                                  Store keeps up to date itself)
     //
     // Driven by --mode rather than an environment variable so it works the same
     // in PowerShell, cmd and bash.
-    __DISTRIBUTION__: JSON.stringify(mode === 'play' || mode === 'demo' ? mode : 'web'),
+    __DISTRIBUTION__: JSON.stringify(mode === 'play' || mode === 'demo' || mode === 'store' ? mode : 'web'),
     // The Pro test build (npm run build:test) is the website build with Pro
     // free to unlock and lock again. See src/pro.ts.
     __PRO_TEST__: JSON.stringify(mode === 'test'),

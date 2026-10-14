@@ -1,16 +1,18 @@
 {
   "name": "mptree-desktop",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/licences.mjs && tsc -b && vite build",
+    "build:store": "node scripts/licences.mjs && tsc -b && vite build --mode store",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "tauri build",
+    "app:build:store": "tauri build --no-bundle --config src-tauri/tauri.store.conf.json && node scripts/msix.mjs",
     "test": "vitest run"
   },
   "dependencies": {

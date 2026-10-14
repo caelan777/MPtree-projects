@@ -4659,7 +4659,7 @@ export default function App() {
             onSetSleepTimer={setSleepTimer}
             uiSize={uiSize} onSetUiSize={changeUiSize}
             lang={langPref} onSetLang={changeLang}
-            updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
+            updateNotices={__DISTRIBUTION__ === "demo" || __DISTRIBUTION__ === "store" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
             mixOthers={mixOthers} onSetMix={changeMix}
             onFeedback={sendFeedback}
@@ -4773,7 +4773,7 @@ export default function App() {
             music={musicAccess}
             onAllowMusic={() => { holdScanRef.current = false; setMusicAsked(true); runLibraryScanRef.current?.(); }}
             onOpenAppSettings={openAppSettings}
-            updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
+            updateNotices={__DISTRIBUTION__ === "demo" || __DISTRIBUTION__ === "store" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
             songCount={songs.length}
             onEnter={() => setWelcome("entering")}

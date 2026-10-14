@@ -53,6 +53,9 @@ This PC is short on memory: `export CARGO_BUILD_JOBS=4` before a Rust build.
 
 ## Releasing
 
+For the Microsoft Store package, see [store/README.md](store/README.md). For the
+installer on the website:
+
 Bump the version in `package.json`, `src-tauri/tauri.conf.json` and
 `src-tauri/Cargo.toml`, build, and upload the installer to a GitHub release
 tagged `windows-v<version>` as `MPTree-Setup-<version>.exe`, **not** marked as
@@ -116,7 +119,8 @@ MPTree runs once at a time: close the real one first.
   `VITE_CHECKOUT_URL` is set at build time.
 - Updates do not install themselves. The app reads the `windows` block of
   `Website/version.json` once a day and points at `mp-tree.net/windows.html`.
-- Code signing: the installer is unsigned, so Windows warns about it.
+- Code signing: the installer on the website is unsigned, so Windows warns about
+  it. The signed way in is the Microsoft Store package: see `store/README.md`.
 - The Playlists page is the phone page with a wider grid; it has no keyboard
   handling.
 - Formats the WebView cannot decode are not scanned (see `AUDIO_EXTENSIONS`).

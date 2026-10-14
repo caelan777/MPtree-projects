@@ -8,10 +8,42 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.3 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.3.aab`
+(versionCode 68, built 2026-10-14 with `npm run build:play`). It is the first
+Play bundle with R8 on; its mapping file is inside the bundle, so Play needs no
+separate upload. Nothing new to declare: no new permission (Lantern's voice is a
+sound file in the app, nothing is recorded), and the data safety answers for
+1.2.0 still hold.
+
+```
+<en-GB>
+Personalise is new: pick a style and see it on the whole app before you keep it. Black, White, Paper and Stone, and with Pro two with a name: Aviela, pink with flowers, and Lantern, in green. Lantern has a question for you.
+Crop a cover to fit when you set one.
+Shuffle and repeat each have their own button, and shuffle stays in the playlist you are playing.
+Skipping songs is smoother.
+</en-GB>
+<nl-NL>
+Personaliseren is nieuw: kies een stijl en zie hem op de hele app voor je hem houdt. Zwart, Wit, Papier en Steen, en met Pro twee met een naam: Aviela, roze met bloemen, en Lantern, in groen. Lantern heeft een vraag voor je.
+Snijd een cover bij als je er een kiest.
+Shuffle en herhalen hebben elk een eigen knop, en shuffle blijft in de afspeellijst die je speelt.
+Nummers overslaan gaat soepeler.
+</nl-NL>
+<es-ES>
+Personalizar es nuevo: elige un estilo y míralo en toda la app antes de quedártelo. Negro, Blanco, Papel y Piedra, y con Pro dos con nombre: Aviela, rosa con flores, y Lantern, en verde. Lantern tiene una pregunta para ti.
+Recorta una portada para que encaje al elegirla.
+Aleatorio y repetir tienen cada uno su botón, y el aleatorio se queda en la lista que estás escuchando.
+Saltar canciones va más fluido.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.2 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.2.aab`
-(versionCode 50; test builds 32 to 48 took 51 to 67, so a rebuilt bundle is 68). Nothing new to declare: no new permission, and the data safety
+(versionCode 50; test builds 32 to 48 took 51 to 67, and 1.2.3 is 68). Nothing new to declare: no new permission, and the data safety
 answers for 1.2.0 still hold. The `es-ES` block is only of use once the listing
 itself has a Spanish translation in the console.
 
@@ -143,8 +175,8 @@ new phone.
 
 MPTREE PRO
 
-One purchase, no subscription. Pro adds colours, a spinning record, a header card and
-other app icons, and never takes a free feature away. Try it free for a week first.
+One purchase, no subscription. Pro adds styles such as Aviela and Lantern, records and
+colours, and never takes a free feature away. Try it free for a week first.
 
 With Pro you can also sign in with Google and use MPTree on up to three devices. Your
 playlists, likes and settings are the same on all of them, and your songs go from one
