@@ -53,11 +53,16 @@ async function withAlpha(rgb, alphaOf, inner = 0.55) {
   return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } });
 }
 
-// The question is on black, so the figure can stay as it is there, fading out
-// at the edges. The glow is the green of it alone: the brighter and greener a
-// pixel, the more of it is kept.
-const body = await withAlpha(base, (_l, e) => e, 0.6);
-const glow = await withAlpha(base, (l, e, r, g, b) => e * Math.min(1, Math.max(0, (g - Math.max(r, b)) / 90) * 1.6), 0.6);
+// The question shows him sharp, on black, fading out at the edges. Only a
+// touch of blur, to smooth the blocks of the JPEG. The glow is the green of
+// him alone (the brighter and greener a pixel, the more of it is kept), with
+// a bloom round it, so it can be laid over him and swell with the voice.
+const clear = await sharp(SOURCE).extract(CROP).resize(W, H).blur(0.5).toBuffer();
+const body = await withAlpha(clear, (_l, e) => e, 0.62);
+const green = (l, e, r, g, b) => e * Math.min(1, Math.max(0, (g - Math.max(r, b)) / 90) * 1.6);
+const glowLines = await (await withAlpha(clear, green, 0.62)).png().toBuffer();
+const glow = sharp(await sharp(glowLines).blur(18).png().toBuffer())
+  .composite([{ input: glowLines, blend: "screen" }]);
 // On a dark app: the same, a little dimmer. On a light one the dark of the
 // photo would be a grey cloud, so there only what has light in it shows: the
 // green, the hair, the edges the light catches, as a faint shadow.
