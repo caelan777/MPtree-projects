@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { LANTERN_GREEN } from "../lantern";
 
 // ─── STYLE REVEAL ────────────────────────────────────────────────────────────
@@ -18,6 +18,13 @@ import { LANTERN_GREEN } from "../lantern";
 // once at its full size, and only its transform and opacity change: the GPU
 // moves finished pictures about and nothing is drawn again. No shadows on
 // anything that moves, and no more pieces than the effect needs.
+//
+// The colour that covers the page is the one big thing. It used to be a
+// circle drawn at its full size, over two thousand pixels across, which a
+// phone has to draw again and again as it grows, and it shows: blank patches
+// and stutter. Now it is painted once into a small picture (`Glow`, a canvas)
+// and that picture is made bigger. A gradient looks the same enlarged, and the
+// GPU enlarges a finished picture for nothing.
 //
 // Two more things a phone needs to keep it smooth. Every keyframe holds plain
 // numbers: one that reads a CSS variable cannot be handed to the GPU and runs
@@ -89,6 +96,36 @@ const FLYING: [number, number, number, number, number][] = Array.from({ length: 
   return [a, 0.42 + ((i * 53) % 43) / 100, 16 + ((i * 29) % 10), ((i * 71) % 9) * 40, 160 + ((i * 97) % 360)];
 });
 
+// The colours, from the middle (0) to the edge (1).
+type Stops = [number, string][];
+const LANTERN_FLOOD: Stops = [[0, "#e2fff0"], [0.085, G], [0.45, "#0f5532"], [0.97, "#04170c"], [1, "#030f08"]];
+const AVIELA_FLOOD: Stops = [[0, WHITE], [0.17, "#fff1f7"], [0.57, "#ffd5e6"], [0.92, PINK], [1, ROSE]];
+// A bright ring at the edge with nothing inside it: the wave running ahead.
+const ringOf = (c: string): Stops => [[0, `${c}00`], [0.84, `${c}00`], [0.95, `${c}88`], [0.975, c], [1, `${c}00`]];
+const LANTERN_RING = ringOf(G);
+const AVIELA_RING = ringOf(WHITE);
+
+/** A round gradient, painted once into a small canvas. Made bigger with a
+ *  transform, the GPU only stretches the finished picture. */
+function Glow({ stops, px, style }: { stops: Stops; px: number; style: React.CSSProperties }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const g = ref.current?.getContext("2d");
+    if (!g) return;
+    const r = px / 2;
+    const fill = g.createRadialGradient(r, r, 0, r, r, r);
+    for (const [at, colour] of stops) fill.addColorStop(at, colour);
+    g.fillStyle = fill;
+    g.beginPath();
+    g.arc(r, r, r - 1, 0, Math.PI * 2);
+    g.fill();
+  }, [stops, px]);
+  return <canvas ref={ref} width={px} height={px} style={{ display: "block", ...style }} />;
+}
+
+/** Half the width the floods and waves are laid out at, before they grow. */
+const B = 64;
+
 function prefersStill(): boolean {
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
 }
@@ -110,6 +147,7 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
   // Far enough to reach the furthest corner from the tap.
   const R = Math.ceil(Math.hypot(Math.max(x, w - x), Math.max(y, h - y))) + 30;
   const reach = Math.max(w, h);
+  const wave = R * 0.95;
   const lift = `svLift ${still ? 300 : LIFT}ms ease ${cover + HOLD}ms forwards`;
 
   // The moving pieces, each with keyframes of its own in plain numbers.
@@ -131,8 +169,8 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
       ]).join("\n");
 
   const css = `
-    @keyframes svGrow  { from { transform: scale(0.02); } to { transform: scale(1); } }
-    @keyframes svWave  { from { opacity: 1; transform: scale(0.06); } to { opacity: 0; transform: scale(1); } }
+    @keyframes svGrow  { from { transform: scale(${(0.02 * R / B).toFixed(3)}); } to { transform: scale(${(R / B).toFixed(3)}); } }
+    @keyframes svWave  { from { opacity: 1; transform: scale(${(0.06 * wave / B).toFixed(3)}); } to { opacity: 0; transform: scale(${(wave / B).toFixed(3)}); } }
     @keyframes svFlash { 0% { opacity: 0; transform: scale(0.2); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(2.4); } }
     @keyframes svLily  { 0% { opacity: 0; transform: scale(0.4) rotate(-24deg); } 15% { opacity: 1; } 100% { opacity: 1; transform: scale(1.15) rotate(8deg); } }
     @keyframes svLilyOut { from { opacity: 1; transform: scale(1.15) rotate(8deg); } to { opacity: 0; transform: scale(1.9) rotate(22deg); } }
@@ -146,14 +184,14 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
   const disc = (size: number): React.CSSProperties => ({
     position: "absolute", left: x - size, top: y - size, width: size * 2, height: size * 2, borderRadius: "50%", willChange: "transform, opacity",
   });
-  const flood = (background: string): React.CSSProperties => ({
-    ...disc(R), background,
-    animation: still ? "none" : `svGrow ${cover}ms cubic-bezier(0.62, 0, 0.22, 1) both`,
-  });
-  // A thin bright ring at the edge of a disc, as a gradient, so it can grow
-  // without its line growing too.
-  const ringOf = (colour: string, alpha: string) =>
-    `radial-gradient(circle, transparent 0%, transparent 93%, ${colour}${alpha} 96.5%, ${colour} 97.5%, transparent 100%)`;
+  // The flood and the waves: laid out small round the tap and grown.
+  const small: React.CSSProperties = { position: "absolute", left: x - B, top: y - B, width: B * 2, height: B * 2, willChange: "transform, opacity" };
+  const flood = (stops: Stops) => (
+    <Glow stops={stops} px={256} style={{
+      ...small, transform: `scale(${(R / B).toFixed(3)})`,
+      animation: still ? "none" : `svGrow ${cover}ms cubic-bezier(0.62, 0, 0.22, 1) both`,
+    }} />
+  );
 
   return (
     <div aria-hidden="true" style={{
@@ -164,10 +202,10 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
 
       {kind === "lantern" ? (
         <>
-          <div style={flood(`radial-gradient(circle, #e2fff0 0%, ${G} 6%, #0f5532 32%, #04170c 70%, #010503 100%)`)} />
+          {flood(LANTERN_FLOOD)}
           {!still && <>
             {[0, 300].map(delay => (
-              <div key={delay} style={{ ...disc(R * 0.95), background: ringOf(G, "88"), opacity: 0, animation: `svWave 1500ms cubic-bezier(0.2, 0.7, 0.3, 1) ${delay}ms both` }} />
+              <Glow key={delay} stops={LANTERN_RING} px={384} style={{ ...small, opacity: 0, animation: `svWave 1500ms cubic-bezier(0.2, 0.7, 0.3, 1) ${delay}ms both` }} />
             ))}
             <div style={{ ...disc(90), background: `radial-gradient(circle, #ffffff 0%, ${G}aa 35%, transparent 70%)`, opacity: 0, animation: "svFlash 900ms ease-out both" }} />
             {FLYING.map(([, , size, delay], i) => (
@@ -181,10 +219,10 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
         </>
       ) : (
         <>
-          <div style={flood(`radial-gradient(circle, ${WHITE} 0%, #fff1f7 12%, #ffd5e6 40%, ${PINK} 72%, ${ROSE} 100%)`)} />
+          {flood(AVIELA_FLOOD)}
           {!still && <>
             {/* Light running out ahead of the pink. */}
-            <div style={{ ...disc(R * 0.95), background: ringOf("#ffffff", "aa"), opacity: 0, animation: "svWave 1600ms cubic-bezier(0.2, 0.7, 0.3, 1) 60ms both" }} />
+            <Glow stops={AVIELA_RING} px={384} style={{ ...small, opacity: 0, animation: "svWave 1600ms cubic-bezier(0.2, 0.7, 0.3, 1) 60ms both" }} />
 
             {/* The lily. Each petal is its own picture, turned out from the
                 middle and grown from its base. */}

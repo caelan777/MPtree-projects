@@ -530,7 +530,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   };
   const sayNotAfraid = (at: Point) => {
     markLanternAsked();
-    setAsking(false);
+    // The dark stays until the green has covered it, or the page would show
+    // through for a moment between the two.
     setReveal({ kind: "lantern", at });
   };
 
@@ -810,7 +811,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
         {reveal && (
           <StyleReveal kind={reveal.kind} at={reveal.at}
-            onCovered={() => (reveal.kind === "aviela" ? enterAviela() : enterLantern())}
+            onCovered={() => { setAsking(false); if (reveal.kind === "aviela") enterAviela(); else enterLantern(); }}
             onDone={() => setReveal(null)} />
         )}
 
