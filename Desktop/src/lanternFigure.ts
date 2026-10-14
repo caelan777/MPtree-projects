@@ -14,8 +14,8 @@ import groundLightUrl from "./assets/lantern-ground-light.webp";
 //
 // Two layers for the question, so the light can swell with the voice: the
 // figure (`body`) and the green light on it (`light`). Behind the list, one
-// picture: as he is on a dark app, as a faint grey mist with the green on it
-// on a light one.
+// picture: as he is on a dark app, and on a light one faint, as if seen
+// through the page.
 
 /** The two layers, for the question: the figure, and the light on it. */
 export function lanternFigure(): { body: string; light: string } {

@@ -62,44 +62,28 @@ const glow = await withAlpha(base, (l, e, r, g, b) => e * Math.min(1, Math.max(0
 // photo would be a grey cloud, so there only what has light in it shows: the
 // green, the hair, the edges the light catches, as a faint shadow.
 const groundDark = await withAlpha(await sharp(base).modulate({ brightness: 0.85 }).toBuffer(), (_l, e) => e, 0.5);
-// The body itself is as black as the dark round it in the photo, so on a
-// light app it is given its shape by a very soft outline laid where the
-// figure stands: a faint grey mist of him. What has light in it (the green,
-// the hair) keeps its colour, made bright where it is thin so it has no dark
-// rim against the page.
+// On a light app: the photo itself, faint, as if seen through the page.
+// Caelan's own mock-up of the screen was exactly this. It fades out in the
+// shape of the figure, not of a circle: a circle left a grey disc round him,
+// since the dark behind him in the photo is as dark as he is.
 const HALF = "M300 46C332 46 354 66 358 102C364 108 368 120 364 134C362 142 358 146 356 150" +
   "C352 174 344 190 334 200C338 214 340 228 350 240C374 250 402 256 434 265" +
   "C474 274 506 296 518 336C528 372 530 430 532 560L300 560Z";
-const shape = await sharp(Buffer.from(
+const bust = await sharp(Buffer.from(
   `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 600 560">` +
-  // On black, so the blur softens the shape and not only its transparency.
   `<rect width="600" height="560" fill="#000"/>` +
-  `<g transform="translate(300 60) scale(0.84 0.9) translate(-300 -46)"><path d="${HALF}" fill="#fff"/>` +
+  `<g transform="translate(300 40) scale(0.95 0.95) translate(-300 -46)"><path d="${HALF}" fill="#fff"/>` +
   `<path d="${HALF}" fill="#fff" transform="translate(600 0) scale(-1 1)"/></g></svg>`,
-)).blur(34).greyscale().raw().toBuffer();
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const groundLight = await (async () => {
-  const soft = await sharp(base).blur(12).raw().toBuffer({ resolveWithObject: true });
-  const { data, info } = soft;
-  const ed = await edge(0.6);
-  const out = Buffer.alloc(W * H * 4);
-  const MIST = [92, 96, 92];
-  for (let p = 0, i = 0; p < W * H; p++, i += info.channels) {
-    const r = data[i], g = data[i + 1], b = data[i + 2];
-    const l = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-    // Graded, not cut off at some brightness: a cut leaves an edge.
-    const lit = Math.min(1, Math.pow(Math.max(0, l - 0.015) / 0.22, 0.9));
-    // Thin light, brightened to its own colour rather than left dark.
-    const lift = Math.min(2.4, 0.34 / Math.max(l, 0.05));
-    for (let c = 0; c < 3; c++) {
-      const bright = Math.min(255, [r, g, b][c] * lift);
-      out[p * 4 + c] = Math.round(MIST[c] + (bright - MIST[c]) * lit);
-    }
-    const a = (ed[p] / 255) * Math.min(1, (shape[p] / 255) * 0.24 + lit * 0.7);
-    out[p * 4 + 3] = Math.round(255 * a);
-  }
-  return sharp(out, { raw: { width: W, height: H, channels: 4 } });
-})();
+)).blur(40).greyscale().raw().toBuffer();
+// A little sharper than the question, so the cords of the suit show faintly.
+const sharper = await sharp(SOURCE).extract(CROP).resize(W, H).blur(5).toBuffer();
+// Gone by the chest: below the shoulders he fades into the page.
+const down = y => 1 - Math.max(0, Math.min(1, (y / H - 0.52) / 0.3));
+let at = 0;
+const groundLight = await withAlpha(sharper, (_l, e) => {
+  const y = Math.floor(at / W);
+  return e * (bust[at++] / 255) * down(y) * 0.36;
+}, 0.75);
 
 const webp = img => img.webp({ quality: 86, alphaQuality: 90, smartSubsample: true }).toBuffer();
 const files = {
