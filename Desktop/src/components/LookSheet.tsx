@@ -486,8 +486,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   };
   const colourNames: Record<string, string> = Object.fromEntries([
     ...DARKS.map(d => [`dark:${d.id}`, d.label]), ...LIGHTS.map(l => [`light:${l.id}`, l.label]),
-    // Lantern's own dark green is only on its page, not under Custom.
-    ["dark:lantern", "Lantern"],
   ]);
   const colourNow = `${theme}:${dark ? look.dark : look.light}`;
   const wearLantern = (l: Look["lantern"]) => {

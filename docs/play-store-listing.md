@@ -11,7 +11,7 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 ## Release notes for 1.2.3 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.3.aab`
-(versionCode 68, built 2026-10-14 with `npm run build:play`). It is the first
+(versionCode 68, built 2026-10-14 with `npm run build:play`; test build 49 took 69, so a rebuilt bundle is 70). It is the first
 Play bundle with R8 on; its mapping file is inside the bundle, so Play needs no
 separate upload. Nothing new to declare: no new permission (Lantern's voice is a
 sound file in the app, nothing is recorded), and the data safety answers for

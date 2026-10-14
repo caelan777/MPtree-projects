@@ -33,6 +33,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, TrialOverSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
+import { lanternBackdrop } from "./lanternFigure";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
@@ -3469,7 +3470,7 @@ export default function App() {
         .dscroll::-webkit-scrollbar-thumb { background: ${TH.dim}; border-radius: 6px; border: 3px solid ${TH.bg}; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ backgroundColor: TH.bg, ...groundFlowers(look.flowers), color: TH.text, minHeight: `calc(100vh - ${TITLE_H}px)`, height: `calc(100vh - ${TITLE_H}px)`, marginTop: TITLE_H, display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", ...(wide ? { display: "grid", height: `calc(100vh - ${TITLE_H}px)`, gridTemplateColumns: wide && panelFits && currentSong ? `${sideW}px minmax(0, 1fr) ${panelOpen ? panelW : 44}px` : `${sideW}px minmax(0, 1fr)`, gridTemplateRows: "minmax(0, 1fr) auto" } : null) }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...(styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers)), color: TH.text, minHeight: `calc(100vh - ${TITLE_H}px)`, height: `calc(100vh - ${TITLE_H}px)`, marginTop: TITLE_H, display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", ...(wide ? { display: "grid", height: `calc(100vh - ${TITLE_H}px)`, gridTemplateColumns: wide && panelFits && currentSong ? `${sideW}px minmax(0, 1fr) ${panelOpen ? panelW : 44}px` : `${sideW}px minmax(0, 1fr)`, gridTemplateRows: "minmax(0, 1fr) auto" } : null) }}>
 
         <TitleBar T={TH} />
         {wide && (

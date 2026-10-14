@@ -37,10 +37,10 @@ export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`
 export const LANTERN_CARDS: readonly CardShade[] = ["dark:lantern", "light:lantern", "dark:classic", "light:classic"];
 /** A colour of the app with its mode, written the way a header card's is. */
 export type AppColour = Exclude<CardShade, "default">;
-/** The colours Lantern can be worn on: the usual ones, and its own. */
-export const LANTERN_COLOURS: readonly AppColour[] = [
-  "dark:classic", "dark:graphite", "light:classic", "light:paper", "light:stone", "light:pink", "light:sage", "dark:lantern",
-];
+/** The colours Lantern can be worn on: black, white and paper. Paper first
+ *  picked, since October 2026; until then it was every colour and a dark
+ *  green of its own. */
+export const LANTERN_COLOURS: readonly AppColour[] = ["dark:classic", "light:classic", "light:paper"];
 /** The header cards Aviela comes with: white, pink or black. */
 export const AVIELA_CARDS: readonly CardShade[] = ["light:classic", "light:pink", "dark:classic"];
 
@@ -68,7 +68,7 @@ export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
   flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
-  lantern: { record: "lantern", card: "dark:lantern", colour: "dark:classic" },
+  lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
 };
 
 /** What anyone gets without Pro. */
@@ -132,13 +132,17 @@ export async function loadLook(): Promise<Look> {
       if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
       {
         const l = { ...DEFAULT_LOOK.lantern, ...look.lantern };
-        const ok = isLanternRecord(l.record) && LANTERN_CARDS.includes(l.card) && LANTERN_COLOURS.includes(l.colour);
-        look = { ...look, lantern: ok ? { record: l.record, card: l.card, colour: l.colour } : DEFAULT_LOOK.lantern };
+        const ok = isLanternRecord(l.record) && LANTERN_CARDS.includes(l.card);
+        // A colour Lantern no longer has (all the others, and its own dark
+        // green) becomes paper; the record and the card stay as they were.
+        const colour = LANTERN_COLOURS.includes(l.colour) ? l.colour : DEFAULT_LOOK.lantern.colour;
+        look = { ...look, lantern: ok ? { record: l.record, card: l.card, colour } : DEFAULT_LOOK.lantern };
       }
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode, and there was an
-      // AMOLED black until October 2026: black is the nearest to all of them.
-      if (!(["classic", "graphite", "lantern"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
+      // AMOLED black until October 2026, and Lantern's own dark green until
+      // later that month: black is the nearest to all of them.
+      if (!(["classic", "graphite"] as string[]).includes(look.dark)) look = { ...look, dark: "classic" };
       for (const k of ["cardDark", "cardLight"] as const) {
         if (String(look[k]) === "dark:amoled") look = { ...look, [k]: "dark:classic" };
         if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
