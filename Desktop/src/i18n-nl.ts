@@ -693,6 +693,9 @@ export const NL: Record<string, string> = {
   "Zoom": "Zoom",
   "Use this": "Deze gebruiken",
   "Are you afraid?": "Ben je bang?",
+  // The question on screen in two parts, the second one large.
+  "Are you": "Ben je",
+  "afraid?": "bang?",
   "Yes": "Ja",
   "No": "Nee",
   "Lantern is locked for {n} more day.": "Lantern zit nog {n} dag op slot.",

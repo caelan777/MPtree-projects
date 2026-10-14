@@ -693,6 +693,9 @@ export const ES: Record<string, string> = {
   "Zoom": "Zoom",
   "Use this": "Usar esta",
   "Are you afraid?": "¿Tienes miedo?",
+  // The question on screen in two parts, the second one large.
+  "Are you": "¿Tienes",
+  "afraid?": "miedo?",
   "Yes": "Sí",
   "No": "No",
   "Lantern is locked for {n} more day.": "Lantern sigue bloqueado {n} día más.",
