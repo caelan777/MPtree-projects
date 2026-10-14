@@ -12,7 +12,7 @@ import { Preferences } from "@capacitor/preferences";
 // whole look. The app icon is one for both.
 
 /** The records of the Aviela style, drawn in flowers.ts. */
-export const FLOWER_RECORDS = ["daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet", "dahlia", "oxeye", "night", "branch", "posy"] as const;
+export const FLOWER_RECORDS = ["lily", "daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet", "dahlia", "oxeye", "night", "branch", "posy"] as const;
 export type FlowerRecord = typeof FLOWER_RECORDS[number];
 export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS as readonly string[]).includes(v);
 /** The records of the Lantern style, drawn in lantern.ts. */
@@ -67,7 +67,7 @@ export type Look = {
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
-  flowers: "none", aviela: { record: "daisy", flowers: "sprig", card: "light:classic" },
+  flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
   lantern: { record: "lantern", card: "dark:lantern", colour: "dark:classic" },
 };
 

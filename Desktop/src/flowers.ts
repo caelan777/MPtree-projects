@@ -89,6 +89,7 @@ export const RECORD_LABEL: Record<FlowerRecord, { bg: string; ink: string }> = {
   night:   { bg: PINK,  ink: INK },
   branch:  { bg: INK,   ink: WHITE },
   posy:    { bg: WHITE, ink: INK },
+  lily:    { bg: WHITE, ink: INK },
 };
 
 /** The records on a dark ground, which keep the deeper shadow. */
@@ -179,6 +180,34 @@ function drawRecord(skin: FlowerRecord): string {
       // Plain pink, with a small ring of flowers round the label.
       art = ring(80, 10, (x, y, i, deg) => flower(x, y, 19, { n: 5, fill: i % 2 ? WHITE : ROSE, heart: i % 2 ? GOLD : WHITE, turn: deg }));
       break;
+    case "lily": {
+      // One pink lily, Aviela's favourite, as large as the record: six long
+      // pointed petals, deep pink at the heart and white at the tips and edges,
+      // speckled near the middle, with stamens standing out round the label.
+      base = BLUSH;
+      // The same petal as the lily in StyleReveal, from its 60 by 150 box to
+      // one that points up from the middle of the record.
+      const k = 194 / 150;
+      const pt = (x: number, y: number) => `${r1((x - 30) * k)} ${r1((y - 150) * k)}`;
+      const lily = `M${pt(30, 150)}C${pt(9, 122)} ${pt(2, 76)} ${pt(13, 40)}C${pt(18, 22)} ${pt(25, 9)} ${pt(30, 0)}C${pt(35, 9)} ${pt(42, 22)} ${pt(47, 40)}C${pt(58, 76)} ${pt(51, 122)} ${pt(30, 150)}Z`;
+      // The petals are drawn round 0,0 (their group is moved to the middle), so
+      // the gradient is centred there too.
+      art = `<defs><radialGradient id="lp" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="196">`
+          + `<stop offset="0" stop-color="#d94a8a"/><stop offset="0.38" stop-color="#ef7fb3"/><stop offset="0.74" stop-color="#f9c6dc"/><stop offset="1" stop-color="#fff2f8"/></radialGradient></defs>`;
+      for (let i = 0; i < 6; i++) {
+        const turn = i * 60 + (i % 2 ? 4 : -3);
+        art += `<g transform="translate(200 200) rotate(${turn})">`
+             + `<path d="${lily}" fill="url(#lp)" stroke="#ffffff" stroke-opacity="0.75" stroke-width="2.4" stroke-linejoin="round"/>`
+             + `<path d="M0 -6C-2 -60 -1 -130 0 -176" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>`
+             + [[-6, 64, 2.4], [7, 76, 2.2], [-9, 88, 2], [5, 98, 2.3], [-4, 110, 1.9], [9, 60, 1.8], [-10, 74, 1.7]]
+                 .map(([x, y, r]) => `<circle cx="${x}" cy="${-y}" r="${r}" fill="#a8235f" opacity="0.75"/>`).join("")
+             + `</g>`;
+      }
+      art += ring(76, 6, (x, y, _i, deg) =>
+        `<path d="M200 200Q${r1(200 + (x - 200) * 0.45)} ${r1(200 + (y - 200) * 0.75)} ${r1(x)} ${r1(y)}" fill="none" stroke="#f6e7c8" stroke-width="2.6" stroke-linecap="round"/>`
+        + `<ellipse cx="${r1(x)}" cy="${r1(y)}" rx="9" ry="4" transform="rotate(${r1(deg + 90)} ${r1(x)} ${r1(y)})" fill="#a4521f"/>`, 30);
+      break;
+    }
   }
   let grooves = "";
   for (let r = 68; r <= 190; r += 7) grooves += `<circle cx="200" cy="200" r="${r}" fill="none" stroke="${groove}" stroke-width="1.1"/>`;

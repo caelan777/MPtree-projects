@@ -11,7 +11,7 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 ## Release notes for 1.2.2 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.2.aab`
-(versionCode 50; test builds 32 to 44 took 51 to 63, so a rebuilt bundle is 64). Nothing new to declare: no new permission, and the data safety
+(versionCode 50; test builds 32 to 45 took 51 to 64, so a rebuilt bundle is 65). Nothing new to declare: no new permission, and the data safety
 answers for 1.2.0 still hold. The `es-ES` block is only of use once the listing
 itself has a Spanish translation in the console.
 

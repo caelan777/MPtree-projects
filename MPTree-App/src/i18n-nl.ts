@@ -643,4 +643,5 @@ export const NL: Record<string, string> = {
   "What you changed here has not been applied yet.": "Wat je hier hebt veranderd, is nog niet toegepast.",
   "Discard": "Weggooien",
   "Keep editing": "Verder bewerken",
+  "Lily": "Lelie",
 };

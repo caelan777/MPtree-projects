@@ -643,4 +643,5 @@ export const ES: Record<string, string> = {
   "What you changed here has not been applied yet.": "Lo que has cambiado aquí aún no se ha aplicado.",
   "Discard": "Descartar",
   "Keep editing": "Seguir editando",
+  "Lily": "Lirio",
 };

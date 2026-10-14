@@ -6,6 +6,7 @@ import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { LanternGate } from "./LanternGate";
 import { StyleReveal } from "./StyleReveal";
+import { primeLanternVoice } from "../lanternVoice";
 import { usePro } from "../pro";
 import {
   useLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
@@ -389,7 +390,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const RECORD_NAMES: Record<FlowerRecord, string> = {
     daisy: t("Daisy ring"), bloom: t("One bloom"), blossom: t("Blossom"), lines: t("Line drawing"), wreath: t("Wreath"),
     petals: t("Loose petals"), ditsy: t("Small flowers"), bouquet: t("Bouquet"), dahlia: t("Dahlia"), oxeye: t("One daisy"),
-    night: t("Night garden"), branch: t("Blossom branch"), posy: t("Posy"),
+    night: t("Night garden"), branch: t("Blossom branch"), posy: t("Posy"), lily: t("Lily"),
   };
   const FLOWER_NAMES: Record<AvielaFlowers, string> = {
     sprig: t("Sprig"), garland: t("Garland"), mark: t("One flower"), bloom: t("Big bloom"), vine: t("Vine"),
@@ -495,7 +496,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         return;
       }
       // The first time, the ring asks.
-      if (!lanternAsked()) { setAsking(true); return; }
+      // In the tap itself: sound may only start from one.
+      if (!lanternAsked()) { primeLanternVoice(); setAsking(true); return; }
     }
     setReveal({ kind: "lantern", at });
   };
