@@ -19,11 +19,11 @@ const plain: React.CSSProperties = { background: "transparent", border: "none", 
  *  mini-player stands on a phone, and has room for what that one leaves to the
  *  expanded player: the timeline. Volume is new here; a phone has buttons. */
 export function DesktopPlayerBar({
-  T, art, title, artist, hasSong, isPlaying, playMode, currentTime, duration, volume, fmt,
+  T, art, title, artist, hasSong, isPlaying, playMode, repeatOn, currentTime, duration, volume, fmt,
   onTogglePlay, onSkip, onShuffle, onRepeat, onSeek, onVolume, onExpand,
 }: {
   T: T; art: ReactNode; title: string; artist: string; hasSong: boolean;
-  isPlaying: boolean; playMode: PlayMode; currentTime: number; duration: number; volume: number;
+  isPlaying: boolean; playMode: PlayMode; repeatOn: boolean; currentTime: number; duration: number; volume: number;
   fmt: (ms: number) => string;
   onTogglePlay: () => void; onSkip: (dir: 1 | -1) => void; onShuffle: () => void; onRepeat: () => void;
   onSeek: (ms: number) => void; onVolume: (v: number) => void; onExpand: () => void;
@@ -59,7 +59,7 @@ export function DesktopPlayerBar({
             {isPlaying ? <IC.Pause /> : <IC.Play />}
           </button>
           <button onClick={() => onSkip(1)} aria-label={t("Next")} style={{ ...plain, color: T.text }}><IC.SkipF /></button>
-          <button onClick={onRepeat} aria-label={t("Repeat")} style={{ ...plain, color: playMode === "repeat" ? T.repeat : T.muted }}><IC.Repeat /></button>
+          <button onClick={onRepeat} aria-label={t("Repeat")} style={{ ...plain, color: repeatOn ? T.repeat : T.muted }}><IC.Repeat /></button>
         </div>
         <div style={{ display: "flex", alignItems: "center", marginTop: 4, fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>
           <span style={{ width: 38, textAlign: "right" }}>{fmt(shown)}</span>

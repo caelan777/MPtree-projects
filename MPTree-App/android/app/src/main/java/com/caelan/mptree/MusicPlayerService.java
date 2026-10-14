@@ -881,11 +881,8 @@ public class MusicPlayerService extends Service {
     private void maybeStartCrossfade() {
         if (crossfadeDurationMs <= 0) return;
         if (crossfading || isPreparing || mediaPlayer == null) return;
-        if (nativeQueue.isEmpty() || nativeQueueIndex < 0) return;
-
-        Track currentTrack = (nativeQueueIndex >= 0 && nativeQueueIndex < nativeQueue.size())
-                ? nativeQueue.get(nativeQueueIndex) : null;
-        if (currentTrack != null && currentTrack.isCut) return;
+        // A cut is never faded out of: its end marker is where it stops.
+        if (curCutFrom > 0 || curCutTo > 0) return;
 
         Track upcoming = peekNextTrack();
         if (upcoming == null || upcoming.isCut) return;
@@ -900,9 +897,8 @@ public class MusicPlayerService extends Service {
     }
 
     private Track peekNextTrack() {
-        if (MODE_REPEAT.equals(playMode)) {
-            return nativeQueue.get(nativeQueueIndex);
-        }
+        if (MODE_REPEAT.equals(playMode)) return currentAsTrack();
+        if (nativeQueue.isEmpty() || nativeQueueIndex < 0) return null;
         int next = nativeQueueIndex + 1;
         if (next < 0 || next >= nativeQueue.size()) return null;
         return nativeQueue.get(next);
@@ -1016,7 +1012,36 @@ public class MusicPlayerService extends Service {
         mainHandler.post(ramp);
     }
 
+    /** The song that is on, as a track. Repeat plays this one again, and it
+     *  used to be read from the queue at the current index instead, which is
+     *  not always this song: with no queue, or a queue just handed over, the
+     *  song was not faded into again, or another one was. */
+    private Track currentAsTrack() {
+        if (currentPath == null) return null;
+        if (nativeQueueIndex >= 0 && nativeQueueIndex < nativeQueue.size()) {
+            Track t = nativeQueue.get(nativeQueueIndex);
+            if (t.path.equals(currentPath) && t.cutFrom == curCutFrom && t.cutTo == curCutTo) return t;
+        }
+        return new Track(currentPath, currentTitle, currentArtist, curCutTo > 0, curCutFrom, curCutTo);
+    }
+
+    /** The song is over, by itself or at a cut's end marker. With repeat on it
+     *  plays again; otherwise the queue moves on. A skip by hand, from the
+     *  lock screen or a headset, always moves on: that is nativeSkip. */
     private void advanceForCompletion() {
+        if (MODE_REPEAT.equals(playMode)) {
+            Track t = currentAsTrack();
+            if (t != null) {
+                // play() finds its place in the queue by the file, and a song
+                // can be in the queue twice; repeat keeps the place it has.
+                int keep = nativeQueueIndex;
+                try {
+                    play(t.path, t.title, t.artist, true, t.cutFrom, t.cutTo);
+                    nativeQueueIndex = keep;
+                    return;
+                } catch (Exception ignored) { /* moves on below */ }
+            }
+        }
         nativeSkip(1);
     }
 
@@ -1041,12 +1066,9 @@ public class MusicPlayerService extends Service {
             return;
         }
 
-        int next;
-        if (dir > 0 && MODE_REPEAT.equals(playMode)) {
-            next = nativeQueueIndex;
-        } else {
-            next = nativeQueueIndex + dir;
-        }
+        // Repeat is for when a song ends (advanceForCompletion). Next means
+        // the next song, repeat on or not; it used to play the same one again.
+        int next = nativeQueueIndex + dir;
 
         if (next < 0 || next >= nativeQueue.size()) {
             // Queue exhausted: stop and notify JS to reset its transport UI.

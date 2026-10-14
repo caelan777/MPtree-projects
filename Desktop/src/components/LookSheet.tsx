@@ -604,7 +604,18 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
             )}
             <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{page === "aviela" ? "Aviela" : page === "lantern" ? "Lantern" : t("Personalise")}</span>
           </div>
-          <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
+          {/* On the pages of Aviela and Lantern the way out is the back
+              arrow, and the corner is where they are kept. */}
+          {page === "main" ? (
+            <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
+          ) : changed && (
+            <button onClick={needsPro ? onNeedPro : apply} style={{
+              flexShrink: 0, padding: "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
+              borderRadius: 18, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+            }}>
+              {needsPro ? t("Keep it with Pro") : t("Apply")}
+            </button>
+          )}
         </div>
 
         <div aria-hidden="true" style={{ flexShrink: 0, display: "flex", justifyContent: "center", gap: 12, padding: "2px 16px 14px" }}>
@@ -799,7 +810,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         {/* Only while something is changed: the way to keep it. With a locked
             option on show and no Pro, that way is Pro (whose page has the free
             week too). */}
-        {changed && (
+        {changed && page === "main" && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
             <button onClick={needsPro ? onNeedPro : apply} style={sh.saveBtn}>
               {needsPro ? t("Keep it with Pro") : t("Apply")}

@@ -60,6 +60,8 @@ type PlayerExpandSheetProps = {
   currentTime: number;
   duration: number;
   playMode: PlayMode;
+  /** Repeat the song that is on; separate from shuffle. */
+  repeatOn: boolean;
   isLiked: boolean;
   /** Current playback speed multiplier (1 = normal). */
   playbackSpeed: number;
@@ -72,9 +74,7 @@ type PlayerExpandSheetProps = {
   getCustomPhoto?: (s: Song) => string | undefined;
   onTogglePlay: () => void;
   onSkip: (dir: -1 | 1) => void;
-  /** Cycles the play mode: off → shuffle → repeat → off. */
-  /** Shuffle and repeat each have a button. They do not go together: turning
-   *  one on turns the other off. */
+  /** Shuffle and repeat each have a button, and each is on or off by itself. */
   onToggleShuffle: () => void;
   onToggleRepeat: () => void;
   onSeek: (ms: number) => void;
@@ -108,7 +108,7 @@ type PlayerExpandSheetProps = {
 
 export function PlayerExpandSheet({
   song, dispName, dispArtist, customPhoto, backdropPhoto,
-  isPlaying, currentTime, duration, playMode, isLiked,
+  isPlaying, currentTime, duration, playMode, repeatOn, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
   upNextQueue, playNextQueue = [], getDispName, getDispArtist, getCustomPhoto,
   onTogglePlay, onSkip, onToggleShuffle, onToggleRepeat,
@@ -151,7 +151,7 @@ export function PlayerExpandSheet({
 
   /** The shuffle or the repeat button: coloured, with a dot under it, while on. */
   const modeButton = (mode: "shuffle" | "repeat") => {
-    const on = playMode === mode;
+    const on = mode === "shuffle" ? playMode === "shuffle" : repeatOn;
     const tint = mode === "shuffle" ? T.violet : T.repeat;
     return (
       <button

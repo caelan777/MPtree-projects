@@ -156,6 +156,10 @@ export default function App() {
   const [currentSong,    setCurrent]       = useState<Song | null>(null);
   const [isPlaying,      setPlaying]       = useState(false);
   const [playMode,       setPlayMode]      = useState<PlayMode>("off");
+  // Repeat plays the song that is on again when it ends. A switch of its own
+  // next to shuffle, so a shuffled queue can have a song on repeat in it.
+  // (PlayMode still knows "repeat" from when the two were one setting.)
+  const [repeatOn,       setRepeatOn]      = useState(false);
   const [search,         setSearch]        = useState("");
   const [filter,         setFilter]        = useState<FilterId>("newest");
   // Narrow the list to one artist. Separate from `filter` because it is a
@@ -672,6 +676,7 @@ export default function App() {
   const playContextRef = useRef<Song[] | null>(null);
   const curRef       = useRef<Song | null>(null);
   const playModeRef  = useRef<PlayMode>("off");
+  const repeatOnRef  = useRef(false);
   const filterRef    = useRef<FilterId>("newest");
   const currentTimeRef  = useRef<number>(0);
   const sessionReadyRef = useRef(false);
@@ -681,6 +686,12 @@ export default function App() {
   const metaRef      = useRef<Record<string, SongMeta>>({});
   /** Whether meta has changed since it was last written. See the sync effect. */
   const metaDirtyRef = useRef(false);
+  /** The meta that counting a play made, while nothing else has changed
+   *  since. Every song played changes meta, and meta holds every cover and
+   *  every lyric: writing all of that down and syncing it each time a song
+   *  started made the app stutter on every skip. A play count alone waits for
+   *  the next real change, or for the app being left. */
+  const statsMetaRef = useRef<Record<string, SongMeta> | null>(null);
   const removedRef   = useRef<Song[]>([]);
   const pressTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartX  = useRef(0);
@@ -720,6 +731,7 @@ export default function App() {
   }, [songs, libraryReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { curRef.current = currentSong; }, [currentSong]);
   useEffect(() => { playModeRef.current = playMode; }, [playMode]);
+  useEffect(() => { repeatOnRef.current = repeatOn; }, [repeatOn]);
   useEffect(() => { removedRef.current = removedSongs; }, [removedSongs]);
   useEffect(() => { filterRef.current = filter; }, [filter]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
@@ -798,6 +810,7 @@ export default function App() {
   const sessionNow = useCallback((): Parameters<typeof saveSession>[0] => ({
         filter:       filterRef.current,
         playMode:     playModeRef.current,
+        repeat:       repeatOnRef.current,
         currentId:    curRef.current?.id,
         queueIds:     playModeRef.current === "shuffle"
                         ? queueRef.current.map(s => s.id)
@@ -811,14 +824,21 @@ export default function App() {
         theme:        themeRef.current,
         playNextQueue: playNextQueueRef.current,
   }), []);
-  const flushSession = useCallback(() => {
+  // The session is small and is written down often: on every change of song
+  // and every few seconds while playing. Meta is not small (covers, lyrics),
+  // so that waits for `andMeta`, when the app is being left; until then the
+  // timer in saveMeta has it.
+  const flushMetaRef = useRef(false);
+  const flushSession = useCallback((andMeta = false) => {
+    if (andMeta) flushMetaRef.current = true;
     if (flushSessionTimer.current) return;
     flushSessionTimer.current = setTimeout(() => {
       flushSessionTimer.current = null;
-      if (metaDirtyRef.current) {
+      if (flushMetaRef.current && metaDirtyRef.current) {
         metaDirtyRef.current = false;
         saveMetaNow(metaRef.current);
       }
+      flushMetaRef.current = false;
       saveSession(sessionNow());
     }, 0);
   }, [sessionNow]);
@@ -931,7 +951,8 @@ export default function App() {
         pendingSession = session;
 
         if (session.filter)   setFilter(session.filter);
-        if (session.playMode) setPlayMode(session.playMode);
+        if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
+        setRepeatOn(session.repeat === true || session.playMode === "repeat");
         if (session.crossfadeMs != null) {
           setCrossfadeMs(session.crossfadeMs);
           crossfadeMsRef.current = session.crossfadeMs;
@@ -957,7 +978,7 @@ export default function App() {
           playNextQueueRef.current = session.playNextQueue;
         }
 
-        AudioPlayer.setPlayMode({ mode: session.playMode ?? "off" }).catch(() => {});
+        AudioPlayer.setPlayMode({ mode: session.repeat ? "repeat" : session.playMode ?? "off" }).catch(() => {});
         if (session.crossfadeMs)  AudioPlayer.setCrossfadeDuration({ milliseconds: session.crossfadeMs }).catch(() => {});
         if (session.playbackSpeed && session.playbackSpeed !== 1) AudioPlayer.setPlaybackSpeed({ speed: session.playbackSpeed }).catch(() => {});
         if (session.eqEnabled)    AudioPlayer.setEqualizerEnabled({ enabled: true }).catch(() => {});
@@ -985,17 +1006,18 @@ export default function App() {
             .then(([{ position }, { duration: dur }]) => { setCurrentTime(position); currentTimeRef.current = position; if (dur > 0) setDuration(dur); })
             .catch(() => {});
         }));
-      } else { flushSession(); }
+      } else { flushSession(true); }
     });
-    const pauseSub = CapApp.addListener("pause" as any, () => flushSession());
-    const onVis = () => { if (document.visibilityState === "hidden") flushSession(); };
+    const leave = () => flushSession(true);
+    const pauseSub = CapApp.addListener("pause" as any, leave);
+    const onVis = () => { if (document.visibilityState === "hidden") leave(); };
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("pagehide", flushSession);
+    window.addEventListener("pagehide", leave);
     return () => {
       sub.then(s => s.remove());
       pauseSub.then(s => s.remove()).catch(() => {});
       document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("pagehide", flushSession);
+      window.removeEventListener("pagehide", leave);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1004,14 +1026,15 @@ export default function App() {
     if (!sessionReadyRef.current) return;
     flushSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, playMode, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
+  }, [filter, playMode, repeatOn, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
 
-  useEffect(() => { if (!sessionReadyRef.current) return; saveMeta(meta); }, [meta]);
+  useEffect(() => { if (!sessionReadyRef.current || meta === statsMetaRef.current) return; saveMeta(meta); }, [meta]);
 
   useEffect(() => {
     if (!sessionReadyRef.current) return;
-    AudioPlayer.setPlayMode({ mode: playMode }).catch(() => {});
-  }, [playMode]);
+    // The service only needs to know about repeat; shuffle is the queue's order.
+    AudioPlayer.setPlayMode({ mode: repeatOn ? "repeat" : playMode }).catch(() => {});
+  }, [playMode, repeatOn]);
 
   useEffect(() => {
     if (!sessionReadyRef.current) return;
@@ -1185,6 +1208,12 @@ export default function App() {
       beginProgrammaticScroll();
       const el = songRowRefs.current.get(currentSong.id);
       if (el) {
+        // Already in view: left where it is. Scrolling the list to the middle
+        // on every skip moved the whole screen each time a song changed.
+        const box = scrollRef.current?.getBoundingClientRect();
+        const row = el.getBoundingClientRect();
+        const top = box ? box.top + (parseFloat(getComputedStyle(scrollRef.current!).paddingTop) || 0) : 0;
+        if (box && row.top >= top && row.bottom <= box.bottom - 140) return;
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
@@ -1374,6 +1403,19 @@ export default function App() {
   const cutBounds = (s: Song) =>
     s.isCut ? { cutFrom: Math.round(s.cutFrom ?? 0), cutTo: Math.round(s.cutTo ?? 0) } : null;
 
+  // Counting a play changes meta, and everything worked out from meta (the
+  // list, the smart playlists) is worked out again. That waits until the new
+  // song is going, and gives way to whatever the screen is doing then.
+  const countPlay = (id: string) => {
+    const at = Date.now();
+    setTimeout(() => React.startTransition(() => setMeta(prev => {
+      const cur = prev[id] || {};
+      const next = { ...prev, [id]: { ...cur, lastPlayedAt: at, playCount: (cur.playCount ?? 0) + 1 } };
+      statsMetaRef.current = next;
+      return next;
+    })), 1500);
+  };
+
   const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
     // Starting a track makes the app scroll to it. Flag that here, in the click
     // handler itself, rather than relying on the effect that performs the
@@ -1388,10 +1430,7 @@ export default function App() {
       if (s.isCut && s.cutFrom && s.cutFrom > 0) { setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom; }
       const idx = q.findIndex(x => x.id === s.id);
       AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: idx }).catch(() => {});
-      setMeta(prev => {
-        const cur = prev[s.id] || {};
-        return { ...prev, [s.id]: { ...cur, lastPlayedAt: Date.now(), playCount: (cur.playCount ?? 0) + 1 } };
-      });
+      countPlay(s.id);
     } catch (e) { showError(t("Play failed: ") + e); }
   };
 
@@ -1547,11 +1586,16 @@ export default function App() {
   };
 
   // ── Shuffle FAB ───────────────────────────────────────────────────────────
-  const onShufflePressStart = () => { shufflePressTimer.current = setTimeout(() => { hapticImpact("medium"); setPlayMode(prev => { const next: PlayMode = prev === "repeat" ? "off" : "repeat"; showToast(next === "repeat" ? t("Repeat on") : t("Repeat off")); return next; }); }, 600); };
+  const flipRepeat = (on: boolean) => {
+    setRepeatOn(on); repeatOnRef.current = on;
+    showToast(on ? t("Repeat on") : t("Repeat off"));
+  };
+  const onShufflePressStart = () => { shufflePressTimer.current = setTimeout(() => { hapticImpact("medium"); flipRepeat(!repeatOnRef.current); }, 600); };
   const onShufflePressEnd   = () => { if (shufflePressTimer.current) clearTimeout(shufflePressTimer.current); };
   const onShuffleClick = () => {
     hapticImpact("light");
-    if (playMode === "repeat") { setPlayMode("off"); showToast(t("Repeat off")); return; }
+    // While repeat is on the button shows it, and a tap turns it off.
+    if (repeatOn) { flipRepeat(false); return; }
     if (!displayList.length) return;
     openChrome();
     const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; playSong(q[0], q);
@@ -1600,13 +1644,11 @@ export default function App() {
     showToast(t("Shuffle on"));
   };
 
-  // The full player's repeat button. Repeat and shuffle do not go together, so
-  // leaving shuffle for repeat puts the order back first.
+  // The full player's repeat button. Repeat leaves shuffle alone: the queue
+  // stays as it is, and the song that is on plays again when it ends.
   const toggleRepeatFromPlayer = () => {
     hapticImpact("light");
-    if (playMode === "repeat") { setPlayMode("off"); showToast(t("Repeat off")); return; }
-    if (playMode === "shuffle" && currentSong) backInOrder(currentSong);
-    setPlayMode("repeat"); showToast(t("Repeat on"));
+    flipRepeat(!repeatOn);
   };
 
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
@@ -2041,7 +2083,8 @@ export default function App() {
       loadLogoPosRef.current();
       const session = await loadSession();
       if (session.filter) setFilter(session.filter);
-      if (session.playMode) setPlayMode(session.playMode);
+      if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
+      setRepeatOn(session.repeat === true || session.playMode === "repeat");
       if (session.crossfadeMs != null) setCrossfadeMs(session.crossfadeMs);
       if (session.playbackSpeed != null && session.playbackSpeed > 0) setPlaybackSpeed(session.playbackSpeed);
       if (session.eqEnabled != null) setEqEnabled(session.eqEnabled);
@@ -2068,8 +2111,13 @@ export default function App() {
   // seconds later, in one go.
   useEffect(() => {
     if (syncStarted.current) syncChanged();
-  }, [songs, removedSongs, meta, playlists, theme, uiSize, langPref, updateNotices, mixOthers, look,
-      filter, playMode, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
+  }, [songs, removedSongs, playlists, theme, uiSize, langPref, updateNotices, mixOthers, look,
+      filter, playMode, repeatOn, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
+  // Meta on its own, so a play count alone does not start a round (see
+  // statsMetaRef); it goes along with the next one.
+  useEffect(() => {
+    if (syncStarted.current && meta !== statsMetaRef.current) syncChanged();
+  }, [meta]);
 
   // ── Hooks ─────────────────────────────────────────────────────────────────
   // Stale-safe restore: uses functional setState so it works correctly even
@@ -3047,8 +3095,9 @@ export default function App() {
   const playerH    = currentSong && !selectMode && !chromeCollapsed ? 113 : 0;
   const selectBarH = selectMode ? 100 : 0;
   const bottomH    = playerH + selectBarH;
-  const modeBg     = playMode === "shuffle" ? TH.violet : playMode === "repeat" ? TH.repeat : TH.dim;
-  const modeShadow = playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : playMode === "repeat" ? "0 0 16px rgba(14,165,233,0.4)" : "none";
+  // Repeat first: with both on, the button shows repeat, and a tap ends it.
+  const modeBg     = repeatOn ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
+  const modeShadow = repeatOn ? "0 0 16px rgba(14,165,233,0.4)" : playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : "none";
   const filterLabel = FILTER_OPTIONS.find((o: { id: FilterId; label: string }) => o.id === filter)?.label ?? "Sort";
   const filterText = t(filterLabel);
   const selectedSongs = displayList.filter(s => selected.has(s.id));
@@ -3172,9 +3221,9 @@ export default function App() {
         /* Bars on the album art of the track that is playing. Defined here
            rather than in AlbumArt so a single rule serves every list that
            renders one (Songs, playlists, the bin). */
-        @keyframes mpEq { 0%,100% { height: 22%; } 50% { height: 92%; } }
-        .mp-eqbar { height: 40%; animation: mpEq 0.9s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) { .mp-eqbar { animation: none; height: 60%; } }
+        @keyframes mpEq { 0%,100% { transform: scaleY(0.22); } 50% { transform: scaleY(0.92); } }
+        .mp-eqbar { height: 100%; transform: scaleY(0.4); transform-origin: 50% 100%; will-change: transform; animation: mpEq 0.9s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .mp-eqbar { animation: none; transform: scaleY(0.6); } }
         /* The "tap the logo" pill shown the first few automatic collapses. */
         @keyframes mpHintIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
         .mp-hint { animation: mpHintIn 0.22s ease both; }
@@ -3938,8 +3987,8 @@ export default function App() {
                   onMouseDown={onShufflePressStart} onMouseUp={onShufflePressEnd}
                   onMouseLeave={() => { if (shufflePressTimer.current) clearTimeout(shufflePressTimer.current); }}
                   onClick={onShuffleClick}
-                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
-                  {playMode === "repeat" ? <IC.Repeat /> : <IC.Shuffle />}
+                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: !repeatOn && playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
+                  {repeatOn ? <IC.Repeat /> : <IC.Shuffle />}
                 </button>
               </div>
             )}
@@ -4218,6 +4267,7 @@ export default function App() {
                 currentTime={currentTime}
                 duration={duration}
                 playMode={playMode}
+                repeatOn={false}
                 isLiked={isLiked(lookSong)}
                 playbackSpeed={playbackSpeed}
                 onPlaybackSpeedChange={() => {}}
@@ -4373,6 +4423,7 @@ export default function App() {
               currentTime={currentTime}
               duration={duration}
               playMode={playMode}
+              repeatOn={repeatOn}
               isLiked={isLiked(currentSong)}
               playbackSpeed={playbackSpeed}
               onPlaybackSpeedChange={setPlaybackSpeed}
