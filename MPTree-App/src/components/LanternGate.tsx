@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { t, tn } from "../i18n";
 import { LANTERN_GREEN } from "../lantern";
 import { speakLanternVoice, playLanternBuildUp, VOICE_STEP, BUILD_MS, BUILD_BEATS } from "../lanternVoice";
@@ -8,8 +9,8 @@ import { lanternFigure, FIGURE_RATIO } from "../lanternFigure";
 // The first time someone with Pro puts Lantern on, the screen goes dark and
 // something builds: a low drone that rises, a hiss, a heart that beats faster
 // (lanternVoice.ts), and the dark pulses green on every beat. Then a hit, and
-// there is only light: the green on a man's shoulders (lanternFigure.ts), the
-// man himself left in the dark, flickering on. A moment of quiet, and a voice
+// slowly there is light: the green on a man's shoulders (lanternFigure.ts),
+// the man himself left in the dark, coming up out of it. A moment of quiet, and a voice
 // asks one thing: "Are you", then large, "afraid?", the light swelling with
 // it. Then the answer, by sliding: left for yes, right for no. "No" is the
 // way in: the Lantern page opens out of the light from where the knob let
@@ -26,8 +27,10 @@ import { lanternFigure, FIGURE_RATIO } from "../lanternFigure";
 const G = LANTERN_GREEN;
 const PALE = "#eafff2";
 
-/** When the light appears: at the hit, the end of the build-up. */
+/** When the light starts to come up: at the hit, the end of the build-up. */
 const REVEAL = BUILD_MS;
+/** How long it takes to come up out of the dark. */
+const RISE = 2600;
 /** When the voice asks, after a moment of quiet. */
 const SPEAK = BUILD_MS + 900;
 /** "afraid?" comes this long after "Are you", roughly as it is said. */
@@ -49,11 +52,13 @@ const BEAT_FRAMES = (() => {
 
 const STYLE = `
   @keyframes lgDark   { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes lgAppear { 0% { opacity: 0; transform: scale(1.08); } 12% { opacity: 0.7; } 100% { opacity: 1; transform: scale(1); } }
-  @keyframes lgIgnite { 0% { opacity: 0; } 8% { opacity: 1; } 14% { opacity: 0.2; } 22% { opacity: 0.9; } 30% { opacity: 0.35; } 42% { opacity: 1; } 100% { opacity: 0.55; } }
-  @keyframes lgFlash  { 0% { opacity: 0; } 6% { opacity: 0.5; } 100% { opacity: 0; } }
+  @keyframes lgAppear { 0% { opacity: 0; transform: translateY(16px) scale(1.035); } 100% { opacity: 1; transform: none; } }
+  @keyframes lgRise   { 0% { opacity: 0; } 60% { opacity: 0.66; } 80% { opacity: 0.52; } 100% { opacity: 0.55; } }
+  @keyframes lgBloom  { 0% { opacity: 0; } 30% { opacity: 0.26; } 100% { opacity: 0; } }
+  @keyframes lgFloat  { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-7px); } }
   @keyframes lgBreatheL { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
-  @keyframes lgWord   { from { opacity: 0; transform: translateY(12px) scale(1.04); } to { opacity: 1; transform: none; } }
+  @keyframes lgWord   { from { opacity: 0; transform: translateY(16px) scale(1.02); } to { opacity: 1; transform: none; } }
+  @keyframes lgHalo   { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 0; transform: scale(1.45); } }
   @keyframes lgUp     { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   @keyframes lgNudge  { 0%, 60%, 100% { transform: translateX(0px); } 75% { transform: translateX(14px); } 85% { transform: translateX(-4px); } }
   ${BEAT_FRAMES}
@@ -82,7 +87,7 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
   // finger has it.
   const [pull, setPull] = useState(0);
   const [held, setHeld] = useState(false);
-  const drag = useRef<{ x0: number; reach: number } | null>(null);
+  const drag = useRef<{ x0: number; reach: number; side: -1 | 0 | 1 } | null>(null);
   const knob = useRef<HTMLDivElement>(null);
   const figure = lanternFigure();
 
@@ -116,14 +121,21 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
   const down = (e: React.PointerEvent<HTMLDivElement>) => {
     const track = e.currentTarget.parentElement?.getBoundingClientRect();
     if (!track || !asked) return;
-    drag.current = { x0: e.clientX - pull, reach: track.width / 2 - 36 };
+    drag.current = { x0: e.clientX - pull, reach: track.width / 2 - 36, side: 0 };
     setHeld(true);
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not every pointer can be held */ }
   };
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
-    setPull(Math.max(-d.reach, Math.min(d.reach, e.clientX - d.x0)));
+    const p = Math.max(-d.reach, Math.min(d.reach, e.clientX - d.x0));
+    setPull(p);
+    // A tick in the hand the moment letting go would answer.
+    const side = p / d.reach >= COMMIT ? 1 : p / d.reach <= -COMMIT ? -1 : 0;
+    if (side !== d.side) {
+      d.side = side;
+      if (side) Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+    }
   };
   const up = () => {
     const d = drag.current;
@@ -149,7 +161,7 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
   const light = out ? "none"
     : asked ? "lgBreatheL 3.4s ease-in-out infinite"
     : voice ? `lgVoiceL ${voice.ms}ms linear forwards`
-    : `lgIgnite 1300ms linear ${REVEAL}ms both`;
+    : `lgRise ${RISE}ms cubic-bezier(0.45, 0, 0.25, 1) ${REVEAL}ms both`;
   const towardsNo = Math.max(0, pull) / 120, towardsYes = Math.max(0, -pull) / 120;
 
   return (
@@ -166,37 +178,43 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
         animation: `lgBeat ${BUILD_MS}ms linear both`,
       }} />
 
-      {/* Only the light: the green of his shoulders, in the dark. */}
+      {/* Only the light: the green of his shoulders, coming up slowly out of
+          the dark, then hanging there and drifting a little. */}
       <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: "7vh", display: "flex", justifyContent: "center", pointerEvents: "none" }}>
         <div className="lg-a" style={{
           position: "relative", width: "min(149vw, 640px)", aspectRatio: String(FIGURE_RATIO), flexShrink: 0, willChange: "transform, opacity",
-          animation: `lgAppear 1800ms cubic-bezier(0.16, 1, 0.3, 1) ${REVEAL}ms both`,
-          opacity: 1 - Math.min(0.6, towardsYes * 0.5), transition: held ? "none" : "opacity 0.4s ease",
+          animation: `lgAppear ${RISE + 400}ms cubic-bezier(0.33, 0, 0.2, 1) ${REVEAL}ms both`,
         }}>
-          <img src={figure.light} alt="" draggable={false} className="lg-a" style={{
-            position: "absolute", inset: 0, width: "100%", height: "100%", willChange: "opacity",
-            opacity: out ? 0 : 0.55, transition: out ? "opacity 1.6s ease" : "none",
-            animation: light,
-          }} />
+          <div className="lg-a" style={{
+            position: "absolute", inset: 0, willChange: "transform, opacity",
+            animation: `lgFloat 7s ease-in-out ${REVEAL + RISE}ms infinite`,
+            opacity: 1 - Math.min(0.6, towardsYes * 0.5), transition: held ? "none" : "opacity 0.5s ease",
+          }}>
+            <img src={figure.light} alt="" draggable={false} className="lg-a" style={{
+              position: "absolute", inset: 0, width: "100%", height: "100%", willChange: "opacity",
+              opacity: out ? 0 : 0.55, transition: out ? "opacity 1.8s ease" : "none",
+              animation: light,
+            }} />
+          </div>
         </div>
       </div>
 
-      {/* The hit: a flash of green light where it appears. */}
+      {/* With the hit, a soft swell of green where the light will be. */}
       <div aria-hidden="true" className="lg-a" style={{
         position: "absolute", inset: 0, opacity: 0, pointerEvents: "none",
-        background: `radial-gradient(ellipse 70% 45% at 50% 34%, #d8ffe9 0%, ${G}88 30%, transparent 70%)`,
-        animation: `lgFlash 1100ms ease-out ${REVEAL}ms both`,
+        background: `radial-gradient(ellipse 70% 45% at 50% 34%, ${G}66 0%, ${G}22 40%, transparent 72%)`,
+        animation: `lgBloom 2600ms cubic-bezier(0.4, 0, 0.2, 1) ${REVEAL}ms both`,
       }} />
 
       {/* The question: "Are you", and large, "afraid?". */}
       {!out && (
         <div style={{ position: "absolute", left: 0, right: 0, top: "36vh", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, color: PALE, textAlign: "center", padding: "0 20px" }}>
-          <div className="lg-a" style={{ fontSize: 22, fontWeight: 500, color: "rgba(234,255,242,0.75)", animation: `lgWord 900ms cubic-bezier(0.2, 0.8, 0.2, 1) ${SPEAK}ms both` }}>
+          <div className="lg-a" style={{ fontSize: 22, fontWeight: 500, color: "rgba(234,255,242,0.75)", animation: `lgWord 1200ms cubic-bezier(0.22, 1, 0.36, 1) ${SPEAK}ms both` }}>
             {t("Are you")}
           </div>
           <div className="lg-a" style={{
             fontSize: 72, fontWeight: 900, letterSpacing: -2.5, lineHeight: 1, textShadow: `0 0 40px ${G}99`,
-            animation: `lgWord 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) ${SPEAK + AFRAID_AFTER}ms both`,
+            animation: `lgWord 1400ms cubic-bezier(0.22, 1, 0.36, 1) ${SPEAK + AFRAID_AFTER}ms both`,
           }}>
             {t("afraid?")}
           </div>
@@ -210,13 +228,19 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
           <div style={{
             position: "relative", height: 72, borderRadius: 36, boxSizing: "border-box",
             background: `linear-gradient(to right, rgba(255,255,255,${0.04 + towardsYes * 0.05}) 0%, rgba(255,255,255,0.04) 50%, rgba(53,224,138,${0.22 + towardsNo * 0.3}) 100%)`,
-            border: "1px solid rgba(234,255,242,0.14)",
+            border: "1px solid rgba(234,255,242,0.14)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -10px 24px rgba(0,0,0,0.35)",
             display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 22px",
-            opacity: asked ? 1 : 0, transform: asked ? "none" : "translateY(12px)", transition: "opacity 0.6s ease, transform 0.6s ease",
+            opacity: asked ? 1 : 0, transform: asked ? "none" : "translateY(18px)", transition: "opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 0.9s cubic-bezier(0.22, 1, 0.36, 1)",
             pointerEvents: asked ? "auto" : "none",
           }}>
-            <button onClick={sayYes} style={{ background: "transparent", border: "none", color: "rgba(234,255,242,0.6)", fontSize: 16, fontWeight: 700, fontFamily: "inherit", minWidth: 48, minHeight: 48, cursor: "pointer" }}>{t("Yes")}</button>
-            <button onClick={e => sayNo(e.clientX, e.clientY)} style={{ background: "transparent", border: "none", color: G, fontSize: 16, fontWeight: 800, fontFamily: "inherit", minWidth: 48, minHeight: 48, cursor: "pointer", textShadow: `0 0 14px ${G}b3` }}>{t("No")}</button>
+            <button onClick={sayYes} style={{ background: "transparent", border: "none", color: PALE, opacity: 0.55 + Math.min(1, towardsYes) * 0.45, fontSize: 16, fontWeight: 700, fontFamily: "inherit", minWidth: 48, minHeight: 48, cursor: "pointer", transition: held ? "none" : "opacity 0.35s ease" }}>{t("Yes")}</button>
+            <button onClick={e => sayNo(e.clientX, e.clientY)} style={{ background: "transparent", border: "none", color: G, opacity: 0.8 + Math.min(1, towardsNo) * 0.2, fontSize: 16, fontWeight: 800, fontFamily: "inherit", minWidth: 48, minHeight: 48, cursor: "pointer", textShadow: `0 0 ${14 + Math.min(1, towardsNo) * 14}px ${G}b3`, transition: held ? "none" : "opacity 0.35s ease" }}>{t("No")}</button>
+            {/* A soft ring going out from the knob while it waits to be pulled. */}
+            <span aria-hidden="true" className="lg-a" style={{
+              position: "absolute", left: "50%", top: 5, width: 60, height: 60, marginLeft: -30, borderRadius: "50%",
+              border: `1.5px solid ${G}`, opacity: 0, pointerEvents: "none",
+              animation: asked && !held && pull === 0 ? "lgHalo 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) 0.6s infinite" : "none",
+            }} />
             <div
               ref={knob}
               aria-hidden="true"
