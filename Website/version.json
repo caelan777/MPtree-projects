@@ -1,12 +1,12 @@
 {
-  "_comment": "Read by the app (see MPTree-App/src/updateCheck.ts) to tell people on an older build that a newer one exists. Keep it in step with the top entry of assets/versions.js, which is what the website itself renders. Only the build handed out by this website checks this file; the Play Store build never does.",
-  "latest": "1.1.0",
-  "date": "2026-09-29",
+  "_comment": "Read by the apps to tell people on an older build that a newer one exists. The top block is for Android copies that were downloaded from this website: since October 2026 Android is on Google Play only, so it sends them there (download.html says how to move without losing anything). The Play and Microsoft Store builds never read this file.",
+  "latest": "1.2.3",
+  "date": "2026-10-14",
   "url": "https://mp-tree.net/download.html",
   "notes": [
-    "MPTree Pro, free to try for a week.",
-    "Dark and light mode each keep their own look.",
-    "Backups: pick what goes in."
+    "MPTree for Android now comes from Google Play, which keeps it up to date.",
+    "Export a backup first: Settings, Backup & Restore.",
+    "Then uninstall this copy, install MPTree from Google Play, and restore the backup."
   ],
   "windows": {
     "_comment": "The Windows app reads this block instead of the top one (Desktop/src/updateCheck.ts).",

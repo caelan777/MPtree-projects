@@ -1,0 +1,6 @@
+# Cloudflare Pages redirects.
+# The versions page listed the APKs this website used to hand out. Android is
+# on Google Play only since October 2026, so it sends people to the page that
+# says so.
+/versions.html  /download.html  301
+/versions       /download       301
