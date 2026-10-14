@@ -2646,6 +2646,7 @@ export default function App() {
       if (proOpen)             { setProOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
+      // The page asks before it throws unapplied changes away.
       if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }

@@ -184,21 +184,33 @@ export function endPreview(): void {
 
 // The Personalise page's own step back, out of a style's page, while it has
 // one. The phone's back button asks here before it closes the page.
-let back: (() => void) | null = null;
-export function setLookBack(step: (() => void) | null): void { back = step; }
+// It answers whether it took the step itself; when it did not, the page closes.
+let back: (() => boolean) | null = null;
+export function setLookBack(step: (() => boolean) | null): void { back = step; }
 /** True when the page took the step back itself. */
 export function lookBack(): boolean {
-  if (!back) return false;
-  back();
-  return true;
+  return back ? back() : false;
+}
+
+/** Whether what is on show differs from what was applied. */
+export function hasLookChanges(): boolean {
+  return preview !== null && JSON.stringify(preview) !== JSON.stringify(look);
+}
+
+/** Whether a look is made of free things only, so it can be kept without Pro. */
+export function isFreeLook(l: Look): boolean {
+  return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
+    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none";
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────
-// Putting Lantern on asks one thing first (LanternGate). Whoever answers that
-// they are afraid cannot wear it for a week. Kept on this device only: it is
+// Putting Lantern on the first time asks one thing first (LanternGate), once
+// only. Whoever answers that they are afraid cannot wear it for a week. Kept on this device only: it is
 // a moment, not a setting, and has no business following the account around.
 const AFRAID_KEY = "mptree_lantern_afraid";
 const AFRAID_DAYS = 7;
+const ASKED_KEY = "mptree_lantern_asked";
+let asked = false;
 const DAY_MS = 24 * 60 * 60 * 1000;
 let afraidUntil = 0;
 
@@ -210,6 +222,7 @@ export async function loadLanternLock(): Promise<number> {
   try {
     const { value } = await Preferences.get({ key: AFRAID_KEY });
     afraidUntil = Number(value) || 0;
+    asked = (await Preferences.get({ key: ASKED_KEY })).value === "1";
   } catch { /* open, then */ }
   return lanternLockDays();
 }
@@ -218,9 +231,18 @@ export function lockLantern(): number {
   Preferences.set({ key: AFRAID_KEY, value: String(afraidUntil) }).catch(() => {});
   return lanternLockDays();
 }
+/** Whether the ring has asked already. It asks once. */
+export function lanternAsked(): boolean { return asked; }
+export function markLanternAsked(): void {
+  asked = true;
+  Preferences.set({ key: ASKED_KEY, value: "1" }).catch(() => {});
+}
+/** Open again, and ready to be asked again: for test builds. */
 export function unlockLantern(): void {
   afraidUntil = 0;
+  asked = false;
   Preferences.remove({ key: AFRAID_KEY }).catch(() => {});
+  Preferences.remove({ key: ASKED_KEY }).catch(() => {});
 }
 
 /** Losing Pro (a refund, or locking a test build again) puts the free look

@@ -634,4 +634,13 @@ export const NL: Record<string, string> = {
   "Lantern is locked for {n} more day.": "Lantern zit nog {n} dag op slot.",
   "Lantern is locked for {n} more days.": "Lantern zit nog {n} dagen op slot.",
   "Smoke and marble records for the player.": "Rook- en marmeren platen voor de speler.",
+  "Lantern is locked for {n} day.": "Lantern zit {n} dag op slot.",
+  "Lantern is locked for {n} days.": "Lantern zit {n} dagen op slot.",
+  "Come back when you are not afraid.": "Kom terug als je niet meer bang bent.",
+  "Apply": "Toepassen",
+  "Applied": "Toegepast",
+  "Discard changes?": "Wijzigingen weggooien?",
+  "What you changed here has not been applied yet.": "Wat je hier hebt veranderd, is nog niet toegepast.",
+  "Discard": "Weggooien",
+  "Keep editing": "Verder bewerken",
 };

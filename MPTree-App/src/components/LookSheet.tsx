@@ -5,9 +5,11 @@ import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { LanternGate } from "./LanternGate";
+import { StyleReveal } from "./StyleReveal";
 import { usePro } from "../pro";
 import {
-  useLook, saveLook, previewLook, keepPreview, endPreview, isPreviewing, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
+  useLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
+  lanternAsked, markLanternAsked, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour,
 } from "../look";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
@@ -25,8 +27,15 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 // black unless another is picked. Tapping one puts it on and opens its page,
 // laid out like Custom, with a way back.
 //
-// Lantern asks something first, of whoever has Pro: a ring comes up with "Are
-// you afraid?" (LanternGate). No lets them in. Yes shuts Lantern for a week.
+// Lantern asks something first, of whoever has Pro, the first time only: a
+// ring comes up with "Are you afraid?" (LanternGate). No lets them in. Yes
+// shuts Lantern for a week. Both styles open out of the place that was
+// tapped (StyleReveal): green light for Lantern, a pink bloom for Aviela.
+//
+// Nothing here is kept until Apply. Every pick is shown at once, everywhere,
+// and only Apply keeps it; leaving with something not applied asks whether to
+// throw it away. Without Pro, Apply becomes "Keep it with Pro" as soon as
+// anything locked is on show.
 //
 // There is no dark or light to choose here. A colour is dark or it is light,
 // and picking one puts the app in that mode; the header card and the record
@@ -36,8 +45,6 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 // on screen right now, taken again after every change (AppCopy); the other is
 // the real player sheet, handed in by App. Both are shrunk with a transform.
 //
-// Without Pro a locked option can still be tapped: it shows everywhere as a
-// preview and goes back when the page closes.
 
 type LookSheetProps = {
   theme: Theme;
@@ -264,6 +271,7 @@ function Group({ children, T }: { children: ReactNode; T: T }) {
 
 type Preset = { id: string; mode: Theme; shade: DarkShade | LightShade; card: CardShade; vinyl: VinylSkin; free?: boolean; name: string };
 type Tab = "styles" | "custom";
+type Point = { x: number; y: number };
 /** One tile on the Styles tab. */
 type StyleTile = {
   key: string; name: string; app: T; card: T; vinyl: VinylSkin; flowers: Flowers; tone: Tone;
@@ -279,7 +287,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
-  const previewing = isPreviewing();
   const dark = theme === "dark";
   const [tab, setTab] = useState<Tab>("styles");
   // A named style's own page, over the tabs. The phone's back button leaves
@@ -290,10 +297,10 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const [asking, setAsking] = useState(false);
   const [shutDays, setShutDays] = useState(0);
   useEffect(() => { loadLanternLock().then(setShutDays).catch(() => {}); }, []);
-  useEffect(() => {
-    setLookBack(asking ? () => setAsking(false) : page !== "main" ? () => setPage("main") : null);
-    return () => setLookBack(null);
-  }, [page, asking]);
+  // A named style opening out of where it was tapped.
+  const [reveal, setReveal] = useState<{ kind: "aviela" | "lantern"; at: Point } | null>(null);
+  // "Discard changes?", while it is asked.
+  const [confirming, setConfirming] = useState(false);
 
   // The window's size, which the small copies are a fraction of.
   const [win, setWin] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -303,31 +310,65 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  // A colour brings its mode with it, so trying a locked colour changes the
-  // mode too, and that has to go back with it. `kept` is the mode that was
-  // really chosen: the one the page opened in, or a free or Pro pick since.
+  // A colour brings its mode with it, so a pick can change the mode too, and
+  // that has to go back with it when the pick is thrown away. `kept` is the
+  // mode that was applied: the one the page opened in, or the last Apply.
+  const [keptTheme, setKeptTheme] = useState<Theme>(theme);
   const kept = useRef<Theme>(theme);
-  const now = useRef({ pro, theme });
-  useEffect(() => { now.current = { pro, theme }; }, [pro, theme]);
+  const now = useRef(theme);
+  useEffect(() => { now.current = theme; kept.current = keptTheme; }, [theme, keptTheme]);
+  // However the page goes, an unapplied mode does not stay behind.
   useEffect(() => () => {
-    if (!now.current.pro && now.current.theme !== kept.current) onSetTheme(kept.current);
+    if (now.current !== kept.current) onSetTheme(kept.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Bought Pro while trying something: keep what is showing.
-  useEffect(() => { if (pro) { kept.current = theme; keepPreview(); } }, [pro, theme]);
+  const wasPro = useRef(pro);
+  useEffect(() => {
+    if (pro && !wasPro.current) { setKeptTheme(theme); keepPreview(); }
+    wasPro.current = pro;
+  }, [pro, theme]);
 
-  const close = () => { endPreview(); onClose(); };
-
-  /** Free picks and Pro picks are kept; the rest is shown as a preview. */
-  const pick = (free: boolean, patch: Partial<Look>) => {
-    if (pro || free) saveLook(patch); else previewLook(patch);
+  // What has been changed and not applied, and whether it needs Pro to keep.
+  const changed = hasLookChanges() || theme !== keptTheme;
+  const needsPro = !pro && !isFreeLook(look);
+  const apply = () => {
+    keepPreview();
+    setKeptTheme(theme);
+    onToast(t("Applied"));
   };
+  const leave = () => {
+    if (changed) { setConfirming(true); return; }
+    endPreview();
+    onClose();
+  };
+  const discard = () => {
+    endPreview();
+    if (theme !== keptTheme) onSetTheme(keptTheme);
+    setConfirming(false);
+    onClose();
+  };
+  // The phone's back button takes one step at a time, and asks before it
+  // throws anything away.
+  useEffect(() => {
+    setLookBack(() => {
+      if (reveal) return true;
+      if (confirming) { setConfirming(false); return true; }
+      if (asking) { setAsking(false); return true; }
+      if (page !== "main") { setPage("main"); return true; }
+      if (changed) { setConfirming(true); return true; }
+      return false;
+    });
+    return () => setLookBack(null);
+  }, [reveal, confirming, asking, page, changed]);
+
+  /** Every pick is shown at once, and kept only by Apply. */
+  const pick = (patch: Partial<Look>) => previewLook(patch);
   /** A pick that decides the mode as well: a colour, or a whole style. */
-  const pickIn = (mode: Theme, free: boolean, patch: Partial<Look>) => {
-    if (pro || free) kept.current = mode;
+  const pickIn = (mode: Theme, patch: Partial<Look>) => {
     if (mode !== theme) onSetTheme(mode);
-    pick(free, patch);
+    pick(patch);
   };
 
   const DARKS: { id: DarkShade; label: string }[] = [
@@ -386,35 +427,33 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     flowers: "none", cardDark: "default", cardLight: "default", vinylDark: "classic", vinylLight: "classic",
     ...(dark ? { dark: "classic" as const } : { light: "classic" as const }),
   } : {});
-  const setCard = (c: CardShade) => pick(c === FREE.card, { ...plain(), cardDark: c, cardLight: c });
-  const setVinyl = (v: VinylSkin) => pick(isFreeVinyl(v), { ...plain(), vinylDark: v, vinylLight: v });
+  const setCard = (c: CardShade) => pick({ ...plain(), cardDark: c, cardLight: c });
+  const setVinyl = (v: VinylSkin) => pick({ ...plain(), vinylDark: v, vinylLight: v });
 
   const presetOn = (p: Preset) =>
     theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card && vinyl === p.vinyl && look.flowers === "none";
-  // Each part is kept or only shown on its own: what is free in a style is
-  // kept by everyone, what is not is only shown without Pro.
-  const pickPreset = (p: Preset) => {
-    if (pro || p.free) kept.current = p.mode;
-    if (p.mode !== theme) onSetTheme(p.mode);
-    pick(p.shade === "classic", { flowers: "none", ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }) });
-    pick(p.card === FREE.card, { cardDark: p.card, cardLight: p.card });
-    pick(isFreeVinyl(p.vinyl), { vinylDark: p.vinyl, vinylLight: p.vinyl });
-  };
+  const pickPreset = (p: Preset) => pickIn(p.mode, {
+    flowers: "none", ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }),
+    cardDark: p.card, cardLight: p.card, vinylDark: p.vinyl, vinylLight: p.vinyl,
+  });
 
   // Aviela: pink, with the record, the flowers and the header card last
   // picked for it.
-  const wearAviela = (a: Look["aviela"]) => pick(false, {
+  const wearAviela = (a: Look["aviela"]) => pick({
     light: "pink", cardDark: a.card, cardLight: a.card,
     vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a,
   });
   const avielaApp = SHADE_PREVIEW.light("pink");
   const avielaCard = cardPalette(look.aviela.card, avielaApp);
   const avielaTone = toneOf(look.aviela.card, false, "pink");
-  const openAviela = () => {
-    if (pro) kept.current = "light";
+  const enterAviela = () => {
     if (dark) onSetTheme("light");
     wearAviela(look.aviela);
     setPage("aviela");
+  };
+  const openAviela = (at: Point) => {
+    if (avielaOn) { enterAviela(); return; }
+    setReveal({ kind: "aviela", at });
   };
 
   // Lantern: the record, the header card and the colour last picked for it.
@@ -431,9 +470,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const colourNow = `${theme}:${dark ? look.dark : look.light}`;
   const wearLantern = (l: Look["lantern"]) => {
     const [mode, shade] = shadeOf(l.colour);
-    if (pro) kept.current = mode;
     if (mode !== theme) onSetTheme(mode);
-    pick(false, {
+    pick({
       ...(mode === "dark" ? { dark: shade as DarkShade } : { light: shade as LightShade }),
       cardDark: l.card, cardLight: l.card, vinylDark: l.record, vinylLight: l.record, flowers: "none", lantern: l,
     });
@@ -444,25 +482,40 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     wearLantern(look.lantern);
     setPage("lantern");
   };
-  const openLantern = () => {
-    // Already on, or only being tried without Pro: straight in.
-    if (lanternOn || !pro) { enterLantern(); return; }
-    const days = lanternLockDays();
-    setShutDays(days);
-    if (days > 0) {
-      // A test build is for trying this more than once a week.
-      if (__PRO_TEST__) { unlockLantern(); setShutDays(0); onToast("Test build: Lantern is open again."); return; }
-      onToast(tn(days, "Lantern is locked for {n} more day.", "Lantern is locked for {n} more days."));
-      return;
+  const openLantern = (at: Point) => {
+    // Already on: straight to its page.
+    if (lanternOn) { enterLantern(); return; }
+    if (pro) {
+      const days = lanternLockDays();
+      setShutDays(days);
+      if (days > 0) {
+        // A test build is for trying this more than once a week.
+        if (__PRO_TEST__) { unlockLantern(); setShutDays(0); onToast("Test build: Lantern is open again, and will ask again."); return; }
+        onToast(tn(days, "Lantern is locked for {n} more day.", "Lantern is locked for {n} more days."));
+        return;
+      }
+      // The first time, the ring asks.
+      if (!lanternAsked()) { setAsking(true); return; }
     }
-    setAsking(true);
+    setReveal({ kind: "lantern", at });
   };
-  const answerAfraid = (afraid: boolean) => {
-    setAsking(false);
-    if (!afraid) { enterLantern(); return; }
+  const sayAfraid = (): number => {
+    markLanternAsked();
     const days = lockLantern();
     setShutDays(days);
-    onToast(tn(days, "Lantern is locked for {n} more day.", "Lantern is locked for {n} more days."));
+    return days;
+  };
+  const sayNotAfraid = (at: Point) => {
+    markLanternAsked();
+    setAsking(false);
+    setReveal({ kind: "lantern", at });
+  };
+
+  /** Where a tap was; the middle of what was tapped when it came from a key. */
+  const tappedAt = (e: React.MouseEvent<HTMLElement>): Point => {
+    if (e.clientX || e.clientY) return { x: e.clientX, y: e.clientY };
+    const r = e.currentTarget.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   };
 
   const presetTile = (p: Preset): StyleTile => {
@@ -509,7 +562,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 420, display: "flex", alignItems: "flex-end" }} onClick={close}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 420, display: "flex", alignItems: "flex-end" }} onClick={leave}>
       <div
         style={{
           ...sh.sheet, paddingBottom: 0, height: "100%", borderRadius: 0,
@@ -527,7 +580,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
             )}
             <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{page === "aviela" ? "Aviela" : page === "lantern" ? "Lantern" : t("Personalise")}</span>
           </div>
-          <button onClick={close} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
+          <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
         <div aria-hidden="true" style={{ flexShrink: 0, display: "flex", justifyContent: "center", gap: 12, padding: "2px 16px 14px" }}>
@@ -630,7 +683,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
               {STYLES.map(s => (
                 <button
                   key={s.key}
-                  onClick={() => (s.preset ? pickPreset(s.preset) : s.key === "aviela" ? openAviela() : openLantern())}
+                  onClick={e => (s.preset ? pickPreset(s.preset) : s.key === "aviela" ? openAviela(tappedAt(e)) : openLantern(tappedAt(e)))}
                   aria-pressed={s.on}
                   style={{
                     padding: 4, borderRadius: 17, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
@@ -655,13 +708,13 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                 <Row T={T} framed title={t("Colour")}>
                   {DARKS.map(d => (
                     <Tile key={`d-${d.id}`} T={T} label={d.label} selected={dark && look.dark === d.id} locked={!pro && d.id !== FREE.dark}
-                      onClick={() => pickIn("dark", d.id === FREE.dark, { ...plain(), dark: d.id, flowers: "none" })}>
+                      onClick={() => pickIn("dark", { ...plain(), dark: d.id, flowers: "none" })}>
                       <Screen p={SHADE_PREVIEW.dark(d.id)} />
                     </Tile>
                   ))}
                   {LIGHTS.map(l => (
                     <Tile key={`l-${l.id}`} T={T} label={l.label} selected={!dark && look.light === l.id} locked={!pro && l.id !== FREE.light}
-                      onClick={() => pickIn("light", l.id === FREE.light, { ...plain(), light: l.id, flowers: "none" })}>
+                      onClick={() => pickIn("light", { ...plain(), light: l.id, flowers: "none" })}>
                       <Screen p={SHADE_PREVIEW.light(l.id)} />
                     </Tile>
                   ))}
@@ -699,15 +752,37 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           )}
         </div>
 
-        {/* Only while a locked option is showing: the way to keep it. The
-            Pro page has the free week too. */}
-        {asking && <LanternGate onYes={() => answerAfraid(true)} onNo={() => answerAfraid(false)} />}
-
-        {previewing && !pro && (
+        {/* Only while something is changed: the way to keep it. With a locked
+            option on show and no Pro, that way is Pro (whose page has the free
+            week too). */}
+        {changed && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
-            <button onClick={onNeedPro} style={sh.saveBtn}>
-              {t("Keep it with Pro")}
+            <button onClick={needsPro ? onNeedPro : apply} style={sh.saveBtn}>
+              {needsPro ? t("Keep it with Pro") : t("Apply")}
             </button>
+          </div>
+        )}
+
+        {asking && <LanternGate onYes={sayAfraid} onNo={sayNotAfraid} onDone={() => setAsking(false)} />}
+
+        {reveal && (
+          <StyleReveal kind={reveal.kind} at={reveal.at}
+            onCovered={() => (reveal.kind === "aviela" ? enterAviela() : enterLantern())}
+            onDone={() => setReveal(null)} />
+        )}
+
+        {confirming && (
+          <div role="dialog" aria-modal="true" onClick={() => setConfirming(false)} style={{
+            position: "fixed", inset: 0, zIndex: 495, background: T.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20, padding: "20px 20px 16px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{t("Discard changes?")}</div>
+              <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.45, margin: "6px 0 18px" }}>{t("What you changed here has not been applied yet.")}</div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={discard} style={{ flex: 1, height: 46, borderRadius: 12, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", background: T.surface, color: T.text, border: `1px solid ${T.border}` }}>{t("Discard")}</button>
+                <button onClick={() => setConfirming(false)} style={{ flex: 1, height: 46, borderRadius: 12, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", background: T.accent, color: T.playBtnFg, border: "none" }}>{t("Keep editing")}</button>
+              </div>
+            </div>
           </div>
         )}
       </div>

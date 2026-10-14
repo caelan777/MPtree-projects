@@ -634,4 +634,13 @@ export const ES: Record<string, string> = {
   "Lantern is locked for {n} more day.": "Lantern sigue bloqueado {n} día más.",
   "Lantern is locked for {n} more days.": "Lantern sigue bloqueado {n} días más.",
   "Smoke and marble records for the player.": "Discos humo y mármol para el reproductor.",
+  "Lantern is locked for {n} day.": "Lantern queda bloqueado {n} día.",
+  "Lantern is locked for {n} days.": "Lantern queda bloqueado {n} días.",
+  "Come back when you are not afraid.": "Vuelve cuando no tengas miedo.",
+  "Apply": "Aplicar",
+  "Applied": "Aplicado",
+  "Discard changes?": "¿Descartar los cambios?",
+  "What you changed here has not been applied yet.": "Lo que has cambiado aquí aún no se ha aplicado.",
+  "Discard": "Descartar",
+  "Keep editing": "Seguir editando",
 };
