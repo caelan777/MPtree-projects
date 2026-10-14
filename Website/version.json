@@ -10,13 +10,13 @@
   ],
   "windows": {
     "_comment": "The Windows app reads this block instead of the top one (Desktop/src/updateCheck.ts).",
-    "latest": "0.1.2",
-    "date": "2026-10-05",
+    "latest": "0.1.3",
+    "date": "2026-10-14",
     "url": "https://mp-tree.net/windows.html",
     "notes": [
-      "Crossfade between songs, and cutting tracks.",
-      "A tour of the window for new users.",
-      "Safer syncing: a disk that is unplugged no longer counts as deleted songs."
+      "Personalise: a style for the whole window, seen before you keep it.",
+      "Crop a cover to fit when you set one.",
+      "Shuffle and repeat each have their own button."
     ]
   }
 }
