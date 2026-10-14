@@ -20,11 +20,15 @@ const PALE = "#eafff2";
 
 const STYLE = `
   @keyframes lgDark   { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes lgBreathe { 0%, 100% { opacity: 0.45; transform: scale(0.92); } 50% { opacity: 0.75; transform: scale(1.04); } }
-  @keyframes lgSay    { from { opacity: 0; transform: translateY(14px); letter-spacing: 0.12em; } to { opacity: 1; transform: none; letter-spacing: 0.01em; } }
+  @keyframes lgBreatheL { 0%, 100% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 0.78; transform: scale(1.05); } }
+  @keyframes lgBreatheC { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 0.7; transform: scale(1); } }
+  @keyframes lgSay    { from { opacity: 0; transform: translateY(14px) scale(1.06); } to { opacity: 1; transform: none; } }
   @keyframes lgUp     { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .lg-a { animation: none !important; } }
 `;
+// Only opacity and transform move here, the two a phone can animate without
+// laying out or drawing anything again. The question used to close up its
+// letter spacing as it came in, which is a new layout on every frame.
 
 type LanternGateProps = {
   /** "I am afraid". Shuts Lantern and says for how many days. */
@@ -78,13 +82,14 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
           position: "absolute", inset: 0, borderRadius: "50%", willChange: "transform, opacity",
           background: `radial-gradient(circle, ${G}aa 0%, ${G}3a 34%, ${G}10 55%, transparent 70%)`,
           opacity: out ? 0 : 0.5, transition: out ? "opacity 1.6s ease, transform 1.6s ease" : "none",
-          animation: asked && !out ? "lgBreathe 3.4s ease-in-out infinite" : "none",
+          // Starts where the voice left it, so there is no jump.
+          animation: asked && !out ? "lgBreatheL 3.4s ease-in-out infinite" : "none",
         }} />
         <div ref={core} className="lg-a" style={{
           position: "absolute", left: 105, top: 105, width: 90, height: 90, borderRadius: "50%", willChange: "transform, opacity",
           background: `radial-gradient(circle, #ffffff 0%, ${PALE} 22%, ${G} 52%, transparent 72%)`,
           opacity: out ? 0 : 0.35, transition: out ? "opacity 1.2s ease, transform 1.2s ease" : "none",
-          animation: asked && !out ? "lgBreathe 3.4s ease-in-out infinite" : "none",
+          animation: asked && !out ? "lgBreatheC 3.4s ease-in-out infinite" : "none",
         }} />
       </div>
 

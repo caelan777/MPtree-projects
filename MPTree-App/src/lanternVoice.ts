@@ -49,12 +49,17 @@ export function speakLanternVoice(level: (v: number) => void, ended: () => void)
     source.connect(meter);
     meter.connect(audio.destination);
     const samples = new Float32Array(meter.fftSize);
+    // Raw loudness jumps from one frame to the next, and a light that does
+    // that flickers. It rises fast with a word and falls away slowly after it.
+    let smooth = 0;
     const tick = () => {
       meter.getFloatTimeDomainData(samples);
       let sum = 0;
       for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
       // Loudness, shaped so a spoken word fills most of the range.
-      level(Math.min(1, Math.sqrt(sum / samples.length) * 5));
+      const raw = Math.min(1, Math.sqrt(sum / samples.length) * 5);
+      smooth += (raw - smooth) * (raw > smooth ? 0.35 : 0.08);
+      level(smooth);
       frame = requestAnimationFrame(tick);
     };
     source.onended = finish;

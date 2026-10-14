@@ -1734,6 +1734,7 @@ export default function App() {
   };
 
   const toggleShuffleFromPlayer = () => {
+    hapticImpact("light");
     if (playMode === "shuffle") {
       setPlayMode("off");
       if (currentSong) backInOrder(currentSong);
@@ -1745,22 +1746,13 @@ export default function App() {
     showToast(t("Shuffle on"));
   };
 
-  // Expanded-player mode button: cycles off → shuffle → repeat → off.
-  const cyclePlayerMode = () => {
+  // The full player's repeat button. Repeat and shuffle do not go together, so
+  // leaving shuffle for repeat puts the order back first.
+  const toggleRepeatFromPlayer = () => {
     hapticImpact("light");
-    if (playMode === "off") {
-      if (!currentSong) return;
-      setPlayMode("shuffle");
-      shuffleFromHere(currentSong);
-      showToast(t("Shuffle on"));
-    } else if (playMode === "shuffle") {
-      // Repeat is reached by way of shuffle. Whoever only wanted repeat should
-      // not be left with a shuffled queue, so the order comes back here.
-      if (currentSong) backInOrder(currentSong);
-      setPlayMode("repeat"); showToast(t("Repeat on"));
-    } else {
-      setPlayMode("off"); showToast(t("Repeat off"));
-    }
+    if (playMode === "repeat") { setPlayMode("off"); showToast(t("Repeat off")); return; }
+    if (playMode === "shuffle" && currentSong) backInOrder(currentSong);
+    setPlayMode("repeat"); showToast(t("Repeat on"));
   };
 
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
@@ -4660,7 +4652,8 @@ export default function App() {
                 getCustomPhoto={s => getMeta(s).customPhoto}
                 onTogglePlay={() => {}}
                 onSkip={() => {}}
-                onCycleMode={() => {}}
+                onToggleShuffle={() => {}}
+                onToggleRepeat={() => {}}
                 onSeek={() => {}}
                 onSeekStart={() => {}}
                 onSeekEnd={() => {}}
@@ -4814,7 +4807,8 @@ export default function App() {
               getCustomPhoto={s => getMeta(s).customPhoto}
               onTogglePlay={togglePlay}
               onSkip={skip}
-              onCycleMode={cyclePlayerMode}
+              onToggleShuffle={toggleShuffleFromPlayer}
+              onToggleRepeat={toggleRepeatFromPlayer}
               onSeek={ms => setCurrentTime(ms)}
               onSeekStart={() => setDragging(true)}
               onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}

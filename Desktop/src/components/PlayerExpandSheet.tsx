@@ -73,7 +73,10 @@ type PlayerExpandSheetProps = {
   onTogglePlay: () => void;
   onSkip: (dir: -1 | 1) => void;
   /** Cycles the play mode: off → shuffle → repeat → off. */
-  onCycleMode: () => void;
+  /** Shuffle and repeat each have a button. They do not go together: turning
+   *  one on turns the other off. */
+  onToggleShuffle: () => void;
+  onToggleRepeat: () => void;
   onSeek: (ms: number) => void;
   onSeekStart: () => void;
   onSeekEnd: (ms: number) => void;
@@ -108,7 +111,7 @@ export function PlayerExpandSheet({
   isPlaying, currentTime, duration, playMode, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
   upNextQueue, playNextQueue = [], getDispName, getDispArtist, getCustomPhoto,
-  onTogglePlay, onSkip, onCycleMode,
+  onTogglePlay, onSkip, onToggleShuffle, onToggleRepeat,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
   onPlayNextReorder, onSkipCurrentUpNext, lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover,
@@ -145,6 +148,23 @@ export function PlayerExpandSheet({
     onPlaybackSpeedChange(next);
   };
   const speedLabel = `${playbackSpeed}×`;
+
+  /** The shuffle or the repeat button: coloured, with a dot under it, while on. */
+  const modeButton = (mode: "shuffle" | "repeat") => {
+    const on = playMode === mode;
+    const tint = mode === "shuffle" ? T.violet : T.repeat;
+    return (
+      <button
+        onClick={mode === "shuffle" ? onToggleShuffle : onToggleRepeat}
+        aria-pressed={on}
+        aria-label={mode === "shuffle" ? t("Shuffle") : t("Repeat")}
+        style={{ background: "transparent", border: "none", color: on ? tint : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
+      >
+        {mode === "shuffle" ? <IC.Shuffle /> : <IC.Repeat />}
+        {on && <span style={{ position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: tint }} />}
+      </button>
+    );
+  };
 
   // ── touch-based drag-and-drop for pinned queue ────────────────────────────
   // We track which index is being dragged and which slot we're hovering over.
@@ -423,16 +443,10 @@ export function PlayerExpandSheet({
 
           {/* Transport */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
-            <button
-              onClick={onCycleMode}
-              title={playMode === "shuffle" ? t("Shuffle on, tap for repeat") : playMode === "repeat" ? t("Repeat on, tap to turn off") : t("Tap to shuffle, again to repeat")}
-              style={{ background: "transparent", border: "none", color: playMode === "shuffle" ? T.violet : playMode === "repeat" ? T.repeat : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
-            >
-              {playMode === "repeat" ? <IC.Repeat /> : <IC.Shuffle />}
-              {playMode !== "off" && (
-                <span style={{ position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: playMode === "shuffle" ? T.violet : T.repeat }} />
-              )}
-            </button>
+            {/* Shuffle and repeat used to be one button that went round
+                off, shuffle, repeat: reaching repeat meant shuffling first.
+                Each has its own now, at either end, with a dot when on. */}
+            {modeButton("shuffle")}
             <button onClick={() => onSkip(-1)} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipB /></button>
             <button
               onClick={onTogglePlay}
@@ -441,19 +455,7 @@ export function PlayerExpandSheet({
               {isPlaying ? <IC.Pause /> : <IC.Play />}
             </button>
             <button onClick={() => onSkip(1)} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipF /></button>
-            <button
-              onClick={cycleSpeed}
-              title={t("Playback speed")}
-              style={{
-                background: playbackSpeed !== 1 ? T.dim : "transparent",
-                border: `1px solid ${playbackSpeed !== 1 ? T.accent : T.border}`,
-                color: playbackSpeed !== 1 ? T.text : T.muted,
-                cursor: "pointer", padding: "5px 8px", borderRadius: 8,
-                fontSize: 12, fontWeight: "700", minWidth: 44, fontFamily: "inherit",
-              }}
-            >
-              {speedLabel}
-            </button>
+            {modeButton("repeat")}
           </div>
         </div>
 
@@ -464,6 +466,11 @@ export function PlayerExpandSheet({
             than competing with Like and Share for a spot next to the
             transport. ─────────────────────────────────────────────────────── */}
         <div style={{ padding: "14px 16px 0", display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+          {/* The speed, moved here from the transport to make room for repeat. */}
+          <button className="chip" onClick={cycleSpeed} title={t("Playback speed")}
+            style={playbackSpeed !== 1 ? { border: `1px solid ${T.accent}`, color: T.text } : undefined}>
+            {speedLabel}
+          </button>
           <button className="chip" onClick={onToggleLike}>
             <IC.Heart filled={isLiked} size={15} />
             {isLiked ? t("Unlike") : t("Like")}

@@ -217,9 +217,6 @@ export const NL: Record<string, string> = {
   "Let's go": "Aan de slag",
   "Next": "Volgende",
   "Close player": "Speler sluiten",
-  "Shuffle on, tap for repeat": "Shuffle aan, tik voor herhalen",
-  "Repeat on, tap to turn off": "Herhalen aan, tik om uit te zetten",
-  "Tap to shuffle, again to repeat": "Tik voor shuffle, nog eens voor herhalen",
   "Playback speed": "Afspeelsnelheid",
   "Up Next": "Hierna",
   "NEXT": "HIERNA",
@@ -644,4 +641,5 @@ export const NL: Record<string, string> = {
   "Discard": "Weggooien",
   "Keep editing": "Verder bewerken",
   "Lily": "Lelie",
+  "Repeat": "Herhalen",
 };

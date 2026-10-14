@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { LANTERN_GREEN } from "../lantern";
 
 // ─── STYLE REVEAL ────────────────────────────────────────────────────────────
@@ -18,6 +18,12 @@ import { LANTERN_GREEN } from "../lantern";
 // once at its full size, and only its transform and opacity change: the GPU
 // moves finished pictures about and nothing is drawn again. No shadows on
 // anything that moves, and no more pieces than the effect needs.
+//
+// Two more things a phone needs to keep it smooth. Every keyframe holds plain
+// numbers: one that reads a CSS variable cannot be handed to the GPU and runs
+// on the main thread, which is busy just then. And the whole run, the lift
+// at the end included, is set going at the start, so nothing waits on a timer
+// or on React while the new page is being built underneath.
 
 type Kind = "aviela" | "lantern";
 type Point = { x: number; y: number };
@@ -88,7 +94,6 @@ function prefersStill(): boolean {
 }
 
 export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: Point; onCovered: () => void; onDone: () => void }) {
-  const [lifting, setLifting] = useState(false);
   const calls = useRef({ onCovered, onDone });
   useEffect(() => { calls.current = { onCovered, onDone }; }, [onCovered, onDone]);
 
@@ -96,9 +101,8 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
   const cover = still ? 0 : COVER[kind];
   useEffect(() => {
     const a = setTimeout(() => calls.current.onCovered(), cover);
-    const b = setTimeout(() => setLifting(true), cover + HOLD);
-    const c = setTimeout(() => calls.current.onDone(), cover + HOLD + (still ? 300 : LIFT));
-    return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c); };
+    const c = setTimeout(() => calls.current.onDone(), cover + HOLD + (still ? 300 : LIFT) + 60);
+    return () => { clearTimeout(a); clearTimeout(c); };
   }, [cover, still]);
 
   const w = window.innerWidth, h = window.innerHeight;
@@ -106,21 +110,36 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
   // Far enough to reach the furthest corner from the tap.
   const R = Math.ceil(Math.hypot(Math.max(x, w - x), Math.max(y, h - y))) + 30;
   const reach = Math.max(w, h);
+  const lift = `svLift ${still ? 300 : LIFT}ms ease ${cover + HOLD}ms forwards`;
+
+  // The moving pieces, each with keyframes of its own in plain numbers.
+  const PETAL_TURNS = [0, 60, 120, 180, 240, 300].map((a, i) => a + (i % 2 ? 4 : -3));
+  const flights = FLYING.map(([a, far, , , turn]) => {
+    const rad = (a * Math.PI) / 180;
+    const d = far * reach * 0.62;
+    return { dx: Math.round(Math.sin(rad) * d), dy: Math.round(-Math.cos(rad) * d + d * 0.25), turn };
+  });
+  const pieces = (kind === "lantern"
+    ? FLYING.map(([a, far], i) =>
+        `@keyframes svSpark${i} { 0% { opacity: 0; transform: rotate(${Math.round(a)}deg) translateY(0px); } 12% { opacity: 1; }`
+        + ` 100% { opacity: 0; transform: rotate(${Math.round(a)}deg) translateY(${-Math.round(far * reach * 0.7)}px); } }`)
+    : [
+        ...PETAL_TURNS.map((a, i) => `@keyframes svOpen${i} { from { transform: rotate(${a}deg) scale(0.2, 0.05); } to { transform: rotate(${a}deg) scale(1, 1); } }`),
+        ...flights.map(({ dx, dy, turn }, i) =>
+          `@keyframes svFly${i} { 0% { opacity: 0; transform: translate(0px, 0px) rotate(0deg) scale(0.4); } 12% { opacity: 1; } 70% { opacity: 1; }`
+          + ` 100% { opacity: 0; transform: translate(${dx}px, ${dy}px) rotate(${turn}deg) scale(1); } }`),
+      ]).join("\n");
 
   const css = `
     @keyframes svGrow  { from { transform: scale(0.02); } to { transform: scale(1); } }
     @keyframes svWave  { from { opacity: 1; transform: scale(0.06); } to { opacity: 0; transform: scale(1); } }
     @keyframes svFlash { 0% { opacity: 0; transform: scale(0.2); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(2.4); } }
-    @keyframes svSpark { 0% { opacity: 0; transform: rotate(var(--a)) translateY(0); } 12% { opacity: 1; }
-                         100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(-1 * var(--d))); } }
-    @keyframes svOpen  { from { transform: rotate(var(--a)) scale(0.2, 0.05); } to { transform: rotate(var(--a)) scale(1, 1); } }
     @keyframes svLily  { 0% { opacity: 0; transform: scale(0.4) rotate(-24deg); } 15% { opacity: 1; } 100% { opacity: 1; transform: scale(1.15) rotate(8deg); } }
     @keyframes svLilyOut { from { opacity: 1; transform: scale(1.15) rotate(8deg); } to { opacity: 0; transform: scale(1.9) rotate(22deg); } }
     @keyframes svPop   { from { opacity: 0; transform: scale(0); } to { opacity: 1; transform: scale(1); } }
-    @keyframes svFly   { 0% { opacity: 0; transform: translate(0, 0) rotate(0deg) scale(0.4); } 12% { opacity: 1; }
-                         70% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--r)) scale(1); } }
     @keyframes svTwinkle { 0%, 100% { opacity: 0; transform: scale(0); } 50% { opacity: 1; transform: scale(1); } }
     @keyframes svLift  { from { opacity: 1; } to { opacity: 0; } }
+    ${pieces}
   `;
 
   // A full-size circle round the tap, drawn once and grown with a transform.
@@ -139,7 +158,7 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
   return (
     <div aria-hidden="true" style={{
       position: "fixed", inset: 0, zIndex: 490, overflow: "hidden", pointerEvents: "auto", willChange: "opacity",
-      animation: lifting ? `svLift ${still ? 300 : LIFT}ms ease forwards` : "none",
+      animation: lift,
     }}>
       <style>{css}</style>
 
@@ -151,12 +170,11 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
               <div key={delay} style={{ ...disc(R * 0.95), background: ringOf(G, "88"), opacity: 0, animation: `svWave 1500ms cubic-bezier(0.2, 0.7, 0.3, 1) ${delay}ms both` }} />
             ))}
             <div style={{ ...disc(90), background: `radial-gradient(circle, #ffffff 0%, ${G}aa 35%, transparent 70%)`, opacity: 0, animation: "svFlash 900ms ease-out both" }} />
-            {FLYING.map(([a, far, size, delay], i) => (
+            {FLYING.map(([, , size, delay], i) => (
               <div key={i} style={{
                 position: "absolute", left: x - 1.5, top: y - size, width: 3, height: size * 2, borderRadius: 2, willChange: "transform, opacity",
                 background: `linear-gradient(${G}00, ${G}, #e2fff0)`, transformOrigin: `1.5px ${size}px`, opacity: 0,
-                ["--a" as string]: `${a}deg`, ["--d" as string]: `${Math.round(far * reach * 0.7)}px`,
-                animation: `svSpark ${1100 + (i % 5) * 120}ms cubic-bezier(0.15, 0.8, 0.3, 1) ${80 + delay / 3}ms both`,
+                animation: `svSpark${i} ${1100 + (i % 5) * 120}ms cubic-bezier(0.15, 0.8, 0.3, 1) ${80 + delay / 3}ms both`,
               }} />
             ))}
           </>}
@@ -172,13 +190,12 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
                 middle and grown from its base. */}
             <div style={{
               position: "absolute", left: x, top: y, width: 0, height: 0, willChange: "transform, opacity",
-              animation: lifting ? `svLilyOut ${LIFT}ms ease-in forwards` : `svLily ${cover}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+              animation: `svLily ${cover}ms cubic-bezier(0.22, 1, 0.36, 1) both, svLilyOut ${LIFT}ms ease-in ${cover + HOLD}ms forwards`,
             }}>
-              {[0, 60, 120, 180, 240, 300].map((a, i) => (
+              {PETAL_TURNS.map((a, i) => (
                 <div key={a} style={{
                   position: "absolute", left: -32, top: -158, width: 64, height: 160, transformOrigin: "32px 158px", willChange: "transform",
-                  ["--a" as string]: `${a + (i % 2 ? 4 : -3)}deg`,
-                  animation: `svOpen 1000ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 70}ms both`,
+                  animation: `svOpen${i} 1000ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 70}ms both`,
                 }}>
                   <LilyPetal id={`svp${i}`} width={64} height={160} />
                 </div>
@@ -189,20 +206,14 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
             </div>
 
             {/* Lily petals thrown out across the screen. */}
-            {FLYING.map(([a, far, size, delay, turn], i) => {
-              const rad = (a * Math.PI) / 180;
-              const d = far * reach * 0.62;
-              return (
-                <div key={i} style={{
-                  position: "absolute", left: x - size * 0.2, top: y - size * 0.5, width: size * 0.4, height: size, opacity: 0, willChange: "transform, opacity",
-                  ["--dx" as string]: `${Math.round(Math.sin(rad) * d)}px`, ["--dy" as string]: `${Math.round(-Math.cos(rad) * d + d * 0.25)}px`,
-                  ["--r" as string]: `${turn}deg`,
-                  animation: `svFly ${1500 + (i % 6) * 140}ms cubic-bezier(0.12, 0.75, 0.3, 1) ${160 + delay / 2}ms both`,
-                }}>
-                  <LilyPetal id={`svf${i}`} width={size * 0.4} height={size} />
-                </div>
-              );
-            })}
+            {FLYING.map(([, , size, delay], i) => (
+              <div key={i} style={{
+                position: "absolute", left: x - size * 0.2, top: y - size * 0.5, width: size * 0.4, height: size, opacity: 0, willChange: "transform, opacity",
+                animation: `svFly${i} ${1500 + (i % 6) * 140}ms cubic-bezier(0.12, 0.75, 0.3, 1) ${160 + delay / 2}ms both`,
+              }}>
+                <LilyPetal id={`svf${i}`} width={size * 0.4} height={size} />
+              </div>
+            ))}
 
             {/* Light catching here and there. */}
             {FLYING.slice(0, 10).map(([a, far], i) => {

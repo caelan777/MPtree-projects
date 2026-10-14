@@ -217,9 +217,6 @@ export const ES: Record<string, string> = {
   "Let's go": "Vamos",
   "Next": "Siguiente",
   "Close player": "Cerrar el reproductor",
-  "Shuffle on, tap for repeat": "Aleatorio activado, toca para repetir",
-  "Repeat on, tap to turn off": "Repetir activado, toca para desactivar",
-  "Tap to shuffle, again to repeat": "Toca para aleatorio, otra vez para repetir",
   "Playback speed": "Velocidad de reproducción",
   "Up Next": "A continuación",
   "NEXT": "DESPUÉS",
@@ -644,4 +641,5 @@ export const ES: Record<string, string> = {
   "Discard": "Descartar",
   "Keep editing": "Seguir editando",
   "Lily": "Lirio",
+  "Repeat": "Repetir",
 };
