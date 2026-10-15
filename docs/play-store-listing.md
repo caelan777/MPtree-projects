@@ -11,7 +11,7 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 ## Release notes for 1.2.4 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.4.aab`
-(versionCode 75, built 2026-10-15 with `npm run build:play`). Nothing new to declare:
+(versionCode 75, built 2026-10-15 with `npm run build:play`; test build 55 took 76, so the next bundle is 77). Nothing new to declare:
 no new permission, and the data safety answers for 1.2.0 still hold.
 
 ```
