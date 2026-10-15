@@ -4,3 +4,9 @@
 # says so.
 /versions.html  /download.html  301
 /versions       /download       301
+
+# The Windows page is gone: MPTree for Windows comes from the Microsoft Store,
+# and the button downloads the Store's own small installer for it. Old links
+# and the update notice in installed copies (version.json) land on it too.
+/windows.html  https://get.microsoft.com/installer/download/9PN3L88V4H58?cid=website_cta_psi  302
+/windows       https://get.microsoft.com/installer/download/9PN3L88V4H58?cid=website_cta_psi  302
