@@ -495,7 +495,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
       }
       // The first time, the ring asks.
       // In the tap itself: sound may only start from one.
-      if (!lanternAsked()) { primeLanternVoice(); setAsking(true); return; }
+      // A test build asks every time, so the question can be tried again.
+      if (__PRO_TEST__ || !lanternAsked()) { primeLanternVoice(); setAsking(true); return; }
     }
     setReveal({ kind: "lantern", at });
   };
@@ -718,18 +719,22 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
             <>
               <Group T={T}>
                 <Row T={T} framed title={t("Colour")}>
-                  {DARKS.map(d => (
-                    <Tile key={`d-${d.id}`} T={T} label={d.label} selected={dark && look.dark === d.id} locked={!pro && d.id !== FREE.dark}
-                      onClick={() => pickIn("dark", { ...plain(), dark: d.id, flowers: "none" })}>
-                      <Screen p={SHADE_PREVIEW.dark(d.id)} />
-                    </Tile>
-                  ))}
-                  {LIGHTS.map(l => (
-                    <Tile key={`l-${l.id}`} T={T} label={l.label} selected={!dark && look.light === l.id} locked={!pro && l.id !== FREE.light}
-                      onClick={() => pickIn("light", { ...plain(), light: l.id, flowers: "none" })}>
-                      <Screen p={SHADE_PREVIEW.light(l.id)} />
-                    </Tile>
-                  ))}
+                  {/* The free ones first: black and white, then the rest. */}
+                  {[...DARKS.filter(d => d.id === FREE.dark), ...LIGHTS.filter(l => l.id === FREE.light),
+                    ...DARKS.filter(d => d.id !== FREE.dark), ...LIGHTS.filter(l => l.id !== FREE.light)].map(c => {
+                    const isDark = DARKS.includes(c as typeof DARKS[number]);
+                    return isDark ? (
+                      <Tile key={`d-${c.id}`} T={T} label={c.label} selected={dark && look.dark === c.id} locked={!pro && c.id !== FREE.dark}
+                        onClick={() => pickIn("dark", { ...plain(), dark: c.id as DarkShade, flowers: "none" })}>
+                        <Screen p={SHADE_PREVIEW.dark(c.id as DarkShade)} />
+                      </Tile>
+                    ) : (
+                      <Tile key={`l-${c.id}`} T={T} label={c.label} selected={!dark && look.light === c.id} locked={!pro && c.id !== FREE.light}
+                        onClick={() => pickIn("light", { ...plain(), light: c.id as LightShade, flowers: "none" })}>
+                        <Screen p={SHADE_PREVIEW.light(c.id as LightShade)} />
+                      </Tile>
+                    );
+                  })}
                 </Row>
               </Group>
 
