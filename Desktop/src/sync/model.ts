@@ -247,18 +247,20 @@ function mergeSong(b: SongRec | undefined, l: SongRec | undefined, r: SongRec | 
   return clean(out);
 }
 
-/** The first time a phone joins an account there is no base. The account's
- *  side wins where both have something, likes are joined, counts kept. A song
- *  this phone has stays in its list or in its bin the way it is here: joining
- *  should not make a song someone is playing disappear. */
-function joinSong(l: SongRec | undefined, r: SongRec | undefined, keepLocalBin: boolean): SongRec | undefined {
+/** The first time a phone joins an account there is no base, and again when
+ *  it signs in after signing out. The account's side wins where both have
+ *  something, likes are joined, counts kept. The bin too: a song the account
+ *  knows goes where the account has it. This phone's own list may be from
+ *  before it signed out, and taking it would bring back every song the other
+ *  phones put in the bin or deleted in the meantime. */
+function joinSong(l: SongRec | undefined, r: SongRec | undefined): SongRec | undefined {
   const out: SongRec = {
     ...(l ?? {}), ...(r ?? {}),
     liked: l?.liked || r?.liked,
     playCount: Math.max(l?.playCount ?? 0, r?.playCount ?? 0),
     lastPlayedAt: Math.max(l?.lastPlayedAt ?? 0, r?.lastPlayedAt ?? 0),
   };
-  if (keepLocalBin) out.bin = l?.bin;
+  out.bin = r ? r.bin : l?.bin;
   if (r?.del) out.del = r.del; else delete out.del;
   return clean(out);
 }
@@ -346,7 +348,7 @@ export function merge(base: LibDoc | null, local: LocalDoc, remote: LibDoc | nul
   for (const k of keysOf(base?.songs, L.songs, remote?.songs)) {
     const r = remote?.songs[k];
     const v = !says(k) ? theirs(d => d.songs, k)
-      : !base ? joinSong(L.songs[k], r, !replace)
+      : !base ? joinSong(L.songs[k], r)
       : mergeSong(base.songs[k], L.songs[k], r, newer("s:" + k));
     if (v) { out.songs[k] = v; stampIt("s:" + k, v, r); }
   }

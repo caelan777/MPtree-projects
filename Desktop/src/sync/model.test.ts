@@ -188,12 +188,21 @@ describe("merge", () => {
     expect(merged.songs.fp2).toBeUndefined();
   });
 
-  it("does not take a song out of the list of a phone that joins", () => {
+  it("keeps the account's bin when a phone joins or signs in again", () => {
     const a = phoneA(); a.removed = [a.songs[0]]; a.songs = a.songs.slice(1);
     const acc = round(a, "/a/", null, null).merged;
     expect(acc.songs.fp1?.bin).toBe(true);
+    // B still has the song in its list, from before: it does not come back.
     const r = round(phoneB(), "/b/", null, acc);
-    expect(r.next.songs.map(s => s.id)).toContain("/b/Music/one.mp3");
+    expect(r.merged.songs.fp1?.bin).toBe(true);
+    expect(r.next.removed.map(s => s.id)).toContain("/b/Music/one.mp3");
+  });
+
+  it("keeps a song deleted on another phone deleted when a phone signs in again", () => {
+    const acc = round(phoneA(), "/a/", null, null).merged;
+    const deleted = { ...acc, songs: { ...acc.songs, fp1: { bin: true, del: { A: 100 } } } };
+    const r = round(phoneB(), "/b/", null, deleted);
+    expect(r.merged.songs.fp1).toEqual({ bin: true, del: { A: 100 } });
   });
 
   it("knows a copy by file name and size, or by title and artist when a length is missing", () => {
