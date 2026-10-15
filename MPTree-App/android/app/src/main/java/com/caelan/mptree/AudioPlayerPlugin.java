@@ -57,6 +57,12 @@ public class AudioPlayerPlugin extends Plugin {
 
     private MusicPlayerService playerService;
     private boolean            bound = false;
+    // What the app asked for before the service was bound: handed over as soon
+    // as it is, instead of being dropped (crossfade was then off until the
+    // setting was touched again).
+    private Integer pendingCrossfade = null;
+    private String  pendingMode      = null;
+    private Float   pendingSpeed     = null;
 
     // ── Service connection ──────────────────────────────────────────────────
     private final ServiceConnection connection = new ServiceConnection() {
@@ -66,6 +72,10 @@ public class AudioPlayerPlugin extends Plugin {
                     (MusicPlayerService.LocalBinder) binder;
             playerService = lb.getService();
             bound = true;
+            if (pendingCrossfade != null) playerService.setCrossfadeDuration(pendingCrossfade);
+            if (pendingMode != null) playerService.setPlayMode(pendingMode);
+            if (pendingSpeed != null) playerService.setPlaybackSpeed(pendingSpeed);
+            pendingCrossfade = null; pendingMode = null; pendingSpeed = null;
 
             // When the track ends natively (even in background), fire an
             // event to JS so it can call play() with the next song.
@@ -273,7 +283,7 @@ public class AudioPlayerPlugin extends Plugin {
     @PluginMethod
     public void setPlayMode(PluginCall call) {
         String mode = call.getString("mode", "off");
-        if (bound) playerService.setPlayMode(mode);
+        if (bound) playerService.setPlayMode(mode); else pendingMode = mode;
         call.resolve();
     }
 
@@ -281,16 +291,17 @@ public class AudioPlayerPlugin extends Plugin {
     @PluginMethod
     public void setCrossfadeDuration(PluginCall call) {
         int ms = call.getInt("milliseconds", 0);
-        if (bound) playerService.setCrossfadeDuration(ms);
+        if (bound) playerService.setCrossfadeDuration(ms); else pendingCrossfade = ms;
         call.resolve();
     }
 
     /** speed: playback rate multiplier. 1.0 == normal. Clamped natively. */
     @PluginMethod
     public void setPlaybackSpeed(PluginCall call) {
-        if (!bound) { call.resolve(); return; }
         Double speed = call.getDouble("speed", 1.0);
-        playerService.setPlaybackSpeed(speed != null ? speed.floatValue() : 1.0f);
+        float value = speed != null ? speed.floatValue() : 1.0f;
+        if (!bound) { pendingSpeed = value; call.resolve(); return; }
+        playerService.setPlaybackSpeed(value);
         call.resolve();
     }
 

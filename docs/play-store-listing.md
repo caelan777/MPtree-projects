@@ -8,6 +8,38 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.4 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.4.aab`
+(versionCode 75, built 2026-10-15 with `npm run build:play`). Nothing new to declare:
+no new permission, and the data safety answers for 1.2.0 still hold.
+
+```
+<en-GB>
+Lantern has a question for you. Turn it on with Pro and find out.
+Lantern now comes in black, white or paper, with a figure in the dark behind your songs.
+Under Custom the free colours come first.
+Fixes.
+Crossfade works every time: it no longer switches itself off after a restart, keeps up with faster playback, and a song that ends early fades into the next.
+</en-GB>
+<nl-NL>
+Lantern heeft een vraag voor je. Zet het aan met Pro en ontdek het.
+Lantern is er nu in zwart, wit of papier, met een figuur in het donker achter je nummers.
+Bij Aangepast staan de gratis kleuren voorop.
+Verbeteringen.
+Crossfade werkt altijd: het gaat niet meer vanzelf uit na een herstart, houdt hogere snelheden bij, en een nummer dat vroeg stopt vloeit over in het volgende.
+</nl-NL>
+<es-ES>
+Lantern tiene una pregunta para ti. Actívalo con Pro y descúbrelo.
+Lantern ahora viene en negro, blanco o papel, con una figura en la oscuridad detrás de tus canciones.
+En Personalizado los colores gratis van primero.
+Correcciones.
+El fundido funciona siempre: ya no se apaga solo tras reiniciar, sigue el ritmo a más velocidad y una canción que acaba antes se funde con la siguiente.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.3 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.3.aab`
