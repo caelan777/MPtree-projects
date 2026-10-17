@@ -970,10 +970,12 @@ export default function App() {
           setEqBandLevels(session.eqBandLevels);
           eqBandLevelsRef.current = session.eqBandLevels;
         }
-        if (session.theme) {
-          setTheme(session.theme);
-          themeRef.current = session.theme;
-        }
+        // Someone opening MPTree for the first time gets it white, with the
+        // black header card (DEFAULT_LOOK). The state starts dark so the
+        // loading screen of everyone else matches Android's black splash.
+        const firstTheme = session.theme ?? "light";
+        setTheme(firstTheme);
+        themeRef.current = firstTheme;
         if (Array.isArray(session.playNextQueue) && session.playNextQueue.length) {
           setPlayNextQueue(session.playNextQueue);
           playNextQueueRef.current = session.playNextQueue;

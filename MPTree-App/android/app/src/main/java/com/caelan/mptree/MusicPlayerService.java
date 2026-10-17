@@ -128,6 +128,9 @@ public class MusicPlayerService extends Service {
     // ── Equalizer ────────────────────────────────────────────────────────────
     private int        sharedAudioSessionId = -1;
     private Equalizer  equalizer;
+    // The equalizer of the song fading in, which plays in a session of its own
+    // until the crossfade makes it the song.
+    private Equalizer  fadeEq;
     private boolean    eqEnabled  = false;
     private short[]    pendingEqBandLevels = null;
 
@@ -606,6 +609,19 @@ public class MusicPlayerService extends Service {
         } catch (Exception ignored) {}
     }
 
+    /** An equalizer on this session, set the way the one playing is. */
+    private Equalizer eqFor(int session) {
+        try {
+            Equalizer eq = new Equalizer(0, session);
+            eq.setEnabled(eqEnabled);
+            if (pendingEqBandLevels != null) {
+                short bands = eq.getNumberOfBands();
+                for (short i = 0; i < bands && i < pendingEqBandLevels.length; i++) eq.setBandLevel(i, pendingEqBandLevels[i]);
+            }
+            return eq;
+        } catch (Exception e) { return null; }
+    }
+
     private void releaseEqualizer() {
         if (equalizer != null) {
             try { equalizer.release(); } catch (Exception ignored) {}
@@ -618,11 +634,20 @@ public class MusicPlayerService extends Service {
         if (equalizer != null) {
             try { equalizer.setEnabled(enabled); } catch (Exception ignored) {}
         }
+        if (fadeEq != null) {
+            try { fadeEq.setEnabled(enabled); } catch (Exception ignored) {}
+        }
     }
 
     public void setEqualizerBandLevels(short[] bandLevels) {
         pendingEqBandLevels = bandLevels;
         if (equalizer != null) applyBandLevelsInternal(bandLevels);
+        if (fadeEq != null) {
+            try {
+                short bands = fadeEq.getNumberOfBands();
+                for (short i = 0; i < bands && i < bandLevels.length; i++) fadeEq.setBandLevel(i, bandLevels[i]);
+            } catch (Exception ignored) {}
+        }
     }
 
     private void applyBandLevelsInternal(short[] levels) {
@@ -752,6 +777,10 @@ public class MusicPlayerService extends Service {
 
         mediaPlayer.setOnErrorListener((mp, what, extra) -> {
             if (myToken != playToken) return true;
+            // The song fading out gave up, with the next one already playing
+            // under it: the fade carries on and makes that one the song. It
+            // used to skip ahead, and the next song started again from 0.
+            if (crossfading && fadeReady) return true;
             isPreparing = false;
             isPlaying   = false;
             updatePlaybackState(PlaybackState.STATE_PAUSED);
@@ -905,6 +934,10 @@ public class MusicPlayerService extends Service {
             try { mp.reset(); } catch (Exception ignored) {}
             try { mp.release(); } catch (Exception ignored) {}
         }
+        if (fadeEq != null) {
+            try { fadeEq.release(); } catch (Exception ignored) {}
+            fadeEq = null;
+        }
     }
 
     /** The next song coming up from silence, over part of the crossfade's
@@ -972,7 +1005,17 @@ public class MusicPlayerService extends Service {
         try {
             incomingPlayer = new MediaPlayer();
             keepAwake(incomingPlayer);
-            ensureSharedSessionId(incomingPlayer);
+            // A session of its own, with an equalizer of its own set the same
+            // way. It used to join the session of the song that was ending,
+            // and two players in one session at once is what broke the
+            // crossfade on many phones: the ending song stopped dead, and the
+            // next one was heard only seconds later, from 0 or from halfway
+            // into the fade.
+            try {
+                int session = audioManager != null ? audioManager.generateAudioSessionId() : AudioManager.ERROR;
+                if (session != AudioManager.ERROR) incomingPlayer.setAudioSessionId(session);
+            } catch (Exception ignored) {}
+            fadeEq = eqFor(incomingPlayer.getAudioSessionId());
             incomingPlayer.setAudioAttributes(new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -1023,6 +1066,10 @@ public class MusicPlayerService extends Service {
                     try { outgoing.stop(); outgoing.release(); } catch (Exception ignored) {}
                     mediaPlayer    = incoming;
                     incomingPlayer = null;
+                    // Its session is the one from now on, and its equalizer.
+                    sharedAudioSessionId = incoming.getAudioSessionId();
+                    if (fadeEq != null) { releaseEqualizer(); equalizer = fadeEq; fadeEq = null; }
+                    else attachEqualizer();
                     crossfading    = false;
                     fadeReady      = false;
                     // From here the song that faded in is the one playing; the
