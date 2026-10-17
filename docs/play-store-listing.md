@@ -176,7 +176,7 @@ A private, offline music player for the songs already on your phone.
 
 ```
 MPTree plays the music that is already on your phone. No streaming, no subscription,
-no ads, and no internet needed. It is free, and nothing you listen to is ever sent to us.
+and no internet needed. It is free, and nothing you listen to is ever sent to us.
 
 Open MPTree, allow it to find your audio files, and your whole library is ready to play.
 That is the entire setup.
@@ -208,7 +208,8 @@ new phone.
 MPTREE PRO
 
 One purchase, no subscription. Pro adds styles such as Aviela and Lantern, records and
-colours, and never takes a free feature away. Try it free for a week first.
+colours, and never takes a free feature away. Want to try it first? Watch one ad and
+Pro is on for 24 hours, as often as you like.
 
 With Pro you can also sign in with Google and use MPTree on up to three devices. Your
 playlists, likes and settings are the same on all of them, and your songs go from one
@@ -217,8 +218,8 @@ with us. Buy Pro once and every device you sign in on has it.
 
 PRIVATE BY DESIGN
 
-MPTree has no ads, no tracking, and no analytics. There is no server, so your music and
-your listening are never sent to us. Signing in is optional, and even then your library
+MPTree has no tracking and no analytics, and shows an ad only when you ask for one to
+try Pro. There is no server, so your music and your listening are never sent to us. Signing in is optional, and even then your library
 only goes to your own Google Drive and your own devices. See the full privacy policy at
 mp-tree.net/privacy.
 
@@ -227,7 +228,7 @@ MADE FOR YOUR OWN MUSIC
 MPTree is a player for audio files you already have on your device. It is perfect if you
 keep your own music collection and want a fast, clean, private way to listen to it.
 
-Free, no ads, no catch. Just your music, on your devices.
+Free, no catch. Just your music, on your devices.
 ```
 
 ---
@@ -268,12 +269,26 @@ functionality.**
 | Device or other IDs | Device or other IDs | A number per device in the list of devices, so they can tell each other apart |
 | Personal info | User IDs | A hash of the MPTree account's email, kept by Google Play with the Pro purchase (obfuscated account id) so one purchase goes to one account. Purpose: App functionality and Fraud prevention, security, and compliance |
 
+**Ads (Google AdMob, the ad for a day of Pro).** Google's SDK collects these itself,
+only when someone asks for an ad. Tick them as Google lists them for AdMob
+(support.google.com/admob/answer/11128377; check it again before filling in, it changes).
+For each: **Collected: yes. Shared: yes** (with Google). **Processed ephemerally: no.
+Required or optional: optional** (only when an ad is asked for). **Purpose: Advertising
+or marketing, Analytics, Fraud prevention, security, and compliance.**
+
+| Category | Data type | What it is |
+|---|---|---|
+| Location | Approximate location | Worked out by Google from the IP address |
+| App activity | App interactions | Whether the ad was watched, tapped |
+| App info and performance | Crash logs, Diagnostics | The ad SDK's own |
+| Device or other IDs | Device or other IDs | The advertising ID (also tick Advertising in the row above) |
+
 Not ticked, on purpose:
 - **Email address / Name:** MPTree reads them from Google only to show which account is
   signed in. They are not sent anywhere.
 - **Purchase history:** Google Play handles Pro; MPTree only asks Play whether it is owned.
-- **Location, contacts, messages, health, financial info, web history, crash logs,
-  diagnostics:** none of it.
+- **Precise location, contacts, messages, health, financial info, web history:** none of
+  it. MPTree itself sends no crash logs or diagnostics; only the ad SDK does (above).
 
 If Google asks about the audio files permission: audio is read on the device to play it.
 It only leaves the device when the user signs in, and then only to their own devices
@@ -303,10 +318,12 @@ Expected outcome: rated for **Everyone / PEGI 3 / all ages**.
 ## App content declarations (Play Console → App content)
 
 - Privacy policy: **https://mp-tree.net/privacy**
-- Ads: **No, this app does not contain ads.**
+- Ads: **Yes, this app contains ads.** (Rewarded video only, and only when asked for.)
+- Advertising ID (App content → Advertising ID): **Yes, it uses an advertising ID**, for
+  **Advertising or marketing**. The ads SDK adds the AD_ID permission itself.
 - App access: **All functionality is available without special access.** Nothing needs a
-  login of ours. Pro is a purchase, and it can be tried free for a week from Settings,
-  then MPTree Pro. Buying Pro starts with signing in with Google (the reviewer's own
+  login of ours. Pro is a purchase, and it can be tried for 24 hours by watching one ad:
+  tap anything Pro (a Pro record in Personalise, say), then Watch an ad. Buying Pro starts with signing in with Google (the reviewer's own
   account, it is the MPTree account that keeps Pro), so no test credentials are
   needed. Granting the audio permission on first launch reveals the full library.
 - Content ratings: complete the questionnaire above.

@@ -5,16 +5,16 @@ import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
-  useOwnsPro, useAccountPro, useTrial, buyPro, restorePro, proPrice, lockProForTesting,
-  startTrial, trialTimeLeft, endTrialForTesting, resetTrialForTesting, PRO_MODE, hasPro,
+  useOwnsPro, useAccountPro, useAdDay, buyPro, restorePro, proPrice, lockProForTesting,
+  watchAdForPro, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
 } from "../pro";
 import { useSync, signIn } from "../sync/engine";
 import { GoogleG } from "./AccountSheet";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
 // What Pro is and the one button that buys it. Opened from Settings, and from
-// anything Pro that someone without it taps. Under the buy button, the free
-// week.
+// anything Pro that someone without it taps. Opened that second way, there is
+// also an ad to watch, for a day of Pro.
 
 const Svg = ({ children }: { children: ReactNode }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -33,18 +33,20 @@ type ProSheetProps = {
   onOpenStore: () => void;
   /** Account & sync, for when the account is on three devices already. */
   onOpenAccount: () => void;
+  /** Opened by tapping something Pro: the ad for a day of Pro is offered. */
+  fromFeature: boolean;
   T: T;
 };
 
-export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: ProSheetProps) {
+export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, fromFeature, T }: ProSheetProps) {
   const sh = makeSH(T);
   const owns = useOwnsPro();
   const viaAccount = useAccountPro();
   const sync = useSync();
   const phase = sync.phase;
-  const trial = useTrial();
+  const adDay = useAdDay();
   const [price, setPrice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "buy" | "restore" | "signin">(null);
+  const [busy, setBusy] = useState<null | "buy" | "restore" | "signin" | "ad">(null);
   // Pro is kept in the MPTree account, so buying starts with signing in. Not
   // in a browser, where there is no signing in (the demo buys straight away).
   const needSignIn = phase !== "on" && (Capacitor.getPlatform() !== "web" || import.meta.env.DEV);
@@ -89,6 +91,18 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
       : r ? t("Pro restored") : t("No Pro purchase found on this Google account"));
   };
 
+  const watchAd = async () => {
+    setBusy("ad");
+    const r = await watchAdForPro();
+    setBusy(null);
+    if (r === "pro") { onToast(t("Pro is on for 24 hours")); onClose(); }
+    else if (r === "offline") onToast(t("The ad needs an internet connection."));
+    else if (r === "closed") onToast(t("The ad was closed early, so Pro did not turn on."));
+    else if (r === "none") onToast(t("There is no ad to show right now. Try again later."));
+    else if (r === "consent") onToast(t("Ads are turned off in your privacy choices."));
+    else onToast(t("The ad could not be shown. Try again in a moment."));
+  };
+
   const features: { icon: ReactNode; title: string; body: string }[] = [
     { icon: <SyncIcon />,   title: t("Account & sync"), body: t("Playlists, likes and settings saved in your account, and all your songs on up to three devices.") },
     { icon: <RecordIcon />, title: t("Records"),      body: t("Smoke and marble records for the player.") },
@@ -100,26 +114,20 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const priceLabel = price ?? "€2,99";
 
   const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
-  // Once only, and nothing to pay: it stops by itself after the week.
-  const trialButton = trial.state === "unused" && (
+  // As often as they like; it never asks for payment details.
+  const adButton = fromFeature && ADS_ON && adDay.state !== "live" && (
     <>
-      <button onClick={() => { if (startTrial()) onToast(t("Pro is on for 7 days")); }}
-        style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: PRO_MODE === "none" ? 0 : 8 }}>
-        {t("Try it free for 7 days")}
+      <button onClick={watchAd} disabled={busy !== null}
+        style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: 8, opacity: busy === "ad" ? 0.7 : 1 }}>
+        {busy === "ad" ? t("Loading the ad…") : t("Watch an ad for 24 hours of Pro")}
       </button>
       <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7 }}>
-        {t("No payment. It stops by itself after the week.")}
+        {t("One video, to the end. As often as you like.")}
       </div>
     </>
   );
-  const trialTest = PRO_MODE === "free" && (
-    trial.state === "live" ? (
-      <button onClick={endTrialForTesting} style={link}>{t("End the free week (test build)")}</button>
-    ) : trial.state === "over" ? (
-      <button onClick={() => { resetTrialForTesting(); onToast(t("The free week can be started again")); }} style={link}>
-        {t("Reset the free week (test build)")}
-      </button>
-    ) : null
+  const adTest = PRO_MODE === "free" && adDay.state === "live" && (
+    <button onClick={endAdDayForTesting} style={link}>{t("End the 24 hours (test build)")}</button>
   );
 
   return (
@@ -142,7 +150,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
               {owns ? t("You have Pro. Thank you for supporting MPTree.")
                 : viaAccount ? t("You have Pro through your MPTree account.")
-                : trial.state === "live" ? t("Free week: {time} left.", { time: trialTimeLeft(trial.until) })
+                : adDay.state === "live" ? t("Pro for a day: {time} left.", { time: adDayTimeLeft(adDay.until) })
                 : t("Pay once, keep it forever. No subscription.")}
             </div>
           </div>
@@ -175,7 +183,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             <button onClick={onClose} style={sh.saveBtn}>{t("Done")}</button>
           ) : PRO_MODE === "none" ? (
             <>
-              {trialButton}
+              {adButton}
               <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, margin: "14px 0 12px", textAlign: "center" }}>
                 {t("Pro is sold through Google Play. This copy of MPTree came from the website, so it cannot buy it.")}
               </div>
@@ -192,8 +200,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
               <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7, lineHeight: 1.45 }}>
                 {t("Pro is kept in your MPTree account, so every device you sign in on has it.")}
               </div>
-              {trialButton}
-              {trialTest}
+              {adButton}
+              {adTest}
             </>
           ) : (
             <>
@@ -203,8 +211,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
                   ? t("Unlock Pro for free (test build)")
                   : busy === "buy" ? t("Opening Google Play…") : t("Get Pro for {price}", { price: priceLabel })}
               </button>
-              {trialButton}
-              {trialTest}
+              {adButton}
+              {adTest}
               {PRO_MODE === "play" && (
                 <button onClick={restore} disabled={busy !== null}
                   style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
@@ -213,31 +221,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
               )}
             </>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Shown once, when the free week has run out. */
-export function TrialOverSheet({ onGetPro, onClose, T }: { onGetPro: () => void; onClose: () => void; T: T }) {
-  const sh = makeSH(T);
-  return (
-    <div style={{ ...sh.overlay, zIndex: 460 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, paddingBottom: 28 }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={{ padding: "18px 24px 0", textAlign: "center" }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{t("Your free week is over")}</div>
-          <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.5, marginTop: 8 }}>
-            {t("Everything is back to how it was. Pro can be yours for good, with one payment.")}
-          </div>
-          <button onClick={onGetPro} style={{ ...sh.saveBtn, marginTop: 20 }}>
-            {t("Get Pro")}
-          </button>
-          <button onClick={onClose}
-            style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
-            {t("Not now")}
-          </button>
         </div>
       </div>
     </div>

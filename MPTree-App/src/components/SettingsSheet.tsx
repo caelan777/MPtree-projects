@@ -6,7 +6,8 @@ import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
-import { useTrial, useOwnsPro, trialTimeLeft } from "../pro";
+import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON } from "../pro";
+import { Ads } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
 
@@ -140,16 +141,22 @@ export function SettingsSheet({
   onClose, T,
 }: SettingsSheetProps) {
   const sh = makeSH(T);
-  const trial = useTrial();
+  const adDay = useAdDay();
   const ownsPro = useOwnsPro();
   const sync = useSync();
   // The countdown on the Pro card moves while Settings is open.
   const [, tick] = useState(0);
   useEffect(() => {
-    if (trial.state !== "live") return;
+    if (adDay.state !== "live") return;
     const id = setInterval(() => tick(n => n + 1), 30_000);
     return () => clearInterval(id);
-  }, [trial.state]);
+  }, [adDay.state]);
+  // In the EU and the UK, the answer to Google's consent question for the ad
+  // must be changeable later. Google says when; until an ad was asked for, never.
+  const [adPrivacy, setAdPrivacy] = useState(false);
+  useEffect(() => {
+    if (ADS_ON) Ads.privacyOptions().then(r => setAdPrivacy(r.required)).catch(() => {});
+  }, []);
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
   const [sub, setSub] = useState<null | "faq" | "licences" | "language">(null);
@@ -257,9 +264,8 @@ export function SettingsSheet({
                 {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
-                {trial.state === "live" && !ownsPro ? t("Free week, {time} left.", { time: trialTimeLeft(trial.until) })
+                {adDay.state === "live" && !ownsPro ? t("Pro for a day, {time} left.", { time: adDayTimeLeft(adDay.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : trial.state === "unused" ? t("Records, shades and more. Try it free for a week.")
                   : t("Records, shades and more. Pay once.")}
               </span>
             </span>
@@ -439,6 +445,7 @@ export function SettingsSheet({
           <Row T={T} onClick={onFeedback} icon={<MailIcon />} label={t("Send feedback")} />
           {onRate && <Row T={T} onClick={onRate} icon={<StarIcon />} label={t("Rate MPTree")} />}
           <Row T={T} onClick={onPrivacy} icon={<ShieldIcon />} label={t("Privacy policy")} />
+          {adPrivacy && <Row T={T} onClick={() => { Ads.showPrivacyOptions().catch(() => {}); }} icon={<ShieldIcon />} label={t("Privacy choices for ads")} />}
           <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
         </Section>
 

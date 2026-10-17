@@ -112,6 +112,16 @@ export type BillingPlugin = {
   restore(options: { productId: string }): Promise<{ ok: boolean; owned: boolean; tag?: string }>;
 };
 
+/** Rewarded video ads (AdMob), for a day of Pro. See AdsPlugin.java. */
+export type AdsPlugin = {
+  /** Asks the consent question first where the law wants one. reason, when
+   *  not rewarded: offline, consent, none (no ad to show), closed or failed. */
+  showRewarded(options: { adUnitId: string }): Promise<{ rewarded: boolean; reason?: string }>;
+  /** Whether Settings must offer a way to change the consent answer. */
+  privacyOptions(): Promise<{ required: boolean }>;
+  showPrivacyOptions(): Promise<void>;
+};
+
 /** Sign in with Google, for the MPTree account. See AccountPlugin.java. */
 export type AccountPlugin = {
   signIn(): Promise<{ token?: string; cancelled?: boolean }>;
@@ -166,6 +176,13 @@ const BillingWeb: BillingPlugin = {
   restore:    async () => ({ ok: false, owned: false }),
 };
 
+// No ads in a browser: the demo unlocks Pro with a tap instead.
+const AdsWeb: AdsPlugin = {
+  showRewarded:       async () => ({ rewarded: false, reason: "failed" }),
+  privacyOptions:     async () => ({ required: false }),
+  showPrivacyOptions: async () => {},
+};
+
 // No Google sign-in in a browser. On the dev server a stand-in account can be
 // switched on with localStorage.mptree_dev_account = "1": it keeps the "Drive"
 // in localStorage too (see sync/drive.ts), so two tabs act as two phones.
@@ -216,6 +233,10 @@ export const System: SystemPlugin = isWeb
 export const Billing: BillingPlugin = isWeb
   ? BillingWeb
   : registerPlugin<BillingPlugin>("Billing");
+
+export const Ads: AdsPlugin = isWeb
+  ? AdsWeb
+  : registerPlugin<AdsPlugin>("Ads");
 
 export const Account: AccountPlugin = isWeb
   ? AccountWeb

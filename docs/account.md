@@ -64,7 +64,7 @@ from another phone lands in Music/MPTree.
   page asks to sign in before it offers the purchase: "Sign in to get Pro".
   Signing in needs no Pro. An account that has Pro gives it to the device
   straight away; otherwise the device is signed in, paused, and the Pro page
-  shows the buy button. The free week and Restore purchase need no account.
+  shows the buy button. A day of Pro for an ad and Restore purchase need no account.
 - **Pro comes with the account.** A device that bought Pro writes `pro.json`;
   any device signed in to the account has Pro too, also one whose Google Play
   account is another one. Pro from the account goes with signing out.
