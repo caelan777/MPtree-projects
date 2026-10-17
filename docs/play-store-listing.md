@@ -8,6 +8,38 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.5 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.5.aab`
+(versionCode 78, built 2026-10-17 with `npm run build:play`; the next bundle or test build is 79). Nothing new to declare:
+no new permission, no ads yet (those are on the `rewarded-ads` branch), and the data safety answers for 1.2.0 still hold.
+
+```
+<en-GB>
+Fixes.
+Crossfade no longer cuts the ending song off on some phones, and the next song no longer starts over.
+A cut MP3 keeps its own length and name, also after you delete the original. Cuts made before this update are best made again.
+Signing in again no longer brings back songs your other devices binned or deleted.
+New to MPTree? It now opens in white with a black header card, free for everyone.
+</en-GB>
+<nl-NL>
+Verbeteringen.
+Crossfade breekt het nummer dat eindigt niet meer af op sommige telefoons, en het volgende nummer begint niet meer opnieuw.
+Een geknipte MP3 houdt zijn eigen lengte en naam, ook als je het origineel verwijdert. Knipsels van voor deze update kun je het best opnieuw maken.
+Opnieuw inloggen haalt geen nummers meer terug die je andere apparaten hebben weggegooid of verwijderd.
+Nieuw bij MPTree? De app opent nu in wit met een zwarte kopkaart, gratis voor iedereen.
+</nl-NL>
+<es-ES>
+Correcciones.
+El fundido ya no corta la canción que termina en algunos teléfonos, y la siguiente ya no empieza de nuevo.
+Un MP3 recortado conserva su propia duración y nombre, también si borras el original. Mejor vuelve a hacer los recortes anteriores a esta actualización.
+Volver a iniciar sesión ya no recupera canciones que tus otros dispositivos tiraron o borraron.
+¿Nuevo en MPTree? Ahora se abre en blanco con una tarjeta de cabecera negra, gratis para todos.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.4 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.4.aab`
