@@ -558,6 +558,13 @@ public class MusicScannerPlugin extends Plugin {
      * (~26ms), which is inaudible here. Throws if the stream can't be parsed, so
      * the caller falls back to the in-app metadata cut.
      */
+    /** The frames of an MP3 between two times, with a header frame in front
+     *  that says how many there are. It used to copy the file's own header
+     *  frame along with a cut from the start, and every frame to the end of a
+     *  cut to the end, tags and all: that header still counted the whole song,
+     *  so the next time the library was read (deleting the original, for one)
+     *  the cut showed the full song's length, and to the end it took the
+     *  original's name from its tag. The same as cut_mp3 in the Windows app. */
     private File cutMp3(String sourcePath, long startMs, long endMs) throws Exception {
         File src = new File(sourcePath);
         long len = src.length();
@@ -568,42 +575,95 @@ public class MusicScannerPlugin extends Plugin {
             while (off < data.length && (n = is.read(data, off, data.length - off)) > 0) off += n;
         }
 
-        int pos = 0;
+        int audioStart = 0;
         // Skip an ID3v2 tag if present (size is stored as a 28-bit synchsafe int).
         if (data.length > 10 && data[0] == 'I' && data[1] == 'D' && data[2] == '3') {
             int size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14)
                      | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F);
-            pos = 10 + size;
-            if ((data[5] & 0x10) != 0) pos += 10; // footer present
-            if (pos < 0 || pos > data.length) pos = 0;
+            audioStart = 10 + size;
+            if ((data[5] & 0x10) != 0) audioStart += 10; // footer present
+            if (audioStart < 0 || audioStart > data.length) audioStart = 0;
         }
 
-        double tMs = 0;
-        int startByte = -1, endByte = data.length;
-        int i = pos;
-        while (i + 4 <= data.length) {
-            // Frame sync = 11 set bits (0xFF, top 3 bits of next byte).
-            if ((data[i] & 0xFF) != 0xFF || (data[i + 1] & 0xE0) != 0xE0) { i++; continue; }
-            int[] frame = parseMp3Frame(data, i); // {frameLenBytes, durationUs}
-            if (frame == null || frame[0] < 4 || i + frame[0] > data.length) { i++; continue; }
-            if (startByte < 0 && tMs >= startMs) startByte = i;
-            if (tMs >= endMs) { endByte = i; break; }
-            tMs += frame[1] / 1000.0;
-            i += frame[0];
+        // The first frame: one that is followed by another, so a stray FF in a
+        // tag is not taken for one.
+        int pos = audioStart;
+        Mp3Frame first;
+        while (true) {
+            if (pos + 4 > data.length || pos > audioStart + 2 * 1024 * 1024) {
+                throw new UnsupportedOperationException("No MP3 frames found");
+            }
+            Mp3Frame f = mp3Frame(data, pos);
+            if (f != null && f.len > 4 && mp3Frame(data, pos + f.len) != null) { first = f; break; }
+            pos++;
         }
-        if (startByte < 0) startByte = pos;
-        if (endByte <= startByte) throw new Exception("Empty MP3 cut range");
+        // The file's own header frame carries the old counts: left behind.
+        if (bytesAre(data, pos + first.xingAt, "Xing") || bytesAre(data, pos + first.xingAt, "Info")
+                || bytesAre(data, pos + 36, "VBRI")) {
+            pos += first.len;
+        }
+
+        java.io.ByteArrayOutputStream kept = new java.io.ByteArrayOutputStream();
+        int frames = 0;
+        long samplesDone = 0;
+        int rate = first.rate;
+        byte[] head = null;
+        while (true) {
+            Mp3Frame f = mp3Frame(data, pos);
+            if (f == null || pos + f.len > data.length) break;
+            long atMs = samplesDone * 1000 / f.rate;
+            if (atMs >= endMs) break;
+            if (atMs >= startMs) {
+                if (head == null) {
+                    head = new byte[]{ data[pos], data[pos + 1], data[pos + 2], data[pos + 3] };
+                    rate = f.rate;
+                }
+                kept.write(data, pos, f.len);
+                frames++;
+            }
+            samplesDone += f.samples;
+            pos += f.len;
+        }
+        if (head == null) throw new Exception("Empty MP3 cut range");
+
+        // The header frame: a silent frame of the same kind, holding "Xing", how
+        // many frames follow and how many bytes the whole file is.
+        head[1] |= 0x01;          // no checksum after the header
+        head[2] &= (byte) ~0x02;  // no padding
+        Mp3Frame info = mp3Frame(head, 0);
+        while (info != null && info.len < info.xingAt + 16 && ((head[2] >> 4) & 0xF) < 14) {
+            head[2] += 0x10;      // a higher bitrate: a longer frame
+            info = mp3Frame(head, 0);
+        }
+        if (info == null || info.len < info.xingAt + 16) throw new UnsupportedOperationException("No room for an MP3 header frame");
+        byte[] out = new byte[info.len];
+        System.arraycopy(head, 0, out, 0, 4);
+        int x = info.xingAt;
+        out[x] = 'X'; out[x + 1] = 'i'; out[x + 2] = 'n'; out[x + 3] = 'g';
+        putInt(out, x + 4, 3);    // frames and bytes follow
+        putInt(out, x + 8, frames);
+        putInt(out, x + 12, info.len + kept.size());
 
         File tmp = File.createTempFile("mptree_cut", ".mp3", getContext().getCacheDir());
         try (java.io.FileOutputStream os = new java.io.FileOutputStream(tmp)) {
-            os.write(data, startByte, endByte - startByte);
+            os.write(out);
+            kept.writeTo(os);
         }
         return tmp;
     }
 
-    /** Parse one MPEG-audio Layer III frame header. Returns {frameLenBytes, durationUs} or null. */
-    private int[] parseMp3Frame(byte[] d, int i) {
-        int b1 = d[i + 1] & 0xFF, b2 = d[i + 2] & 0xFF;
+    private static final class Mp3Frame {
+        final int len, samples, rate;
+        /** Where a Xing or Info tag would stand, counted from the frame's start. */
+        final int xingAt;
+        Mp3Frame(int len, int samples, int rate, int xingAt) { this.len = len; this.samples = samples; this.rate = rate; this.xingAt = xingAt; }
+    }
+
+    /** One MPEG-audio Layer III frame header at i, or null. */
+    private static Mp3Frame mp3Frame(byte[] d, int i) {
+        if (i < 0 || i + 4 > d.length) return null;
+        if ((d[i] & 0xFF) != 0xFF || (d[i + 1] & 0xE0) != 0xE0) return null;
+        int b1 = d[i + 1] & 0xFF, b2 = d[i + 2] & 0xFF, b3 = d[i + 3] & 0xFF;
         int versionBits = (b1 >> 3) & 0x3; // 3=MPEG1, 2=MPEG2, 0=MPEG2.5, 1=reserved
         int layerBits   = (b1 >> 1) & 0x3; // 1=Layer III
         if (versionBits == 1 || layerBits != 1) return null;
@@ -611,6 +671,7 @@ public class MusicScannerPlugin extends Plugin {
         int srIdx      = (b2 >> 2) & 0x3;
         int padding    = (b2 >> 1) & 0x1;
         if (bitrateIdx == 0 || bitrateIdx == 15 || srIdx == 3) return null;
+        boolean mono = (b3 >> 6) == 3;
 
         boolean v1 = versionBits == 3;
         int[] brV1 = {0,32,40,48,56,64,80,96,112,128,160,192,224,256,320};
@@ -622,11 +683,19 @@ public class MusicScannerPlugin extends Plugin {
         int[] srV25 = {11025,12000,8000};
         int sampleRate = versionBits == 3 ? srV1[srIdx] : versionBits == 2 ? srV2[srIdx] : srV25[srIdx];
 
-        int samplesPerFrame = v1 ? 1152 : 576;
-        int frameLen = v1 ? 144 * bitrate / sampleRate + padding
-                          : 72 * bitrate / sampleRate + padding;
-        int durationUs = (int) (samplesPerFrame * 1_000_000L / sampleRate);
-        return new int[]{ frameLen, durationUs };
+        int frameLen = (v1 ? 144 : 72) * bitrate / sampleRate + padding;
+        int side = v1 ? (mono ? 17 : 32) : (mono ? 9 : 17);
+        return new Mp3Frame(frameLen, v1 ? 1152 : 576, sampleRate, 4 + side);
+    }
+
+    private static boolean bytesAre(byte[] d, int at, String s) {
+        if (at < 0 || at + s.length() > d.length) return false;
+        for (int k = 0; k < s.length(); k++) if (d[at + k] != (byte) s.charAt(k)) return false;
+        return true;
+    }
+
+    private static void putInt(byte[] d, int at, int v) {
+        d[at] = (byte) (v >>> 24); d[at + 1] = (byte) (v >>> 16); d[at + 2] = (byte) (v >>> 8); d[at + 3] = (byte) v;
     }
 
     /** Copies `tmp` into the shared Music/MPTree collection via MediaStore and
