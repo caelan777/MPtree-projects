@@ -1,0 +1,4 @@
+# Everything on mp-tree.net may be crawled.
+# Without this file the site answered /robots.txt with the homepage.
+User-agent: *
+Allow: /
