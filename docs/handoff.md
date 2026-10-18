@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.4, versionCode 75 | uploaded by Caelan on 15 October |
-| Android test build | 56, versionCode 77 | prerelease `v1.2.3-pro-test.56`, mp-tree.net/test |
+| Android test build | 57, versionCode 80 (same as 1.2.6) | prerelease `v1.2.3-pro-test.57`, mp-tree.net/test |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 80 (1.2.5 took 78, 1.2.6 took 79). Next Windows is 0.1.5.
+Next Android versionCode is 81 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80). Next Windows is 0.1.5.
 
 ## Waiting on Caelan
 
