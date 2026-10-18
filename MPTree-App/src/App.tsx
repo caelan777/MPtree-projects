@@ -970,9 +970,9 @@ export default function App() {
           setEqBandLevels(session.eqBandLevels);
           eqBandLevelsRef.current = session.eqBandLevels;
         }
-        // Someone opening MPTree for the first time gets it white, with the
-        // black header card (DEFAULT_LOOK). The state starts dark so the
-        // loading screen of everyone else matches Android's black splash.
+        // Someone opening MPTree for the first time gets it white. The state
+        // starts dark so the loading screen of everyone else matches
+        // Android's black splash.
         const firstTheme = session.theme ?? "light";
         setTheme(firstTheme);
         themeRef.current = firstTheme;

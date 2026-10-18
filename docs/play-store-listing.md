@@ -8,6 +8,104 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.7 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.7.aab`
+(versionCode 81, built 2026-10-18 with `npm run build:play`; the next bundle or test build is 82). 1.2.6 with the
+Account & sync page full screen. Upload this one in place of 1.2.5 and 1.2.6; the notes cover all three.
+Nothing new to declare.
+
+```
+<en-GB>
+Account & sync is a page of its own now, and clearer: your devices in a triangle, with the songs moving between them, and plain words for what is going on.
+Fixes.
+Crossfade no longer cuts the ending song off on some phones.
+A cut MP3 keeps its own length and name. Cuts made before this update are best made again.
+Signing in again no longer brings back songs your other devices binned or deleted.
+</en-GB>
+<nl-NL>
+Account en sync is nu een eigen pagina, en duidelijker: je apparaten in een driehoek, met de nummers die ertussen gaan, en gewone woorden voor wat er gebeurt.
+Verbeteringen.
+Crossfade breekt het nummer dat eindigt niet meer af op sommige telefoons.
+Een geknipte MP3 houdt zijn eigen lengte en naam. Knipsels van voor deze update kun je het best opnieuw maken.
+Opnieuw inloggen haalt geen nummers meer terug die je andere apparaten hebben weggegooid of verwijderd.
+</nl-NL>
+<es-ES>
+Cuenta y sincronización es ahora una página propia, y más clara: tus dispositivos en un triángulo, con las canciones pasando entre ellos, y palabras sencillas para lo que ocurre.
+Correcciones.
+El fundido ya no corta la canción que termina en algunos teléfonos.
+Un MP3 recortado conserva su propia duración y nombre. Mejor vuelve a hacer los recortes anteriores.
+Volver a iniciar sesión ya no recupera canciones que tus otros dispositivos tiraron o borraron.
+</es-ES>
+```
+
+---
+
+## Release notes for 1.2.6 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.6.aab`
+(versionCode 79, built 2026-10-18 with `npm run build:play`; the next bundle or test build is 80). It has everything
+of 1.2.5 except the white with black header start (back to plain white), plus the new Account & sync page, so these
+notes cover both: upload this one in place of 1.2.5 if that was not sent yet. Nothing new to declare.
+
+```
+<en-GB>
+Account & sync is clearer: your devices in a triangle, with the songs moving between them, and plain words for what is going on.
+Fixes.
+Crossfade no longer cuts the ending song off on some phones.
+A cut MP3 keeps its own length and name. Cuts made before this update are best made again.
+Signing in again no longer brings back songs your other devices binned or deleted.
+</en-GB>
+<nl-NL>
+Account en sync is duidelijker: je apparaten in een driehoek, met de nummers die ertussen gaan, en gewone woorden voor wat er gebeurt.
+Verbeteringen.
+Crossfade breekt het nummer dat eindigt niet meer af op sommige telefoons.
+Een geknipte MP3 houdt zijn eigen lengte en naam. Knipsels van voor deze update kun je het best opnieuw maken.
+Opnieuw inloggen haalt geen nummers meer terug die je andere apparaten hebben weggegooid of verwijderd.
+</nl-NL>
+<es-ES>
+Cuenta y sincronización es más clara: tus dispositivos en un triángulo, con las canciones pasando entre ellos, y palabras sencillas para lo que ocurre.
+Correcciones.
+El fundido ya no corta la canción que termina en algunos teléfonos.
+Un MP3 recortado conserva su propia duración y nombre. Mejor vuelve a hacer los recortes anteriores a esta actualización.
+Volver a iniciar sesión ya no recupera canciones que tus otros dispositivos tiraron o borraron.
+</es-ES>
+```
+
+---
+
+## Release notes for 1.2.5 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.5.aab`
+(versionCode 78, built 2026-10-17 with `npm run build:play`; the next bundle or test build is 79). Nothing new to declare:
+no new permission, no ads yet (those are on the `rewarded-ads` branch), and the data safety answers for 1.2.0 still hold.
+
+```
+<en-GB>
+Fixes.
+Crossfade no longer cuts the ending song off on some phones, and the next song no longer starts over.
+A cut MP3 keeps its own length and name, also after you delete the original. Cuts made before this update are best made again.
+Signing in again no longer brings back songs your other devices binned or deleted.
+New to MPTree? It now opens in white with a black header card, free for everyone.
+</en-GB>
+<nl-NL>
+Verbeteringen.
+Crossfade breekt het nummer dat eindigt niet meer af op sommige telefoons, en het volgende nummer begint niet meer opnieuw.
+Een geknipte MP3 houdt zijn eigen lengte en naam, ook als je het origineel verwijdert. Knipsels van voor deze update kun je het best opnieuw maken.
+Opnieuw inloggen haalt geen nummers meer terug die je andere apparaten hebben weggegooid of verwijderd.
+Nieuw bij MPTree? De app opent nu in wit met een zwarte kopkaart, gratis voor iedereen.
+</nl-NL>
+<es-ES>
+Correcciones.
+El fundido ya no corta la canción que termina en algunos teléfonos, y la siguiente ya no empieza de nuevo.
+Un MP3 recortado conserva su propia duración y nombre, también si borras el original. Mejor vuelve a hacer los recortes anteriores a esta actualización.
+Volver a iniciar sesión ya no recupera canciones que tus otros dispositivos tiraron o borraron.
+¿Nuevo en MPTree? Ahora se abre en blanco con una tarjeta de cabecera negra, gratis para todos.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.4 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.4.aab`
