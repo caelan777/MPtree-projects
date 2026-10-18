@@ -18,16 +18,17 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 79 (1.2.5 took 78). Next Windows is 0.1.5.
+Next Android versionCode is 80 (1.2.5 took 78, 1.2.6 took 79). Next Windows is 0.1.5.
 
 ## Waiting on Caelan
 
-1. **Upload 1.2.5 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.5.aab`,
-   versionCode 78, built 17 October; release notes in `docs/play-store-listing.md`).
-   It has test builds 55 and 56 (sign in again keeps the bin, crossfade in its own
-   audio session, white with a black header to start with) and the MP3 cut fix. No
-   ads. Caelan chose to ship it without hearing the crossfade of test build 56 on
-   a device first. Once it is live, put 1.2.5 in the table above.
+1. **Upload 1.2.6 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.6.aab`,
+   versionCode 79, built 18 October; release notes in `docs/play-store-listing.md`).
+   It replaces 1.2.5 (78), which Caelan may not have sent: it has all of 1.2.5
+   (crossfade, sign in again keeps the bin, the MP3 cut fix) plus the new Account &
+   sync page, and MPTree starts plain white again (Caelan dropped the black header
+   start on 18 October, in both apps). No ads. The crossfade of test build 56 was
+   never heard on a device. Once it is live, put it in the table above.
 2. **Windows 0.1.4 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.4.msix`, the
    sign-in-again fix) to upload in Partner Center. Only then bump the `windows`
    block of `Website/version.json` to 0.1.4: its notice sends installer users to
@@ -67,7 +68,17 @@ Next Android versionCode is 79 (1.2.5 took 78). Next Windows is 0.1.5.
   "Requires review" in AdMob.
   When it ships: merge the branch, take the next versionCode, push the privacy
   page in the same go (redate it), and drop "no ads" from `Website/index.html`
-  (the Get and Support parts) at the same time. Windows keeps the free week.
+  (the Get and Support parts) at the same time, and the splash's "your music ·
+  zero ads" line in the app. Windows keeps the free week.
+
+## Parked by Caelan (18 October): sync, to watch
+
+Not problems yet, to look at only if people run into them: songs only move while
+MPTree is open (no native background work); WebRTC has STUN only, no TURN, so on
+many mobile networks songs go the slower way through Drive; the relay uses the
+person's own Drive space; `engine.ts` has no tests (only `model.ts` does); a
+conflict goes to the later device clock. Look at Play reviews and mail for
+"songs do not arrive" first.
 
 ## In the working tree, not committed
 
@@ -77,6 +88,13 @@ Next Android versionCode is 79 (1.2.5 took 78). Next Windows is 0.1.5.
   `Branding/store/app-screens/`, `Branding/social/colours/`.
 
 ## Done this week, for context
+
+- Account & sync page (Android, 1.2.6): design B from the canvas
+  https://claude.ai/artifact/QHFuSQLBKb9UNurRbqNdre. The devices in a triangle,
+  this one on top, dots running along a line while songs go that way (slowly both
+  ways when all is in step), one plain sentence below, then rows: playlists and
+  likes, songs over mobile data, add or remove devices (folds open), what syncs.
+  The Windows app still has the old page.
 
 - Crossfade (Android, test build 56): the song fading in plays in an audio session
   of its own with an equalizer set the same way, and takes the session over at the
