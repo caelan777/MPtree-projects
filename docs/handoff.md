@@ -18,18 +18,18 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 85 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84). Next Windows is 0.1.5.
+Next Android versionCode is 86 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85). Next Windows is 0.1.5.
 
 ## Waiting on Caelan
 
-1. **Upload 1.2.7 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.7.aab`,
-   versionCode 81, built 18 October; release notes in `docs/play-store-listing.md`).
-   It replaces 1.2.5 (78) and 1.2.6 (79): the Account & sync page is full screen
-   now (a page of its own, like the bin). It has all of 1.2.5
-   (crossfade, sign in again keeps the bin, the MP3 cut fix) plus the new Account &
-   sync page, and MPTree starts plain white again (Caelan dropped the black header
-   start on 18 October, in both apps). No ads. The crossfade of test build 56 was
-   never heard on a device. Once it is live, put it in the table above.
+1. **Upload 1.2.8 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.8.aab`,
+   versionCode 85, built 18 October; release notes in `docs/play-store-listing.md`).
+   The first bundle with ads: everything of 1.2.7 (account page, MP3 cut fix,
+   crossfade, sign in again keeps the bin, plain white start) plus the ad for a day
+   of Pro instead of the free week. Replaces 1.2.5 to 1.2.7. Before sending it for
+   review, in Play Console: Ads yes, Advertising ID yes, Data safety rows for
+   AdMob. Caelan tested the ad on his phone with test build 60 (it works). The
+   website already says what the app does with ads (privacy page live 18 October).
 2. **Windows 0.1.4 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.4.msix`, the
    sign-in-again fix) to upload in Partner Center. Only then bump the `windows`
    block of `Website/version.json` to 0.1.4: its notice sends installer users to
@@ -44,10 +44,10 @@ Next Android versionCode is 85 (1.2.5 took 78, 1.2.6 took 79, test build 57 took
    build Windows with it, tick "purchases outside the Store commerce system" in
    Partner Center, then one real purchase and refund.
 
-## On a branch
+## Ads (merged into main on 18 October)
 
 - **Rewarded ads instead of the free week (Android only)**, on the branch
-  `rewarded-ads` (pushed 18 October, main merged in, not merged back). Test build 58
+  `rewarded-ads`, merged into main on 18 October for 1.2.8. Test build 58
   is made from it. The Pro page there shows buying and the ad as two equal cards
   (design B of https://claude.ai/artifact/HfXts2MANZazZggR3LNmyW). Someone without Pro who
   taps something Pro (a Pro record or shade, Clean up, sync paused) gets the Pro
@@ -70,10 +70,9 @@ Next Android versionCode is 85 (1.2.5 took 78, 1.2.6 took 79, test build 57 took
   right after that push, most likely because it had crawled before the file was
   there; Caelan presses Check for updates again on 18 October. The app still
   "Requires review" in AdMob.
-  When it ships: merge the branch, take the next versionCode, push the privacy
-  page in the same go (redate it), and drop "no ads" from `Website/index.html`
-  (the Get and Support parts) at the same time, and the splash's "your music ·
-  zero ads" line in the app. Windows keeps the free week.
+  Done for 1.2.8: branch merged, privacy page live (dated 18 October), "no ads"
+  gone from `Website/index.html`, the splash says "your music · on your device".
+  Windows keeps the free week.
 
 ## Parked by Caelan (18 October): sync, to watch
 

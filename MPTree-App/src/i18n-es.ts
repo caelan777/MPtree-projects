@@ -199,7 +199,7 @@ export const ES: Record<string, string> = {
   "MPTree is built on work other people share freely. These are their licences.": "MPTree está hecho sobre trabajo que otras personas comparten libremente. Estas son sus licencias.",
   "No licence file is included with this package.": "Este paquete no incluye archivo de licencia.",
   "Loading your music…": "Cargando tu música…",
-  "your music · zero ads": "tu música · cero anuncios",
+  "your music · on your device": "tu música · en tu dispositivo",
   "Lyrics": "Letra",
   "Paste the lyrics here…": "Pega la letra aquí…",
   "Nothing yet": "Aún nada",

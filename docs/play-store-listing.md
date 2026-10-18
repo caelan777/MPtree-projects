@@ -8,6 +8,37 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.8 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.8.aab`
+(versionCode 85, built 2026-10-18 with `npm run build:play`; the next bundle or test build is 86). The first
+bundle with ads: everything of 1.2.7 plus the ad for a day of Pro instead of the free week. **Declare in Play Console
+before sending it for review**: Ads yes, Advertising ID yes, and the Data safety rows for AdMob (all further down in
+this file). Upload this one in place of 1.2.5 to 1.2.7.
+
+```
+<en-GB>
+Try Pro for free: watch one ad and all of Pro is on for 24 hours, as often as you like. Or buy it once, for good.
+The Pro page shows both side by side, full screen.
+Account & sync is a page of its own: your devices in a triangle, with the songs moving between them.
+Fixes: crossfade no longer cuts songs off, a cut MP3 keeps its own length and name, and signing in again keeps the bin.
+</en-GB>
+<nl-NL>
+Probeer Pro gratis: kijk één advertentie en alles van Pro staat 24 uur aan, zo vaak als je wilt. Of koop het één keer, voor altijd.
+De Pro-pagina laat ze naast elkaar zien, op het hele scherm.
+Account en sync is een eigen pagina: je apparaten in een driehoek, met de nummers die ertussen gaan.
+Verbeteringen: crossfade breekt niets meer af, een geknipte MP3 houdt zijn lengte en naam, en opnieuw inloggen bewaart de prullenbak.
+</nl-NL>
+<es-ES>
+Prueba Pro gratis: mira un anuncio y todo Pro se activa 24 horas, tantas veces como quieras. O cómpralo una vez, para siempre.
+La página Pro muestra las dos opciones juntas, a pantalla completa.
+Cuenta y sincronización es una página propia: tus dispositivos en un triángulo, con las canciones pasando entre ellos.
+Correcciones: el fundido ya no corta canciones, un MP3 recortado conserva su duración y nombre, y volver a iniciar sesión mantiene la papelera.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.7 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.7.aab`

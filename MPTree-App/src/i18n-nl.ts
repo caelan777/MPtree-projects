@@ -199,7 +199,7 @@ export const NL: Record<string, string> = {
   "MPTree is built on work other people share freely. These are their licences.": "MPTree is gebouwd op werk dat anderen vrij delen. Dit zijn hun licenties.",
   "No licence file is included with this package.": "Bij dit pakket zit geen licentiebestand.",
   "Loading your music…": "Je muziek laden…",
-  "your music · zero ads": "jouw muziek · nul reclame",
+  "your music · on your device": "jouw muziek · op je apparaat",
   "Lyrics": "Songtekst",
   "Paste the lyrics here…": "Plak de songtekst hier…",
   "Nothing yet": "Nog niets",

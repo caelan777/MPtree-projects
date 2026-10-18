@@ -145,7 +145,7 @@ export function LoadingScreen({
       <div style={{ position: "absolute", bottom: 40, textAlign: "center", opacity: settled ? 1 : 0, transition: "opacity 0.35s ease" }}>
         <div style={{ fontSize: 12, color: TH.muted }}>by Verkuijl</div>
         <div style={{ fontSize: 11, color: TH.muted, opacity: 0.65, marginTop: 4, letterSpacing: "0.06em" }}>
-          {t("your music · zero ads")}
+          {t("your music · on your device")}
         </div>
       </div>
     </div>
