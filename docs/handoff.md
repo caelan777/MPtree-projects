@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.4, versionCode 75 | uploaded by Caelan on 15 October |
-| Android test build | 57, versionCode 80 (same as 1.2.6) | prerelease `v1.2.3-pro-test.57`, mp-tree.net/test |
+| Android test build | 58, versionCode 82 (branch `rewarded-ads`: ads with Google test units, two-card Pro page) | prerelease `v1.2.3-pro-test.58`, mp-tree.net/test |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 82 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81). Next Windows is 0.1.5.
+Next Android versionCode is 83 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test build 58 took 82). Next Windows is 0.1.5.
 
 ## Waiting on Caelan
 
@@ -47,7 +47,9 @@ Next Android versionCode is 82 (1.2.5 took 78, 1.2.6 took 79, test build 57 took
 ## On a branch
 
 - **Rewarded ads instead of the free week (Android only)**, on the branch
-  `rewarded-ads` (commit d356b96, not merged, not pushed). Someone without Pro who
+  `rewarded-ads` (pushed 18 October, main merged in, not merged back). Test build 58
+  is made from it. The Pro page there shows buying and the ad as two equal cards
+  (design B of https://claude.ai/artifact/HfXts2MANZazZggR3LNmyW). Someone without Pro who
   taps something Pro (a Pro record or shade, Clean up, sync paused) gets the Pro
   page with "Watch an ad for 24 hours of Pro" under the buy button. Not when the
   Pro page is opened from the Settings card. One rewarded video watched to the end
