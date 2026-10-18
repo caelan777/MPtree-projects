@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.4, versionCode 75 | uploaded by Caelan on 15 October |
-| Android test build | 59, versionCode 83 (branch `rewarded-ads`: ads with Google test units, two-card Pro page, ad card always shown) | prerelease `v1.2.3-pro-test.59`, mp-tree.net/test |
+| Android test build | 60, versionCode 84 (branch `rewarded-ads`: ads with Google test units, two-card Pro page always with the ad, full screen) | prerelease `v1.2.3-pro-test.60`, mp-tree.net/test |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 84 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 and 59 took 82 and 83). Next Windows is 0.1.5.
+Next Android versionCode is 85 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84). Next Windows is 0.1.5.
 
 ## Waiting on Caelan
 
