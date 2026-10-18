@@ -25,7 +25,7 @@ android {
         // 33, 35, 37, 39, 41: Pro test builds 21 to 25. 40 and 42 were the 1.2.0 bundles for Play.
         // 43, 44, 45: Pro test builds 26, 27 and 28.
         // 1.2.1: 46 on Play, the fixes of test builds 26 to 28.
-        versionCode 83
+        versionCode 84
         versionName "1.2.7"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // The AdMob app id (AdMob > Apps > App settings), for the ad that
