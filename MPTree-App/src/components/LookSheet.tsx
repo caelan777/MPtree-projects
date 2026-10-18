@@ -9,7 +9,7 @@ import { StyleReveal } from "./StyleReveal";
 import { primeLanternVoice } from "../lanternVoice";
 import { usePro } from "../pro";
 import {
-  useLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, isFreeCard, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
+  useLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
   lanternAsked, markLanternAsked, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour,
 } from "../look";
@@ -407,7 +407,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const pair = (a: string, b: string) => `${t(a)} · ${t(b)}`;
   const PRESETS: Preset[] = [
     { id: "black",          mode: "dark",  shade: "classic", card: "default",       vinyl: "classic", name: t("Black"), free: true },
-    { id: "white-black",    mode: "light", shade: "classic", card: "dark:classic",  vinyl: "classic", name: pair("White", "Black"), free: true },
     { id: "white",          mode: "light", shade: "classic", card: "default",       vinyl: "white",   name: t("White"), free: true },
     { id: "paper-graphite", mode: "light", shade: "paper",   card: "dark:graphite", vinyl: "smoke",   name: pair("Paper", "Graphite") },
     { id: "stone-black",    mode: "light", shade: "stone",   card: "dark:classic",  vinyl: "classic", name: pair("Stone", "Black") },
@@ -746,7 +745,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                     <Card p={T} />
                   </Tile>
                   {CARDS.map(c => (
-                    <Tile key={c.id} T={T} label={c.label} selected={card === c.id} locked={!pro && !isFreeCard(c.id)} onClick={() => setCard(c.id)}>
+                    <Tile key={c.id} T={T} label={c.label} selected={card === c.id} locked={!pro} onClick={() => setCard(c.id)}>
                       <Card p={cardPalette(c.id, T)} />
                     </Tile>
                   ))}

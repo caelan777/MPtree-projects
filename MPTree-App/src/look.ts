@@ -66,18 +66,13 @@ export type Look = {
 
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
-  // White with the black header card is what MPTree opens in the first time.
-  cardDark: "default", cardLight: "dark:classic", icon: "classic", photoDisc: false,
+  cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
   flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
 };
 
 /** What anyone gets without Pro. */
 export const FREE = { vinyl: "classic", dark: "classic", light: "classic", card: "default", icon: "classic" } as const;
-
-/** The header cards anyone may have: the one that follows the app, and the
- *  black one, which a white app opens with. */
-export const isFreeCard = (c: CardShade): boolean => c === FREE.card || c === "dark:classic";
 
 /** The records anyone may have: the black one, and the white one that goes
  *  with the White style, which is free as a whole. */
@@ -208,7 +203,7 @@ export function hasLookChanges(): boolean {
 
 /** Whether a look is made of free things only, so it can be kept without Pro. */
 export function isFreeLook(l: Look): boolean {
-  return l.dark === FREE.dark && l.light === FREE.light && isFreeCard(l.cardDark) && isFreeCard(l.cardLight)
+  return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
     && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none";
 }
 
