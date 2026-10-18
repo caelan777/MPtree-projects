@@ -266,6 +266,7 @@ export function SettingsSheet({
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {adDay.state === "live" && !ownsPro ? t("Pro for a day, {time} left.", { time: adDayTimeLeft(adDay.until) })
                   : pro ? t("Thank you for supporting MPTree.")
+                  : ADS_ON ? t("Free for a day with an ad, or pay once.")
                   : t("Records, shades and more. Pay once.")}
               </span>
             </span>

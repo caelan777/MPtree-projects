@@ -615,6 +615,7 @@ export const ES: Record<string, string> = {
   "Sign in on up to {n} device. Your songs, playlists, likes and settings are the same on all of them.": "Inicia sesión en {n} dispositivo como máximo. Tus canciones, listas, me gusta y ajustes son iguales en todos.",
   "Sign in on up to {n} devices. Your songs, playlists, likes and settings are the same on all of them.": "Inicia sesión en {n} dispositivos como máximo. Tus canciones, listas, me gusta y ajustes son iguales en todos.",
   "Loading…": "Cargando…",
+  "Free for a day with an ad, or pay once.": "Gratis un día con un anuncio, o pagas una vez.",
   "Records, shades and more. Pay once.": "Discos, tonos y más. Un solo pago.",
   "Language, text size and audio effects are set per device.": "El idioma, el tamaño del texto y los efectos de sonido se ajustan en cada dispositivo.",
   "Flowers in the app": "Flores en la app",

@@ -12,9 +12,8 @@ import { useSync, signIn } from "../sync/engine";
 import { GoogleG } from "./AccountSheet";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
-// What Pro does, line by line, and how to get it: pay once, or, when the page
-// was opened by tapping something Pro, watch an ad for a day of it. The two
-// stand side by side as equals. Opened from Settings, only the payment shows.
+// What Pro does, line by line, and how to get it: pay once, or watch an ad for
+// a day of it. The two stand side by side as equals, however the page opened.
 
 type ProSheetProps = {
   onClose: () => void;
@@ -23,12 +22,10 @@ type ProSheetProps = {
   onOpenStore: () => void;
   /** Account & sync, for when the account is on three devices already. */
   onOpenAccount: () => void;
-  /** Opened by tapping something Pro: the ad for a day of Pro is offered. */
-  fromFeature: boolean;
   T: T;
 };
 
-export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, fromFeature, T }: ProSheetProps) {
+export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: ProSheetProps) {
   const sh = makeSH(T);
   const owns = useOwnsPro();
   const viaAccount = useAccountPro();
@@ -99,9 +96,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, fromFea
   const priceLabel = price ?? "€2,99";
 
   const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
-  // The ad, as often as they like; it never asks for payment details. Only
-  // when the page was opened by tapping something Pro.
-  const showAd = fromFeature && ADS_ON && adDay.state !== "live";
+  // The ad, as often as they like; it never asks for payment details.
+  const showAd = ADS_ON && adDay.state !== "live";
   const adTest = PRO_MODE === "free" && adDay.state === "live" && (
     <button onClick={endAdDayForTesting} style={link}>{t("End the 24 hours (test build)")}</button>
   );

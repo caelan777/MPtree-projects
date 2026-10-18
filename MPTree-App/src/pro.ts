@@ -32,8 +32,8 @@ import { t } from "./i18n";
 // for it), so signing in to other accounts does not hand Pro to those too.
 //
 // Pro can also be had for a day by watching one ad: a rewarded video, which
-// only counts when watched to the end. It is offered when someone without Pro
-// taps something Pro, as often as they like. The day is kept on the device.
+// only counts when watched to the end. The Pro page offers it next to buying,
+// as often as they like. The day is kept on the device.
 // (Until 1.2.5 this was a free week, once; a week still running when the app
 // is updated runs out the same way.)
 

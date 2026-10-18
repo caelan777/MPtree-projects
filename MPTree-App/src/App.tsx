@@ -755,8 +755,7 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
-  // "feature": opened by tapping something Pro, which also offers the ad.
-  const [proOpen,     setProOpen]     = useState<false | "page" | "feature">(false);
+  const [proOpen,     setProOpen]     = useState(false);
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -4217,10 +4216,10 @@ export default function App() {
             binCount={removedSongs.length}
             pro={pro}
             hidden={lookOpen}
-            onOpenPro={() => setProOpen("page")}
+            onOpenPro={() => setProOpen(true)}
             onOpenLook={() => setLookOpen(true)}
             onOpenAccount={() => setAccountOpen(true)}
-            onOpenCleanup={() => pro ? setCleanupOpen(true) : setProOpen("feature")}
+            onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
             onViewBin={() => setBinOpen(true)}
             onOpenAudioEffects={openEQSheet}
@@ -4301,7 +4300,7 @@ export default function App() {
                 T={TH}
               />
             ) : undefined}
-            onNeedPro={() => setProOpen("feature")}
+            onNeedPro={() => setProOpen(true)}
             onToast={showToast}
             onClose={() => setLookOpen(false)}
             T={TH} />
@@ -4322,7 +4321,7 @@ export default function App() {
         {accountOpen && (
           <AccountSheet
             pro={pro}
-            onOpenPro={() => setProOpen("feature")}
+            onOpenPro={() => setProOpen(true)}
             onClose={() => setAccountOpen(false)}
             onToast={showToast}
             T={TH} />
@@ -4333,7 +4332,6 @@ export default function App() {
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
-            fromFeature={proOpen === "feature"}
             T={TH} />
         )}
 

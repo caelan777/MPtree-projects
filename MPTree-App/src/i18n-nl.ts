@@ -615,6 +615,7 @@ export const NL: Record<string, string> = {
   "Sign in on up to {n} device. Your songs, playlists, likes and settings are the same on all of them.": "Log in op maximaal {n} apparaat. Je nummers, afspeellijsten, likes en instellingen zijn overal hetzelfde.",
   "Sign in on up to {n} devices. Your songs, playlists, likes and settings are the same on all of them.": "Log in op maximaal {n} apparaten. Je nummers, afspeellijsten, likes en instellingen zijn overal hetzelfde.",
   "Loading…": "Laden…",
+  "Free for a day with an ad, or pay once.": "Een dag gratis met een advertentie, of één keer betalen.",
   "Records, shades and more. Pay once.": "Platen, tinten en meer. Een keer betalen.",
   "Language, text size and audio effects are set per device.": "Taal, tekstgrootte en geluidseffecten stel je per apparaat in.",
   "Flowers in the app": "Bloemen in de app",
