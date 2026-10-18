@@ -30,7 +30,7 @@ import { BinView } from "./components/BinView";
 import { MultiSelectBar } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { ProSheet, TrialOverSheet } from "./components/ProSheet";
+import { ProSheet } from "./components/ProSheet";
 import { LookSheet } from "./components/LookSheet";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
@@ -42,7 +42,7 @@ import {
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
 import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
-import { usePro, loadPro, useTrial, dismissTrialNotice } from "./pro";
+import { usePro, loadPro } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
@@ -755,7 +755,6 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
-  const trial = useTrial();
   const [proOpen,     setProOpen]     = useState(false);
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
@@ -4333,15 +4332,6 @@ export default function App() {
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
-            T={TH} />
-        )}
-
-        {/* Once, when the free week has run out (also if it ran out while
-            MPTree was closed). Not for someone who bought Pro meanwhile. */}
-        {trial.state === "over" && trial.notice && !pro && !proOpen && (
-          <TrialOverSheet
-            onGetPro={() => { dismissTrialNotice(); setProOpen(true); }}
-            onClose={dismissTrialNotice}
             T={TH} />
         )}
 

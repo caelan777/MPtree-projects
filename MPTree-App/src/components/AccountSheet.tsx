@@ -5,7 +5,7 @@ import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
 import { Loading } from "./Loading";
 import { Switch } from "./Switch";
-import { useAccountPro, useTrial, hasPro } from "../pro";
+import { useAccountPro, useAdDay, hasPro } from "../pro";
 import {
   useSync, signIn, signOut, cancelJoin, removeDevice, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles,
   MOBILE_DAILY, type SyncState, type Device, type TestStep,
@@ -52,8 +52,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   // One of the folded parts under the sync card, open.
   const [openPart, setOpenPart] = useState<null | "devices" | "how">(null);
   const viaAccount = useAccountPro();
-  const trial = useTrial();
-  const proFromAccount = viaAccount && trial.state !== "live";
+  const adDay = useAdDay();
+  const proFromAccount = viaAccount && adDay.state !== "live";
   // "Saved 2 minutes ago" keeps moving while the page is open.
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 20_000); return () => clearInterval(id); }, []);

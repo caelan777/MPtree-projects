@@ -141,7 +141,7 @@ export type SyncState = {
   account?: { email: string; name: string; photo?: string };
   deviceId?: string;
   devices: Device[];
-  /** Signed in, but Pro ran out (the free week ended). Nothing moves. */
+  /** Signed in, but Pro ran out (a day for an ad ended). Nothing moves. */
   pausedNoPro: boolean;
   saving: boolean;
   lastSaved?: number;

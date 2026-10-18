@@ -1,30 +1,19 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
-  useOwnsPro, useAccountPro, useTrial, buyPro, restorePro, proPrice, lockProForTesting,
-  startTrial, trialTimeLeft, endTrialForTesting, resetTrialForTesting, PRO_MODE, hasPro,
+  useOwnsPro, useAccountPro, useAdDay, buyPro, restorePro, proPrice, lockProForTesting,
+  watchAdForPro, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
 } from "../pro";
 import { useSync, signIn } from "../sync/engine";
 import { GoogleG } from "./AccountSheet";
 
 // ─── MPTREE PRO ──────────────────────────────────────────────────────────────
-// What Pro is and the one button that buys it. Opened from Settings, and from
-// anything Pro that someone without it taps. Under the buy button, the free
-// week.
-
-const Svg = ({ children }: { children: ReactNode }) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
-);
-const RecordIcon = () => <Svg><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 5a7 7 0 0 1 7 7"/></Svg>;
-const ShadeIcon  = () => <Svg><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/></Svg>;
-const CardIcon   = () => <Svg><rect x="3" y="4" width="18" height="8" rx="3"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="21" x2="14" y2="21"/></Svg>;
-const SyncIcon   = () => <Svg><rect x="2" y="5" width="8" height="14" rx="2"/><rect x="14" y="5" width="8" height="14" rx="2"/><path d="M10.5 10h3"/><path d="M12.5 8.5 14 10l-1.5 1.5"/><path d="M13.5 14h-3"/><path d="M11.5 12.5 10 14l1.5 1.5"/></Svg>;
-const BroomIcon  = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
+// What Pro does, line by line, and how to get it: pay once, or watch an ad for
+// a day of it. The two stand side by side as equals, however the page opened.
 
 type ProSheetProps = {
   onClose: () => void;
@@ -42,9 +31,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const viaAccount = useAccountPro();
   const sync = useSync();
   const phase = sync.phase;
-  const trial = useTrial();
+  const adDay = useAdDay();
   const [price, setPrice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "buy" | "restore" | "signin">(null);
+  const [busy, setBusy] = useState<null | "buy" | "restore" | "signin" | "ad">(null);
   // Pro is kept in the MPTree account, so buying starts with signing in. Not
   // in a browser, where there is no signing in (the demo buys straight away).
   const needSignIn = phase !== "on" && (Capacitor.getPlatform() !== "web" || import.meta.env.DEV);
@@ -75,12 +64,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     else if (r === "ok" && hasPro()) onToast(t("MPTree Pro is on, from your account"));
     else if (r === "ok" && PRO_MODE === "none") onToast(t("This account has no MPTree Pro yet."));
   };
-  const signInButton = (label: string) => (
-    <button onClick={join} disabled={busy !== null || joining}
-      style={{ ...sh.saveBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: joining ? 0.7 : 1 }}>
-      <GoogleG />{joining ? t("Signing in…") : label}
-    </button>
-  );
   const restore = async () => {
     setBusy("restore");
     const r = await restorePro();
@@ -89,49 +72,86 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
       : r ? t("Pro restored") : t("No Pro purchase found on this Google account"));
   };
 
-  const features: { icon: ReactNode; title: string; body: string }[] = [
-    { icon: <SyncIcon />,   title: t("Account & sync"), body: t("Playlists, likes and settings saved in your account, and all your songs on up to three devices.") },
-    { icon: <RecordIcon />, title: t("Records"),      body: t("Smoke and marble records for the player.") },
-    { icon: <ShadeIcon />,  title: t("Shades"),       body: t("Graphite for dark mode. Paper, stone, pink and sage for light.") },
-    { icon: <CardIcon />,   title: t("Header card"),  body: t("Give the card at the top a colour of its own, from either mode.") },
-    { icon: <BroomIcon />,  title: t("Clean up"),     body: t("Finds voice notes, WhatsApp audio and clips under a minute, and bins them in one go.") },
+  const watchAd = async () => {
+    setBusy("ad");
+    const r = await watchAdForPro();
+    setBusy(null);
+    if (r === "pro") { onToast(t("Pro is on for 24 hours")); onClose(); }
+    else if (r === "offline") onToast(t("The ad needs an internet connection."));
+    else if (r === "closed") onToast(t("The ad was closed early, so Pro did not turn on."));
+    else if (r === "none") onToast(t("There is no ad to show right now. Try again later."));
+    else if (r === "consent") onToast(t("Ads are turned off in your privacy choices."));
+    else onToast(t("The ad could not be shown. Try again in a moment."));
+  };
+
+  // Each line says what it does for you, not what it is called inside.
+  const features: { title: string; body: string }[] = [
+    { title: t("All your devices"), body: t("Your songs are synced between all your devices.") },
+    { title: t("Styles"),   body: t("Give the whole app a different face: pink with flowers (Aviela) or green light in the dark (Lantern).") },
+    { title: t("Records"),  body: t("Pick the record that spins in the player: smoke, marble and more.") },
+    { title: t("Colours"),  body: t("Make the app yours by giving it your own colours.") },
+    { title: t("Clean up"), body: t("Finds voice messages, WhatsApp audio and short clips among your songs, and bins them in one go.") },
   ];
 
   const priceLabel = price ?? "€2,99";
 
   const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 };
-  // Once only, and nothing to pay: it stops by itself after the week.
-  const trialButton = trial.state === "unused" && (
-    <>
-      <button onClick={() => { if (startTrial()) onToast(t("Pro is on for 7 days")); }}
-        style={{ ...sh.saveBtn, background: T.dim, color: T.text, marginTop: PRO_MODE === "none" ? 0 : 8 }}>
-        {t("Try it free for 7 days")}
-      </button>
-      <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7 }}>
-        {t("No payment. It stops by itself after the week.")}
-      </div>
-    </>
-  );
-  const trialTest = PRO_MODE === "free" && (
-    trial.state === "live" ? (
-      <button onClick={endTrialForTesting} style={link}>{t("End the free week (test build)")}</button>
-    ) : trial.state === "over" ? (
-      <button onClick={() => { resetTrialForTesting(); onToast(t("The free week can be started again")); }} style={link}>
-        {t("Reset the free week (test build)")}
-      </button>
-    ) : null
+  // The ad, as often as they like; it never asks for payment details.
+  const showAd = ADS_ON && adDay.state !== "live";
+  const adTest = PRO_MODE === "free" && adDay.state === "live" && (
+    <button onClick={endAdDayForTesting} style={link}>{t("End the 24 hours (test build)")}</button>
   );
 
+  // Two cards side by side, the same size: pay once, or a day for an ad.
+  const choice = (on: boolean) => ({
+    border: `2px solid ${on ? T.text : T.dim}`, borderRadius: 16, padding: "16px 14px",
+    display: "flex", flexDirection: "column", minWidth: 0,
+  } as const);
+  const kicker = { fontSize: 12, color: T.textSub, letterSpacing: "0.06em", textTransform: "uppercase" } as const;
+  const big = { fontSize: 26, fontWeight: 800, color: T.text, marginTop: 6 } as const;
+  const note = { fontSize: 12.5, color: T.textSub, lineHeight: 1.4, marginTop: 4, flex: 1 } as const;
+  const cardBtn = { ...sh.saveBtn, marginTop: 14, padding: "12px 8px", borderRadius: 10, fontSize: 14, fontFamily: "inherit" };
+  const buyCard = (
+    <div style={choice(true)}>
+      <div style={kicker}>{t("For good")}</div>
+      <div style={big}>{priceLabel}</div>
+      <div style={note}>{t("Pay once, yours for good.")}</div>
+      {needSignIn ? (
+        <button onClick={join} disabled={busy !== null || joining}
+          style={{ ...cardBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: joining ? 0.7 : 1 }}>
+          <GoogleG />{joining ? t("Signing in…") : t("Sign in")}
+        </button>
+      ) : (
+        <button onClick={buy} disabled={busy !== null} style={{ ...cardBtn, opacity: busy ? 0.6 : 1 }}>
+          {PRO_MODE === "free" ? t("Unlock (test build)")
+            : busy === "buy" ? t("Opening Google Play…") : t("Get Pro")}
+        </button>
+      )}
+    </div>
+  );
+  const adCard = (
+    <div style={choice(false)}>
+      <div style={kicker}>{t("At no cost")}</div>
+      <div style={big}>{t("24 hours")}</div>
+      <div style={note}>{t("Watch one ad. As often as you like.")}</div>
+      <button onClick={watchAd} disabled={busy !== null}
+        style={{ ...cardBtn, background: T.dim, color: T.text, opacity: busy === "ad" ? 0.7 : 1 }}>
+        {busy === "ad" ? t("Loading…") : t("Watch ad")}
+      </button>
+    </div>
+  );
+
+  // A page of its own, the whole screen, like Account & sync. The app draws
+  // edge to edge, so it steps over the status bar and the gesture bar itself.
+  const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={{ ...sh.hdr, paddingBottom: 4 }}>
-          <span />
+    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 450, display: "flex", flexDirection: "column" }}>
+        <div style={{ ...column, display: "flex", justifyContent: "flex-end", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 0", flexShrink: 0 }}>
           <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
-        <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ ...column, padding: "0 20px 8px" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Logo size={40} color={T.text} />
@@ -142,26 +162,25 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             <div style={{ fontSize: 14, color: T.textSub, marginTop: 10, lineHeight: 1.5 }}>
               {owns ? t("You have Pro. Thank you for supporting MPTree.")
                 : viaAccount ? t("You have Pro through your MPTree account.")
-                : trial.state === "live" ? t("Free week: {time} left.", { time: trialTimeLeft(trial.until) })
+                : adDay.state === "live" ? t("Pro for a day: {time} left.", { time: adDayTimeLeft(adDay.until) })
+                : showAd ? t("Choose how you want it.")
                 : t("Pay once, keep it forever. No subscription.")}
             </div>
           </div>
 
           <div style={{ marginTop: 18 }}>
-            {features.map(f => (
-              <div key={f.title} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "11px 2px", borderTop: `1px solid ${T.dim}` }}>
-                <span style={{ display: "flex", color: T.text, marginTop: 1, flexShrink: 0 }}>{f.icon}</span>
-                <span>
-                  <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: T.text }}>{f.title}</span>
-                  <span style={{ display: "block", fontSize: 13, color: T.textSub, lineHeight: 1.45, marginTop: 2 }}>{f.body}</span>
-                </span>
+            {features.map((f, i) => (
+              <div key={f.title} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "11px 2px", borderTop: `1px solid ${T.dim}`, borderBottom: i === features.length - 1 ? `1px solid ${T.dim}` : "none" }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: T.text, width: 112, flexShrink: 0, lineHeight: 1.35 }}>{f.title}</span>
+                <span style={{ fontSize: 13, color: T.textSub, lineHeight: 1.45 }}>{f.body}</span>
               </div>
             ))}
           </div>
+        </div>
 
         </div>
 
-        <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>
+        <div style={{ ...column, padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", flexShrink: 0 }}>
           {owns ? (
             PRO_MODE === "free" ? (
               <button onClick={() => { lockProForTesting(); onToast(t("Pro locked again")); }}
@@ -175,8 +194,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             <button onClick={onClose} style={sh.saveBtn}>{t("Done")}</button>
           ) : PRO_MODE === "none" ? (
             <>
-              {trialButton}
-              <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, margin: "14px 0 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, margin: "0 0 12px", textAlign: "center" }}>
                 {t("Pro is sold through Google Play. This copy of MPTree came from the website, so it cannot buy it.")}
               </div>
               <button onClick={onOpenStore} style={sh.saveBtn}>{t("Open Google Play")}</button>
@@ -186,60 +204,26 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
                 </button>
               )}
             </>
-          ) : needSignIn ? (
-            <>
-              {signInButton(t("Sign in to get Pro"))}
-              <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 7, lineHeight: 1.45 }}>
-                {t("Pro is kept in your MPTree account, so every device you sign in on has it.")}
-              </div>
-              {trialButton}
-              {trialTest}
-            </>
           ) : (
             <>
-              <button onClick={buy} disabled={busy !== null}
-                style={{ ...sh.saveBtn, opacity: busy ? 0.6 : 1 }}>
-                {PRO_MODE === "free"
-                  ? t("Unlock Pro for free (test build)")
-                  : busy === "buy" ? t("Opening Google Play…") : t("Get Pro for {price}", { price: priceLabel })}
-              </button>
-              {trialButton}
-              {trialTest}
-              {PRO_MODE === "play" && (
-                <button onClick={restore} disabled={busy !== null}
-                  style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
+              <div style={{ display: "grid", gridTemplateColumns: showAd ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 10 }}>
+                {buyCard}
+                {showAd && adCard}
+              </div>
+              {needSignIn && (
+                <div style={{ fontSize: 12, color: T.muted, textAlign: "center", marginTop: 8, lineHeight: 1.45 }}>
+                  {t("Pro is kept in your MPTree account, so every device you sign in on has it.")}
+                </div>
+              )}
+              {adTest}
+              {PRO_MODE === "play" && !needSignIn && (
+                <button onClick={restore} disabled={busy !== null} style={link}>
                   {busy === "restore" ? t("Checking…") : t("Restore purchase")}
                 </button>
               )}
             </>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-/** Shown once, when the free week has run out. */
-export function TrialOverSheet({ onGetPro, onClose, T }: { onGetPro: () => void; onClose: () => void; T: T }) {
-  const sh = makeSH(T);
-  return (
-    <div style={{ ...sh.overlay, zIndex: 460 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, paddingBottom: 28 }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={{ padding: "18px 24px 0", textAlign: "center" }}>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{t("Your free week is over")}</div>
-          <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.5, marginTop: 8 }}>
-            {t("Everything is back to how it was. Pro can be yours for good, with one payment.")}
-          </div>
-          <button onClick={onGetPro} style={{ ...sh.saveBtn, marginTop: 20 }}>
-            {t("Get Pro")}
-          </button>
-          <button onClick={onClose}
-            style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
-            {t("Not now")}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
