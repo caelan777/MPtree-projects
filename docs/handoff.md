@@ -18,13 +18,14 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 81 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80). Next Windows is 0.1.5.
+Next Android versionCode is 82 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81). Next Windows is 0.1.5.
 
 ## Waiting on Caelan
 
-1. **Upload 1.2.6 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.6.aab`,
-   versionCode 79, built 18 October; release notes in `docs/play-store-listing.md`).
-   It replaces 1.2.5 (78), which Caelan may not have sent: it has all of 1.2.5
+1. **Upload 1.2.7 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.7.aab`,
+   versionCode 81, built 18 October; release notes in `docs/play-store-listing.md`).
+   It replaces 1.2.5 (78) and 1.2.6 (79): the Account & sync page is full screen
+   now (a page of its own, like the bin). It has all of 1.2.5
    (crossfade, sign in again keeps the bin, the MP3 cut fix) plus the new Account &
    sync page, and MPTree starts plain white again (Caelan dropped the black header
    start on 18 October, in both apps). No ads. The crossfade of test build 56 was

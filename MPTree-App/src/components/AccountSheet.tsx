@@ -324,17 +324,19 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     );
   }
 
+  // A page of its own, the whole screen, like the bin. The app draws edge to
+  // edge, so it steps over the status bar and the gesture bar itself.
+  const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Account & sync")}</span>
-          <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
-        </div>
-        <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>{body}</div>
-        {bottom && <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>{bottom}</div>}
+    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px", flexShrink: 0 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("Account & sync")}</span>
+        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
       </div>
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ ...column, padding: "0 20px 16px" }}>{body}</div>
+      </div>
+      {bottom && <div style={{ ...column, padding: "12px 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", flexShrink: 0 }}>{bottom}</div>}
     </div>
   );
 }
@@ -432,7 +434,7 @@ function SyncCard({ s, T }: { s: SyncState; T: T }) {
 /** The sync card's ground: the light grey of the design on a white page,
  *  the usual card grey on a dark one, where the light one would vanish. */
 function cardGround(T: T): string {
-  const h = T.sheetBg.replace("#", "");
+  const h = T.bg.replace("#", "");
   const n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h.slice(0, 6), 16);
   const lum = ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114;
   return lum > 140 ? T.surface : T.dim;
