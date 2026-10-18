@@ -141,16 +141,17 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     </div>
   );
 
+  // A page of its own, the whole screen, like Account & sync. The app draws
+  // edge to edge, so it steps over the status bar and the gesture bar itself.
+  const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={{ ...sh.hdr, paddingBottom: 4 }}>
-          <span />
+    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 450, display: "flex", flexDirection: "column" }}>
+        <div style={{ ...column, display: "flex", justifyContent: "flex-end", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 0", flexShrink: 0 }}>
           <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>
 
-        <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ ...column, padding: "0 20px 8px" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Logo size={40} color={T.text} />
@@ -177,7 +178,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
           </div>
         </div>
 
-        <div style={{ padding: "14px 20px 0", flexShrink: 0 }}>
+        </div>
+
+        <div style={{ ...column, padding: "14px 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", flexShrink: 0 }}>
           {owns ? (
             PRO_MODE === "free" ? (
               <button onClick={() => { lockProForTesting(); onToast(t("Pro locked again")); }}
@@ -221,7 +224,6 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             </>
           )}
         </div>
-      </div>
     </div>
   );
 }
