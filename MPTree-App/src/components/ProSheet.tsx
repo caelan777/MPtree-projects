@@ -34,6 +34,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const adDay = useAdDay();
   const [price, setPrice] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "buy" | "restore" | "signin" | "ad">(null);
+  // The film about Pro (brag-output/pro.mp4), full screen. It ships inside the
+  // app (public/pro-video.mp4), so it plays without internet too.
+  const [film, setFilm] = useState(false);
   // Pro is kept in the MPTree account, so buying starts with signing in. Not
   // in a browser, where there is no signing in (the demo buys straight away).
   const needSignIn = phase !== "on" && (Capacitor.getPlatform() !== "web" || import.meta.env.DEV);
@@ -168,7 +171,21 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             </div>
           </div>
 
-          <div style={{ marginTop: 18 }}>
+          <button onClick={() => setFilm(true)} aria-label={t("Watch how Pro works")}
+            style={{ display: "block", width: "100%", marginTop: 18, padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+            <span style={{ display: "block", position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 16, overflow: "hidden", border: `1px solid ${T.border}`, background: "#fff" }}>
+              <img src={`${import.meta.env.BASE_URL}pro-video.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <span style={{ position: "absolute", left: "50%", top: "50%", width: 58, height: 58, marginLeft: -29, marginTop: -29, borderRadius: 29, background: "#0b0b0d", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff" /></svg>
+              </span>
+            </span>
+            <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8, padding: "0 2px" }}>
+              <span style={{ fontSize: 14.5, fontWeight: 700, color: T.text }}>{t("Watch how Pro works")}</span>
+              <span style={{ fontSize: 12.5, color: T.muted }}>0:44</span>
+            </span>
+          </button>
+
+          <div style={{ marginTop: 14 }}>
             {features.map((f, i) => (
               <div key={f.title} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "11px 2px", borderTop: `1px solid ${T.dim}`, borderBottom: i === features.length - 1 ? `1px solid ${T.dim}` : "none" }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: T.text, width: 112, flexShrink: 0, lineHeight: 1.35 }}>{f.title}</span>
@@ -224,6 +241,18 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
             </>
           )}
         </div>
+
+        {film && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 460, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <video src={`${import.meta.env.BASE_URL}pro-video.mp4`}
+              autoPlay controls playsInline onEnded={() => setFilm(false)}
+              style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+            <button onClick={() => setFilm(false)} aria-label={t("Close")}
+              style={{ position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 12px)", right: 14, width: 44, height: 44, borderRadius: 22, border: "none", background: "rgba(255,255,255,0.9)", color: "#0b0b0d", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <IC.Close />
+            </button>
+          </div>
+        )}
     </div>
   );
 }

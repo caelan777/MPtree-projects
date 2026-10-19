@@ -357,6 +357,7 @@ export const NL: Record<string, string> = {
   "Colours": "Kleuren",
   "Make the app yours by giving it your own colours.": "Maak de app van jou door hem je eigen kleuren te geven.",
   "Finds voice messages, WhatsApp audio and short clips among your songs, and bins them in one go.": "Vindt spraakberichten, WhatsApp-audio en korte clips tussen je nummers en gooit ze in één keer weg.",
+  "Watch how Pro works": "Bekijk hoe Pro werkt",
   "Choose how you want it.": "Kies hoe je het wilt.",
   "For good": "Voor altijd",
   "Pay once, yours for good.": "Eén keer betalen, voor altijd van jou.",

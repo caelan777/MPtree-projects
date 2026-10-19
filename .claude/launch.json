@@ -54,6 +54,20 @@
       ],
       "port": 5173,
       "cwd": "Desktop"
+    },
+    {
+      "name": "mptree-play-shots",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--mode",
+        "play",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176,
+      "cwd": "MPTree-App"
     }
   ]
 }

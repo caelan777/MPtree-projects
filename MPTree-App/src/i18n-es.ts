@@ -357,6 +357,7 @@ export const ES: Record<string, string> = {
   "Colours": "Colores",
   "Make the app yours by giving it your own colours.": "Haz tuya la app dándole tus propios colores.",
   "Finds voice messages, WhatsApp audio and short clips among your songs, and bins them in one go.": "Encuentra notas de voz, audios de WhatsApp y clips cortos entre tus canciones y los tira de una vez.",
+  "Watch how Pro works": "Mira cómo funciona Pro",
   "Choose how you want it.": "Elige cómo lo quieres.",
   "For good": "Para siempre",
   "Pay once, yours for good.": "Pagas una vez y es tuyo para siempre.",
