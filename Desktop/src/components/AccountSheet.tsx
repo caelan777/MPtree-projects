@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Capacitor } from "@capacitor/core";
 import { isDesktop } from "../plugins";
 import { invoke } from "@tauri-apps/api/core";
-import { Capacitor } from "@capacitor/core";
 import { makeSH, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
@@ -51,6 +51,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const [busy, setBusy] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
   const [removeReceived, setRemoveReceived] = useState(false);
+  // One of the folded parts under the sync card, open.
+  const [openPart, setOpenPart] = useState<null | "devices" | "how">(null);
   const viaAccount = useAccountPro();
   const trial = useTrial();
   const proFromAccount = viaAccount && trial.state !== "live";
@@ -148,18 +150,25 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       </>
     );
   } else if (s.phase === "on") {
-    const status = s.pausedNoPro ? ""
-      : s.problem === "offline" ? t("Waiting for internet")
-      : s.problem === "signin" ? t("Sign in again to keep syncing")
-      : s.problem === "drive" ? t("Could not reach Google Drive. Trying again soon.")
-      : s.saving ? t("Saving…")
-      : s.lastSaved ? t("Saved {when}", { when: ago(s.lastSaved) })
-      : t("Saving…");
-    const realDevices = s.devices.filter(d => !d.test);
     const testOn = s.devices.some(d => d.test);
     const testRow = (label: string, step: TestStep, done: string) => (
       <button disabled={busy} onClick={() => doTest(step, done)}
         style={{ ...btn, background: T.surface, color: T.text, marginTop: 8, opacity: busy ? 0.6 : 1 }}>{label}</button>
+    );
+    // The library (playlists, likes, settings): saved, saving, or why not.
+    const saved = !s.problem && !s.saving && !!s.lastSaved;
+    const library = s.problem === "offline" ? t("Waiting for internet")
+      : s.problem === "signin" ? t("Sign in again to keep syncing")
+      : s.problem === "drive" ? t("Could not reach Google Drive. Trying again soon.")
+      : saved ? t("Saved {when}", { when: ago(s.lastSaved!) })
+      : t("Saving…");
+    const row = {
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%",
+      padding: "13px 2px", background: "transparent", borderStyle: "solid", borderColor: T.border, borderWidth: "1px 0 0",
+      fontFamily: "inherit", textAlign: "left", color: T.text, cursor: "pointer",
+    } as const;
+    const chevron = (open: boolean) => (
+      <span style={{ display: "flex", color: T.muted, flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}><IC.ChevronR /></span>
     );
     body = (
       <>
@@ -169,9 +178,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           </span>
           <span style={{ minWidth: 0, flex: 1 }}>
             <span style={{ display: "block", fontSize: 15, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.account?.name || s.account?.email}</span>
-            <span style={{ display: "block", fontSize: 12.5, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.account?.email}</span>
+            <span style={{ display: "block", fontSize: 12.5, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("Signed in as {email}", { email: s.account?.email ?? "" })}</span>
           </span>
-          <span style={{ fontSize: 12.5, color: s.problem ? T.text : T.muted, textAlign: "right", maxWidth: 130, lineHeight: 1.35 }}>{status}</span>
         </div>
 
         {s.pausedNoPro ? (
@@ -184,10 +192,9 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
               {t("To start syncing your songs between your devices, buy MPTree Pro, or sign in to a Google account that has Pro.")}
             </div>
           </div>
-        ) : (
-          <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, marginBottom: 4 }}>{t("Songs")}</div>
-            <SongStatus s={s} T={T} />
+        ) : (<>
+          <div style={{ ...card, background: cardGround(T), padding: "16px 14px", marginTop: 14 }}>
+            <SyncCard s={s} T={T} />
             {s.songs.doubles.length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
                 <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>
@@ -204,34 +211,54 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
               </div>
             )}
           </div>
-        )}
 
-        {!s.pausedNoPro && (<>
-        <div style={{ ...sh.lbl, marginTop: 20 }}>{t("Your devices ({n} of {max})", { n: realDevices.length, max: MAX })}</div>
-        {s.devices.length === 0 && !s.problem
-          ? <Loading T={T} />
-          : <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />}
-
-        <button onClick={() => setMobileData(!s.mobileData)}
-          style={{ ...card, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginTop: 16 }}>
-          <span>
-            <span style={{ display: "block", fontSize: 15, color: T.text }}>{t("Sync songs over mobile data")}</span>
-            <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>
-              {t("Off: songs only sync on wifi. On: also on mobile data, at most {size} a day.", { size: fmtBytes(MOBILE_DAILY) })}
-            </span>
-          </span>
-          <Switch on={s.mobileData} T={T} />
-        </button>
-
-        <div style={card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.muted, marginBottom: 2 }}>{t("Good to know")}</div>
-          {[
-            t("Deleting a song permanently only takes it off this device. You can get it back in the bin, under Permanently deleted."),
-            t("Language, text size and audio effects are set per device."),
-            t("Voice notes and short clips stay on the device they are on."),
-            t("Everything is kept in your own Google Drive, in a folder only MPTree can open."),
-          ].map(x => <div key={x} style={{ ...small, color: T.text, padding: "5px 0" }}>{x}</div>)}
-        </div>
+          <div style={{ marginTop: 14 }}>
+            <div style={{ ...row, cursor: "default" }}>
+              <span>
+                <span style={{ display: "block", fontSize: 14.5, lineHeight: 1.4 }}>{t("Your playlists and likes are the same everywhere")}</span>
+                <span style={{ display: "block", fontSize: 12.5, color: s.problem ? T.text : T.muted, marginTop: 2, lineHeight: 1.4 }}>{library}</span>
+              </span>
+              {saved && <span style={{ display: "flex", flexShrink: 0 }}>{IC.Check(T.text)}</span>}
+            </div>
+            <button onClick={() => setMobileData(!s.mobileData)} style={row}>
+              <span>
+                <span style={{ display: "block", fontSize: 14.5, lineHeight: 1.4 }}>{t("Send songs over mobile data too?")}</span>
+                <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>
+                  {t("Off: only over wifi. On: also without wifi, at most {size} a day.", { size: fmtBytes(MOBILE_DAILY) })}
+                </span>
+              </span>
+              <Switch on={s.mobileData} T={T} />
+            </button>
+            <button onClick={() => setOpenPart(openPart === "devices" ? null : "devices")} style={row} aria-expanded={openPart === "devices"}>
+              <span style={{ fontSize: 14.5 }}>{t("Add or remove devices")}</span>
+              {chevron(openPart === "devices")}
+            </button>
+            {openPart === "devices" && (
+              <div style={{ padding: "0 2px 6px" }}>
+                <div style={{ ...small, paddingBottom: 8 }}>
+                  {tn(MAX, "Your account can be on {n} device. To add one, sign in on it with the same Google account.", "Your account can be on {n} devices. To add one, sign in on it with the same Google account.")}
+                </div>
+                {s.devices.length === 0 && !s.problem
+                  ? <Loading T={T} />
+                  : <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />}
+              </div>
+            )}
+            <button onClick={() => setOpenPart(openPart === "how" ? null : "how")} style={{ ...row, borderWidth: "1px 0" }} aria-expanded={openPart === "how"}>
+              <span style={{ fontSize: 14.5 }}>{t("What syncs, and what does not")}</span>
+              {chevron(openPart === "how")}
+            </button>
+            {openPart === "how" && (
+              <div style={{ padding: "6px 2px" }}>
+                {[
+                  t("Your songs, playlists, likes, names, covers and the bin are the same on every device."),
+                  t("Language, text size and audio effects are set per device."),
+                  t("Voice notes and short clips stay on the device they are on."),
+                  t("Deleting a song permanently only takes it off this device. You can get it back in the bin, under Permanently deleted."),
+                  t("Everything is kept in your own Google Drive, in a folder only MPTree can open."),
+                ].map(x => <div key={x} style={{ ...small, color: T.text, padding: "5px 0" }}>{x}</div>)}
+              </div>
+            )}
+          </div>
         </>)}
 
         {(__PRO_TEST__ || import.meta.env.DEV) && !s.pausedNoPro && (
@@ -280,7 +307,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
             </div>
           </div>
         ) : (
-          <button onClick={() => { setRemoveReceived(false); setConfirmOut(true); }} style={{ ...btn, background: T.dim, color: T.text }}>{t("Sign out")}</button>
+          <button onClick={() => { setRemoveReceived(false); setConfirmOut(true); }} style={{ ...btn, background: T.dim, color: T.text }}>{t("Sign out on this device")}</button>
         )}
       </>
     );
@@ -305,17 +332,18 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     );
   }
 
+  // A page of its own, the whole window, like the bin.
+  const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ ...sh.overlay, zIndex: 450 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, maxHeight: "88vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Account & sync")}</span>
-          <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
-        </div>
-        <div style={{ overflowY: "auto", padding: "0 20px 8px" }}>{body}</div>
-        {bottom && <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>{bottom}</div>}
+    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px", flexShrink: 0 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("Account & sync")}</span>
+        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
       </div>
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ ...column, padding: "0 20px 16px" }}>{body}</div>
+      </div>
+      {bottom && <div style={{ ...column, padding: "12px 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", flexShrink: 0 }}>{bottom}</div>}
     </div>
   );
 }
@@ -349,46 +377,149 @@ function SyncPicture({ T }: { T: T }) {
   );
 }
 
-/** One plain line about the songs, or the song on its way. */
-function SongStatus({ s, T }: { s: SyncState; T: T }) {
+/** The devices on the account in a triangle, this one on top, and below them
+ *  one plain sentence about the songs. Dots run along a line while songs go
+ *  that way; slowly both ways when everything is in step; not at all when
+ *  something is waiting. */
+function SyncCard({ s, T }: { s: SyncState; T: T }) {
   const g = s.songs;
   const others = s.devices.filter(d => d.id !== s.deviceId);
-  if (g.moving) {
-    const pct = g.moving.total > 0 ? Math.min(100, Math.round(g.moving.done / g.moving.total * 100)) : 0;
-    const what = g.moving.dir === "in"
-      ? t("Getting “{name}” from {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other device") })
-      : t("Sending “{name}” to {phone}", { name: g.moving.name, phone: g.moving.peer || t("your other device") });
-    return (
-      <>
-        <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis" }}>{what}</div>
-        <div style={{ height: 4, background: T.border, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
-        </div>
-        <div style={{ fontSize: 12, color: T.muted, marginTop: 5 }}>
-          {g.moving.total > 0 ? `${mb(g.moving.done)} / ${mb(g.moving.total)} MB` : ""}
-          {g.missing > 1 ? " · " + tn(g.missing - 1, "{n} more after this", "{n} more after this") : ""}
-        </div>
-        <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{t("Keep MPTree open to keep syncing songs between your devices.")}</div>
-      </>
-    );
+  const peer = g.moving?.peer;
+  let head: string;
+  let sub = "";
+  let flow: "in" | "out" | "calm" | "still" = "still";
+  if (!s.devices.length && !s.problem) head = t("Loading…");
+  else if (s.problem === "offline") head = t("Waiting for internet");
+  else if (s.problem === "signin") head = t("Sign in again to keep syncing");
+  else if (s.problem === "drive") { head = t("Could not reach Google Drive"); sub = t("Trying again soon."); }
+  else if (g.moving) {
+    flow = g.moving.dir;
+    head = g.moving.dir === "in"
+      ? t("{phone} is sending “{name}” to this device", { phone: peer || t("Your other device"), name: g.moving.name })
+      : t("Sending “{name}” to {phone}", { name: g.moving.name, phone: peer || t("your other device") });
+    sub = t("Keep MPTree open on both until it is there.");
   }
-  // Only just opened: who else is on the account is not known yet, so there
-  // is nothing true to say about the songs.
-  if (!s.devices.length && !s.problem) return <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.45 }}>{t("Loading…")}</div>;
-  let line: string;
-  if (!others.length) line = t("Sign in on another device and your songs go there too.");
-  else if (g.note === "phone-full") line = t("This device is full. Free up {size} to get the rest.", { size: fmtBytes(Math.max(0, (g.needBytes ?? 0) - Math.max(0, (g.freeBytes ?? 0) - 500 * 1024 * 1024))) });
-  else if (g.note === "mobile-limit") line = t("Today's mobile data for songs is used up. The rest waits for wifi.");
-  else if (g.note === "wifi" && (g.missing || g.theyMiss)) line = t("Waiting for wifi.");
-  else if (g.missing && g.waitingOn.length) line = tn(g.missing, "{n} song is still on {phone}. Open MPTree there to bring it here.", "{n} songs are still on {phone}. Open MPTree there to bring them here.", { phone: g.waitingOn.join(", ") });
-  else if (g.missing) line = tn(g.missing, "{n} song on its way to this device.", "{n} songs on their way to this device.");
-  else if (g.theyMiss) line = tn(g.theyMiss, "{n} song still going to your other devices.", "{n} songs still going to your other devices.");
-  else line = t("All your songs are on this device.");
+  else if (!others.length) { head = t("Only this device so far"); sub = t("Sign in on another device with the same Google account, and your songs go there too."); }
+  else if (g.note === "phone-full") { head = t("This device is full"); sub = t("Free up {size} to get the rest.", { size: fmtBytes(Math.max(0, (g.needBytes ?? 0) - Math.max(0, (g.freeBytes ?? 0) - 500 * 1024 * 1024))) }); }
+  else if (g.note === "mobile-limit") { head = t("Today's mobile data for songs is used up"); sub = t("The rest waits for wifi."); }
+  else if (g.note === "wifi" && (g.missing || g.theyMiss)) { head = t("Waiting for wifi"); sub = t("Songs only go over wifi. You can change that below."); }
+  else if (g.missing && g.waitingOn.length) {
+    head = tn(g.missing, "{n} song is still on {phone}", "{n} songs are still on {phone}", { phone: g.waitingOn.join(", ") });
+    sub = t("Open MPTree on {phone} to send them here.", { phone: g.waitingOn.join(", ") });
+  }
+  else if (g.missing) { flow = "in"; head = tn(g.missing, "{n} song on its way to this device", "{n} songs on their way to this device"); sub = t("Keep MPTree open until they are here."); }
+  else if (g.theyMiss) { flow = "out"; head = tn(g.theyMiss, "{n} song still going to your other devices", "{n} songs still going to your other devices"); sub = t("Keep MPTree open until they are there."); }
+  else {
+    flow = "calm";
+    head = t("All your songs are on every device");
+    if (g.arrived > 0) sub = tn(g.arrived, "{n} song arrived since you opened MPTree.", "{n} songs arrived since you opened MPTree.");
+  }
+  const pct = g.moving && g.moving.total > 0 ? Math.min(100, Math.round(g.moving.done / g.moving.total * 100)) : null;
   return (
     <>
-      <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>{line}</div>
-      {g.arrived > 0 && <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{tn(g.arrived, "{n} song arrived since you opened MPTree.", "{n} songs arrived since you opened MPTree.")}</div>}
+      <Triangle s={s} flow={flow} peer={peer} T={T} />
+      <div style={{ height: 1, background: T.border, margin: "10px 2px 14px" }} />
+      <div style={{ padding: "0 2px" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis" }}>{head}</div>
+        {pct !== null && g.moving && (
+          <>
+            <div style={{ height: 4, background: T.border, borderRadius: 2, marginTop: 9, overflow: "hidden" }}>
+              <div style={{ width: `${pct}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
+            </div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 5 }}>
+              {`${mb(g.moving.done)} / ${mb(g.moving.total)} MB`}
+              {g.missing > 1 ? " · " + tn(g.missing - 1, "{n} more after this", "{n} more after this") : ""}
+            </div>
+          </>
+        )}
+        {sub && <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.45, marginTop: 4 }}>{sub}</div>}
+      </div>
     </>
+  );
+}
+
+/** The sync card's ground: the light grey of the design on a white page,
+ *  the usual card grey on a dark one, where the light one would vanish. */
+function cardGround(T: T): string {
+  const h = T.bg.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h.slice(0, 6), 16);
+  const lum = ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114;
+  return lum > 140 ? T.surface : T.dim;
+}
+
+const SPOTS = [{ x: 165, y: 34 }, { x: 60, y: 168 }, { x: 270, y: 168 }];
+const cut = (text: string, n = 16) => text.length > n ? text.slice(0, n - 1) + "…" : text;
+
+/** Three places, this device at the top. A free place is drawn dashed. */
+function Triangle({ s, flow, peer, T }: { s: SyncState; flow: "in" | "out" | "calm" | "still"; peer?: string; T: T }) {
+  const me = s.devices.find(d => d.id === s.deviceId);
+  const rest = [...s.devices.filter(d => d.id !== s.deviceId && !d.test), ...s.devices.filter(d => d.test)];
+  const spots: (Device | null)[] = [me ?? null, rest[0] ?? null, rest[1] ?? null];
+  const ground = cardGround(T);
+  const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const label = (d: Device | null, i: number) => {
+    if (!d) return { name: t("Free"), sub: t("Sign in there") };
+    if (i === 0) return { name: d.name, sub: t("This device") };
+    if (d.test) return { name: d.name, sub: t("Pretend, for testing") };
+    if (peer && d.name === peer && flow === "in") return { name: d.name, sub: t("Sending songs") };
+    if (peer && d.name === peer && flow === "out") return { name: d.name, sub: t("Getting songs") };
+    return { name: d.name, sub: t("Used {when}", { when: ago(d.lastActive ?? d.addedAt) }) };
+  };
+  const pairs: [number, number][] = [[0, 1], [0, 2], [1, 2]];
+  const dots = (a: number, b: number, n: number, dur: number, r: number, op: number, key: string) =>
+    Array.from({ length: n }, (_, k) => {
+      const from = SPOTS[a], to = SPOTS[b], begin = `${(dur / n) * k}s`;
+      return (
+        <circle key={key + k} r={r} fill={T.text} opacity="0">
+          <animateMotion dur={`${dur}s`} repeatCount="indefinite" begin={begin} path={`M${from.x},${from.y} L${to.x},${to.y}`} />
+          <animate attributeName="opacity" values={`0;${op};${op};0`} keyTimes="0;0.15;0.85;1" dur={`${dur}s`} repeatCount="indefinite" begin={begin} />
+        </circle>
+      );
+    });
+  // Songs go between this device and the one named, or, when none is named,
+  // every other device on the account.
+  const named = peer ? spots.findIndex((d, i) => i > 0 && d?.name === peer) : -1;
+  const ends = named > 0 ? [named] : [1, 2].filter(i => spots[i]);
+  return (
+    <svg viewBox="0 0 330 244" width="100%" style={{ display: "block", maxWidth: 330, margin: "0 auto", overflow: "visible" }} aria-hidden="true">
+      {pairs.map(([a, b]) => {
+        const live = !!spots[a] && !!spots[b];
+        return <line key={`${a}${b}`} x1={SPOTS[a].x} y1={SPOTS[a].y} x2={SPOTS[b].x} y2={SPOTS[b].y}
+          stroke={live ? T.text : T.muted} strokeWidth="1.5" strokeDasharray={live ? undefined : "4 5"} opacity={live ? 1 : 0.6} />;
+      })}
+      {!still && (flow === "in" || flow === "out") && ends.flatMap(i => flow === "in"
+        ? dots(i, 0, 3, 2.4, 4, 1, `go${i}`)
+        : dots(0, i, 3, 2.4, 4, 1, `go${i}`))}
+      {!still && flow === "calm" && pairs.filter(([a, b]) => spots[a] && spots[b]).flatMap(([a, b]) => [
+        ...dots(a, b, 2, 4, 3, 0.4, `c${a}${b}`), ...dots(b, a, 2, 4, 3, 0.4, `d${a}${b}`),
+      ])}
+      {spots.map((d, i) => {
+        const { x, y } = SPOTS[i];
+        const l = label(d, i);
+        if (i === 0 && d && isDesktop) return (
+          <g key={i}>
+            <rect x={x - 30} y={y - 22} width="60" height="38" rx="5" fill={ground} stroke={T.text} strokeWidth="2.2" />
+            <line x1={x - 38} y1={y + 24} x2={x + 38} y2={y + 24} stroke={T.text} strokeWidth="2.2" strokeLinecap="round" />
+            <text x={x} y={y + 48} textAnchor="middle" fontSize="13" fontWeight={700} fill={T.text}
+              stroke={ground} strokeWidth="6" strokeLinejoin="round" paintOrder="stroke">{cut(l.name)}</text>
+            <text x={x} y={y + 64} textAnchor="middle" fontSize="11.5" fill={T.textSub}
+              stroke={ground} strokeWidth="6" strokeLinejoin="round" paintOrder="stroke">{cut(l.sub, 19)}</text>
+          </g>
+        );
+        return (
+          <g key={i}>
+            <rect x={x - 16} y={y - 28} width="32" height="56" rx="7" fill={ground}
+              stroke={d ? T.text : T.muted} strokeWidth="2.2" strokeDasharray={d ? undefined : "4 4"} />
+            {d ? <line x1={x - 4} y1={y + 19} x2={x + 4} y2={y + 19} stroke={T.text} strokeWidth="2.2" strokeLinecap="round" />
+              : <path d={`M${x} ${y - 7}v14M${x - 7} ${y}h14`} stroke={T.muted} strokeWidth="2.2" strokeLinecap="round" />}
+            <text x={x} y={y + 48} textAnchor="middle" fontSize="13" fontWeight={d ? 700 : 600} fill={d ? T.text : T.muted}
+              stroke={ground} strokeWidth="6" strokeLinejoin="round" paintOrder="stroke">{cut(l.name)}</text>
+            <text x={x} y={y + 64} textAnchor="middle" fontSize="11.5" fill={T.textSub}
+              stroke={ground} strokeWidth="6" strokeLinejoin="round" paintOrder="stroke">{cut(l.sub, 19)}</text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 

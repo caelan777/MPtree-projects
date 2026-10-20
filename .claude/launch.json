@@ -68,6 +68,19 @@
       ],
       "port": 5176,
       "cwd": "MPTree-App"
+    },
+    {
+      "name": "mptree-desktop-test",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--mode",
+        "test",
+        "--port",
+        "5181"
+      ],
+      "port": 5181,
+      "cwd": "Desktop"
     }
   ]
 }

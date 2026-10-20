@@ -1,4 +1,4 @@
-# Handoff, 17 October 2026
+# Handoff, 20 October 2026
 
 Where the work stands, for whoever picks it up next. Read `CLAUDE.md` first, then
 the "Where things stand" part of `docs/roadmap.md`. `docs/account.md` explains the
@@ -8,7 +8,7 @@ account and sync, `Desktop/README.md` the Windows app.
 
 | Thing | Version | Where |
 |---|---|---|
-| Android on Google Play | 1.2.4, versionCode 75 | uploaded by Caelan on 15 October |
+| Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
 | Android test build | 61, versionCode 86 (1.2.8 plus the Pro film on the Pro page, Google test ads) | prerelease `v1.2.3-pro-test.61`, mp-tree.net/test |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
@@ -18,21 +18,19 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 87 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86). Next Windows is 0.1.5.
+Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87). Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
-1. **Upload 1.2.8 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.8.aab`,
-   versionCode 85, built 18 October; release notes in `docs/play-store-listing.md`).
-   The first bundle with ads: everything of 1.2.7 (account page, MP3 cut fix,
-   crossfade, sign in again keeps the bin, plain white start) plus the ad for a day
-   of Pro instead of the free week. Replaces 1.2.5 to 1.2.7. Before sending it for
-   review, in Play Console: Ads yes, Advertising ID yes, Data safety rows for
-   AdMob. Caelan tested the ad on his phone with test build 60 (it works). The
-   website already says what the app does with ads (privacy page live 18 October).
-2. **Windows 0.1.4 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.4.msix`, the
-   sign-in-again fix) to upload in Partner Center. Only then bump the `windows`
-   block of `Website/version.json` to 0.1.4: its notice sends installer users to
+1. **Upload 1.2.9 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.9.aab`,
+   versionCode 87, built 20 October; release notes in `docs/play-store-listing.md`).
+   1.2.8 plus the Pro film on the Pro page (1.2.8 does not have the film).
+2. **Windows 0.1.5 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.5.msix`, built
+   20 October, replaces the 0.1.4 that was never uploaded): the sign-in-again fix
+   plus the full-screen Pro page (two equal cards: pay once, or the free week; no
+   ads and no film on Windows) and the triangle Account & sync page, with this
+   computer drawn as a laptop. Upload in Partner Center. Only then bump the `windows`
+   block of `Website/version.json` to 0.1.5: its notice sends installer users to
    the Store.
 3. **Lemon Squeezy** still "under review" since 5 October. Caelan waits a week from
    15 October; he was given a status message for support@lemonsqueezy.com. Setup is
