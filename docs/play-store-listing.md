@@ -8,6 +8,26 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.2.9 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.9.aab`
+(versionCode 87, built 2026-10-20 with `npm run build:play`; the next bundle or test build is 88). 1.2.8 plus the
+Pro film (public/pro-video.mp4, 7 MB) on the Pro page. Nothing new to declare.
+
+```
+<en-GB>
+New: a short film at the top of the Pro page shows everything Pro adds, and the two ways to get it. It plays without internet too.
+</en-GB>
+<nl-NL>
+Nieuw: een korte film bovenaan de Pro-pagina laat alles zien wat Pro toevoegt, en de twee manieren om het te krijgen. Hij speelt ook zonder internet.
+</nl-NL>
+<es-ES>
+Novedad: un vídeo corto arriba en la página Pro muestra todo lo que añade Pro y las dos formas de conseguirlo. Funciona también sin internet.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.8 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.8.aab`
