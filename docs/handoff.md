@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 93 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92). Next is 93. Next Windows is 0.1.6.
+Next Android versionCode is 97 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`). Next is 97. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
