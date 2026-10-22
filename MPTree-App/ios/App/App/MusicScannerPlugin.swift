@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// Where MPTree's songs come from on an iPhone. An app there cannot look
 /// through the phone for music, so every scan reads:
 ///   - its own folder in the Files app ("On My iPhone", MPTree), without the
-///     backups in Backups/;
+///     song copies inside backups (a folder with a .nomedia file is skipped);
 ///   - every folder the person gave it (Music folders), kept with bookmarks so
 ///     the permission lasts;
 ///   - the Music library, once allowed and switched on: only songs stored on
@@ -83,9 +83,9 @@ public class MusicScannerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDe
         work.async {
             self.loadCache()
             var songs: [[String: Any]] = []
-            self.collect(root: self.docs, prefix: "docs", skipTop: ["Backups"], into: &songs)
+            self.collect(root: self.docs, prefix: "docs", into: &songs)
             for f in self.openFolders() {
-                self.collect(root: f.url, prefix: "f" + f.key, skipTop: [], into: &songs)
+                self.collect(root: f.url, prefix: "f" + f.key, into: &songs)
             }
             if self.libraryOn() { self.collectLibrary(into: &songs) }
             self.saveCache()
@@ -98,16 +98,24 @@ public class MusicScannerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDe
         call.resolve(["granted": true])
     }
 
-    /// Android asks its media index to look at a folder. Here every scan reads
-    /// the files themselves, so there is nothing to do.
-    @objc func scanFolder(_ call: CAPPluginCall) { call.resolve() }
+    /// After a restore, the backup's songs become part of the library. Android
+    /// asks its media index to look at the folder; here every scan reads the
+    /// files themselves, so all that is left is taking away the .nomedia
+    /// marker a backup leaves in its music folder (see below).
+    @objc func scanFolder(_ call: CAPPluginCall) {
+        if let path = call.getString("path") {
+            let marker = URL(fileURLWithPath: path.replacingOccurrences(of: "file://", with: "")).appendingPathComponent(".nomedia")
+            try? fm.removeItem(at: marker)
+        }
+        call.resolve()
+    }
 
     private func real(_ url: URL) -> String { url.resolvingSymlinksInPath().standardizedFileURL.path }
 
-    private func collect(root: URL, prefix: String, skipTop: Set<String>, into songs: inout [[String: Any]]) {
+    private func collect(root: URL, prefix: String, into songs: inout [[String: Any]]) {
         let base = real(root)
         guard let it = fm.enumerator(at: root,
-                                     includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey, .creationDateKey],
+                                     includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .creationDateKey],
                                      options: [], errorHandler: { _, _ in true }) else { return }
         for case let url as URL in it {
             let name = url.lastPathComponent
@@ -124,7 +132,13 @@ public class MusicScannerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDe
                 if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { it.skipDescendants() }
                 continue
             }
-            if it.level == 1, skipTop.contains(name) { it.skipDescendants(); continue }
+            // A folder with a .nomedia file in it is left out, as Android's
+            // media index does: a backup puts one in its copy of the songs,
+            // which would otherwise all show up twice.
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+                if fm.fileExists(atPath: url.appendingPathComponent(".nomedia").path) { it.skipDescendants() }
+                continue
+            }
             guard Self.audioTypes.contains(url.pathExtension.lowercased()) else { continue }
             let vals = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey, .creationDateKey])
             guard vals?.isRegularFile == true else { continue }

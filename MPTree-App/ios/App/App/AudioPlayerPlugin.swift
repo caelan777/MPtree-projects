@@ -12,8 +12,10 @@ import MediaPlayer
 /// only means the queue has run out. With repeat on, a song that ends plays
 /// again; Next always moves on.
 ///
-/// Not here yet: crossfade (the length is kept) and the equaliser, which says
-/// it is not available so the app hides it.
+/// Crossfade, as on Android: near the end the next song starts in a second
+/// player, the two are faded across, and the new one becomes the song. Cuts
+/// are never faded into or out of. Not here yet: the equaliser, which says it
+/// is not available so the app hides it.
 @objc(AudioPlayerPlugin)
 public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "AudioPlayerPlugin"
@@ -51,7 +53,15 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     // Everything below is only touched on the main thread.
-    private let player = AVPlayer()
+    private var player = AVPlayer()
+    /// Looks four times a second whether a crossfade is due.
+    private var tick: Any?
+    // The crossfade in progress: the song fading in, and its place.
+    private var incoming: AVPlayer?
+    private var incomingTrack: Track?
+    private var incomingIndex = -1
+    private var fading = false
+    private var fadeTimer: Timer?
     private var queue: [Track] = []
     private var index = -1
     private var mode = "off"
@@ -75,7 +85,10 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         nc.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
-        DispatchQueue.main.async { self.setUpRemoteCommands() }
+        DispatchQueue.main.async {
+            self.setUpRemoteCommands()
+            self.installTick()
+        }
     }
 
     // MARK: - Playing
@@ -99,14 +112,31 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func start(_ t: Track) {
-        for o in itemObservers { NotificationCenter.default.removeObserver(o) }
-        itemObservers = []
-        statusObservation = nil
-
+        cancelCrossfade()
         current = t
         let item = AVPlayerItem(url: url(t.path))
         // A cut ends at its end marker the way a file ends at its last sample.
         if t.cutTo > t.cutFrom { item.forwardPlaybackEndTime = CMTime(value: CMTimeValue(t.cutTo), timescale: 1000) }
+        observe(item)
+        player.replaceCurrentItem(with: item)
+        if t.cutFrom > 0 {
+            player.seek(to: CMTime(value: CMTimeValue(t.cutFrom), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        try? AVAudioSession.sharedInstance().setActive(true)
+        player.volume = 1
+        player.playImmediately(atRate: speed)
+        isPlaying = true
+        nowCover = picked[t.path]
+        updateNowPlaying()
+        if nowCover == nil { loadCover(for: t.path) }
+        notifyStateChange()
+    }
+
+    /// The end, a failure and the moment it is ready, for the song that is on.
+    private func observe(_ item: AVPlayerItem) {
+        for o in itemObservers { NotificationCenter.default.removeObserver(o) }
+        itemObservers = []
+        statusObservation = nil
         let nc = NotificationCenter.default
         itemObservers.append(nc.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             self?.finished()
@@ -126,21 +156,105 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
-        player.replaceCurrentItem(with: item)
-        if t.cutFrom > 0 {
-            player.seek(to: CMTime(value: CMTimeValue(t.cutFrom), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    // MARK: - Crossfade
+
+    private func installTick() {
+        if let t = tick { player.removeTimeObserver(t) }
+        tick = player.addPeriodicTimeObserver(forInterval: CMTime(value: 250, timescale: 1000), queue: .main) { [weak self] _ in
+            self?.checkCrossfade()
         }
-        try? AVAudioSession.sharedInstance().setActive(true)
-        player.playImmediately(atRate: speed)
-        isPlaying = true
+    }
+
+    /// What plays after this song, and where it is in the queue.
+    private func peekNext() -> (Track, Int)? {
+        if mode == "repeat", let t = current { return (t, index) }
+        let next = index + 1
+        guard index >= 0, next < queue.count else { return nil }
+        return (queue[next], next)
+    }
+
+    private func checkCrossfade() {
+        guard crossfadeMs > 0, !fading, isPlaying, let cur = current, cur.cutTo == 0, cur.cutFrom == 0 else { return }
+        guard let upcoming = peekNext(), upcoming.0.cutTo == 0, upcoming.0.cutFrom == 0 else { return }
+        let (next, at) = upcoming
+        let duration = ms(player.currentItem?.duration ?? .zero)
+        guard duration > 0 else { return }
+        // In real time: at 1.5 times the speed the end comes sooner.
+        let remaining = Int(Double(duration - ms(player.currentTime())) / Double(max(speed, 0.01)))
+        // A little early, so the next file has time to load before the fade.
+        guard remaining <= crossfadeMs + 250, remaining > 150 else { return }
+        startCrossfade(into: next, at: at, fadeMs: max(300, min(crossfadeMs, remaining - 100)))
+    }
+
+    private func startCrossfade(into t: Track, at i: Int, fadeMs: Int) {
+        fading = true
+        let p = AVPlayer(playerItem: AVPlayerItem(url: url(t.path)))
+        p.automaticallyWaitsToMinimizeStalling = false
+        p.volume = 0
+        p.playImmediately(atRate: speed)
+        incoming = p
+        incomingTrack = t
+        incomingIndex = i
+        let out = player
+        let steps = max(1, fadeMs / 50)
+        var step = 0
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
+            guard let self = self, self.fading else { timer.invalidate(); return }
+            step += 1
+            let k = Float(min(1.0, Double(step) / Double(steps)))
+            out.volume = 1 - k
+            p.volume = k
+            if step >= steps {
+                timer.invalidate()
+                self.finishCrossfade()
+            }
+        }
+    }
+
+    /// The song that faded in becomes the song.
+    private func finishCrossfade() {
+        guard let p = incoming, let t = incomingTrack, let item = p.currentItem else { cancelCrossfade(); return }
+        if let tk = tick { player.removeTimeObserver(tk); tick = nil }
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        player = p
+        incoming = nil
+        incomingTrack = nil
+        fadeTimer = nil
+        fading = false
+        current = t
+        index = incomingIndex
+        p.volume = 1
+        observe(item)
+        installTick()
         nowCover = picked[t.path]
         updateNowPlaying()
         if nowCover == nil { loadCover(for: t.path) }
         notifyStateChange()
     }
 
+    /// Something else happened (a tap, a seek, a pause): the song that was
+    /// fading in goes, and the one that is on plays at full volume again.
+    private func cancelCrossfade() {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        if let p = incoming {
+            p.pause()
+            p.replaceCurrentItem(with: nil)
+        }
+        incoming = nil
+        incomingTrack = nil
+        fading = false
+        player.volume = 1
+    }
+
     /// The song is over, by itself or at a cut's end marker.
     private func finished() {
+        // It ran out while fading into the next one: the fade carries on and
+        // makes that one the song.
+        if fading { return }
         guard let t = current else { return }
         if mode == "repeat" {
             // The same place in the queue: a song can be in it twice.
@@ -185,6 +299,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func pausePlayback() {
+        cancelCrossfade()
         player.pause()
         isPlaying = false
         updateNowPlaying()
@@ -204,6 +319,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func seek(ms value: Int) {
+        cancelCrossfade()
         player.seek(to: CMTime(value: CMTimeValue(max(0, value)), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             DispatchQueue.main.async { self?.updateNowPlaying() }
         }
@@ -304,6 +420,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             self.speed = min(4, max(0.25, value))
             // Only while playing: setting a rate on a paused player starts it.
             if self.isPlaying { self.player.rate = self.speed }
+            self.incoming?.rate = self.speed
             self.updateNowPlaying()
             call.resolve()
         }
@@ -468,6 +585,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         let optionsRaw = n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
         DispatchQueue.main.async {
             if type == .began {
+                self.cancelCrossfade()
                 if self.isPlaying {
                     self.wasPlayingBeforeInterruption = true
                     self.isPlaying = false

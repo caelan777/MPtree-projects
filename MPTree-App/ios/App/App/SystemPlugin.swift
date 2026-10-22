@@ -1,9 +1,8 @@
 import UIKit
 import Capacitor
 
-/// The iPhone's half of SystemPlugin.java: the device, links and text size.
-/// Play's updates and review card do not exist here, and app icons come
-/// later (Personalise hides Icons on the iPhone until then).
+/// The iPhone's half of SystemPlugin.java: the device, links, text size and
+/// app icons. Play's updates and review card do not exist here.
 @objc(SystemPlugin)
 public class SystemPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "SystemPlugin"
@@ -64,8 +63,31 @@ public class SystemPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func checkPlayUpdate(_ call: CAPPluginCall) { call.resolve(["available": false]) }
     @objc func startPlayUpdate(_ call: CAPPluginCall) { call.resolve() }
-    @objc func getAppIcon(_ call: CAPPluginCall) { call.resolve(["icon": "classic"]) }
-    @objc func setAppIcon(_ call: CAPPluginCall) { call.resolve() }
+    // The icons are the "AppIcon-<name>" sets in Assets.xcassets, made by
+    // Branding/build-alt-icons.mjs; "classic" is the app's own icon. iOS
+    // tells the person itself when it changes, and nothing has to close, so
+    // the `restart` Android needs means nothing here.
+    @objc func getAppIcon(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let name = UIApplication.shared.alternateIconName
+            call.resolve(["icon": name.map { String($0.dropFirst("AppIcon-".count)) } ?? "classic"])
+        }
+    }
+
+    @objc func setAppIcon(_ call: CAPPluginCall) {
+        let icon = call.getString("icon") ?? "classic"
+        DispatchQueue.main.async {
+            guard UIApplication.shared.supportsAlternateIcons else {
+                call.reject("This iPhone does not let apps change their icon")
+                return
+            }
+            let name: String? = icon == "classic" ? nil : "AppIcon-" + icon
+            if UIApplication.shared.alternateIconName == name { call.resolve(); return }
+            UIApplication.shared.setAlternateIconName(name) { error in
+                if let error = error { call.reject(error.localizedDescription) } else { call.resolve() }
+            }
+        }
+    }
     @objc func askReview(_ call: CAPPluginCall) { call.resolve(["asked": false]) }
     @objc func pinPhotoShortcut(_ call: CAPPluginCall) { call.resolve(["supported": false]) }
 }

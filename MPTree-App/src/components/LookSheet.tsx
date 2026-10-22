@@ -422,10 +422,18 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** A new icon was applied: ask when MPTree may close to switch to it. */
+  /** A new icon was applied: ask when MPTree may close to switch to it. The
+   *  iPhone switches at once and says so itself, with nothing closing. */
   const applyIcon = () => {
     const want = getLook().icon;
-    if (want !== appIcon) setIconAsk(want);
+    if (want === appIcon) return;
+    if (IS_IOS) {
+      System.setAppIcon({ icon: want })
+        .then(() => setAppIcon(want))
+        .catch(() => onToast(t("This phone did not let MPTree change its icon")));
+      return;
+    }
+    setIconAsk(want);
   };
   /** Now (MPTree closes itself) or once the app is left. */
   const switchIcon = (restart: boolean) => {
@@ -655,8 +663,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     ?? (avielaOn ? RECORD_NAMES[vinyl as FlowerRecord] : lanternOn ? LANTERN_RECORD_NAMES[vinyl as LanternRecord] : "") ?? "";
   const iconName = ICONS.find(i => i.id === look.icon)?.label ?? "";
   const dot = (s: React.CSSProperties) => <span style={{ width: 34, height: 34, borderRadius: "50%", display: "block", ...s }} />;
-  type Choice = { id: Page; title: string; sub: string; art: ReactNode };
-  const choices = ([
+  const choices: { id: Page; title: string; sub: string; art: ReactNode }[] = [
     {
       id: "background", title: t("Background"),
       sub: bg.photo ? t("Your photo, {n}%", { n: Math.round(bg.strength * 100) }) : t("None"),
@@ -680,8 +687,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     },
     { id: "icons", title: t("Icons"), sub: iconName, art: <IconArt icon={look.icon} size={34} /> },
     { id: "records", title: t("Records"), sub: recordName, art: <SpinningDisc size={36} skin={vinyl} /> },
-  // The iPhone has no app icons to pick yet (SystemPlugin.swift).
-  ] as Choice[]).filter(c => !(IS_IOS && c.id === "icons"));
+  ];
   const choiceRow = (c: typeof choices[number], i: number) => {
     const first = i === 0, last = i === choices.length - 1;
     return (
