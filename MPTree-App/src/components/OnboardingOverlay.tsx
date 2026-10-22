@@ -35,7 +35,7 @@ interface Step {
 const GET_MUSIC_STEP: Step = {
   target: '[data-tour="plus"]',
   title: "Get music, the legal way",
-  body: "Search for a song and MPTree shows you where to get it free, or where to buy it. What you download shows up here by itself.",
+  body: "Tap it for the places to get music, free or paid. What you download shows up here by itself.",
 };
 
 const STEPS: Step[] = [

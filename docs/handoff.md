@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
-| Android test build | 66, versionCode 93 (1.3.1 work: Get music behind the + in the header, links to Bandcamp, Jamendo, Free Music Archive and Qobuz; a toast when a download arrives; the + in the tour and pointed out once to people who update) | prerelease `v1.2.3-pro-test.66`, mp-tree.net/test, branch `get-music` |
+| Android test build | 67, versionCode 94 (1.3.1 work: Get music behind the + in the header, a full-screen page with a tutorial film, Bandcamp and Qobuz; a toast when a download arrives; the + in the tour and pointed out once to people who update) | prerelease `v1.2.3-pro-test.67`, mp-tree.net/test, branch `get-music` |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 94 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test build 66 took 93). Next is 94. Next Windows is 0.1.6.
+Next Android versionCode is 95 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test build 66 took 93, test build 67 took 94). Next is 95. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
@@ -133,15 +133,19 @@ conflict goes to the later device clock. Look at Play reviews and mail for
   window when its launcher entry changes. SystemPlugin keeps it as pending and
   switches in handleOnStop, or closes MPTree itself first when asked to ("Close
   and change it").
-- The + in the header is back since test build 66, as **Get music**: a fixed list
-  of legal sites (Bandcamp, Jamendo, Free Music Archive, Qobuz) whose own search
-  opens in the browser. MPTree downloads nothing and sends the search nowhere;
-  downloads land in Download, which the scan already reads. That is why it is fine
-  where the + removed on 2 August was not: that one opened any download page the
-  user typed in, in practice rip sites. Never add a site that rips from YouTube
-  or similar (Caelan asked for mp3juice on 22 October; refused). Real in-app
-  search and download would need a paid deal with Jamendo, whose API terms forbid
-  offline use in an app with ads or Pro. Windows gets Get music later.
+- The + in the header is back since test build 66, as **Get music**: a full-screen
+  page with a 36 s tutorial film (`public/get-music-video.mp4`, script in
+  `brag-output/getmusic-script.md`) and two legal sites, Bandcamp (free or buy)
+  and Qobuz (buy), opened in the browser. Since 22 October no search box, no
+  Jamendo, no Free Music Archive and no "from your computer" (Caelan's call).
+  MPTree downloads nothing; downloads land in Download, which the scan already
+  reads. That is why it is fine where the + removed on 2 August was not: that one
+  opened any download page the user typed in, in practice rip sites. Never add a
+  site that rips from YouTube or similar, not even with a "not responsible" line:
+  Caelan asked for mp3juice and for a row for illegal sites on 22 October; both
+  refused, and the page ends with "Only download music you have the right to"
+  instead. Real in-app downloads would need a paid deal with Jamendo, whose API
+  terms forbid offline use in an app with ads or Pro. Windows gets it later.
 
 ## How to build
 

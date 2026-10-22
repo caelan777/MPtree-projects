@@ -174,9 +174,7 @@ export default function App() {
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   // The + in the header: legal places to get music (components/GetMusicSheet).
-  // The search is kept while the app is open, so a second site is one tap.
   const [getMusicOpen,   setGetMusicOpen]  = useState(false);
-  const [getMusicQuery,  setGetMusicQuery] = useState("");
   const [theme,         setTheme]         = useState<Theme>("dark");
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
@@ -4491,7 +4489,7 @@ export default function App() {
 
         {/* ═══ GET MUSIC ═══════════════════════════════════════════════════ */}
         {getMusicOpen && (
-          <GetMusicSheet query={getMusicQuery} onQuery={setGetMusicQuery} onOpen={openMusicSite} onClose={() => setGetMusicOpen(false)} T={TH} />
+          <GetMusicSheet onOpen={openMusicSite} onClose={() => setGetMusicOpen(false)} T={TH} />
         )}
 
         {/* ═══ BACKUP SHEET════════════════════════════════════════════════ */}

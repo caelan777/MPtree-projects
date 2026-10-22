@@ -1,21 +1,22 @@
-import React, { useState } from "react";
-import type { T } from "../themes";
+import { useState } from "react";
+import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
+import { IC } from "./Icons";
 
 // ─── GET MUSIC ───────────────────────────────────────────────────────────────
-// The + in the header. A fixed list of legal places to get music: type a song,
-// tap a place, and that site's own search opens in the browser. MPTree itself
-// downloads nothing and sends the search nowhere; whatever the person saves
-// lands in Download, which the library scan already reads.
+// The + in the header. A page of its own with the legal places to get music;
+// tapping one opens that site in the browser. MPTree itself downloads nothing;
+// whatever the person saves lands in Download, which the library scan already
+// reads.
 //
-// None of these sites lets an app search or download for it: Jamendo's API
-// terms rule out offline use for an app with ads or Pro, and Bandcamp and Free
-// Music Archive have no open API. Hence links, not results.
+// None of these sites lets an app search or download for it (Bandcamp has no
+// open API), hence links, not results. Never a site that rips songs from
+// YouTube or the like: that is what the + removed on 2 August 2026 led to.
 
-type MusicSite = "bandcamp" | "jamendo" | "fma" | "qobuz";
+type MusicSite = "bandcamp" | "qobuz";
 
-// Qobuz keeps a shop per country, and a search outside one is a 404. All of
-// these answered a search on 22 October 2026.
+// Qobuz keeps a shop per country, and outside one a page is a 404. All of
+// these answered on 22 October 2026.
 const QOBUZ_BY_COUNTRY: Record<string, string> = {
   US: "us-en", GB: "gb-en", IE: "ie-en", AU: "au-en", NZ: "nz-en",
   NL: "nl-nl", DE: "de-de", AT: "at-de", FR: "fr-fr", LU: "lu-fr",
@@ -39,126 +40,101 @@ function qobuzShop(): string | null {
   return QOBUZ_BY_COUNTRY[country] ?? QOBUZ_BY_LANGUAGE[lang.toLowerCase()] ?? null;
 }
 
-/** Where a place opens: its search for `query`, or its front page without one. */
-function siteUrl(site: MusicSite, query: string): string {
-  const q = encodeURIComponent(query.trim());
-  switch (site) {
-    case "bandcamp": return q ? `https://bandcamp.com/search?q=${q}` : "https://bandcamp.com/";
-    case "jamendo":  return q ? `https://www.jamendo.com/search?q=${q}` : "https://www.jamendo.com/";
-    case "fma":      return q ? `https://freemusicarchive.org/search?quicksearch=${q}` : "https://freemusicarchive.org/";
-    case "qobuz": {
-      const shop = qobuzShop();
-      if (!shop) return "https://www.qobuz.com/";
-      return q ? `https://www.qobuz.com/${shop}/search/?q=${q}` : `https://www.qobuz.com/${shop}/shop`;
-    }
-  }
+function siteUrl(site: MusicSite): string {
+  if (site === "bandcamp") return "https://bandcamp.com/";
+  const shop = qobuzShop();
+  return shop ? `https://www.qobuz.com/${shop}/shop` : "https://www.qobuz.com/";
 }
 
 interface Props {
-  query: string;
-  onQuery: (q: string) => void;
   onOpen: (url: string) => void;
   onClose: () => void;
   T: T;
 }
 
-export function GetMusicSheet({ query, onQuery, onOpen, onClose, T }: Props) {
-  const [howTo, setHowTo] = useState(false);
+export function GetMusicSheet({ onOpen, onClose, T }: Props) {
+  const sh = makeSH(T);
+  // The film that shows how (brag-output/getmusic.mp4), full screen. It ships
+  // inside the app (public/get-music-video.mp4), so it plays without internet.
+  const [film, setFilm] = useState(false);
 
-  const chip = (label: string) => (
-    <span style={{
-      fontSize: 11, fontWeight: 700, color: T.text, background: T.card,
-      border: `1px solid ${T.border}`, borderRadius: 10, padding: "2px 8px",
-      whiteSpace: "nowrap", flexShrink: 0,
-    }}>{label}</span>
-  );
-
-  const row = (key: string, name: string, label: string, sub: string, onClick: () => void, right: React.ReactNode) => (
-    <button key={key} onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer",
-      background: T.dim, border: `1px solid ${T.border}`, borderRadius: 14, padding: "13px 16px",
-      marginBottom: 10, fontFamily: "inherit", color: T.text,
-    }}>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>{name}</span>
-          {label && chip(label)}
-        </span>
-        <span style={{ display: "block", fontSize: 13, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>{sub}</span>
-      </span>
-      <span style={{ display: "flex", flexShrink: 0, color: T.muted }}>{right}</span>
-    </button>
-  );
+  const sites: { site: MusicSite; name: string; label: string; sub: string }[] = [
+    { site: "bandcamp", name: "Bandcamp", label: t("Free or buy"), sub: t("Straight from the artists. Some songs are free, the rest you buy.") },
+    { site: "qobuz",    name: "Qobuz",    label: t("Buy"),         sub: t("The big names too, as files you keep.") },
+  ];
 
   const out = (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M7 17 17 7" /><path d="M8 7h9v9" />
     </svg>
   );
-  const chevron = (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-      style={{ transform: howTo ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
 
-  const sites: { site: MusicSite; name: string; label: string; sub: string }[] = [
-    { site: "bandcamp", name: "Bandcamp",           label: t("Free or buy"), sub: t("Straight from the artists. Some songs are free, the rest you buy.") },
-    // "Free download", not "Free": that one is taken by the account page,
-    // where it means an empty device slot ("Vrij", "Libre").
-    { site: "jamendo",  name: "Jamendo",            label: t("Free download"), sub: t("Free music from independent artists. Needs a free account.") },
-    { site: "fma",      name: "Free Music Archive", label: t("Free download"), sub: t("Free songs shared by the artists themselves.") },
-    { site: "qobuz",    name: "Qobuz",              label: t("Buy"),         sub: t("The big names too, as files you keep.") },
-  ];
-
+  // A page of its own, the whole screen, like Pro and Account & sync.
+  const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 400, display: "flex", alignItems: "flex-end" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ width: "100%", background: T.card, borderRadius: "20px 20px 0 0", padding: "8px 20px 44px", maxHeight: "90vh", overflowY: "auto" }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, margin: "8px auto 16px" }} />
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.text }}>{t("Get music")}</div>
-        <div style={{ fontSize: 13, color: T.muted, marginTop: 4, marginBottom: 14, lineHeight: 1.4 }}>
-          {t("Free or paid, always legal. What you download shows up in MPTree by itself.")}
-        </div>
+    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <div style={{ ...column, display: "flex", justifyContent: "flex-end", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 0", flexShrink: 0 }}>
+        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.dim, border: `1px solid ${T.border}`, borderRadius: 12, padding: "0 12px", height: 44, marginBottom: 14 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            value={query}
-            onChange={e => onQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-            enterKeyHint="search"
-            placeholder={t("Song, artist or album")}
-            aria-label={t("Song, artist or album")}
-            style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: T.text, fontSize: 16, fontFamily: "inherit" }}
-          />
-          {query.length > 0 && (
-            <button onClick={() => onQuery("")} aria-label={t("Clear search")} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", color: T.muted }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-            </button>
-          )}
-        </div>
-
-        {sites.map(s => row(s.site, s.name, s.label, s.sub, () => onOpen(siteUrl(s.site, query)), out))}
-
-        {row("computer", t("From your computer"), "", t("Songs you already have, copied over with a cable."), () => setHowTo(v => !v), chevron)}
-        {howTo && (
-          <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.55, padding: "0 4px 12px" }}>
-            {t("Connect your device to a computer with a cable and choose File transfer. Open it on the computer and copy your songs into the Music folder. They show up in MPTree by themselves.")}
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ ...column, padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("Get music")}</div>
+          <div style={{ fontSize: 14, color: T.textSub, marginTop: 8, lineHeight: 1.5 }}>
+            {t("Free or paid, always legal. What you download shows up in MPTree by itself.")}
           </div>
-        )}
 
-        <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginTop: 4, opacity: 0.85 }}>
-          {t("Albums often come as a .zip. Open it in Files and tap Extract, and the songs show up here.")}
+          <button onClick={() => setFilm(true)} aria-label={t("Watch how it works")}
+            style={{ display: "block", width: "100%", margin: "18px 0 20px", padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+            <span style={{ display: "block", position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 16, overflow: "hidden", border: `1px solid ${T.border}`, background: "#fff" }}>
+              <img src={`${import.meta.env.BASE_URL}get-music-video.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <span style={{ position: "absolute", left: "50%", top: "50%", width: 58, height: 58, marginLeft: -29, marginTop: -29, borderRadius: 29, background: "#0b0b0d", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff" /></svg>
+              </span>
+            </span>
+            <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8, padding: "0 2px" }}>
+              <span style={{ fontSize: 14.5, fontWeight: 700, color: T.text }}>{t("Watch how it works")}</span>
+              <span style={{ fontSize: 12.5, color: T.muted }}>0:36</span>
+            </span>
+          </button>
+
+          {sites.map(s => (
+            <button key={s.site} onClick={() => onOpen(siteUrl(s.site))} style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer",
+              background: T.dim, border: `1px solid ${T.border}`, borderRadius: 14, padding: "15px 16px",
+              marginBottom: 10, fontFamily: "inherit", color: T.text,
+            }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>{s.name}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: T.text, background: T.card,
+                    border: `1px solid ${T.border}`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap",
+                  }}>{s.label}</span>
+                </span>
+                <span style={{ display: "block", fontSize: 13, color: T.textSub, marginTop: 4, lineHeight: 1.4 }}>{s.sub}</span>
+              </span>
+              <span style={{ display: "flex", flexShrink: 0, color: T.muted }}>{out}</span>
+            </button>
+          ))}
+
+          <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginTop: 10 }}>
+            {t("Only download music you have the right to. MPTree is not responsible for what you download from other websites.")}
+          </div>
         </div>
       </div>
+
+      {film && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 460, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <video src={`${import.meta.env.BASE_URL}get-music-video.mp4`}
+            autoPlay controls playsInline onEnded={() => setFilm(false)}
+            style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+          <button onClick={() => setFilm(false)} aria-label={t("Close")}
+            style={{ position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 12px)", right: 14, width: 44, height: 44, borderRadius: 22, border: "none", background: "rgba(255,255,255,0.9)", color: "#0b0b0d", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <IC.Close />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
