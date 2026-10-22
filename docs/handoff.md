@@ -1,4 +1,4 @@
-# Handoff, 20 October 2026
+# Handoff, 22 October 2026
 
 Where the work stands, for whoever picks it up next. Read `CLAUDE.md` first, then
 the "Where things stand" part of `docs/roadmap.md`. `docs/account.md` explains the
@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
-| Android test build | 61, versionCode 86 (1.2.8 plus the Pro film on the Pro page, Google test ads) | prerelease `v1.2.3-pro-test.61`, mp-tree.net/test |
+| Android test build | 62, versionCode 88 (1.3.0 work: Personalise like Android's Wallpaper & style, background photo, icons back, Aviela's flower editor, multi-share, one backup row, review ask) | prerelease `v1.2.3-pro-test.62`, mp-tree.net/test, branch `personalise-2` |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87). Next Windows is 0.1.6.
+Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test build 62 took 88). Next is 89. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
@@ -117,8 +117,15 @@ conflict goes to the later device clock. Look at Play reviews and mail for
 - Loading screen white for light-mode users is fine.
 - Pro is not free on Windows. The repository stays public. Uploading to Play and
   Partner Center, Google sign-in and payment details are his.
-- Rejected, do not bring back: plus page, extra widgets, app icon picker, the
-  in-app web download, a website APK.
+- Rejected, do not bring back: plus page, extra widgets, the in-app web
+  download, a website APK. (The app icon picker was rejected on 13 October and
+  asked back by Caelan on 22 October, with an icon each for Aviela and Lantern.)
+- No reward for a review: Google Play does not allow it. The review card
+  (`src/review.ts`) asks once, from the second day, after ten songs, for nothing.
+- Ads stay the one rewarded ad for a day of Pro; Pro things say "Free with an
+  ad". Banners between songs and an ad on every Pro tap were turned down on
+  22 October (AdMob banners cannot sit in the list; Google discourages ads on
+  every tap). Look at the AdMob numbers again in early November.
 
 ## How to build
 

@@ -49,6 +49,22 @@ ${body}
 </vector>
 `;
 
+// A flower as in MPTree-App/src/flowers.ts (flower()): petals round a heart.
+const r1 = v => Math.round(v * 10) / 10;
+const petalPath = (len, wide) => {
+  const w = r1(len * wide);
+  return `M0,0C${w},${r1(-len * 0.3)} ${w},${r1(-len * 0.9)} 0,${r1(-len)}C${-w},${r1(-len * 0.9)} ${-w},${r1(-len * 0.3)} 0,0Z`;
+};
+const flower = (x, y, r, n, fill, heart) => {
+  const d = petalPath(r, n > 8 ? 0.2 : n > 5 ? 0.42 : 0.58);
+  const petals = [];
+  for (let i = 0; i < n; i++) petals.push(`        <group android:rotation="${r1(i * 360 / n)}"><path android:fillColor="${fill}" android:pathData="${d}" /></group>`);
+  return `    <group android:translateX="${x}" android:translateY="${y}">
+${petals.join("\n")}
+        <path android:fillColor="${heart}" android:pathData="${circle(0, 0, r1(r * 0.2))}" />
+    </group>`;
+};
+
 // Grooves: fine rings from just outside the label to the edge of the canvas.
 const grooves = [];
 for (let r = 20; r <= 60; r += 2.5) grooves.push(ring(r, "#16FFFFFF", 0.5));
@@ -68,6 +84,17 @@ const ICONS = {
   stamp: {
     bg: [rect("#FFFFFF")],
     fg: [disc(29, "#000000"), mark(30, "#FFFFFF")],
+  },
+  // Aviela: the mark in ink on petal pink, a rose flower on its shoulder, as
+  // the app wears it in Aviela's "One flower".
+  aviela: {
+    bg: [rect("#FFD5E6")],
+    fg: [mark(43.2, "#20181B"), flower(74, 33, 13, 6, "#EE8FB4", "#F3C14B")],
+  },
+  // Lantern: the mark in its green light, glowing out of black.
+  lantern: {
+    bg: [rect("#050906"), disc(40, "#1035E08A"), disc(31, "#1A35E08A"), disc(23, "#2435E08A")],
+    fg: [mark(43.2, "#35E08A")],
   },
 };
 

@@ -50,6 +50,7 @@ interface Props {
   onLikeMany:            (ids: string[], liked: boolean) => void;
   onShuffleMany:         (ids: string[]) => void;
   onPlayManyNext:        (ids: string[]) => void;
+  onShareMany:           (ids: string[]) => void;
   onAddManyToPlaylist:   (ids: string[]) => void;
   onBulkEditMany:        (ids: string[]) => void;
   onCutSong:          (song: Song) => void;
@@ -186,7 +187,7 @@ export const PlaylistsView: React.FC<Props> = ({
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
-  onLikeMany, onShuffleMany, onPlayManyNext, onAddManyToPlaylist, onBulkEditMany,
+  onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
   onBodyScroll, animateInsets = true, onClose, T,
 }) => {
@@ -1267,6 +1268,7 @@ export const PlaylistsView: React.FC<Props> = ({
           onShuffleSelection={() => { const ids = [...selectedIds]; exitSelect(); onShuffleMany(ids); }}
           onAddToPlaylist={() => { onAddManyToPlaylist([...selectedIds]); }}
           onPlayNext={() => { const ids = [...selectedIds]; exitSelect(); onPlayManyNext(ids); }}
+          onShare={() => { onShareMany([...selectedIds]); }}
           onBulkEdit={() => { onBulkEditMany([...selectedIds]); }}
           onRemoveFromPlaylist={activePlaylist
             ? () => { const ids = selectedIds; exitSelect(); removeManyFromPlaylist(ids); }

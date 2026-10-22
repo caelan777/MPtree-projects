@@ -1,6 +1,6 @@
 import React from "react";
 import type { T } from "../themes";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 
 type MultiSelectBarProps = {
@@ -12,6 +12,7 @@ type MultiSelectBarProps = {
   onShuffleSelection: () => void;
   onAddToPlaylist: () => void;
   onPlayNext: () => void;
+  onShare: () => void;
   onBulkEdit: () => void;
   /** Only inside a real playlist: take the songs out of it. Supplied there and
    *  nowhere else, which is what makes this bar serve both pages. */
@@ -24,7 +25,7 @@ type MultiSelectBarProps = {
 
 export function MultiSelectBar({
   count, totalCount, allLiked,
-  onLikeAll, onUnlikeAll, onShuffleSelection, onAddToPlaylist, onPlayNext, onBulkEdit,
+  onLikeAll, onUnlikeAll, onShuffleSelection, onAddToPlaylist, onPlayNext, onShare, onBulkEdit,
   onRemoveFromPlaylist,
   onSelectAll, onClearAll, onClose, T,
 }: MultiSelectBarProps) {
@@ -42,7 +43,7 @@ export function MultiSelectBar({
           <span style={{ fontWeight: "600" }}>{t("Cancel")}</span>
         </button>
         <div style={{ background: T.violet + "22", color: T.violet, borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: "700" }}>
-          {count} selected
+          {tn(count, "{n} selected", "{n} selected")}
         </div>
         <button onClick={allSelected ? onClearAll : onSelectAll} style={{ background: "transparent", border: "none", color: T.violet, cursor: "pointer", fontSize: 13, fontWeight: "700", padding: "4px 0", fontFamily: "inherit" }}>
           {allSelected ? t("Deselect all") : t("Select all")}
@@ -61,10 +62,11 @@ export function MultiSelectBar({
             gear, where the count used to sit, so the one destructive action in
             this mode is not sitting in the same row as four harmless ones. */}
         <Chip disabled={count === 0} onClick={onPlayNext} T={T}><IC.PlayNext />{t("Play next")}</Chip>
+        <Chip disabled={count === 0} onClick={onShare} T={T}><IC.Share />{t("Share")}</Chip>
         <Chip disabled={count === 0} onClick={onBulkEdit} T={T}><IC.Edit />{t("Edit")}</Chip>
         {onRemoveFromPlaylist && (
           <Chip disabled={count === 0} onClick={onRemoveFromPlaylist} T={T}>
-            <IC.MinusCircle />Remove from playlist
+            <IC.MinusCircle />{t("Remove from playlist")}
           </Chip>
         )}
       </div>

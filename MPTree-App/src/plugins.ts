@@ -92,6 +92,10 @@ export type SystemPlugin = {
   startPlayUpdate(): Promise<void>;
   /** Which launcher icon is switched on: "classic", "light", "vinyl" or "stamp". */
   getAppIcon(): Promise<{ icon: string }>;
+  /** Google Play's own review card, over the app. Resolves whether Play
+   *  could be asked; whether the card was shown, or what was given, is not
+   *  told (Play keeps that to itself). */
+  askReview(): Promise<{ asked: boolean }>;
   /** Switches the launcher icon. Android may take a few seconds to redraw the
    *  home screen, and some launchers move the icon to the app drawer. */
   setAppIcon(options: { icon: string }): Promise<void>;
@@ -166,6 +170,7 @@ const SystemWeb: SystemPlugin = {
   checkPlayUpdate:   async () => ({ available: false }),
   startPlayUpdate:   async () => {},
   getAppIcon:        async () => ({ icon: "classic" }),
+  askReview:         async () => ({ asked: false }),
   setAppIcon:        async () => {},
   pinPhotoShortcut:  async () => ({ supported: false }),
 };

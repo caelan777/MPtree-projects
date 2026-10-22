@@ -26,6 +26,8 @@ import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
 import com.google.android.play.core.appupdate.AppUpdateOptions;
 import com.google.android.play.core.install.model.AppUpdateType;
 import com.google.android.play.core.install.model.UpdateAvailability;
+import com.google.android.play.core.review.ReviewManager;
+import com.google.android.play.core.review.ReviewManagerFactory;
 
 /**
  * The phone around the app, as opposed to the music in it: which phone this is,
@@ -151,7 +153,7 @@ public class SystemPlugin extends Plugin {
     // with its own icon. Exactly one is enabled; switching enables the new one
     // before disabling the old, so there is never a moment with no icon at all.
 
-    private static final String[] ICONS = { "classic", "light", "vinyl", "stamp" };
+    private static final String[] ICONS = { "classic", "light", "vinyl", "stamp", "aviela", "lantern" };
 
     private ComponentName iconAlias(String icon) {
         String cls = "Icon" + Character.toUpperCase(icon.charAt(0)) + icon.substring(1);
@@ -173,6 +175,25 @@ public class SystemPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("icon", on);
         call.resolve(ret);
+    }
+
+    /** Google Play's review card, over the app. Play decides whether it is
+     *  really shown, and never says what was given. */
+    @PluginMethod
+    public void askReview(PluginCall call) {
+        try {
+            ReviewManager manager = ReviewManagerFactory.create(getContext());
+            manager.requestReviewFlow().addOnCompleteListener(request -> {
+                if (!request.isSuccessful() || getActivity() == null) {
+                    JSObject r = new JSObject(); r.put("asked", false); call.resolve(r); return;
+                }
+                manager.launchReviewFlow(getActivity(), request.getResult()).addOnCompleteListener(done -> {
+                    JSObject r = new JSObject(); r.put("asked", true); call.resolve(r);
+                });
+            });
+        } catch (Exception e) {
+            JSObject r = new JSObject(); r.put("asked", false); call.resolve(r);
+        }
     }
 
     @PluginMethod

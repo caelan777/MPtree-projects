@@ -13,8 +13,9 @@ import { Preferences } from "@capacitor/preferences";
 
 /** The records of the Aviela style, drawn in flowers.ts. */
 export const FLOWER_RECORDS = ["lily", "daisy", "bloom", "blossom", "lines", "wreath", "petals", "ditsy", "bouquet", "dahlia", "oxeye", "night", "branch", "posy"] as const;
-export type FlowerRecord = typeof FLOWER_RECORDS[number];
-export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS as readonly string[]).includes(v);
+/** "own" is the record they made themselves (OwnFlowers). */
+export type FlowerRecord = typeof FLOWER_RECORDS[number] | "own";
+export const isFlowerRecord = (v: string): v is FlowerRecord => v === "own" || (FLOWER_RECORDS as readonly string[]).includes(v);
 /** The records of the Lantern style, drawn in lantern.ts. */
 export const LANTERN_RECORDS = ["lantern", "lantern-rings", "lantern-core", "lantern-dash", "lantern-solid", "lantern-burst"] as const;
 export type LanternRecord = typeof LANTERN_RECORDS[number];
@@ -22,13 +23,45 @@ export const isLanternRecord = (v: string): v is LanternRecord => (LANTERN_RECOR
 export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | LanternRecord | FlowerRecord;
 /** How the app itself wears flowers: not at all, or one of Aviela's ways. */
 export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
-export type AvielaFlowers = typeof FLOWER_KINDS[number];
+/** "own" is the flowers they placed on the app themselves (OwnFlowers). */
+export type AvielaFlowers = typeof FLOWER_KINDS[number] | "own";
+const isAvielaFlowers = (v: string): v is AvielaFlowers => v === "own" || (FLOWER_KINDS as readonly string[]).includes(v);
+
+// ─── Aviela, made your own ───────────────────────────────────────────────────
+// Every flower of Aviela's, one at a time, placed, sized and turned by hand:
+// once on a record, once on the app. Small enough to sync with the rest.
+
+/** The flowers there are to place. Drawn in flowers.ts (stampArt). */
+export const STAMPS = ["rose", "pink", "petal", "white", "daisy", "lily", "dahlia", "bloom", "line", "night", "leaf", "bud"] as const;
+export type Stamp = typeof STAMPS[number];
+/** One flower: which, where (0 to 1 across and down), how large (its width as
+ *  a share of the whole width) and how far turned, in degrees. */
+export type OwnItem = { f: Stamp; x: number; y: number; s: number; r: number };
+/** What the record is under the flowers. */
+export const OWN_GROUNDS = ["pink", "blush", "white", "ink"] as const;
+export type OwnGround = typeof OWN_GROUNDS[number];
+export type OwnFlowers = { record: OwnItem[]; ground: OwnGround; app: OwnItem[] };
+/** More than this and it is a pattern, not a picture, and slow to draw. */
+export const OWN_MAX = 40;
+export const OWN_SIZE = { min: 0.04, max: 0.7 } as const;
+
+function cleanItems(v: unknown): OwnItem[] {
+  if (!Array.isArray(v)) return [];
+  const n = (x: unknown, lo: number, hi: number, d: number) => (typeof x === "number" && isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
+  return v.filter(i => i && (STAMPS as readonly string[]).includes(i.f)).slice(0, OWN_MAX)
+    .map(i => ({ f: i.f as Stamp, x: n(i.x, 0, 1, 0.5), y: n(i.y, 0, 1, 0.5), s: n(i.s, OWN_SIZE.min, OWN_SIZE.max, 0.2), r: n(i.r, -360, 360, 0) }));
+}
+function cleanOwn(v: unknown): OwnFlowers {
+  const o = (v ?? {}) as Partial<OwnFlowers>;
+  return { record: cleanItems(o.record), app: cleanItems(o.app), ground: (OWN_GROUNDS as readonly string[]).includes(o.ground as string) ? o.ground as OwnGround : "pink" };
+}
 /** What Aviela draws on the app, or nothing. */
 export type Flowers    = "none" | AvielaFlowers;
 export type DarkShade  = "classic" | "graphite" | "lantern";
 /** "lantern" is only ever a header card: the green one on the Lantern page. */
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage" | "lantern";
-export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
+export const APP_ICONS = ["classic", "light", "vinyl", "stamp", "aviela", "lantern"] as const;
+export type AppIcon    = typeof APP_ICONS[number];
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
@@ -55,7 +88,7 @@ export type Look = {
   flowers: Flowers;
   /** What was last picked on the Aviela page, so coming back to the style
    *  brings back the same record, the same flowers and the same header card. */
-  aviela: { record: FlowerRecord; flowers: AvielaFlowers; card: CardShade };
+  aviela: { record: FlowerRecord; flowers: AvielaFlowers; card: CardShade; own: OwnFlowers };
   /** And the same for the Lantern page: its record, its header card and the
    *  colour of the app under them. */
   lantern: { record: LanternRecord; card: CardShade; colour: AppColour };
@@ -67,7 +100,7 @@ export type Look = {
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
-  flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
+  flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic", own: { record: [], ground: "pink", app: [] } },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
 };
 
@@ -126,10 +159,10 @@ export async function loadLook(): Promise<Look> {
         if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k]) && !isLanternRecord(look[k])) look = { ...look, [k]: "classic" };
       }
       // Test build 38 had light on the card for Lantern; that is gone.
-      if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
+      if (look.flowers !== "none" && !isAvielaFlowers(look.flowers)) look = { ...look, flowers: "none" };
       // Test build 35 had two kinds that are gone, and no card of Aviela's own.
-      look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, ...look.aviela } };
-      if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
+      look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, ...look.aviela, own: cleanOwn(look.aviela?.own) } };
+      if (!isFlowerRecord(look.aviela.record) || !isAvielaFlowers(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, own: look.aviela.own } };
       {
         const l = { ...DEFAULT_LOOK.lantern, ...look.lantern };
         const ok = isLanternRecord(l.record) && LANTERN_CARDS.includes(l.card);
@@ -147,6 +180,7 @@ export async function loadLook(): Promise<Look> {
         if (String(look[k]) === "dark:amoled") look = { ...look, [k]: "dark:classic" };
         if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
       }
+      if (!(APP_ICONS as readonly string[]).includes(look.icon)) look = { ...look, icon: "classic" };
       // The first test build had one card skin (glass, line...) for both modes.
       if (typeof look.cardDark !== "string" || !/^(default|dark:|light:)/.test(look.cardDark)) look = { ...look, cardDark: "default" };
       if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };
@@ -204,7 +238,7 @@ export function hasLookChanges(): boolean {
 /** Whether a look is made of free things only, so it can be kept without Pro. */
 export function isFreeLook(l: Look): boolean {
   return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
-    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none";
+    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon;
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────

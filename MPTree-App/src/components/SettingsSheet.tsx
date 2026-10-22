@@ -21,7 +21,6 @@ const Svg = ({ children }: { children: ReactNode }) => (
 );
 
 const DownloadIcon = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></Svg>;
-const UploadIcon   = () => <Svg><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></Svg>;
 const GlobeIcon    = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></Svg>;
 const BellIcon     = () => <Svg><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></Svg>;
 const TextIcon     = () => <Svg><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></Svg>;
@@ -62,7 +61,14 @@ function Row({ icon, label, sub, right, onClick, first, T }: {
   );
 }
 
+/** On something that needs Pro. Where an ad unlocks a day of it, it says so:
+ *  "free with an ad" asks less of someone than "Pro" does. */
 function ProTag({ T }: { T: T }) {
+  if (ADS_ON) return (
+    <span style={{ fontSize: 11, fontWeight: 700, color: T.playBtnFg, background: T.accent, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }}>
+      {t("Free with an ad")}
+    </span>
+  );
   return (
     <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: T.playBtnFg, background: T.accent, borderRadius: 5, padding: "2px 6px" }}>
       PRO
@@ -96,10 +102,8 @@ type SettingsSheetProps = {
   onOpenAudioEffects: () => void;
   /** Re-runs the first-launch spotlight tour. */
   onShowTutorial: () => void;
-  /** Opens the pre-export info sheet */
-  onExport: () => void;
-  /** Opens the pre-import info sheet */
-  onImportOpen: () => void;
+  /** Backup & restore: asks which of the two. */
+  onBackup: () => void;
   /** Opens the support/tip page in the browser. */
   // ── Sleep timer ──
   /** Absolute epoch-ms deadline for a fixed-clock sleep timer, or null. */
@@ -133,7 +137,7 @@ export function SettingsSheet({
   hidden, binCount,
   pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
   onViewBin, onOpenAudioEffects, onShowTutorial,
-  onExport, onImportOpen,
+  onBackup,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
   uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, onSetMix,
@@ -295,7 +299,7 @@ export function SettingsSheet({
             onClick={onOpenLook}
             icon={<BrushIcon />}
             label={t("Personalise")}
-            sub={t("Styles, shades, header card and record.")}
+            sub={t("Styles, your own background, colours, icon and record.")}
             right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
           {/* Size: text and rows together. One control rather than two: a
@@ -435,9 +439,8 @@ export function SettingsSheet({
           />
         </Section>
 
-        <Section T={T} title={t("Backup & Restore")}>
-          <Row T={T} first onClick={onExport} icon={<DownloadIcon />} label={t("Export backup")} />
-          <Row T={T} onClick={onImportOpen} icon={<UploadIcon />} label={t("Restore backup")} />
+        <Section T={T} title={t("Backup")}>
+          <Row T={T} first onClick={onBackup} icon={<DownloadIcon />} label={t("Backup & restore")} sub={t("Make a backup, or put one back.")} />
         </Section>
 
         <Section T={T} title={t("Help")}>

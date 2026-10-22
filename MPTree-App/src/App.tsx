@@ -41,6 +41,8 @@ import {
   prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
+import { startReview, reviewSongPlayed } from "./review";
+import { useBackground, loadBackground } from "./background";
 import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
 import { usePro, loadPro } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
@@ -506,6 +508,7 @@ export default function App() {
     // Held until the library is up, so the very first launch is not competing
     // with the scan and the permission dialog.
     if (!libraryReady) return;
+    startReview();
     let cancelled = false;
     const t = setTimeout(() => {
       const check = __DISTRIBUTION__ === "play"
@@ -760,7 +763,7 @@ export default function App() {
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
-  useEffect(() => { loadLook(); loadPro(); }, []);
+  useEffect(() => { loadLook(); loadBackground(); loadPro(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
@@ -777,6 +780,9 @@ export default function App() {
     return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
   };
   const TH = tinted(paletteFor(theme, look.dark, look.light));
+  // What the style draws on the ground: Aviela's flowers or Lantern's light.
+  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
+  const background = useBackground();
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -1416,6 +1422,7 @@ export default function App() {
       statsMetaRef.current = next;
       return next;
     })), 1500);
+    void reviewSongPlayed();
   };
 
   const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
@@ -2537,6 +2544,29 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta]);
 
+  /** Several songs in one go, from multi-select. A cut kept in MPTree only is
+   *  a stretch of another file, so it has no file of its own to send. */
+  const SHARE_MAX = 50;
+  const shareSongs = useCallback(async (ids: string[]) => {
+    const picked = ids.map(id => songsRef.current.find(s => s.id === id)).filter((s): s is Song => !!s);
+    const files = picked.filter(s => !s.isCut);
+    const skipped = picked.length - files.length;
+    if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
+    if (files.length > SHARE_MAX) { showToast(tn(SHARE_MAX, "Share at most {n} song at a time.", "Share at most {n} songs at a time.")); return; }
+    try {
+      await Share.share({
+        title: tn(files.length, "{n} song", "{n} songs"),
+        files: files.map(s => toFileUri(s.uri)),
+        dialogTitle: t("Share songs"),
+      });
+      if (skipped) showToast(tn(skipped, "{n} cut kept in MPTree only was left out.", "{n} cuts kept in MPTree only were left out."));
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Playlists ─────────────────────────────────────────────────────────────
   const handlePlaylistsChange = useCallback((updated: Playlist[]) => {
     setPlaylists(updated);
@@ -3240,7 +3270,15 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ backgroundColor: TH.bg, ...(styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers)), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative" }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...(background.photo ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+        {/* Their own photo, under a veil of the app's colour, and Aviela's
+            flowers or Lantern's light over both. Behind everything else in
+            the app: the shell is its own layer, so -1 is still inside it. */}
+        {background.photo && <>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${background.photo}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundColor: TH.bg, opacity: 1 - background.strength }} />
+          <div aria-hidden="true" data-ground style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
+        </>}
 
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
         {/* Everything up top lives in one rounded card that floats ABOVE the
@@ -3278,7 +3316,7 @@ export default function App() {
           {/* Aviela's flowers, behind what the card holds. Laid over the card,
               not in it, so its measured height is untouched. */}
           {[cardFlowers(look.flowers, flowerTone), cornerFlowers(look.flowers, flowerTone)].map((layer, i) => layer && (
-            <div key={i} aria-hidden="true" style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
+            <div key={i} aria-hidden="true" data-ground style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
           ))}
           {/* Full header. Kept mounted and at its natural width while collapsed
               (just clipped) so it never reflows — a reflow would corrupt the
@@ -4035,6 +4073,7 @@ export default function App() {
               onLikeMany={likeMany}
               onShuffleMany={shuffleMany}
               onPlayManyNext={handlePlayManyNext}
+              onShareMany={ids => { void shareSongs(ids); }}
               onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
               onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
               onCutSong={(song) => openCutSheet(song)}
@@ -4134,6 +4173,7 @@ export default function App() {
             onLikeAll={() => multiLikeWithMeta(true)} onUnlikeAll={() => multiLikeWithMeta(false)}
             onShuffleSelection={multiShuffleSelection}
             onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
+            onShare={() => { void shareSongs([...selected]); }}
             onBulkEdit={() => { setMultiIds([...selected]); setBulkEditOpen(true); }}
             onAddToPlaylist={() => { setMultiIds([...selected]); setMultiAddOpen(true); }}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
@@ -4228,8 +4268,7 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onExport={handleExportOpen}
-            onImportOpen={handleImportOpen}
+            onBackup={() => setBackupSheet({ kind: "choose" })}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4390,6 +4429,7 @@ export default function App() {
           onShare={handleShareBackup}
           onDone={doneBackupSheet}
           onOpenImportPicker={handleOpenImportPicker}
+          onChoose={what => (what === "export" ? handleExportOpen() : handleImportOpen())}
           onClose={closeBackupSheet}
           T={TH}
         />
