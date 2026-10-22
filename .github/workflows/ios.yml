@@ -1,0 +1,70 @@
+# The iPhone app, built on one of GitHub's Macs (free for a public repo).
+#
+# It comes out unsigned, as MPTree.ipa attached to the run. Sideloadly signs
+# it with an Apple ID when it is put on the iPhone: see docs/ios.md.
+#
+# Runs on every push to the ios branch that touches the app, and by hand
+# (Actions, "iPhone build", Run workflow) once this file is on main too.
+name: iPhone build
+
+on:
+  push:
+    branches: [ios]
+    paths: [MPTree-App/**, .github/workflows/ios.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: MPTree-App
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: MPTree-App/package-lock.json
+
+      - name: Web app
+        run: |
+          npm ci
+          npm run build:ios
+
+      # Also rewrites ios/App/CapApp-SPM/Package.swift with this Mac's paths
+      # (a sync on Windows writes them with backslashes).
+      - name: Copy it into the iOS project
+        run: npx cap sync ios
+
+      - name: Build
+        run: |
+          xcodebuild -list -project ios/App/App.xcodeproj
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Make MPTree.ipa
+        run: |
+          mkdir -p ipa/Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app ipa/Payload/
+          cd ipa && zip -qr ../MPTree.ipa Payload
+          ls -l ../MPTree.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MPTree-iPhone-${{ github.run_number }}
+          path: MPTree-App/MPTree.ipa
+          retention-days: 30

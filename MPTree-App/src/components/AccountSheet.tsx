@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Capacitor } from "@capacitor/core";
+import { SIGN_IN_HERE } from "../plugins";
 import { makeSH, pageGround, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
@@ -58,7 +58,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 20_000); return () => clearInterval(id); }, []);
 
-  const native = Capacitor.getPlatform() !== "web" || import.meta.env.DEV;
+  const native = SIGN_IN_HERE;
 
   const doSignIn = async () => {
     const had = pro;

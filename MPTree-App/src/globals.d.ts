@@ -3,11 +3,13 @@ declare const __APP_VERSION__: string;
 /**
  * Which channel this build is for, set by the build mode (see vite.config.ts):
  * "web" is the APK from mp-tree.net, "play" the Play Store build, "demo" the
- * in-browser copy on the website. Only "web" checks for updates.
+ * in-browser copy on the website, "appstore" the iPhone build. Only "web"
+ * checks for updates.
  */
-declare const __DISTRIBUTION__: "web" | "play" | "demo";
+declare const __DISTRIBUTION__: "web" | "play" | "demo" | "appstore";
 /**
- * True only in the test build (npm run build:test): Pro unlocks with a tap and
- * can be locked again, so it can be tried before anything is on sale.
+ * True only in the test builds (npm run build:test, and the iPhone build while
+ * it is sideloaded): Pro unlocks with a tap and can be locked again, so it can
+ * be tried before anything is on sale.
  */
 declare const __PRO_TEST__: boolean;

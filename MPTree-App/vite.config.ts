@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => ({
   define: {
     // The test build says so in Settings, so a screenshot of it is never
     // mistaken for a release.
-    __APP_VERSION__: JSON.stringify(mode === 'test' ? pkg.version + ' (Pro test)' : pkg.version),
+    __APP_VERSION__: JSON.stringify(mode === 'test' ? pkg.version + ' (Pro test)' : mode === 'ios' ? pkg.version + ' (iPhone test)' : pkg.version),
     // Which channel this build is for. Only "web" — the APK handed out by
     // mp-tree.net — is allowed to tell the user about a newer version on the
     // website; Google Play forbids an app it distributes from steering users to
@@ -47,12 +47,14 @@ export default defineConfig(({ mode }) => ({
     //   npm run build:play    → play  (the Play Store AAB)
     //   npm run build:demo    → demo  (the try-it-in-your-browser copy on the
     //                                  website, which has nothing to update)
+    //   npm run build:ios     → appstore (the iPhone build, see docs/ios.md)
     //
     // Driven by --mode rather than an environment variable so it works the same
     // in PowerShell, cmd and bash.
-    __DISTRIBUTION__: JSON.stringify(mode === 'play' || mode === 'demo' ? mode : 'web'),
+    __DISTRIBUTION__: JSON.stringify(mode === 'play' || mode === 'demo' ? mode : mode === 'ios' ? 'appstore' : 'web'),
     // The Pro test build (npm run build:test) is the website build with Pro
-    // free to unlock and lock again. See src/pro.ts.
-    __PRO_TEST__: JSON.stringify(mode === 'test'),
+    // free to unlock and lock again. See src/pro.ts. The iPhone build does the
+    // same while it is sideloaded: it cannot sell anything yet.
+    __PRO_TEST__: JSON.stringify(mode === 'test' || mode === 'ios'),
   },
 }))

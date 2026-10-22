@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Capacitor } from "@capacitor/core";
+import { SIGN_IN_HERE } from "../plugins";
 import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
@@ -39,7 +39,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const [film, setFilm] = useState(false);
   // Pro is kept in the MPTree account, so buying starts with signing in. Not
   // in a browser, where there is no signing in (the demo buys straight away).
-  const needSignIn = phase !== "on" && (Capacitor.getPlatform() !== "web" || import.meta.env.DEV);
+  const needSignIn = phase !== "on" && SIGN_IN_HERE;
   const joining = busy === "signin" || phase === "joining";
 
   useEffect(() => {

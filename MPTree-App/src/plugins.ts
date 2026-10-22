@@ -223,32 +223,43 @@ const SyncWeb: SyncPlugin = {
   addListener:  async () => ({ remove() {} }),
 };
 
-const isWeb = Capacitor.getPlatform() === "web";
+const platform = Capacitor.getPlatform();
+const isWeb = platform === "web";
 
-export const MusicScanner: MusicScannerPlugin = isWeb
-  ? (new MusicScannerWeb() as unknown as MusicScannerPlugin)
-  : registerPlugin<MusicScannerPlugin>("MusicScanner");
+/** The iPhone version. Its Swift plugins (ios/App/App/) arrive one at a time;
+ *  until one is in, the stand-in answers for it, as in the browser. Android
+ *  has every plugin. */
+export const IS_IOS = platform === "ios";
+const native = (name: string) => platform === "android" || (IS_IOS && Capacitor.isPluginAvailable(name));
 
-export const AudioPlayer: AudioPlayerPlugin = isWeb
-  ? (new AudioPlayerWeb() as unknown as AudioPlayerPlugin)
-  : registerPlugin<AudioPlayerPlugin>("AudioPlayer");
+/** Whether signing in to an MPTree account can work here: the native Google
+ *  sign-in, or the dev server's stand-in account. */
+export const SIGN_IN_HERE = isWeb ? import.meta.env.DEV : native("Account");
 
-export const System: SystemPlugin = isWeb
-  ? SystemWeb
-  : registerPlugin<SystemPlugin>("System");
+export const MusicScanner: MusicScannerPlugin = native("MusicScanner")
+  ? registerPlugin<MusicScannerPlugin>("MusicScanner")
+  : (new MusicScannerWeb() as unknown as MusicScannerPlugin);
 
-export const Billing: BillingPlugin = isWeb
-  ? BillingWeb
-  : registerPlugin<BillingPlugin>("Billing");
+export const AudioPlayer: AudioPlayerPlugin = native("AudioPlayer")
+  ? registerPlugin<AudioPlayerPlugin>("AudioPlayer")
+  : (new AudioPlayerWeb() as unknown as AudioPlayerPlugin);
 
-export const Ads: AdsPlugin = isWeb
-  ? AdsWeb
-  : registerPlugin<AdsPlugin>("Ads");
+export const System: SystemPlugin = native("System")
+  ? registerPlugin<SystemPlugin>("System")
+  : SystemWeb;
 
-export const Account: AccountPlugin = isWeb
-  ? AccountWeb
-  : registerPlugin<AccountPlugin>("Account");
+export const Billing: BillingPlugin = native("Billing")
+  ? registerPlugin<BillingPlugin>("Billing")
+  : BillingWeb;
 
-export const Sync: SyncPlugin = isWeb
-  ? SyncWeb
-  : registerPlugin<SyncPlugin>("Sync");
+export const Ads: AdsPlugin = native("Ads")
+  ? registerPlugin<AdsPlugin>("Ads")
+  : AdsWeb;
+
+export const Account: AccountPlugin = native("Account")
+  ? registerPlugin<AccountPlugin>("Account")
+  : AccountWeb;
+
+export const Sync: SyncPlugin = native("Sync")
+  ? registerPlugin<SyncPlugin>("Sync")
+  : SyncWeb;

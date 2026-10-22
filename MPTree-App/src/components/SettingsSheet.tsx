@@ -7,7 +7,7 @@ import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
 import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON } from "../pro";
-import { Ads } from "../plugins";
+import { Ads, IS_IOS, SIGN_IN_HERE } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
 
@@ -278,7 +278,8 @@ export function SettingsSheet({
           </button>
         </div>
 
-        <Section T={T} title={t("Account")}>
+        {/* On the iPhone the account waits for its native Google sign-in. */}
+        {(!IS_IOS || SIGN_IN_HERE) && <Section T={T} title={t("Account")}>
           <Row T={T}
             first
             onClick={onOpenAccount}
@@ -289,7 +290,7 @@ export function SettingsSheet({
               : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
             right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
           />
-        </Section>
+        </Section>}
 
         <Section T={T} title={t("Appearance")}>
           {/* Dark or light is not picked here any more: a colour under
