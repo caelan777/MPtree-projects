@@ -65,7 +65,8 @@ import {
 } from "./storage";
 import type { BackupData } from "./storage";
 
-import { MusicScanner, AudioPlayer, System } from "./plugins";
+import { MusicScanner, AudioPlayer, System, IS_IOS } from "./plugins";
+import { MusicFoldersSheet } from "./components/IosLibrary";
 import { checkForUpdate, checkForPlayUpdate, dismissUpdate, NOTICES_KEY, type UpdateInfo } from "./updateCheck";
 
 
@@ -172,6 +173,9 @@ export default function App() {
   const [filterOpen,     setFilterOpen]    = useState(false);
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
+  // iPhone only: the Music folders sheet, and whether the Music library is on.
+  const [foldersOpen,    setFoldersOpen]   = useState(false);
+  const [musicLibraryOn, setMusicLibraryOn] = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
@@ -854,7 +858,10 @@ export default function App() {
     try {
       const [r, persistedCuts] = await Promise.all([MusicScanner.scan(), loadCutTracks()]);
       setPermissionDenied(false);
-      const scannedWithIds: Song[] = r.songs.map((s: Song) => ({ ...s, id: s.uri }));
+      // The path is the id, except where native gives one of its own: on the
+      // iPhone the app's folder moves with every update, so it sends ids that
+      // do not (MusicScannerPlugin.swift).
+      const scannedWithIds: Song[] = r.songs.map((s: Song) => ({ ...s, id: s.id || s.uri }));
       const currentRemoved = removedList ?? removedRef.current;
       const blocked = new Set(currentRemoved.map((s: Song) => s.id));
       const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
@@ -879,6 +886,31 @@ export default function App() {
   const openAppSettings = useCallback(() => {
     MusicScanner.openAppSettings().catch(() => {});
   }, []);
+
+  // ── The iPhone: Add songs, Music folders, the Music library ──────────────
+  // An iPhone app cannot look through the phone for music, so these are the
+  // ways in (MusicScannerPlugin.swift). Each one scans again when it is done.
+  useEffect(() => {
+    if (!IS_IOS) return;
+    MusicScanner.musicLibrary?.().then(r => setMusicLibraryOn(r.on)).catch(() => {});
+  }, []);
+  const addSongs = useCallback(async () => {
+    try {
+      const r = await MusicScanner.addSongs!();
+      if (r.added) {
+        showToast(tn(r.added, "{n} song added", "{n} songs added"));
+        scanMusic();
+      }
+    } catch { showToast(t("Those songs could not be added.")); }
+  }, [scanMusic]);
+  const toggleMusicLibrary = useCallback(async () => {
+    try {
+      const r = await MusicScanner.musicLibrary!({ on: !musicLibraryOn });
+      setMusicLibraryOn(r.on);
+      if (r.denied) showToast(t("Not allowed. In the iPhone's Settings, open MPTree and allow Media & Apple Music."));
+      scanMusic();
+    } catch { /* it stays as it was */ }
+  }, [musicLibraryOn, scanMusic]);
 
   // `session`: what was saved when the app was last on screen. On a cold start
   // over music that kept playing (the app was swiped away, the service played
@@ -2508,7 +2540,7 @@ export default function App() {
         artist: song.artist,
         duration: res.duration || (endMs - startMs),
         dateAdded: Date.now(),
-        id: res.uri,          // real file → use its path as the stable id
+        id: res.id || res.uri, // real file → its path, or native's own id (iPhone)
         isCut: false,
       };
       setSongs(prev => {
@@ -2724,6 +2756,7 @@ export default function App() {
       // The page asks before it throws unapplied changes away.
       if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
+      if (foldersOpen)         { setFoldersOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
       if (cutSong)             { setCutSong(null); return; }
@@ -3833,6 +3866,17 @@ export default function App() {
                   <IC.Heart filled={false} size={28} />
                   <div style={{ marginTop: 12 }}>{t("No songs found")}</div>
                   <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{isFavFilter ? t("Like songs by double-tapping them") : t("Pull down to refresh")}</div>
+                  {/* An empty iPhone library: show the way in. */}
+                  {IS_IOS && libraryReady && songs.length === 0 && (
+                    <>
+                      <button onClick={addSongs} style={{ marginTop: 18, background: TH.accent, color: TH.playBtnFg, border: "none", borderRadius: 20, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        {t("Add songs")}
+                      </button>
+                      <div style={{ fontSize: 12.5, marginTop: 10, opacity: 0.7, maxWidth: 280, textAlign: "center", lineHeight: 1.45 }}>
+                        {t("Or put songs in the MPTree folder in the Files app, or give MPTree a folder in Settings.")}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
@@ -4249,6 +4293,7 @@ export default function App() {
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
             onViewBin={() => setBinOpen(true)}
+            ios={IS_IOS ? { onAddSongs: addSongs, onFolders: () => setFoldersOpen(true), libraryOn: musicLibraryOn, onToggleLibrary: toggleMusicLibrary } : undefined}
             onOpenAudioEffects={openEQSheet}
             onShowTutorial={() => {
               setSettingsOpen(false);
@@ -4377,6 +4422,10 @@ export default function App() {
             onEntered={() => { setWelcome(null); startTutorial(300); }}
             T={TH}
           />
+        )}
+
+        {foldersOpen && (
+          <MusicFoldersSheet onClose={() => setFoldersOpen(false)} onChanged={() => { scanMusic(); }} T={TH} />
         )}
 
         {binOpen && (

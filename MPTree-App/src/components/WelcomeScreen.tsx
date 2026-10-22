@@ -5,6 +5,7 @@ import { Logo } from "./Logo";
 import { Switch } from "./Switch";
 import { LanguageSheet } from "./LanguageSheet";
 import { IC } from "./Icons";
+import { IS_IOS } from "../plugins";
 
 export type MusicAccess = "unasked" | "asking" | "allowed" | "denied";
 
@@ -125,7 +126,9 @@ export function WelcomeScreen({
               <span style={{ flex: 1 }}>
                 <span style={{ fontSize: 15.5, fontWeight: 600 }}>{t("Your music")}</span>
                 <span style={sub}>
-                  {music === "denied"
+                  {IS_IOS
+                    ? t("MPTree plays the songs in its folder in the Files app. In Settings you can add songs, folders and your Music library.")
+                    : music === "denied"
                     ? t("Not allowed yet. Open Settings, then Permissions > Music and audio > Allow.")
                     : t("MPTree needs to read the audio files on your phone. Nothing leaves it.")}
                 </span>

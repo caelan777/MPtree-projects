@@ -15,6 +15,10 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		A5FE40CEA5AD160775B788AB /* AudioPlayerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8765746520E012E550BBFC8D /* AudioPlayerPlugin.swift */; };
+		17DEA351B81999D5DB4C3AA2 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF023ACC55C5B3172FD592A /* MainViewController.swift */; };
+		DFD156E71312E9CE6E5C065B /* MusicScannerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C7DCDC43DA3CB733E2DC11 /* MusicScannerPlugin.swift */; };
+		CDAF00542062B0A73B88E940 /* SystemPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7375E4484F6528A73A077C07 /* SystemPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +32,10 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		8765746520E012E550BBFC8D /* AudioPlayerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerPlugin.swift; sourceTree = "<group>"; };
+		ECF023ACC55C5B3172FD592A /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		E0C7DCDC43DA3CB733E2DC11 /* MusicScannerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicScannerPlugin.swift; sourceTree = "<group>"; };
+		7375E4484F6528A73A077C07 /* SystemPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +72,10 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				7375E4484F6528A73A077C07 /* SystemPlugin.swift */,
+				E0C7DCDC43DA3CB733E2DC11 /* MusicScannerPlugin.swift */,
+				ECF023ACC55C5B3172FD592A /* MainViewController.swift */,
+				8765746520E012E550BBFC8D /* AudioPlayerPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -156,6 +168,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				CDAF00542062B0A73B88E940 /* SystemPlugin.swift in Sources */,
+				DFD156E71312E9CE6E5C065B /* MusicScannerPlugin.swift in Sources */,
+				17DEA351B81999D5DB4C3AA2 /* MainViewController.swift in Sources */,
+				A5FE40CEA5AD160775B788AB /* AudioPlayerPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

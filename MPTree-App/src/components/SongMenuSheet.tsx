@@ -4,6 +4,7 @@ import { t } from "../i18n";
 import type { Song, Playlist } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
+import { IS_IOS } from "../plugins";
 
 // ─── SONG MENU SHEET ─────────────────────────────────────────────────────────
 // The per-song action menu, opened from the "⋮" button on a row. Replaces the
@@ -112,7 +113,8 @@ export function SongMenuSheet({
                 menu to do. The rest of the list is one-tap verbs; these three
                 open something. */}
             <div style={{ display: "flex", gap: 8, padding: "12px 20px 6px" }}>
-              <BigAction icon={<IC.Bell />}  label={t("Set as ringtone")} onClick={onSetRingtone} T={T} />
+              {/* An iPhone has no ringtones for apps to set. */}
+              {!IS_IOS && <BigAction icon={<IC.Bell />}  label={t("Set as ringtone")} onClick={onSetRingtone} T={T} />}
               <BigAction icon={<IC.Photo />} label={t("Photo")}    onClick={onChangePhoto} T={T} />
               <BigAction icon={<IC.Edit />}  label={t("Edit")}     onClick={onEdit}        T={T} />
             </div>

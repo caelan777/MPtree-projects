@@ -8,7 +8,7 @@ import { LanternGate } from "./LanternGate";
 import { StyleReveal } from "./StyleReveal";
 import { primeLanternVoice } from "../lanternVoice";
 import { usePro, ADS_ON } from "../pro";
-import { System } from "../plugins";
+import { System, IS_IOS } from "../plugins";
 import { MARK_PATH } from "./Logo";
 import { CropSheet } from "./CropSheet";
 import {
@@ -655,7 +655,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     ?? (avielaOn ? RECORD_NAMES[vinyl as FlowerRecord] : lanternOn ? LANTERN_RECORD_NAMES[vinyl as LanternRecord] : "") ?? "";
   const iconName = ICONS.find(i => i.id === look.icon)?.label ?? "";
   const dot = (s: React.CSSProperties) => <span style={{ width: 34, height: 34, borderRadius: "50%", display: "block", ...s }} />;
-  const choices: { id: Page; title: string; sub: string; art: ReactNode }[] = [
+  type Choice = { id: Page; title: string; sub: string; art: ReactNode };
+  const choices = ([
     {
       id: "background", title: t("Background"),
       sub: bg.photo ? t("Your photo, {n}%", { n: Math.round(bg.strength * 100) }) : t("None"),
@@ -679,7 +680,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     },
     { id: "icons", title: t("Icons"), sub: iconName, art: <IconArt icon={look.icon} size={34} /> },
     { id: "records", title: t("Records"), sub: recordName, art: <SpinningDisc size={36} skin={vinyl} /> },
-  ];
+  // The iPhone has no app icons to pick yet (SystemPlugin.swift).
+  ] as Choice[]).filter(c => !(IS_IOS && c.id === "icons"));
   const choiceRow = (c: typeof choices[number], i: number) => {
     const first = i === 0, last = i === choices.length - 1;
     return (

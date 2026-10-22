@@ -56,17 +56,25 @@ browser's stand-in until then, so the app runs from the first build on.
 
 | Plugin | iPhone |
 |---|---|
-| MusicScanner (songs) | stand-in: the demo library |
-| AudioPlayer | stand-in: plays in the web view, not on the lock screen |
-| System | stand-in |
+| MusicScanner (songs) | Swift: the MPTree folder in Files, Add songs, Music folders, the Music library, cuts, lyrics |
+| AudioPlayer | Swift: AVPlayer, background, lock screen, speed; no crossfade or equaliser yet |
+| System | Swift: device, links, text size; no app icons yet (Icons hidden in Personalise) |
 | Billing | stand-in (Pro unlocks with a tap) |
 | Ads | stand-in, none yet |
 | Account, Sync | stand-in; Account & sync hidden in Settings |
 
-The plan: `MusicScanner` with the MPTree folder in Files, Add songs, Music
-folders and the Music library; `AudioPlayer` on AVPlayer with background
-playback and the lock screen; then cuts, crossfade, app icons, the test ad
-day; then account and sync once an iOS OAuth client exists in Google Cloud.
+A Swift plugin is listed in `IOS_SWIFT` in `src/plugins.ts` and registered in
+`MainViewController.swift`. A new `.swift` file in `ios/App/App/` goes into the
+Xcode project with `node scripts/ios-sources.mjs`.
+
+Still to come: crossfade, app icons, the test ad day; then account and sync
+once an iOS OAuth client exists in Google Cloud.
+
+On the iPhone, songs come from: the MPTree folder in Files (always), Settings,
+Library, **Add songs** (copies files in), **Music folders** (any folder, read
+with everything inside, every time) and **Music library** (songs synced to the
+Music app, not Apple Music's own). Ids stay the same across updates
+(`docs/…`, `f<key>/…`, `lib/<id>`), so playlists and likes keep their songs.
 
 ## Building, for whoever works on it
 

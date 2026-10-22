@@ -32,7 +32,7 @@ export type MusicScannerPlugin = {
   // file in Music/MPTree and registers it with MediaStore. Rejects with code
   // "UNSUPPORTED_FORMAT" when the source codec can't be muxed losslessly.
   cutTrack(options: { path: string; startMs: number; endMs: number; name: string }):
-    Promise<{ uri: string; path: string | null; contentUri?: string; title: string; duration: number }>;
+    Promise<{ id?: string; uri: string; path: string | null; contentUri?: string; title: string; duration: number }>;
   // Opens this app's system settings page (App info), where the user can grant
   // the media permission after having denied it with "Don't ask again".
   openAppSettings(): Promise<void>;
@@ -45,6 +45,19 @@ export type MusicScannerPlugin = {
   // Lyrics from a sidecar file next to the audio (song.lrc / song.txt). Always
   // local: see the note in MusicScannerPlugin.getLyrics.
   getLyrics(options: { path: string }): Promise<{ lyrics: string; source?: string }>;
+
+  // iPhone only (MusicScannerPlugin.swift). An iPhone app cannot look through
+  // the phone for music, so songs come from MPTree's own folder in the Files
+  // app, from folders given to it, and from the Music library.
+  /** The Files picker; what is picked is copied into MPTree's folder. */
+  addSongs?(): Promise<{ added?: number; cancelled?: boolean }>;
+  /** Gives MPTree a folder to read for good, subfolders included. */
+  addFolder?(): Promise<{ key?: string; name?: string; cancelled?: boolean }>;
+  folders?(): Promise<{ folders: { key: string; name: string }[] }>;
+  removeFolder?(options: { key: string }): Promise<void>;
+  /** { on } switches the Music library on or off (asking Apple's permission
+   *  the first time); without it, says how it stands. */
+  musicLibrary?(options?: { on?: boolean }): Promise<{ on: boolean; denied?: boolean }>;
 };
 
 export type AudioPlayerPlugin = {
@@ -226,11 +239,12 @@ const SyncWeb: SyncPlugin = {
 const platform = Capacitor.getPlatform();
 const isWeb = platform === "web";
 
-/** The iPhone version. Its Swift plugins (ios/App/App/) arrive one at a time;
- *  until one is in, the stand-in answers for it, as in the browser. Android
- *  has every plugin. */
+/** The iPhone version. Its Swift plugins (ios/App/App/, registered in
+ *  MainViewController.swift) arrive one at a time; until one is in, the
+ *  stand-in answers for it, as in the browser. Android has every plugin. */
 export const IS_IOS = platform === "ios";
-const native = (name: string) => platform === "android" || (IS_IOS && Capacitor.isPluginAvailable(name));
+const IOS_SWIFT = ["MusicScanner", "AudioPlayer", "System"];
+const native = (name: string) => platform === "android" || (IS_IOS && IOS_SWIFT.includes(name));
 
 /** Whether signing in to an MPTree account can work here: the native Google
  *  sign-in, or the dev server's stand-in account. */

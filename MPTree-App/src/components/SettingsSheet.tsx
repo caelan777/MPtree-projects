@@ -10,6 +10,7 @@ import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON } from "../pro";
 import { Ads, IS_IOS, SIGN_IN_HERE } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
+import { FolderIcon, NoteIcon } from "./IosLibrary";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -98,6 +99,9 @@ type SettingsSheetProps = {
   /** How many probable non-songs the library holds, shown on the row. */
   cleanupCount: number;
   binCount: number;
+  /** The iPhone's ways in for songs (see components/IosLibrary.tsx). Only
+   *  there: Android reads the whole phone by itself. */
+  ios?: { onAddSongs: () => void; onFolders: () => void; libraryOn: boolean; onToggleLibrary: () => void };
   onViewBin: () => void;
   onOpenAudioEffects: () => void;
   /** Re-runs the first-launch spotlight tour. */
@@ -134,7 +138,7 @@ type SettingsSheetProps = {
 };
 
 export function SettingsSheet({
-  hidden, binCount,
+  hidden, binCount, ios,
   pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
   onViewBin, onOpenAudioEffects, onShowTutorial,
   onBackup,
@@ -413,8 +417,19 @@ export function SettingsSheet({
         </Section>
 
         <Section T={T} title={t("Library")}>
+          {ios && (
+            <>
+              <Row T={T} first onClick={ios.onAddSongs} icon={<IC.Plus />} label={t("Add songs")}
+                sub={t("Copied into the MPTree folder in the Files app.")} />
+              <Row T={T} onClick={ios.onFolders} icon={<FolderIcon />} label={t("Music folders")}
+                sub={t("Folders MPTree reads every time, like Downloads.")} />
+              <Row T={T} onClick={ios.onToggleLibrary} icon={<NoteIcon />} label={t("Music library")}
+                sub={t("Songs in the Music app that are stored on this iPhone.")}
+                right={<Switch on={ios.libraryOn} T={T} />} />
+            </>
+          )}
           <Row T={T}
-            first
+            first={!ios}
             onClick={onViewBin}
             icon={<IC.Bin />}
             label={t("Removed songs")}
