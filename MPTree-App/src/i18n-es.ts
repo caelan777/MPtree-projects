@@ -724,9 +724,7 @@ export const ES: Record<string, string> = {
   "Could not open the browser": "No se pudo abrir el navegador",
   "\"{name}\" is in your library": "\"{name}\" ya está en tu biblioteca",
   "{n} new songs are in your library": "{n} canciones nuevas en tu biblioteca",
-  "Get music, the legal way": "Consigue música, de forma legal",
-  "Got it": "Entendido",
-  "Tap it for the places to get music, free or paid. What you download shows up here by itself.": "Tócalo para ver dónde conseguir música, gratis o de pago. Lo que descargues aparece aquí solo.",
   "Only download music you have the right to. MPTree is not responsible for what you download from other websites.": "Descarga solo música sobre la que tengas derechos. MPTree no se hace responsable de lo que descargues de otras webs.",
   "Watch how it works": "Mira cómo funciona",
+  "Download and buy music legally here": "Descarga y compra música legal aquí",
 };

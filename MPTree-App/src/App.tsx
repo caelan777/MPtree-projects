@@ -50,7 +50,7 @@ import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { BackupSheet }      from "./components/BackupSheet";
-import { GetMusicSheet }    from "./components/GetMusicSheet";
+import { GetMusicSheet, GetMusicArrow } from "./components/GetMusicSheet";
 import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
 import type { Playlist, SmartPlaylist } from "./types";
 import { useMultiSelect } from "./hooks/useMultiSelect";
@@ -498,18 +498,17 @@ export default function App() {
       if (hiddenBeforeKnown.current && (!due || granted)) runLibraryScanRef.current?.();
     });
   }, []);
+  // ── The arrow at the + ────────────────────────────────────────────────────
+  // A big arrow at the + saying what it is for (GetMusicArrow). It comes right
+  // after the tour, and for everyone who had MPTree before the + came back, a
+  // moment after the library is up. Only on a calm screen (getMusicTipShown
+  // further down), and until the + or the arrow's own button is tapped once.
+  const [getMusicTip, setGetMusicTip] = useState(false);
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
-    // The tour has a step on the +, so it never needs pointing out again.
-    Preferences.set({ key: "mptree_getmusic_seen", value: "1" }).catch(() => {});
+    setGetMusicTip(true);
   }, []);
-
-  // ── The + for people who already had MPTree ───────────────────────────────
-  // New installs meet it in the tour. Everyone else gets its one step once,
-  // a moment after the library is up, and only on a calm screen (see
-  // getMusicTipShown further down).
-  const [getMusicTip, setGetMusicTip] = useState(false);
   useEffect(() => {
     if (!libraryReady || firstRunRef.current !== false) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -2759,9 +2758,9 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, likedKey, lastPlayedKey, playCountKey, langPref]);
 
-  // The one-off pointer at the + waits for a calm screen: the header open with
-  // the + in view, and nothing else asking for attention. Until then it simply
-  // stays pending.
+  // The arrow at the + waits for a calm screen: the header open with the + in
+  // view, and nothing else asking for attention. Until then it simply stays
+  // pending, and it steps aside again whenever something else opens.
   const getMusicTipShown = getMusicTip && libraryReady && !isInitializing
     && !showOnboarding && !welcome && page === "songs" && chromeOpen && !selectMode && !playlistSelecting
     && !settingsOpen && !binOpen && !cleanupOpen && !eqOpen && !proOpen && !lookOpen && !accountOpen
@@ -3463,7 +3462,7 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-            <button data-tour="plus" onClick={() => setGetMusicOpen(true)} aria-label={t("Get music")} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
+            <button data-tour="plus" onClick={() => { setGetMusicOpen(true); if (getMusicTip) dismissGetMusicTip(); }} aria-label={t("Get music")} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Plus />
             </button>
             <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
@@ -4581,7 +4580,7 @@ export default function App() {
           <OnboardingOverlay onDone={finishOnboarding} T={TH} />
         )}
         {getMusicTipShown && (
-          <OnboardingOverlay onlyGetMusic onDone={dismissGetMusicTip} T={TH} />
+          <GetMusicArrow onOpen={() => { setGetMusicOpen(true); dismissGetMusicTip(); }} onClose={dismissGetMusicTip} T={TH} />
         )}
 
         {/* ═══ LOADING SCREEN ══════════════════════════════════════════════

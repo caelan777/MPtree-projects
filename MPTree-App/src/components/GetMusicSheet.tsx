@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
@@ -135,6 +135,65 @@ export function GetMusicSheet({ onOpen, onClose, T }: Props) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── The arrow at the + ──────────────────────────────────────────────────────
+// A big arrow up at the + in the header, and under it what the + is for. The
+// arrow lets taps through to the list; the label opens Get music, the cross
+// only puts it away. App decides when it shows (getMusicTipShown).
+export function GetMusicArrow({ onOpen, onClose, T }: { onOpen: () => void; onClose: () => void; T: T }) {
+  const [plus, setPlus] = useState<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const r = document.querySelector('[data-tour="plus"]')?.getBoundingClientRect();
+      setPlus(r && r.width > 0 ? { x: r.left + r.width / 2, y: r.bottom } : null);
+    };
+    const frame = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", measure); };
+  }, []);
+  if (!plus) return null;
+
+  // The tip is at (96, 8) of the arrow's 110 x 150 box, just under the +; its
+  // tail ends at (16, 144), over the label, which sits under the header card.
+  const left = plus.x - 96, top = plus.y - 4;
+  const vw = window.innerWidth;
+  const labelW = Math.min(260, vw - 32);
+  const labelLeft = Math.max(16, Math.min(vw - 16, left + 16 + 60) - labelW);
+  return (
+    <div className="mp-arrow-in" style={{ position: "fixed", inset: 0, zIndex: 62, pointerEvents: "none" }}>
+      <style>{`
+        @keyframes mpArrowIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes mpArrowBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+        .mp-arrow-in { animation: mpArrowIn 0.35s ease both; }
+        .mp-arrow-bob { animation: mpArrowBob 1.6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .mp-arrow-in, .mp-arrow-bob { animation: none; } }
+      `}</style>
+      <svg className="mp-arrow-bob" width="110" height="150" viewBox="0 0 110 150" aria-hidden="true"
+        style={{ position: "absolute", left, top, overflow: "visible", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.18))" }}>
+        <path d="M16 144C14 90 44 40 96 8M96 8L74 8M96 8L86.2 27.7" fill="none" stroke={T.text} strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div style={{
+        position: "absolute", left: labelLeft, top: top + 154, width: labelW, boxSizing: "border-box",
+        display: "flex", alignItems: "center", gap: 6, pointerEvents: "auto",
+        background: T.accent, color: T.playBtnFg, borderRadius: 18, padding: "6px 6px 6px 4px",
+        boxShadow: "0 8px 28px rgba(0,0,0,0.28)",
+      }}>
+        <button onClick={onOpen} style={{
+          flex: 1, minWidth: 0, background: "transparent", border: "none", color: "inherit", cursor: "pointer",
+          textAlign: "left", fontFamily: "inherit", fontSize: 16, fontWeight: 700, lineHeight: 1.3, padding: "7px 0 7px 12px",
+        }}>
+          {t("Download and buy music legally here")}
+        </button>
+        <button onClick={onClose} aria-label={t("Close")} style={{
+          width: 32, height: 32, flexShrink: 0, borderRadius: 16, border: "none", cursor: "pointer",
+          background: "rgba(127,127,127,0.25)", color: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
     </div>
   );
 }

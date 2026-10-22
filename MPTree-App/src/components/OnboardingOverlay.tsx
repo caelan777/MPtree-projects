@@ -11,9 +11,6 @@ import { t } from "../i18n";
 
 interface Props {
   onDone: () => void;
-  /** Only the step on the +, for people who had MPTree before it came back.
-   *  Without it, the whole first-launch tour. */
-  onlyGetMusic?: boolean;
   T: T;
 }
 
@@ -29,14 +26,6 @@ interface Step {
    *  put the tip card). */
   pickRow?: boolean;
 }
-
-/** The + in the header. Also shown on its own, once, to people who had MPTree
- *  before the + came back. */
-const GET_MUSIC_STEP: Step = {
-  target: '[data-tour="plus"]',
-  title: "Get music, the legal way",
-  body: "Tap it for the places to get music, free or paid. What you download shows up here by itself.",
-};
 
 const STEPS: Step[] = [
   {
@@ -65,7 +54,6 @@ const STEPS: Step[] = [
     title: "Your playlists",
     body: "Tap here (or swipe the screen left) for your playlists, plus Favorites, Recently Played and Most Played, built automatically.",
   },
-  GET_MUSIC_STEP,
   {
     target: '[data-tour="settings"]',
     title: "Make it yours",
@@ -75,8 +63,7 @@ const STEPS: Step[] = [
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-export function OnboardingOverlay({ onDone, onlyGetMusic, T }: Props) {
-  const steps = onlyGetMusic ? [GET_MUSIC_STEP] : STEPS;
+export function OnboardingOverlay({ onDone, T }: Props) {
   // Straight into the first tip. There used to be a "Welcome to MPTree" card in
   // front of it, which after the first-launch welcome page was the same
   // greeting twice, and from Settings was a step between asking for the
@@ -89,9 +76,8 @@ export function OnboardingOverlay({ onDone, onlyGetMusic, T }: Props) {
   // vanish against the scrim).
   const spotlight = "#FFFFFF";
   const tipIndex = step;
-  const current = steps[tipIndex];
-  const isLast = tipIndex === steps.length - 1;
-  const single = steps.length === 1;
+  const current = STEPS[tipIndex];
+  const isLast = tipIndex === STEPS.length - 1;
 
   // Measure the current step's target. Re-measures on resize/orientation.
   useLayoutEffect(() => {
@@ -242,7 +228,7 @@ export function OnboardingOverlay({ onDone, onlyGetMusic, T }: Props) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
               {/* Progress dots */}
               <div style={{ display: "flex", gap: 6 }}>
-                {!single && steps.map((_, i) => (
+                {STEPS.map((_, i) => (
                   <div key={i} style={{
                     width: i === tipIndex ? 16 : 6, height: 6, borderRadius: 3,
                     background: i === tipIndex ? T.text : T.border,
@@ -267,7 +253,7 @@ export function OnboardingOverlay({ onDone, onlyGetMusic, T }: Props) {
                     fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                   }}
                 >
-                  {single ? t("Got it") : isLast ? t("Let's go") : t("Next")}
+                  {isLast ? t("Let's go") : t("Next")}
                 </button>
               </div>
             </div>

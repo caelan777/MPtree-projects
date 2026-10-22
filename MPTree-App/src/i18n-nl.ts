@@ -724,9 +724,7 @@ export const NL: Record<string, string> = {
   "Could not open the browser": "Kon de browser niet openen",
   "\"{name}\" is in your library": "\"{name}\" staat in je bibliotheek",
   "{n} new songs are in your library": "{n} nieuwe nummers staan in je bibliotheek",
-  "Get music, the legal way": "Muziek halen, legaal",
-  "Got it": "Begrepen",
-  "Tap it for the places to get music, free or paid. What you download shows up here by itself.": "Tik erop voor de plekken om muziek te halen, gratis of betaald. Wat je downloadt, verschijnt hier vanzelf.",
   "Only download music you have the right to. MPTree is not responsible for what you download from other websites.": "Download alleen muziek waar je het recht op hebt. MPTree is niet verantwoordelijk voor wat je van andere websites downloadt.",
   "Watch how it works": "Kijk hoe het werkt",
+  "Download and buy music legally here": "Download en koop hier legaal muziek",
 };
