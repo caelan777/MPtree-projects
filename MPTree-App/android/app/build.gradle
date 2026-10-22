@@ -25,8 +25,8 @@ android {
         // 33, 35, 37, 39, 41: Pro test builds 21 to 25. 40 and 42 were the 1.2.0 bundles for Play.
         // 43, 44, 45: Pro test builds 26, 27 and 28.
         // 1.2.1: 46 on Play, the fixes of test builds 26 to 28.
-        versionCode 87
-        versionName "1.2.9"
+        versionCode 92
+        versionName "1.3.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // The AdMob app id (AdMob > Apps > App settings), for the ad that
         // gives a day of Pro. The ad unit is in src/pro.ts: test builds use
@@ -80,6 +80,8 @@ dependencies {
     // Google Play's own "a newer version is out" check, for the Play build only.
     // It talks to the Play Store app on the phone, not to the network itself.
     implementation "com.google.android.play:app-update:2.1.0"
+    // Google Play's own review card, asked for once (see review.ts).
+    implementation "com.google.android.play:review:2.0.2"
     // Google Play Billing, for MPTree Pro (a one-time purchase). Talks to the
     // Play Store app on the phone; see BillingPlugin.java.
     implementation "com.android.billingclient:billing:8.0.0"

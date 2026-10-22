@@ -50,6 +50,9 @@ interface Props {
   onLikeMany:            (ids: string[], liked: boolean) => void;
   onShuffleMany:         (ids: string[]) => void;
   onPlayManyNext:        (ids: string[]) => void;
+  onShareMany:           (ids: string[]) => void;
+  /** Picking songs in a playlist starts or ends: App hides its header card. */
+  onSelectingChange?:    (on: boolean) => void;
   onAddManyToPlaylist:   (ids: string[]) => void;
   onBulkEditMany:        (ids: string[]) => void;
   onCutSong:          (song: Song) => void;
@@ -186,7 +189,7 @@ export const PlaylistsView: React.FC<Props> = ({
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
-  onLikeMany, onShuffleMany, onPlayManyNext, onAddManyToPlaylist, onBulkEditMany,
+  onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
   onBodyScroll, animateInsets = true, onClose, T,
 }) => {
@@ -265,6 +268,7 @@ export const PlaylistsView: React.FC<Props> = ({
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exitSelect = useCallback(() => { setSelectMode(false); setSelectedIds(new Set()); }, [setSelectMode, setSelectedIds]);
+  useEffect(() => { onSelectingChange?.(selectMode); }, [selectMode, onSelectingChange]);
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -1267,6 +1271,7 @@ export const PlaylistsView: React.FC<Props> = ({
           onShuffleSelection={() => { const ids = [...selectedIds]; exitSelect(); onShuffleMany(ids); }}
           onAddToPlaylist={() => { onAddManyToPlaylist([...selectedIds]); }}
           onPlayNext={() => { const ids = [...selectedIds]; exitSelect(); onPlayManyNext(ids); }}
+          onShare={() => { onShareMany([...selectedIds]); }}
           onBulkEdit={() => { onBulkEditMany([...selectedIds]); }}
           onRemoveFromPlaylist={activePlaylist
             ? () => { const ids = selectedIds; exitSelect(); removeManyFromPlaylist(ids); }

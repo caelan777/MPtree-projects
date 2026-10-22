@@ -92,9 +92,15 @@ export type SystemPlugin = {
   startPlayUpdate(): Promise<void>;
   /** Which launcher icon is switched on: "classic", "light", "vinyl" or "stamp". */
   getAppIcon(): Promise<{ icon: string }>;
-  /** Switches the launcher icon. Android may take a few seconds to redraw the
-   *  home screen, and some launchers move the icon to the app drawer. */
-  setAppIcon(options: { icon: string }): Promise<void>;
+  /** Google Play's own review card, over the app. Resolves whether Play
+   *  could be asked; whether the card was shown, or what was given, is not
+   *  told (Play keeps that to itself). */
+  askReview(): Promise<{ asked: boolean }>;
+  /** Switches the launcher icon. Android ends the app's window when it does,
+   *  so the switch waits until MPTree leaves the screen; with restart: true
+   *  MPTree closes itself right away to make it. Some launchers then move the
+   *  icon off the home screen, to the app list. */
+  setAppIcon(options: { icon: string; restart?: boolean }): Promise<void>;
   /** Asks the launcher to pin an extra MPTree shortcut with this picture on
    *  it. Resolves supported:false when the launcher cannot pin shortcuts. The
    *  launcher shows its own confirmation; this does not wait for it. */
@@ -166,6 +172,7 @@ const SystemWeb: SystemPlugin = {
   checkPlayUpdate:   async () => ({ available: false }),
   startPlayUpdate:   async () => {},
   getAppIcon:        async () => ({ icon: "classic" }),
+  askReview:         async () => ({ asked: false }),
   setAppIcon:        async () => {},
   pinPhotoShortcut:  async () => ({ supported: false }),
 };

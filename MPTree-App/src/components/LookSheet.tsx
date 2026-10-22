@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { makeSH, cardPalette, SHADE_PREVIEW, type T } from "../themes";
+import { makeSH, cardPalette, isDarkPalette, SHADE_PREVIEW, type T } from "../themes";
 import type { Theme } from "../types";
 import { t, tn } from "../i18n";
 import { IC } from "./Icons";
@@ -7,26 +7,32 @@ import { SpinningDisc } from "./SpinningDisc";
 import { LanternGate } from "./LanternGate";
 import { StyleReveal } from "./StyleReveal";
 import { primeLanternVoice } from "../lanternVoice";
-import { usePro } from "../pro";
+import { usePro, ADS_ON } from "../pro";
+import { System } from "../plugins";
+import { MARK_PATH } from "./Logo";
+import { CropSheet } from "./CropSheet";
 import {
-  useLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
+  useBackground, previewBackground, keepBackground, endBackgroundPreview, hasBackgroundChanges, STRENGTH_MIN, STRENGTH_MAX,
+} from "../background";
+import {
+  useLook, getLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
   lanternAsked, markLanternAsked, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
-  type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour,
+  type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour, type AppIcon,
 } from "../look";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
-// like at the top, and under it two tabs. Styles are whole looks, picked with
-// one tap. Custom has every choice on its own, in groups: colour, header card,
-// record.
+// like at the top, large, getting smaller as the page is scrolled; under it one
+// the two custom styles side by side, then one row for each kind of choice:
+// the background photo, the colours, the header card, the app icon and the
+// record. A row opens its choices on a page of its own, laid out over the whole
+// width, with a way back; a style's page keeps its choices in sideways rows.
 //
-// Two styles carry a name and have a page of their own. Aviela is pink with
-// flowers, and which flowers is a choice: its records, the ways for the app to
-// wear them, and a header card in white, pink or black. Lantern is green
-// light: its own records and header cards, on any of the app's usual colours,
-// black unless another is picked. Tapping one puts it on and opens its page,
-// laid out like Custom, with a way back.
+// Aviela is pink with flowers, and which flowers is a choice: its records, the
+// ways for the app to wear them, and a header card in white, pink or black.
+// Lantern is green light: its own records and header cards, on black, white or
+// paper. Put on, each brings its own app icon too. Tapping one opens its page.
 //
 // Lantern asks something first, of whoever has Pro, the first time only: a
 // ring comes up with "Are you afraid?" (LanternGate). No lets them in. Yes
@@ -35,8 +41,9 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 //
 // Nothing here is kept until Apply. Every pick is shown at once, everywhere,
 // and only Apply keeps it; leaving with something not applied asks whether to
-// throw it away. Without Pro, Apply becomes "Keep it with Pro" as soon as
-// anything locked is on show.
+// throw it away. The app icon waits for Apply even to be shown, since changing
+// it can move it on the home screen. Without Pro, Apply becomes a way to Pro
+// as soon as anything locked is on show.
 //
 // There is no dark or light to choose here. A colour is dark or it is light,
 // and picking one puts the app in that mode; the header card and the record
@@ -110,7 +117,7 @@ function Tile({ selected, onClick, label, children, T, locked }: {
           </span>
         )}
       </div>
-      <span style={{ fontSize: 12, fontWeight: selected ? 700 : 500, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: selected ? 700 : 500, textAlign: "center", lineHeight: 1.25, maxWidth: 100 }}>{label}</span>
     </button>
   );
 }
@@ -163,6 +170,16 @@ function Row({ title, aside, children, T, framed }: { title: string; aside?: Rea
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** Choices laid out over the width of the page, as many to a line as fit. */
+function Grid({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "14px 4px", justifyItems: "center", padding: "6px 12px 0" }}>
+      {children}
     </div>
   );
 }
@@ -237,12 +254,12 @@ function AppCopy({ stamp, width, height, scale }: { stamp: string; width: number
 
 /** A whole look in one tile: the app's colour, the header card on it, and
  *  its record in the corner. */
-function Swatch({ app, card, vinyl, flowers = "none", tone = "white" }: { app: T; card: T; vinyl: VinylSkin; flowers?: Flowers; tone?: Tone }) {
+function Swatch({ app, card, vinyl, flowers = "none", tone = "white", height = 76 }: { app: T; card: T; vinyl: VinylSkin; flowers?: Flowers; tone?: Tone; height?: number }) {
   const inCard = cardFlowers(flowers, tone);
   // The corner pictures are larger than this little card, so they are halved.
   const halved = flowers === "sprig" || flowers === "lines" ? { backgroundSize: "65px 42px" } : flowers === "corners" ? { backgroundSize: "39px 26px" } : null;
   return (
-    <div style={{ height: 76, borderRadius: 12, backgroundColor: app.bg, ...groundFlowers(flowers), border: `1px solid ${app.border}`, position: "relative", overflow: "hidden" }}>
+    <div style={{ height, borderRadius: 12, backgroundColor: app.bg, ...groundFlowers(flowers), border: `1px solid ${app.border}`, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", left: 7, right: 7, top: 7, height: 24, borderRadius: 8, background: card.playerBg, border: `1px solid ${card.border}`, boxSizing: "border-box", overflow: "hidden", zIndex: 0 }}>
         {inCard && <div style={{ ...inCard, ...halved }} />}
         <div style={{ position: "absolute", left: 7, top: 8, width: 18, height: 6, borderRadius: 3, background: card.text }} />
@@ -261,38 +278,73 @@ const Lock = ({ T }: { T: T }) => (
   </span>
 );
 
-/** A group of choices, as a panel with its name on top. */
-function Group({ children, T }: { children: ReactNode; T: T }) {
+/** A group of choices on a style's page: a panel with its name on top and
+ *  its choices in a row that scrolls sideways. */
+function Group({ title, children, T }: { title: string; children: ReactNode; T: T }) {
   return (
     <div style={{ margin: "12px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, paddingBottom: 12 }}>
-      {children}
+      <Row T={T} framed title={title}>{children}</Row>
     </div>
   );
 }
 
-type Preset = { id: string; mode: Theme; shade: DarkShade | LightShade; card: CardShade; vinyl: VinylSkin; free?: boolean; name: string };
-type Tab = "styles" | "custom";
+/** The launcher icons, drawn the way Branding/build-alt-icons.mjs draws them
+ *  for Android. Change one, change the other. */
+function IconArt({ icon, size }: { icon: AppIcon; size: number }) {
+  const markAt = (w: number, color: string) => {
+    const off = (108 - w) / 2;
+    return (
+      <g transform={`translate(${off} ${off}) scale(${w / 1000})`}>
+        <path d={MARK_PATH} fill={color} fillRule="evenodd" />
+      </g>
+    );
+  };
+  const rings = [];
+  for (let r = 20; r <= 60; r += 2.5) rings.push(<circle key={r} cx="54" cy="54" r={r} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth="0.5" />);
+  const petals = [];
+  for (let i = 0; i < 6; i++) petals.push(<path key={i} d="M0,0C4.2,-3 4.2,-9 0,-10C-4.2,-9 -4.2,-3 0,0Z" transform={`rotate(${i * 60})`} fill="#ee8fb4" />);
+  return (
+    // The ring keeps a white icon visible on a white page.
+    <svg width={size} height={size} viewBox="0 0 108 108" style={{ display: "block", borderRadius: "26%", boxShadow: "0 0 0 1px rgba(128,128,128,0.35)" }}>
+      {icon === "classic" && <><rect width="108" height="108" fill="#000" />{markAt(52, "#fff")}</>}
+      {icon === "light"   && <><rect width="108" height="108" fill="#fff" />{markAt(52, "#000")}</>}
+      {icon === "vinyl"   && <>
+        <rect width="108" height="108" fill="#0b0b0b" />{rings}
+        <circle cx="54" cy="54" r="34" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="0.8" />
+        <circle cx="54" cy="54" r="17" fill="#fff" />{markAt(20, "#000")}
+      </>}
+      {icon === "stamp"   && <>
+        <rect width="108" height="108" fill="#fff" />
+        <circle cx="54" cy="54" r="29" fill="#000" />{markAt(30, "#fff")}
+      </>}
+      {icon === "aviela"  && <>
+        <rect width="108" height="108" fill="#ffd5e6" />{markAt(43.2, "#20181b")}
+        <g transform="translate(74 33) scale(1.3)">{petals}<circle r="2" fill="#f3c14b" /></g>
+      </>}
+      {icon === "lantern" && <>
+        <rect width="108" height="108" fill="#050906" />
+        <circle cx="54" cy="54" r="40" fill="rgba(53,224,138,0.06)" />
+        <circle cx="54" cy="54" r="31" fill="rgba(53,224,138,0.10)" />
+        <circle cx="54" cy="54" r="23" fill="rgba(53,224,138,0.14)" />
+        {markAt(43.2, "#35e08a")}
+      </>}
+    </svg>
+  );
+}
+
 type Point = { x: number; y: number };
-/** One tile on the Styles tab. */
-type StyleTile = {
-  key: string; name: string; app: T; card: T; vinyl: VinylSkin; flowers: Flowers; tone: Tone;
-  on: boolean; free: boolean;
-  /** Shut for now, Pro or not: Lantern after a yes. */
-  shut?: boolean;
-  /** The preset behind it. Without one it is a named style, which opens a
-   *  page of its own. */
-  preset?: Preset;
-};
+/** The pages under the small screens: the list of choices, a style's own
+ *  page, or one kind of choice on its own. */
+type Page = "main" | "aviela" | "lantern" | "background" | "colours" | "card" | "icons" | "records";
 
 export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
+  const bg = useBackground();
   const dark = theme === "dark";
-  const [tab, setTab] = useState<Tab>("styles");
-  // A named style's own page, over the tabs. The phone's back button leaves
-  // it first.
-  const [page, setPage] = useState<"main" | "aviela" | "lantern">("main");
+  // Which page is open. The phone's back button goes back a page first.
+  const [page, setPage] = useState<Page>("main");
   // Lantern's question, while it is being asked, and how many days Lantern is
   // still shut for after a yes.
   const [asking, setAsking] = useState(false);
@@ -302,6 +354,17 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const [reveal, setReveal] = useState<{ kind: "aviela" | "lantern"; at: Point } | null>(null);
   // "Discard changes?", while it is asked.
   const [confirming, setConfirming] = useState(false);
+  // A photo picked for the background, being placed.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  // The icon the launcher shows now. It only changes on Apply: switching it
+  // can move it on the home screen, which is not for every tap.
+  const [appIcon, setAppIcon] = useState<AppIcon>(look.icon);
+  // A new icon just applied, while MPTree asks when to switch to it.
+  const [iconAsk, setIconAsk] = useState<AppIcon | null>(null);
+  useEffect(() => { System.getAppIcon().then(r => setAppIcon(r.icon as AppIcon)).catch(() => {}); }, []);
+  // A background tried and not kept goes when the page does, however it goes.
+  useEffect(() => () => endBackgroundPreview(), []);
 
   // The window's size, which the small copies are a fraction of.
   const [win, setWin] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -310,6 +373,41 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
+
+  // ── The two small screens ──
+  // Large at the top of the page, and smaller as it is scrolled, as Android's
+  // own "Wallpaper & style" does. They sit in a block of their full height
+  // that scrolls with the page and then sticks with only its bottom showing,
+  // so nothing below them moves when they change size: the page's own height
+  // never changes, which is what kept the list from jumping on the way up.
+  const panes = player ? 2 : 1;
+  const room = win.w - 32 - (panes - 1) * 12;
+  const big = Math.min(0.42, room / panes / win.w);
+  const small = Math.min(big, 0.2);
+  const PAD = 16;
+  const bigH = Math.round(win.h * big) + PAD;
+  const range = Math.round(win.h * (big - small));
+  const [scrolled, setScrolled] = useState(0);
+  const frame = useRef(0);
+  const body = useRef<HTMLDivElement>(null);
+  const onScroll = () => {
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => setScrolled(Math.min(range, Math.max(0, body.current?.scrollTop ?? 0))));
+  };
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const shrink = range > 0 ? scrolled / range : 0;
+  const scale = big + (small - big) * shrink;
+  const pane: React.CSSProperties = {
+    width: Math.round(win.w * scale), height: Math.round(win.h * scale), flexShrink: 0,
+    position: "relative", overflow: "hidden", borderRadius: 16 + 6 * (1 - shrink), background: T.bg,
+    border: `1px solid ${T.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+  };
+  // Every page starts at its top, with the screens large again.
+  const go = (next: Page) => {
+    setPage(next);
+    if (body.current) body.current.scrollTop = 0;
+    setScrolled(0);
+  };
 
   // A colour brings its mode with it, so a pick can change the mode too, and
   // that has to go back with it when the pick is thrown away. `kept` is the
@@ -324,28 +422,49 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** A new icon was applied: ask when MPTree may close to switch to it. */
+  const applyIcon = () => {
+    const want = getLook().icon;
+    if (want !== appIcon) setIconAsk(want);
+  };
+  /** Now (MPTree closes itself) or once the app is left. */
+  const switchIcon = (restart: boolean) => {
+    const want = iconAsk;
+    setIconAsk(null);
+    if (!want) return;
+    System.setAppIcon({ icon: want, restart })
+      .then(() => { setAppIcon(want); if (!restart) onToast(t("The new icon comes as soon as you leave MPTree.")); })
+      .catch(() => onToast(t("This phone did not let MPTree change its icon")));
+  };
+
   // Bought Pro while trying something: keep what is showing.
   const wasPro = useRef(pro);
   useEffect(() => {
-    if (pro && !wasPro.current) { setKeptTheme(theme); keepPreview(); }
+    if (pro && !wasPro.current) { setKeptTheme(theme); keepPreview(); void keepBackground(); applyIcon(); }
     wasPro.current = pro;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pro, theme]);
 
   // What has been changed and not applied, and whether it needs Pro to keep.
-  const changed = hasLookChanges() || theme !== keptTheme;
-  const needsPro = !pro && !isFreeLook(look);
+  const changed = hasLookChanges() || theme !== keptTheme || hasBackgroundChanges();
+  const needsPro = !pro && (!isFreeLook(look) || !!bg.photo);
   const apply = () => {
     keepPreview();
+    void keepBackground();
     setKeptTheme(theme);
-    onToast(t("Applied"));
+    // A new icon brings its own question, which says enough on its own.
+    if (getLook().icon !== appIcon) applyIcon();
+    else onToast(t("Applied"));
   };
   const leave = () => {
     if (changed) { setConfirming(true); return; }
     endPreview();
+    endBackgroundPreview();
     onClose();
   };
   const discard = () => {
     endPreview();
+    endBackgroundPreview();
     if (theme !== keptTheme) onSetTheme(keptTheme);
     setConfirming(false);
     onClose();
@@ -354,15 +473,18 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // throws anything away.
   useEffect(() => {
     setLookBack(() => {
+      if (iconAsk) { switchIcon(false); return true; }
+      if (cropSrc) { setCropSrc(null); return true; }
       if (reveal) return true;
       if (confirming) { setConfirming(false); return true; }
       if (asking) { setAsking(false); return true; }
-      if (page !== "main") { setPage("main"); return true; }
+      if (page !== "main") { go("main"); return true; }
       if (changed) { setConfirming(true); return true; }
       return false;
     });
     return () => setLookBack(null);
-  }, [reveal, confirming, asking, page, changed]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iconAsk, cropSrc, reveal, confirming, asking, page, changed]);
 
   /** Every pick is shown at once, and kept only by Apply. */
   const pick = (patch: Partial<Look>) => previewLook(patch);
@@ -387,6 +509,11 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     { id: "classic", label: t("Black") }, { id: "white", label: t("White") },
     { id: "smoke", label: t("Smoke") }, { id: "marble", label: t("Marble") },
   ];
+  const ICONS: { id: AppIcon; label: string }[] = [
+    { id: "classic", label: t("Classic") }, { id: "light", label: t("Light") },
+    { id: "vinyl", label: t("Record") }, { id: "stamp", label: t("Stamp") },
+    { id: "aviela", label: "Aviela" }, { id: "lantern", label: "Lantern" },
+  ];
   const RECORD_NAMES: Record<FlowerRecord, string> = {
     daisy: t("Daisy ring"), bloom: t("One bloom"), blossom: t("Blossom"), lines: t("Line drawing"), wreath: t("Wreath"),
     petals: t("Loose petals"), ditsy: t("Small flowers"), bouquet: t("Bouquet"), dahlia: t("Dahlia"), oxeye: t("One daisy"),
@@ -402,15 +529,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     "lantern-dash": t("Charge"), "lantern-solid": t("Green"), "lantern-burst": t("Burst"),
   };
   const LANTERN_CARD_NAMES = ["Lantern", t("Green"), t("Black"), t("White")];
-  // Whole looks: a colour, a header card and a record that belong together.
-  // Named after the app's colour, then the header card's where it differs.
-  const pair = (a: string, b: string) => `${t(a)} · ${t(b)}`;
-  const PRESETS: Preset[] = [
-    { id: "black",          mode: "dark",  shade: "classic", card: "default",       vinyl: "classic", name: t("Black"), free: true },
-    { id: "white",          mode: "light", shade: "classic", card: "default",       vinyl: "white",   name: t("White"), free: true },
-    { id: "paper-graphite", mode: "light", shade: "paper",   card: "dark:graphite", vinyl: "smoke",   name: pair("Paper", "Graphite") },
-    { id: "stone-black",    mode: "light", shade: "stone",   card: "dark:classic",  vinyl: "classic", name: pair("Stone", "Black") },
-  ];
 
   // The header card and the record are one choice, written for both modes, so
   // they stay when a colour of the other mode is picked.
@@ -421,39 +539,35 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // makes Lantern is its record, so that is what tells whether it is on.
   const avielaOn = !dark && look.light === "pink" && look.flowers !== "none";
   const lanternOn = (LANTERN_RECORDS as readonly string[]).includes(vinyl) && look.flowers === "none";
-  // Under Custom a named style does not outlive a pick. Everything it brought
-  // goes back to plain first, and the pick is made on that: otherwise half of
-  // Aviela or of Lantern is left standing round the one thing that changed.
+  // A named style does not outlive a pick of one thing on its own. Everything
+  // it brought goes back to plain first, its icon too, and the pick is made on
+  // that: otherwise half of Aviela or of Lantern is left standing round the
+  // one thing that changed.
   const plain = (): Partial<Look> => (avielaOn || lanternOn ? {
     flowers: "none", cardDark: "default", cardLight: "default", vinylDark: "classic", vinylLight: "classic",
     ...(dark ? { dark: "classic" as const } : { light: "classic" as const }),
+    ...(look.icon === (avielaOn ? "aviela" : "lantern") ? { icon: "classic" as const } : {}),
   } : {});
   const setCard = (c: CardShade) => pick({ ...plain(), cardDark: c, cardLight: c });
   const setVinyl = (v: VinylSkin) => pick({ ...plain(), vinylDark: v, vinylLight: v });
 
-  const presetOn = (p: Preset) =>
-    theme === p.mode && (p.mode === "dark" ? look.dark : look.light) === p.shade && card === p.card && vinyl === p.vinyl && look.flowers === "none";
-  const pickPreset = (p: Preset) => pickIn(p.mode, {
-    flowers: "none", ...(p.mode === "dark" ? { dark: p.shade as DarkShade } : { light: p.shade as LightShade }),
-    cardDark: p.card, cardLight: p.card, vinylDark: p.vinyl, vinylLight: p.vinyl,
-  });
-
   // Aviela: pink, with the record, the flowers and the header card last
   // picked for it.
-  const wearAviela = (a: Look["aviela"]) => pick({
+  const wearAviela = (a: Look["aviela"], extra: Partial<Look> = {}) => pick({
     light: "pink", cardDark: a.card, cardLight: a.card,
-    vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a,
+    vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a, ...extra,
   });
   const avielaApp = SHADE_PREVIEW.light("pink");
   const avielaCard = cardPalette(look.aviela.card, avielaApp);
   const avielaTone = toneOf(look.aviela.card, false, "pink");
-  const enterAviela = () => {
+  /** Opens Aviela's page. Put on fresh, it brings its own icon. */
+  const enterAviela = (fresh: boolean) => {
     if (dark) onSetTheme("light");
-    wearAviela(look.aviela);
-    setPage("aviela");
+    wearAviela(look.aviela, fresh ? { icon: "aviela" } : {});
+    go("aviela");
   };
   const openAviela = (at: Point) => {
-    if (avielaOn) { enterAviela(); return; }
+    if (avielaOn) { enterAviela(false); return; }
     setReveal({ kind: "aviela", at });
   };
 
@@ -467,23 +581,23 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     ...DARKS.map(d => [`dark:${d.id}`, d.label]), ...LIGHTS.map(l => [`light:${l.id}`, l.label]),
   ]);
   const colourNow = `${theme}:${dark ? look.dark : look.light}`;
-  const wearLantern = (l: Look["lantern"]) => {
+  const wearLantern = (l: Look["lantern"], extra: Partial<Look> = {}) => {
     const [mode, shade] = shadeOf(l.colour);
     if (mode !== theme) onSetTheme(mode);
     pick({
       ...(mode === "dark" ? { dark: shade as DarkShade } : { light: shade as LightShade }),
-      cardDark: l.card, cardLight: l.card, vinylDark: l.record, vinylLight: l.record, flowers: "none", lantern: l,
+      cardDark: l.card, cardLight: l.card, vinylDark: l.record, vinylLight: l.record, flowers: "none", lantern: l, ...extra,
     });
   };
   const lanternApp = paletteOf(look.lantern.colour);
   const lanternCard = cardPalette(look.lantern.card, lanternApp);
-  const enterLantern = () => {
-    wearLantern(look.lantern);
-    setPage("lantern");
+  const enterLantern = (fresh: boolean) => {
+    wearLantern(look.lantern, fresh ? { icon: "lantern" } : {});
+    go("lantern");
   };
   const openLantern = (at: Point) => {
     // Already on: straight to its page.
-    if (lanternOn) { enterLantern(); return; }
+    if (lanternOn) { enterLantern(false); return; }
     if (pro) {
       const days = lanternLockDays();
       setShutDays(days);
@@ -520,48 +634,102 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   };
 
-  const presetTile = (p: Preset): StyleTile => {
-    const app = p.mode === "dark" ? SHADE_PREVIEW.dark(p.shade as DarkShade) : SHADE_PREVIEW.light(p.shade as LightShade);
-    return {
-      key: p.id, name: p.name, app, card: cardPalette(p.card, app), vinyl: p.vinyl, flowers: "none", tone: "white",
-      on: presetOn(p), free: !!p.free, preset: p,
-    };
+  // ── The background photo ──
+  const choosePhoto = () => picker.current?.click();
+  const onPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { if (typeof reader.result === "string") setCropSrc(reader.result); };
+    reader.onerror = () => onToast(t("Could not open that photo"));
+    reader.readAsDataURL(file);
   };
-  // The two free ones first, then the two with a name, then the rest.
-  const STYLES: StyleTile[] = [
-    ...PRESETS.slice(0, 2).map(presetTile),
-    { key: "aviela", name: "Aviela", app: avielaApp, card: avielaCard, vinyl: look.aviela.record, flowers: look.aviela.flowers, tone: avielaTone, on: avielaOn, free: false },
-    { key: "lantern", name: "Lantern", app: lanternApp, card: lanternCard, vinyl: look.lantern.record, flowers: "none", tone: "white", on: lanternOn, free: false, shut: pro && shutDays > 0 && !lanternOn },
-    ...PRESETS.slice(2).map(presetTile),
+
+  const stamp = `${theme}|${JSON.stringify(look)}|${bg.photo?.length ?? 0}|${bg.strength}`;
+
+  // ── The list of choices, as Android lays out its own ──
+  const colourName = dark ? DARKS.find(d => d.id === look.dark)?.label : LIGHTS.find(l => l.id === look.light)?.label;
+  const cardName = card === "default" ? t("Default") : CARDS.find(c => c.id === card)?.label ?? AVIELA_CARD_NAMES[AVIELA_CARDS.indexOf(card)] ?? "Lantern";
+  const recordName = VINYLS.find(v => v.id === vinyl)?.label
+    ?? (avielaOn ? RECORD_NAMES[vinyl as FlowerRecord] : lanternOn ? LANTERN_RECORD_NAMES[vinyl as LanternRecord] : "") ?? "";
+  const iconName = ICONS.find(i => i.id === look.icon)?.label ?? "";
+  const dot = (s: React.CSSProperties) => <span style={{ width: 34, height: 34, borderRadius: "50%", display: "block", ...s }} />;
+  const choices: { id: Page; title: string; sub: string; art: ReactNode }[] = [
+    {
+      id: "background", title: t("Background"),
+      sub: bg.photo ? t("Your photo, {n}%", { n: Math.round(bg.strength * 100) }) : t("None"),
+      art: bg.photo
+        ? <img src={bg.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        : <span style={{ color: T.text, display: "flex", transform: "scale(1.3)" }}><IC.Photo /></span>,
+    },
+    {
+      id: "colours", title: t("Colours"), sub: colourName ?? "",
+      art: dot({ width: 30, height: 30, border: `1px solid ${T.border}`, boxSizing: "border-box", background: `linear-gradient(90deg, ${T.bg} 50%, ${T.accent} 50%)` }),
+    },
+    {
+      id: "card", title: t("Header card"), sub: cardName,
+      // The card drawn at its own size and shrunk; the box around it is the
+      // shrunk size, or the layout would still take the full one.
+      art: (
+        <span style={{ display: "block", position: "relative", width: 39, height: 27 }}>
+          <span style={{ position: "absolute", left: 0, top: 0, transform: "scale(0.42)", transformOrigin: "top left" }}><Card p={cardPalette(card, T)} /></span>
+        </span>
+      ),
+    },
+    { id: "icons", title: t("Icons"), sub: iconName, art: <IconArt icon={look.icon} size={34} /> },
+    { id: "records", title: t("Records"), sub: recordName, art: <SpinningDisc size={36} skin={vinyl} /> },
   ];
-
-  // ── The two small screens ──
-  const wide = false;
-  const panes = player ? 2 : 1;
-  const room = (wide ? 520 : win.w - 32) - (panes - 1) * 12;
-  const scale = Math.min(Math.min(330, win.h * 0.38) / win.h, room / panes / win.w);
-  const pane: React.CSSProperties = {
-    width: Math.round(win.w * scale), height: Math.round(win.h * scale), flexShrink: 0,
-    position: "relative", overflow: "hidden", borderRadius: 16, background: T.bg,
-    border: `1px solid ${T.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
+  const choiceRow = (c: typeof choices[number], i: number) => {
+    const first = i === 0, last = i === choices.length - 1;
+    return (
+      <button key={c.id} onClick={() => go(c.id)} style={{
+        display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", cursor: "pointer",
+        // On the dark sheet the usual surface is darker than the sheet itself
+        // and the rows would sink into it; there they are lifted instead.
+        background: isDarkPalette(T) ? T.dim : T.surface, border: "none", fontFamily: "inherit", color: T.text, padding: "14px 16px",
+        borderRadius: `${first ? 22 : 6}px ${first ? 22 : 6}px ${last ? 22 : 6}px ${last ? 22 : 6}px`,
+      }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 16, fontWeight: 600 }}>{c.title}</span>
+          <span style={{ display: "block", fontSize: 13, color: T.textSub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.sub}</span>
+        </span>
+        <span style={{ width: 52, height: 52, borderRadius: 16, background: T.sheetBg, display: "grid", placeItems: "center", overflow: "hidden", flexShrink: 0 }}>{c.art}</span>
+      </button>
+    );
   };
-  const stamp = `${theme}|${JSON.stringify(look)}`;
 
-  const tabBtn = (id: Tab, name: string) => (
-    <button
-      role="tab"
-      aria-selected={tab === id}
-      onClick={() => setTab(id)}
-      style={{
-        flex: 1, height: 36, borderRadius: 18, border: "none", cursor: "pointer", fontFamily: "inherit",
-        fontSize: 14, fontWeight: 700,
-        background: tab === id ? T.accent : "transparent", color: tab === id ? T.playBtnFg : T.muted,
-        transition: "background 0.2s, color 0.2s",
-      }}
-    >
-      {name}
-    </button>
-  );
+  const styleTile = (key: "aviela" | "lantern") => {
+    const on = key === "aviela" ? avielaOn : lanternOn;
+    const shut = key === "lantern" && pro && shutDays > 0 && !lanternOn;
+    return (
+      <button key={key}
+        onClick={e => (key === "aviela" ? openAviela(tappedAt(e)) : openLantern(tappedAt(e)))}
+        aria-pressed={on}
+        style={{
+          padding: 4, borderRadius: 19, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          background: "transparent", border: `2px solid ${on ? T.accent : "transparent"}`, transition: "border-color 0.15s ease",
+        }}>
+        {key === "aviela"
+          ? <Swatch app={avielaApp} card={avielaCard} vinyl={look.aviela.record} flowers={look.aviela.flowers} tone={avielaTone} height={104} />
+          : <Swatch app={lanternApp} card={lanternCard} vinyl={look.lantern.record} height={104} />}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "8px 4px 2px" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: on ? T.text : T.textSub }}>{key === "aviela" ? "Aviela" : "Lantern"}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
+            {(!pro || shut) && <Lock T={T} />}
+            <IC.ChevronR />
+          </span>
+        </div>
+      </button>
+    );
+  };
+
+  const TITLES: Record<Page, string> = {
+    main: t("Personalise"), aviela: "Aviela", lantern: "Lantern", background: t("Background"),
+    colours: t("Colours"), card: t("Header card"), icons: t("Icons"), records: t("Records"),
+  };
+  const keepLabel = needsPro ? (ADS_ON ? t("Keep it, free with an ad") : t("Keep it with Pro")) : t("Apply");
+  const note = { fontSize: 13, color: T.muted, lineHeight: 1.5, padding: "12px 20px 0" } as const;
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 420, display: "flex", alignItems: "flex-end" }} onClick={leave}>
@@ -573,54 +741,70 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ ...sh.hdr, padding: "14px 20px 10px" }}>
+        <div style={{ ...sh.hdr, padding: "14px 20px 10px", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
             {page !== "main" && (
-              <button onClick={() => setPage("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
+              <button onClick={() => go("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
               </button>
             )}
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{page === "aviela" ? "Aviela" : page === "lantern" ? "Lantern" : t("Personalise")}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{TITLES[page]}</span>
           </div>
-          {/* On the pages of Aviela and Lantern the way out is the back
-              arrow, and the corner is where they are kept. */}
+          {/* On a page of its own the way out is the back arrow, and the
+              corner is where a change is kept. */}
           {page === "main" ? (
             <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
           ) : changed && (
             <button onClick={needsPro ? onNeedPro : apply} style={{
               flexShrink: 0, padding: "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
-              borderRadius: 18, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+              borderRadius: 18, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap",
             }}>
-              {needsPro ? t("Keep it with Pro") : t("Apply")}
+              {keepLabel}
             </button>
           )}
         </div>
 
-        <div aria-hidden="true" style={{ flexShrink: 0, display: "flex", justifyContent: "center", gap: 12, padding: "2px 16px 14px" }}>
-          <div style={pane}>
-            <AppCopy stamp={stamp} width={win.w} height={win.h} scale={scale} />
-          </div>
-          {player && (
-            <div style={pane}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: win.w, height: win.h, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }}>
-                {player}
+        <div ref={body} onScroll={onScroll} style={{ flex: 1, overflowY: "auto" }}>
+          {/* The block the screens sit in: their full height, sticking once
+              all but the small size has scrolled away. */}
+          <div aria-hidden="true" style={{ position: "sticky", top: -range, height: bigH, zIndex: 2, background: T.sheetBg }}>
+            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", gap: 12, padding: `2px 16px ${PAD - 2}px` }}>
+              <div style={pane}>
+                <AppCopy stamp={stamp} width={win.w} height={win.h} scale={scale} />
               </div>
+              {player && (
+                <div style={pane}>
+                  <div style={{ position: "absolute", top: 0, left: 0, width: win.w, height: win.h, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }}>
+                    {player}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-
-        {page === "main" && (
-          <div role="tablist" style={{ flexShrink: 0, display: "flex", gap: 2, margin: "0 16px", padding: 3, borderRadius: 21, background: T.surface, border: `1px solid ${T.border}` }}>
-            {tabBtn("styles", t("Styles"))}
-            {tabBtn("custom", t("Custom"))}
           </div>
-        )}
 
-        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}>
-          {page === "aviela" ? (
-            <>
-              <Group T={T}>
-                <Row T={T} framed title={t("Record")}>
+          <div style={{ paddingBottom: 24 }}>
+            {page === "main" ? (
+              <div style={{ padding: "0 16px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "4px 4px 8px" }}>
+                  <span style={{ ...sh.lbl, margin: 0 }}>{t("Custom styles")}</span>
+                  {/* Only while one is on: the way back to no style at all. */}
+                  {(avielaOn || lanternOn) && (
+                    <button onClick={() => pick(plain())} style={{ background: "transparent", border: "none", padding: "2px 0", color: T.muted, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline" }}>
+                      {t("Take the style off")}
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {styleTile("aviela")}
+                  {styleTile("lantern")}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 16 }}>
+                  {choices.map(choiceRow)}
+                </div>
+              </div>
+            ) : page === "aviela" ? (
+              <>
+                <Group T={T} title={t("Record")}>
                   {FLOWER_RECORDS.map(id => (
                     <Tile key={id} T={T} label={RECORD_NAMES[id]} selected={avielaOn && vinyl === id} locked={!pro}
                       onClick={() => wearAviela({ ...look.aviela, record: id })}>
@@ -629,35 +813,27 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                       </div>
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-
-              <Group T={T}>
-                <Row T={T} framed title={t("Flowers in the app")}>
+                </Group>
+                <Group T={T} title={t("Flowers in the app")}>
                   {FLOWER_KINDS.map(id => (
                     <Tile key={id} T={T} label={FLOWER_NAMES[id]} selected={avielaOn && look.flowers === id} locked={!pro}
                       onClick={() => wearAviela({ ...look.aviela, flowers: id })}>
                       <FlowerScreen kind={id} app={avielaApp} card={avielaCard} tone={avielaTone} />
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-
-              <Group T={T}>
-                <Row T={T} framed title={t("Header card")}>
+                </Group>
+                <Group T={T} title={t("Header card")}>
                   {AVIELA_CARDS.map((c, i) => (
                     <Tile key={c} T={T} label={AVIELA_CARD_NAMES[i]} selected={avielaOn && card === c} locked={!pro}
                       onClick={() => wearAviela({ ...look.aviela, card: c })}>
                       <Card p={cardPalette(c, avielaApp)} />
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-            </>
-          ) : page === "lantern" ? (
-            <>
-              <Group T={T}>
-                <Row T={T} framed title={t("Record")}>
+                </Group>
+              </>
+            ) : page === "lantern" ? (
+              <>
+                <Group T={T} title={t("Record")}>
                   {LANTERN_RECORDS.map(id => (
                     <Tile key={id} T={T} label={LANTERN_RECORD_NAMES[id]} selected={lanternOn && vinyl === id} locked={!pro}
                       onClick={() => wearLantern({ ...look.lantern, record: id })}>
@@ -666,59 +842,61 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                       </div>
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-
-              <Group T={T}>
-                <Row T={T} framed title={t("Header card")}>
+                </Group>
+                <Group T={T} title={t("Header card")}>
                   {LANTERN_CARDS.map((c, i) => (
                     <Tile key={c} T={T} label={LANTERN_CARD_NAMES[i]} selected={lanternOn && card === c} locked={!pro}
                       onClick={() => wearLantern({ ...look.lantern, card: c })}>
                       <Card p={cardPalette(c, lanternApp)} />
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-
-              <Group T={T}>
-                <Row T={T} framed title={t("Colour")}>
+                </Group>
+                <Group T={T} title={t("Colour")}>
                   {LANTERN_COLOURS.map(c => (
                     <Tile key={c} T={T} label={colourNames[c]} selected={lanternOn && colourNow === c} locked={!pro}
                       onClick={() => wearLantern({ ...look.lantern, colour: c })}>
                       <Screen p={paletteOf(c)} />
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-            </>
-          ) : tab === "styles" ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, padding: "14px 16px 0" }}>
-              {STYLES.map(s => (
-                <button
-                  key={s.key}
-                  onClick={e => (s.preset ? pickPreset(s.preset) : s.key === "aviela" ? openAviela(tappedAt(e)) : openLantern(tappedAt(e)))}
-                  aria-pressed={s.on}
-                  style={{
-                    padding: 4, borderRadius: 17, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                    background: "transparent", border: `2px solid ${s.on ? T.accent : "transparent"}`,
-                    transition: "border-color 0.15s ease",
-                  }}
-                >
-                  <Swatch app={s.app} card={s.card} vinyl={s.vinyl} flowers={s.flowers} tone={s.tone} />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 4px 2px" }}>
-                    <span style={{ fontSize: 13, fontWeight: s.on ? 700 : 500, color: s.on ? T.text : T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
-                      {((!pro && !s.free) || s.shut) && <Lock T={T} />}
-                      {!s.preset && <IC.ChevronR />}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <>
-              <Group T={T}>
-                <Row T={T} framed title={t("Colour")}>
+                </Group>
+              </>
+            ) : page === "background" ? (
+              <div style={{ padding: "4px 16px 0" }}>
+                <input ref={picker} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhoto} />
+                {bg.photo ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, background: T.surface, borderRadius: 18, padding: 12 }}>
+                      <img src={bg.photo} alt="" style={{ width: 56, height: 96, objectFit: "cover", borderRadius: 10, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{t("Photo strength")}</span>
+                          <span style={{ fontSize: 13, color: T.muted }}>{Math.round(bg.strength * 100)}%</span>
+                        </div>
+                        <input className="slider" type="range" min={STRENGTH_MIN} max={STRENGTH_MAX} step={0.01} value={bg.strength}
+                          aria-label={t("Photo strength")}
+                          onChange={e => previewBackground({ strength: Number(e.target.value) })}
+                          style={{ width: "100%", margin: "12px 0 4px", accentColor: T.accent }} />
+                        <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.4 }}>{t("Less keeps the text easy to read.")}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button onClick={choosePhoto} style={{ ...sh.saveBtn, flex: 1, background: T.surface, color: T.text, fontSize: 14 }}>{t("Another photo")}</button>
+                      <button onClick={() => previewBackground({ photo: null })} style={{ ...sh.saveBtn, flex: 1, background: T.surface, color: T.text, fontSize: 14 }}>{t("Remove photo")}</button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={choosePhoto} style={{ ...sh.saveBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <IC.Photo />{t("Choose a photo")}
+                  </button>
+                )}
+                <div style={{ ...note, padding: "12px 4px 0" }}>
+                  {t("Your photo goes behind the whole app, under its colour. It stays on this device: it is not synced and not in a backup.")}
+                </div>
+                {!pro && <div style={{ ...note, padding: "8px 4px 0" }}>{t("Try it as much as you like. Keeping it needs Pro.")}</div>}
+              </div>
+            ) : page === "colours" ? (
+              <>
+                <Grid>
                   {/* The free ones first: black and white, then the rest. */}
                   {[...DARKS.filter(d => d.id === FREE.dark), ...LIGHTS.filter(l => l.id === FREE.light),
                     ...DARKS.filter(d => d.id !== FREE.dark), ...LIGHTS.filter(l => l.id !== FREE.light)].map(c => {
@@ -735,11 +913,12 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                       </Tile>
                     );
                   })}
-                </Row>
-              </Group>
-
-              <Group T={T}>
-                <Row T={T} framed title={t("Header card")}>
+                </Grid>
+                <div style={note}>{t("Each colour is dark or light, and the app follows it.")}</div>
+              </>
+            ) : page === "card" ? (
+              <>
+                <Grid>
                   {/* Default follows the app's colour; every other card is its own. */}
                   <Tile T={T} label={t("Default")} selected={card === "default"} onClick={() => setCard("default")}>
                     <Card p={T} />
@@ -749,11 +928,24 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                       <Card p={cardPalette(c.id, T)} />
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-
-              <Group T={T}>
-                <Row T={T} framed title={t("Record")}>
+                </Grid>
+                <div style={note}>{t("The card at the top of the app, with the search and the buttons. Default takes the app's own colour.")}</div>
+              </>
+            ) : page === "icons" ? (
+              <>
+                <Grid>
+                  {ICONS.map(i => (
+                    <Tile key={i.id} T={T} label={i.label} selected={look.icon === i.id} locked={!pro && i.id !== FREE.icon}
+                      onClick={() => pick({ icon: i.id })}>
+                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}><IconArt icon={i.id} size={58} /></div>
+                    </Tile>
+                  ))}
+                </Grid>
+                <div style={note}>{t("To change its icon, MPTree has to close for a moment. On some phones the icon then leaves the home screen: add it again from your app list.")}</div>
+              </>
+            ) : (
+              <>
+                <Grid>
                   {VINYLS.map(v => (
                     <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && !isFreeVinyl(v.id)}
                       onClick={() => setVinyl(v.id)}>
@@ -762,21 +954,19 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                       </div>
                     </Tile>
                   ))}
-                </Row>
-              </Group>
-
-            </>
-          )}
+                </Grid>
+                <div style={note}>{t("Aviela and Lantern bring records of their own, under Custom styles.")}</div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Only while something is changed: the way to keep it. With a locked
-            option on show and no Pro, that way is Pro (whose page has the free
-            week too). */}
+            option on show and no Pro, that way is Pro (whose page has the ad
+            for a day too). */}
         {changed && page === "main" && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
-            <button onClick={needsPro ? onNeedPro : apply} style={sh.saveBtn}>
-              {needsPro ? t("Keep it with Pro") : t("Apply")}
-            </button>
+            <button onClick={needsPro ? onNeedPro : apply} style={sh.saveBtn}>{keepLabel}</button>
           </div>
         )}
 
@@ -784,8 +974,31 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
         {reveal && (
           <StyleReveal kind={reveal.kind} at={reveal.at}
-            onCovered={() => { setAsking(false); if (reveal.kind === "aviela") enterAviela(); else enterLantern(); }}
+            onCovered={() => { setAsking(false); if (reveal.kind === "aviela") enterAviela(true); else enterLantern(true); }}
             onDone={() => setReveal(null)} />
+        )}
+
+        {cropSrc && (
+          <CropSheet src={cropSrc} shape="background" T={T} onCancel={() => setCropSrc(null)}
+            onUse={d => { previewBackground({ photo: d }); setCropSrc(null); }} />
+        )}
+
+        {iconAsk && (
+          <div role="dialog" aria-modal="true" onClick={() => switchIcon(false)} style={{
+            position: "fixed", inset: 0, zIndex: 495, background: T.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20, padding: "22px 20px 16px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><IconArt icon={iconAsk} size={64} /></div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{t("Your new icon")}</div>
+              <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.5, margin: "6px 0 18px" }}>
+                {t("To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.")}
+              </div>
+              <button onClick={() => switchIcon(true)} style={{ ...sh.saveBtn, fontSize: 15 }}>{t("Close and change it")}</button>
+              <button onClick={() => switchIcon(false)} style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
+                {t("When I leave MPTree")}
+              </button>
+            </div>
+          </div>
         )}
 
         {confirming && (

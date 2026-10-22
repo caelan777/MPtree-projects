@@ -1,4 +1,4 @@
-# Handoff, 20 October 2026
+# Handoff, 22 October 2026
 
 Where the work stands, for whoever picks it up next. Read `CLAUDE.md` first, then
 the "Where things stand" part of `docs/roadmap.md`. `docs/account.md` explains the
@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
-| Android test build | 61, versionCode 86 (1.2.8 plus the Pro film on the Pro page, Google test ads) | prerelease `v1.2.3-pro-test.61`, mp-tree.net/test |
+| Android test build | 65, versionCode 91 (1.3.0 work: Personalise like Android's Wallpaper & style, Aviela and Lantern side by side, background photo, icons back with a question before MPTree closes to switch; multi-select with its own top bar and an icon bar, sharing several songs; one backup row; review ask; white mark in the playing notification; lighter pages in black mode) | prerelease `v1.2.3-pro-test.65`, mp-tree.net/test, branch `personalise-2` |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,13 +18,14 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87). Next Windows is 0.1.6.
+Next Android versionCode is 93 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92). Next is 93. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
-1. **Upload 1.2.9 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.9.aab`,
-   versionCode 87, built 20 October; release notes in `docs/play-store-listing.md`).
-   1.2.8 plus the Pro film on the Pro page (1.2.8 does not have the film).
+1. **Upload 1.3.0 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`,
+   versionCode 92, built 22 October from `personalise-2`; release notes in
+   `docs/play-store-listing.md`). Everything of test builds 62 to 65, and of 1.2.9 (the
+   Pro film) if that was not uploaded. Nothing new to declare in Play Console.
 2. **Windows 0.1.5 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.5.msix`, built
    20 October, replaces the 0.1.4 that was never uploaded): the sign-in-again fix
    plus the full-screen Pro page (two equal cards: pay once, or the free week; no
@@ -117,8 +118,21 @@ conflict goes to the later device clock. Look at Play reviews and mail for
 - Loading screen white for light-mode users is fine.
 - Pro is not free on Windows. The repository stays public. Uploading to Play and
   Partner Center, Google sign-in and payment details are his.
-- Rejected, do not bring back: plus page, extra widgets, app icon picker, the
-  in-app web download, a website APK.
+- Rejected, do not bring back: plus page, extra widgets, the in-app web
+  download, a website APK. (The app icon picker was rejected on 13 October and
+  asked back by Caelan on 22 October, with an icon each for Aviela and Lantern.)
+- No reward for a review: Google Play does not allow it. The review card
+  (`src/review.ts`) asks once, from the second day, after ten songs, for nothing.
+- Ads stay the one rewarded ad for a day of Pro; Pro things say "Free with an
+  ad". Banners between songs and an ad on every Pro tap were turned down on
+  22 October (AdMob banners cannot sit in the list; Google discourages ads on
+  every tap). Look at the AdMob numbers again in early November.
+- Aviela's flower editor ("Make your own", flowers placed by hand) was in test
+  build 62 only; Caelan had it taken out again on 22 October.
+- The app icon is never switched while MPTree is in front: Android ends the
+  window when its launcher entry changes. SystemPlugin keeps it as pending and
+  switches in handleOnStop, or closes MPTree itself first when asked to ("Close
+  and change it").
 
 ## How to build
 

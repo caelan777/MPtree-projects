@@ -95,6 +95,14 @@ export const RECORD_LABEL: Record<FlowerRecord, { bg: string; ink: string }> = {
 /** The records on a dark ground, which keep the deeper shadow. */
 export const DARK_RECORDS: readonly FlowerRecord[] = ["wreath", "night"];
 
+/** The lily's petal: the same as the lily in StyleReveal, from its 60 by 150
+ *  box to one `len` long that points up from 0,0. */
+function lilyPetal(len: number): string {
+  const k = len / 150;
+  const pt = (x: number, y: number) => `${r1((x - 30) * k)} ${r1((y - 150) * k)}`;
+  return `M${pt(30, 150)}C${pt(9, 122)} ${pt(2, 76)} ${pt(13, 40)}C${pt(18, 22)} ${pt(25, 9)} ${pt(30, 0)}C${pt(35, 9)} ${pt(42, 22)} ${pt(47, 40)}C${pt(58, 76)} ${pt(51, 122)} ${pt(30, 150)}Z`;
+}
+
 function drawRecord(skin: FlowerRecord): string {
   let base = PINK;
   let groove = "rgba(32,24,27,0.09)";
@@ -185,11 +193,7 @@ function drawRecord(skin: FlowerRecord): string {
       // pointed petals, deep pink at the heart and white at the tips and edges,
       // speckled near the middle, with stamens standing out round the label.
       base = BLUSH;
-      // The same petal as the lily in StyleReveal, from its 60 by 150 box to
-      // one that points up from the middle of the record.
-      const k = 194 / 150;
-      const pt = (x: number, y: number) => `${r1((x - 30) * k)} ${r1((y - 150) * k)}`;
-      const lily = `M${pt(30, 150)}C${pt(9, 122)} ${pt(2, 76)} ${pt(13, 40)}C${pt(18, 22)} ${pt(25, 9)} ${pt(30, 0)}C${pt(35, 9)} ${pt(42, 22)} ${pt(47, 40)}C${pt(58, 76)} ${pt(51, 122)} ${pt(30, 150)}Z`;
+      const lily = lilyPetal(194);
       // The petals are drawn round 0,0 (their group is moved to the middle), so
       // the gradient is centred there too.
       art = `<defs><radialGradient id="lp" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="196">`
@@ -355,3 +359,4 @@ export function groundFlowers(kind: Flowers): CSSProperties {
 /** For what is drawn round the settings button: how wide it is. The Windows
  *  sidebar has that button somewhere else and moves the picture there. */
 export const settingsHalo = (kind: Flowers): number | null => (kind === "bloom" ? 180 : null);
+

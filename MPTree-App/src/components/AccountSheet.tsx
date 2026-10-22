@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
-import { makeSH, type T } from "../themes";
+import { makeSH, pageGround, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
 import { IC } from "./Icons";
 import { Loading } from "./Loading";
@@ -328,7 +328,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   // edge, so it steps over the status bar and the gesture bar itself.
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 450, display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
       <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px", flexShrink: 0 }}>
         <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("Account & sync")}</span>
         <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>

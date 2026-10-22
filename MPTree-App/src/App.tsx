@@ -27,7 +27,7 @@ import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
 import { applyLang, isLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
-import { MultiSelectBar } from "./components/MultiSelectBar";
+import { MultiSelectBar, SELECT_TOP_H } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet } from "./components/ProSheet";
@@ -41,6 +41,8 @@ import {
   prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
+import { startReview, reviewSongPlayed } from "./review";
+import { useBackground, loadBackground } from "./background";
 import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
 import { usePro, loadPro } from "./pro";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
@@ -506,6 +508,7 @@ export default function App() {
     // Held until the library is up, so the very first launch is not competing
     // with the scan and the permission dialog.
     if (!libraryReady) return;
+    startReview();
     let cancelled = false;
     const t = setTimeout(() => {
       const check = __DISTRIBUTION__ === "play"
@@ -760,7 +763,7 @@ export default function App() {
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
-  useEffect(() => { loadLook(); loadPro(); }, []);
+  useEffect(() => { loadLook(); loadBackground(); loadPro(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
@@ -777,6 +780,9 @@ export default function App() {
     return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
   };
   const TH = tinted(paletteFor(theme, look.dark, look.light));
+  // What the style draws on the ground: Aviela's flowers or Lantern's light.
+  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
+  const background = useBackground();
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -1416,6 +1422,7 @@ export default function App() {
       statsMetaRef.current = next;
       return next;
     })), 1500);
+    void reviewSongPlayed();
   };
 
   const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
@@ -2142,6 +2149,9 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Songs being picked in a playlist: PlaylistsView has its own select mode,
+  // and tells App so the header card can make way there too.
+  const [playlistSelecting, setPlaylistSelecting] = useState(false);
   const {
     selected,
     selectMode,
@@ -2537,6 +2547,29 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta]);
 
+  /** Several songs in one go, from multi-select. A cut kept in MPTree only is
+   *  a stretch of another file, so it has no file of its own to send. */
+  const SHARE_MAX = 50;
+  const shareSongs = useCallback(async (ids: string[]) => {
+    const picked = ids.map(id => songsRef.current.find(s => s.id === id)).filter((s): s is Song => !!s);
+    const files = picked.filter(s => !s.isCut);
+    const skipped = picked.length - files.length;
+    if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
+    if (files.length > SHARE_MAX) { showToast(tn(SHARE_MAX, "Share at most {n} song at a time.", "Share at most {n} songs at a time.")); return; }
+    try {
+      await Share.share({
+        title: tn(files.length, "{n} song", "{n} songs"),
+        files: files.map(s => toFileUri(s.uri)),
+        dialogTitle: t("Share songs"),
+      });
+      if (skipped) showToast(tn(skipped, "{n} cut kept in MPTree only was left out.", "{n} cuts kept in MPTree only were left out."));
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Playlists ─────────────────────────────────────────────────────────────
   const handlePlaylistsChange = useCallback((updated: Playlist[]) => {
     setPlaylists(updated);
@@ -2734,7 +2767,8 @@ export default function App() {
   // Both tabs collapse — the Playlists grid runs off the bottom of the screen
   // just as readily as the song list does. Multi-select is the one exception:
   // it needs its own bar and the header's count visible.
-  const chromeCollapsed = !selectMode && !chromeOpen;
+  const selecting = selectMode || playlistSelecting;
+  const chromeCollapsed = !selecting && !chromeOpen;
 
   // ONE definition of how the fold moves, used by every piece that moves with
   // it: the header card, the mini-player, the list paddings, the two floating
@@ -2763,8 +2797,11 @@ export default function App() {
   // fold's own third of a second. A gap closing reads as the card arriving;
   // content sliding under a header that is standing still reads as a fault.
   const COLLAPSED_INSET = dims.cardTop + 54 + 14;
-  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
-  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  // Picking songs, the header card makes way for MultiSelectBar's plain top
+  // bar, and the list starts under that instead.
+  const SELECT_INSET    = dims.cardTop - 2 + SELECT_TOP_H + 6;
+  const songsInset      = selecting ? SELECT_INSET : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
+  const playlistsInset  = selecting ? SELECT_INSET : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
   // Folding or unfolding the card while the list is scrolled: the list's top
   // padding changes at once, and the scroll position moves by the same amount,
   // so the rows on screen do not move at all. At the very top the list moves
@@ -3240,7 +3277,15 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ backgroundColor: TH.bg, ...(styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers)), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative" }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...(background.photo ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+        {/* Their own photo, under a veil of the app's colour, and Aviela's
+            flowers or Lantern's light over both. Behind everything else in
+            the app: the shell is its own layer, so -1 is still inside it. */}
+        {background.photo && <>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${background.photo}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundColor: TH.bg, opacity: 1 - background.strength }} />
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
+        </>}
 
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
         {/* Everything up top lives in one rounded card that floats ABOVE the
@@ -3270,8 +3315,9 @@ export default function App() {
             // Deliberately not faded: at both of those moments the card's own
             // mark and the flying one are the same size in the same place, so
             // an instant swap is invisible and a fade would show two of them.
-            opacity:       chromeCollapsed && logoFloating && logoFlight !== "fold" ? 0 : 1,
-            pointerEvents: chromeCollapsed && logoFloating ? "none" : "auto",
+            // Picking songs, it makes way for the bar that says how many.
+            opacity:       selecting || (chromeCollapsed && logoFloating && logoFlight !== "fold") ? 0 : 1,
+            pointerEvents: selecting || (chromeCollapsed && logoFloating) ? "none" : "auto",
             transition: move("width", "height", "border-radius"),
           }}
         >
@@ -3344,29 +3390,6 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {/* In select mode the count gives way to Remove. It is the only action
-                in this mode that destroys anything, so it sits up here on its own
-                rather than in a row of four harmless chips where a mis-tap is easy.
-                The count is still shown, in the bar at the bottom. The confirm
-                sheet behind removeMultiConfirm is what actually guards it. */}
-            {selectMode && (
-              <button
-                onClick={selected.size === 0 ? undefined : () => setRemoveMultiConfirm(true)}
-                aria-label={t("Remove selected songs")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  background: selected.size > 0 ? CT.binBg : "transparent",
-                  border: "1px solid " + (selected.size > 0 ? CT.binBorder : CT.border),
-                  color: selected.size > 0 ? "#e8445a" : CT.muted,
-                  borderRadius: 20, padding: "6px 12px",
-                  fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                  cursor: selected.size > 0 ? "pointer" : "default",
-                  opacity: selected.size > 0 ? 1 : 0.5,
-                }}
-              >
-                <IC.Trash />Remove
-              </button>
-            )}
             <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
@@ -4035,6 +4058,8 @@ export default function App() {
               onLikeMany={likeMany}
               onShuffleMany={shuffleMany}
               onPlayManyNext={handlePlayManyNext}
+              onShareMany={ids => { void shareSongs(ids); }}
+              onSelectingChange={setPlaylistSelecting}
               onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
               onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
               onCutSong={(song) => openCutSheet(song)}
@@ -4134,6 +4159,8 @@ export default function App() {
             onLikeAll={() => multiLikeWithMeta(true)} onUnlikeAll={() => multiLikeWithMeta(false)}
             onShuffleSelection={multiShuffleSelection}
             onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
+            onShare={() => { void shareSongs([...selected]); }}
+            onDelete={() => setRemoveMultiConfirm(true)}
             onBulkEdit={() => { setMultiIds([...selected]); setBulkEditOpen(true); }}
             onAddToPlaylist={() => { setMultiIds([...selected]); setMultiAddOpen(true); }}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
@@ -4228,8 +4255,7 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onExport={handleExportOpen}
-            onImportOpen={handleImportOpen}
+            onBackup={() => setBackupSheet({ kind: "choose" })}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4390,6 +4416,7 @@ export default function App() {
           onShare={handleShareBackup}
           onDone={doneBackupSheet}
           onOpenImportPicker={handleOpenImportPicker}
+          onChoose={what => (what === "export" ? handleExportOpen() : handleImportOpen())}
           onClose={closeBackupSheet}
           T={TH}
         />

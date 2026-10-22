@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { Ads, Billing, System } from "./plugins";
 import { resetLook } from "./look";
+import { dropBackground } from "./background";
 import { t } from "./i18n";
 
 // ─── PRO ─────────────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ export const subscribePro = subscribe;
  *  Pro is a change to the home screen, which resetLook cannot undo. */
 function dropProLook() {
   resetLook();
+  dropBackground();
   System.setAppIcon({ icon: "classic" }).catch(() => {});
 }
 

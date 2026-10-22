@@ -23,12 +23,14 @@ export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | LanternRecor
 /** How the app itself wears flowers: not at all, or one of Aviela's ways. */
 export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
 export type AvielaFlowers = typeof FLOWER_KINDS[number];
+const isAvielaFlowers = (v: string): v is AvielaFlowers => (FLOWER_KINDS as readonly string[]).includes(v);
 /** What Aviela draws on the app, or nothing. */
 export type Flowers    = "none" | AvielaFlowers;
 export type DarkShade  = "classic" | "graphite" | "lantern";
 /** "lantern" is only ever a header card: the green one on the Lantern page. */
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage" | "lantern";
-export type AppIcon    = "classic" | "light" | "vinyl" | "stamp";
+export const APP_ICONS = ["classic", "light", "vinyl", "stamp", "aviela", "lantern"] as const;
+export type AppIcon    = typeof APP_ICONS[number];
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
@@ -126,10 +128,14 @@ export async function loadLook(): Promise<Look> {
         if (!(["classic", "white", "smoke", "marble"] as string[]).includes(look[k]) && !isFlowerRecord(look[k]) && !isLanternRecord(look[k])) look = { ...look, [k]: "classic" };
       }
       // Test build 38 had light on the card for Lantern; that is gone.
-      if (look.flowers !== "none" && !(FLOWER_KINDS as readonly string[]).includes(look.flowers)) look = { ...look, flowers: "none" };
+      if (look.flowers !== "none" && !isAvielaFlowers(look.flowers)) look = { ...look, flowers: "none" };
       // Test build 35 had two kinds that are gone, and no card of Aviela's own.
-      look = { ...look, aviela: { ...DEFAULT_LOOK.aviela, ...look.aviela } };
-      if (!isFlowerRecord(look.aviela.record) || !(FLOWER_KINDS as readonly string[]).includes(look.aviela.flowers) || !AVIELA_CARDS.includes(look.aviela.card)) look = { ...look, aviela: DEFAULT_LOOK.aviela };
+      {
+        // Only these three: test build 62 also kept flowers placed by hand.
+        const a = { ...DEFAULT_LOOK.aviela, ...look.aviela };
+        const ok = isFlowerRecord(a.record) && isAvielaFlowers(a.flowers) && AVIELA_CARDS.includes(a.card);
+        look = { ...look, aviela: ok ? { record: a.record, flowers: a.flowers, card: a.card } : DEFAULT_LOOK.aviela };
+      }
       {
         const l = { ...DEFAULT_LOOK.lantern, ...look.lantern };
         const ok = isLanternRecord(l.record) && LANTERN_CARDS.includes(l.card);
@@ -147,6 +153,7 @@ export async function loadLook(): Promise<Look> {
         if (String(look[k]) === "dark:amoled") look = { ...look, [k]: "dark:classic" };
         if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
       }
+      if (!(APP_ICONS as readonly string[]).includes(look.icon)) look = { ...look, icon: "classic" };
       // The first test build had one card skin (glass, line...) for both modes.
       if (typeof look.cardDark !== "string" || !/^(default|dark:|light:)/.test(look.cardDark)) look = { ...look, cardDark: "default" };
       if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };
@@ -204,7 +211,7 @@ export function hasLookChanges(): boolean {
 /** Whether a look is made of free things only, so it can be kept without Pro. */
 export function isFreeLook(l: Look): boolean {
   return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
-    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none";
+    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon;
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────

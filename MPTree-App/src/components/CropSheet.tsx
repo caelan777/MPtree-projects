@@ -13,12 +13,16 @@ import { t } from "../i18n";
 // ever cut to.
 
 const OUT_PX = 640;
+const BACKGROUND_PX = 900;
 const QUALITY = 0.82;
 const MAX_ZOOM = 4;
 
 type CropSheetProps = {
   /** The photo as picked, as a data URL. */
   src: string;
+  /** "background": the shape of this screen, for a photo behind the whole
+   *  app, without the record's ring. A cover otherwise. */
+  shape?: "cover" | "background";
   onUse: (dataUrl: string) => void;
   onCancel: () => void;
   T: T;
@@ -27,8 +31,13 @@ type CropSheetProps = {
 /** zoom 1 fills the window; x and y are where the photo's corner is in it. */
 type View = { zoom: number; x: number; y: number };
 
-export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
-  const side = Math.round(Math.min(window.innerWidth - 72, window.innerHeight * 0.48, 360));
+export function CropSheet({ src, shape = "cover", onUse, onCancel, T }: CropSheetProps) {
+  const cover = shape === "cover";
+  // How tall the window is for its width: square for a cover, the screen's
+  // own shape for a background.
+  const aspect = cover ? 1 : window.innerHeight / window.innerWidth;
+  const side = Math.round(Math.min(window.innerWidth - 72, (window.innerHeight * (cover ? 0.48 : 0.58)) / aspect, 360));
+  const tall = Math.round(side * aspect);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });
   const frame = useRef<HTMLDivElement>(null);
@@ -37,15 +46,16 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
   const spread = useRef(0);
 
   /** How large the photo is drawn at a zoom, in the window's pixels. */
+  const fitOf = (i: HTMLImageElement) => Math.max(side / i.width, tall / i.height);
   const sizeAt = (i: HTMLImageElement, zoom: number) => {
-    const fit = side / Math.min(i.width, i.height);
+    const fit = fitOf(i);
     return { w: i.width * fit * zoom, h: i.height * fit * zoom };
   };
   /** Never past its own edge: the window is always full. */
   const held = (i: HTMLImageElement, v: View): View => {
     const zoom = Math.min(MAX_ZOOM, Math.max(1, v.zoom));
     const { w, h } = sizeAt(i, zoom);
-    return { zoom, x: Math.min(0, Math.max(side - w, v.x)), y: Math.min(0, Math.max(side - h, v.y)) };
+    return { zoom, x: Math.min(0, Math.max(side - w, v.x)), y: Math.min(0, Math.max(tall - h, v.y)) };
   };
   /** Zooms with the point under the fingers staying where it is. */
   const zoomAt = (i: HTMLImageElement, v: View, zoom: number, px: number, py: number): View => {
@@ -59,10 +69,10 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
     const i = new Image();
     i.onload = () => {
       if (gone) return;
-      const fit = side / Math.min(i.width, i.height);
+      const fit = fitOf(i);
       setImg(i);
       // Starts in the middle, which is what it was cut to before.
-      setView({ zoom: 1, x: (side - i.width * fit) / 2, y: (side - i.height * fit) / 2 });
+      setView({ zoom: 1, x: (side - i.width * fit) / 2, y: (tall - i.height * fit) / 2 });
     };
     i.onerror = () => { if (!gone) onCancel(); };
     i.src = src;
@@ -72,7 +82,7 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
 
   const inFrame = (clientX: number, clientY: number) => {
     const r = frame.current?.getBoundingClientRect();
-    return r ? { x: clientX - r.left, y: clientY - r.top } : { x: side / 2, y: side / 2 };
+    return r ? { x: clientX - r.left, y: clientY - r.top } : { x: side / 2, y: tall / 2 };
   };
 
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -115,17 +125,19 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
     if (!img) return;
     try {
       // The window, measured in the photo's own pixels.
-      const perPx = Math.min(img.width, img.height) / side / view.zoom;
-      const cut = side * perPx;
-      const out = Math.max(1, Math.min(OUT_PX, Math.round(cut)));
+      const perPx = 1 / fitOf(img) / view.zoom;
+      const cutW = side * perPx, cutH = tall * perPx;
+      // A background is as wide as a phone screen's pixels, near enough.
+      const outW = Math.max(1, Math.min(cover ? OUT_PX : BACKGROUND_PX, Math.round(cutW)));
+      const outH = Math.max(1, Math.round(outW * aspect));
       const canvas = document.createElement("canvas");
-      canvas.width = out; canvas.height = out;
+      canvas.width = outW; canvas.height = outH;
       const ctx = canvas.getContext("2d");
       if (!ctx) { onUse(src); return; }
       // A see-through photo would come out black as a JPEG.
       ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, out, out);
-      ctx.drawImage(img, -view.x * perPx, -view.y * perPx, cut, cut, 0, 0, out, out);
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, -view.x * perPx, -view.y * perPx, cutW, cutH, 0, 0, outW, outH);
       onUse(canvas.toDataURL("image/jpeg", QUALITY));
     } catch {
       // Better the whole photo than none.
@@ -141,7 +153,7 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 470, background: T.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 22, padding: "18px 18px 16px", width: side + 2, boxSizing: "content-box", boxShadow: "0 16px 48px rgba(0,0,0,0.4)" }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Crop the cover")}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{cover ? t("Crop the cover") : t("Place the photo")}</div>
         <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.45, margin: "4px 0 12px" }}>
           {t("Drag the photo to move it. Use the slider to zoom.")}
         </div>
@@ -150,7 +162,7 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
           ref={frame}
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}
           style={{
-            width: side, height: side, position: "relative", overflow: "hidden", borderRadius: 14,
+            width: side, height: tall, position: "relative", overflow: "hidden", borderRadius: 14,
             background: T.dim, border: `1px solid ${T.border}`, touchAction: "none", cursor: img ? "grab" : "default",
           }}
         >
@@ -160,16 +172,16 @@ export function CropSheet({ src, onUse, onCancel, T }: CropSheetProps) {
               style={{ position: "absolute", left: view.x, top: view.y, width: drawn.w, height: drawn.h, maxWidth: "none", userSelect: "none", pointerEvents: "none" }}
             />
           )}
-          <div aria-hidden="true" style={{
+          {cover && <div aria-hidden="true" style={{
             position: "absolute", inset: 0, borderRadius: "50%", pointerEvents: "none",
             border: "1.5px dashed rgba(255,255,255,0.75)", boxShadow: "0 0 0 1px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(0,0,0,0.3)",
-          }} />
+          }} />}
         </div>
 
         <input
           className="slider" type="range" min={1} max={MAX_ZOOM} step={0.01} value={view.zoom} disabled={!img}
           aria-label={t("Zoom")}
-          onChange={e => { const z = Number(e.target.value); if (img) setView(v => zoomAt(img, v, z, side / 2, side / 2)); }}
+          onChange={e => { const z = Number(e.target.value); if (img) setView(v => zoomAt(img, v, z, side / 2, tall / 2)); }}
           style={{ width: "100%", margin: "18px 0 16px", accentColor: T.accent }}
         />
 

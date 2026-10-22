@@ -6,6 +6,7 @@ import { t, tn } from "../i18n";
 
 export type BackupSheetState =
   | { kind: "closed" }
+  | { kind: "choose" }
   | { kind: "exportInfo" }
   | { kind: "exportProgress"; done: number; total: number; cancelled: boolean }
   | { kind: "exportSuccess"; folderName: string; jsonUri?: string; failedCount?: number }
@@ -26,6 +27,8 @@ type BackupSheetProps = {
   onShare: () => void;
   onDone: () => void;
   onOpenImportPicker: () => void;
+  /** From the choice: make a backup, or restore one. */
+  onChoose: (what: "export" | "import") => void;
   onClose: () => void;
   defaultBackupName: string;
   T: T;
@@ -478,6 +481,30 @@ function ExportErrorSheet({
 
 // ─── Import Info Sheet ────────────────────────────────────────────────────────
 
+/** The one row in Settings opens this: make a backup, or put one back. */
+function ChooseSheet({ onChoose, onClose, T }: { onChoose: (what: "export" | "import") => void; onClose: () => void; T: T }) {
+  const option = (what: "export" | "import", icon: React.ReactNode, title: string, sub: string) => (
+    <button onClick={() => onChoose(what)} style={{
+      display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", cursor: "pointer",
+      background: T.dim, border: `1px solid ${T.border}`, borderRadius: 14, padding: "14px 16px",
+      marginBottom: 10, fontFamily: "inherit", color: T.text,
+    }}>
+      <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
+      <span>
+        <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>{title}</span>
+        <span style={{ display: "block", fontSize: 13, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>{sub}</span>
+      </span>
+    </button>
+  );
+  return (
+    <SheetOverlay onClose={onClose} T={T}>
+      <div style={{ fontSize: 18, fontWeight: "700", color: T.text, marginBottom: 14 }}>{t("Backup & restore")}</div>
+      {option("export", <BackupIcon />, t("Make a backup"), t("Your playlists, likes and edits, and the songs if you like, in one folder."))}
+      {option("import", <RestoreIcon />, t("Restore a backup"), t("Put a backup you made before back into MPTree."))}
+    </SheetOverlay>
+  );
+}
+
 function ImportInfoSheet({
   onProceed, onClose, T,
 }: {
@@ -672,6 +699,7 @@ export function BackupSheet({
   onShare,
   onDone,
   onOpenImportPicker,
+  onChoose,
   onClose,
   defaultBackupName,
   T,
@@ -679,6 +707,9 @@ export function BackupSheet({
   if (state.kind === "closed") return null;
 
   switch (state.kind) {
+    case "choose":
+      return <ChooseSheet onChoose={onChoose} onClose={onClose} T={T} />;
+
     case "exportInfo":
       return (
         <ExportInfoSheet
