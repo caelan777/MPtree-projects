@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
-| Android test build | 67, versionCode 94 (1.3.1 work: Get music behind the + in the header, a full-screen page with a tutorial film, Bandcamp and Qobuz; a toast when a download arrives; the + in the tour and pointed out once to people who update) | prerelease `v1.2.3-pro-test.67`, mp-tree.net/test, branch `get-music` |
+| Android test build | 68, versionCode 95 (1.3.1 work: Get music behind the + in the header, a full-screen page with a tutorial film, Bandcamp and Qobuz; a toast when a download arrives; the + in the tour and pointed out once to people who update) | prerelease `v1.2.3-pro-test.68`, mp-tree.net/test, branch `get-music` |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 95 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test build 66 took 93, test build 67 took 94). Next is 95. Next Windows is 0.1.6.
+Next Android versionCode is 96 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test build 66 took 93, test builds 67 and 68 took 94 and 95). Next is 96. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
