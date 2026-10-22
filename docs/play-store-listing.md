@@ -8,6 +8,27 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.0 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`
+(versionCode 92, built 2026-10-22 with `npm run build:play`; the next bundle or test build is 93). Test builds 62 to 65
+on the branch `personalise-2`. Nothing new to declare: no new permission, and Google's review card (Play In-App
+Review) collects nothing for MPTree.
+
+```
+<en-GB>
+Personalise is new, laid out like Android's own Wallpaper & style. Put your own photo behind the app and choose how strongly it shows. Pick an app icon, with new ones for Aviela and Lantern. Hold a song to pick several: share them, add them to a playlist or play them next. Backup and restore now sit together. The MPTree logo shows on the lock screen, and black mode is easier to read.
+</en-GB>
+<nl-NL>
+Personaliseren is vernieuwd, net als Achtergrond en stijl van Android. Zet je eigen foto achter de app en kies hoe sterk hij te zien is. Kies een app-icoon, met nieuwe voor Aviela en Lantern. Houd een nummer vast om er meer te kiezen: deel ze, zet ze in een playlist of speel ze hierna. Back-up en terugzetten staan nu bij elkaar. Het MPTree-logo staat op je vergrendelscherm en de zwarte modus leest makkelijker.
+</nl-NL>
+<es-ES>
+Personalizar se renueva, como Fondo y estilo de Android. Pon tu propia foto detrás de la app y elige cuánto se ve. Elige un icono, con nuevos para Aviela y Lantern. Mantén pulsada una canción para elegir varias: compártelas, añádelas a una lista o ponlas a continuación. Copia y restauración están ahora juntas. El logo de MPTree aparece en la pantalla de bloqueo y el modo negro se lee mejor.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.2.9 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.9.aab`

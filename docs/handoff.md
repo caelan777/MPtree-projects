@@ -18,13 +18,14 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91). Next is 92. Next Windows is 0.1.6.
+Next Android versionCode is 93 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92). Next is 93. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
-1. **Upload 1.2.9 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.2.9.aab`,
-   versionCode 87, built 20 October; release notes in `docs/play-store-listing.md`).
-   1.2.8 plus the Pro film on the Pro page (1.2.8 does not have the film).
+1. **Upload 1.3.0 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`,
+   versionCode 92, built 22 October from `personalise-2`; release notes in
+   `docs/play-store-listing.md`). Everything of test builds 62 to 65, and of 1.2.9 (the
+   Pro film) if that was not uploaded. Nothing new to declare in Play Console.
 2. **Windows 0.1.5 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.5.msix`, built
    20 October, replaces the 0.1.4 that was never uploaded): the sign-in-again fix
    plus the full-screen Pro page (two equal cards: pay once, or the free week; no
