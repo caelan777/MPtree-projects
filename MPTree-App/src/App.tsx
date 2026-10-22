@@ -3277,7 +3277,7 @@ export default function App() {
         {background.photo && <>
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${background.photo}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundColor: TH.bg, opacity: 1 - background.strength }} />
-          <div aria-hidden="true" data-ground style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
         </>}
 
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
@@ -3316,7 +3316,7 @@ export default function App() {
           {/* Aviela's flowers, behind what the card holds. Laid over the card,
               not in it, so its measured height is untouched. */}
           {[cardFlowers(look.flowers, flowerTone), cornerFlowers(look.flowers, flowerTone)].map((layer, i) => layer && (
-            <div key={i} aria-hidden="true" data-ground style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
+            <div key={i} aria-hidden="true" style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
           ))}
           {/* Full header. Kept mounted and at its natural width while collapsed
               (just clipped) so it never reflows — a reflow would corrupt the

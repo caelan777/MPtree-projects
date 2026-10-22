@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { getLook, type CardShade, type FlowerRecord, type Flowers, type LightShade, type OwnFlowers, type OwnGround, type OwnItem, type Stamp } from "./look";
+import type { CardShade, FlowerRecord, Flowers, LightShade } from "./look";
 
 // ─── AVIELA ──────────────────────────────────────────────────────────────────
 // The flowers of the Aviela style: its records, and the ways the app itself
@@ -90,7 +90,6 @@ export const RECORD_LABEL: Record<FlowerRecord, { bg: string; ink: string }> = {
   branch:  { bg: INK,   ink: WHITE },
   posy:    { bg: WHITE, ink: INK },
   lily:    { bg: WHITE, ink: INK },
-  own:     { bg: WHITE, ink: INK },
 };
 
 /** The records on a dark ground, which keep the deeper shadow. */
@@ -189,8 +188,6 @@ function drawRecord(skin: FlowerRecord): string {
       // Plain pink, with a small ring of flowers round the label.
       art = ring(80, 10, (x, y, i, deg) => flower(x, y, 19, { n: 5, fill: i % 2 ? WHITE : ROSE, heart: i % 2 ? GOLD : WHITE, turn: deg }));
       break;
-    // Made of their own flowers: ownRecordArt, never drawn here.
-    case "own": break;
     case "lily": {
       // One pink lily, Aviela's favourite, as large as the record: six long
       // pointed petals, deep pink at the heart and white at the tips and edges,
@@ -224,7 +221,6 @@ function drawRecord(skin: FlowerRecord): string {
 const records = new Map<FlowerRecord, string>();
 /** The picture of a flower record, to be used as an image and turned. */
 export function recordArt(skin: FlowerRecord): string {
-  if (skin === "own") return ownRecordArt(getLook().aviela.own);
   let made = records.get(skin);
   if (!made) { made = drawRecord(skin); records.set(skin, made); }
   return made;
@@ -354,7 +350,6 @@ const MEADOW = once(() => {
 /** What the app's own background gets. Paint only. */
 export function groundFlowers(kind: Flowers): CSSProperties {
   switch (kind) {
-    case "own":    return { backgroundImage: `url("${ownAppArt(getLook().aviela.own.app, window.innerWidth, window.innerHeight)}")`, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%" };
     case "bloom":  return { backgroundImage: BIG_BLOOM(), backgroundRepeat: "no-repeat", backgroundSize: "420px 420px", backgroundPosition: "right -150px bottom 60px" };
     case "meadow": return { backgroundImage: MEADOW(), backgroundRepeat: "repeat-x", backgroundSize: "184px 156px", backgroundPosition: "left bottom" };
     default:       return {};
@@ -365,99 +360,3 @@ export function groundFlowers(kind: Flowers): CSSProperties {
  *  sidebar has that button somewhere else and moves the picture there. */
 export const settingsHalo = (kind: Flowers): number | null => (kind === "bloom" ? 180 : null);
 
-// ─── Aviela, made your own ───────────────────────────────────────────────────
-// Each of Aviela's flowers on its own, to be placed by hand (FlowerEditor), and
-// the pictures made of where they were placed: a record, and the app's ground.
-
-/** One flower, drawn round 0,0, 100 across. */
-function stampArt(f: Stamp): string {
-  switch (f) {
-    case "rose":  return flower(0, 0, 48, { n: 6, fill: ROSE, heart: GOLD });
-    case "pink":  return flower(0, 0, 48, { n: 5, fill: PINK, heart: WHITE });
-    case "petal": return flower(0, 0, 48, { n: 5, fill: PETAL, heart: ROSE });
-    case "white": return flower(0, 0, 48, { n: 5, fill: WHITE, heart: GOLD });
-    case "daisy": return flower(0, 0, 48, { n: 12, fill: WHITE, heart: GOLD });
-    case "line":  return flower(0, 0, 44, { n: 6, fill: "none", heart: "none", line: INK });
-    case "night": return flower(0, 0, 44, { n: 5, fill: "none", heart: "none", line: ROSE });
-    case "leaf":  return leaf(0, 26, 52, 0, PINK);
-    case "bud":   return `<circle r="18" fill="${ROSE}"/><circle r="7" cx="-5" cy="-5" fill="${PINK}"/>`;
-    case "bloom": {
-      let a = "";
-      for (let i = 0; i < 8; i++) a += `<path d="${petal(48, 0.4)}" transform="rotate(${i * 45})" fill="${i % 2 ? PINK : ROSE}"/>`;
-      for (let i = 0; i < 8; i++) a += `<path d="${petal(31, 0.44)}" transform="rotate(${22.5 + i * 45})" fill="${i % 2 ? WHITE : PETAL}" stroke="rgba(32,24,27,0.08)" stroke-width="0.6"/>`;
-      return a + `<circle r="6" fill="${GOLD}"/>`;
-    }
-    case "dahlia": {
-      let a = "";
-      const rows: [number, number, string][] = [[48, 18, PETAL], [39, 16, PINK], [30, 14, "#f3a4c2"], [21, 12, ROSE]];
-      rows.forEach(([len, n, fill], row) => {
-        for (let i = 0; i < n; i++) a += `<path d="${petal(len, 0.26)}" transform="rotate(${r1((i + (row % 2) / 2) * 360 / n)})" fill="${fill}" stroke="rgba(32,24,27,0.10)" stroke-width="0.5"/>`;
-      });
-      return a;
-    }
-    case "lily": {
-      const d = lilyPetal(48);
-      let a = "";
-      for (let i = 0; i < 6; i++) a += `<path d="${d}" transform="rotate(${i * 60})" fill="url(#mpLily)" stroke="#ffffff" stroke-opacity="0.75" stroke-width="1"/>`;
-      return a + `<circle r="5" fill="#a4521f"/>`;
-    }
-  }
-}
-
-/** The lily's colour, for any picture with a lily in it. Centred on 0,0, where
- *  each flower is drawn, so it moves and sizes with it. */
-const LILY_PAINT = `<defs><radialGradient id="mpLily" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="49"><stop offset="0" stop-color="#d94a8a"/><stop offset="0.38" stop-color="#ef7fb3"/><stop offset="0.74" stop-color="#f9c6dc"/><stop offset="1" stop-color="#fff2f8"/></radialGradient></defs>`;
-
-const stamps = new Map<Stamp, string>();
-/** One flower as a picture, for the editor's tray and the flowers on it. */
-export function stampUri(f: Stamp): string {
-  let made = stamps.get(f);
-  if (!made) {
-    made = "data:image/svg+xml," + encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' viewBox='-50 -50 100 100'>${f === "lily" ? LILY_PAINT : ""}${stampArt(f)}</svg>`.replace(/"/g, "'"));
-    stamps.set(f, made);
-  }
-  return made;
-}
-
-/** The flowers, each moved, turned and sized, on a picture `w` by `h`. Sizes
- *  are shares of the width, so a flower is as large on a tall phone as on a
- *  short one. */
-function placed(items: OwnItem[], w: number, h: number): string {
-  const lily = items.some(i => i.f === "lily") ? LILY_PAINT : "";
-  return lily + items.map(i =>
-    `<g transform="translate(${r1(i.x * w)} ${r1(i.y * h)}) rotate(${r1(i.r)}) scale(${(i.s * w / 100).toFixed(3)})">${stampArt(i.f)}</g>`).join("");
-}
-
-export const OWN_GROUND: Record<OwnGround, string> = { pink: PINK, blush: BLUSH, white: WHITE, ink: "#151012" };
-
-const ownRecords = new Map<string, string>();
-/** Their own record: the ground they picked, their flowers, and the grooves. */
-export function ownRecordArt(own: OwnFlowers): string {
-  const key = own.ground + JSON.stringify(own.record);
-  let made = ownRecords.get(key);
-  if (!made) {
-    const groove = own.ground === "ink" ? "rgba(255,255,255,0.08)" : "rgba(32,24,27,0.09)";
-    let grooves = "";
-    for (let r = 68; r <= 190; r += 7) grooves += `<circle cx="200" cy="200" r="${r}" fill="none" stroke="${groove}" stroke-width="1.1"/>`;
-    made = uri(400, 400, `<rect width="400" height="400" fill="${OWN_GROUND[own.ground]}"/>${placed(own.record, 400, 400)}${grooves}`);
-    if (ownRecords.size > 20) ownRecords.clear();
-    ownRecords.set(key, made);
-  }
-  return made;
-}
-
-const ownApps = new Map<string, string>();
-/** Their own flowers on the app: a see-through picture the shape of the
- *  screen, laid over the app's ground. */
-export function ownAppArt(items: OwnItem[], screenW: number, screenH: number): string {
-  const h = Math.round(400 * screenH / Math.max(1, screenW));
-  const key = h + JSON.stringify(items);
-  let made = ownApps.get(key);
-  if (!made) {
-    made = uri(400, h, placed(items, 400, h));
-    if (ownApps.size > 20) ownApps.clear();
-    ownApps.set(key, made);
-  }
-  return made;
-}
