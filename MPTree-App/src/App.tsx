@@ -50,6 +50,7 @@ import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { BackupSheet }      from "./components/BackupSheet";
+import { GetMusicSheet }    from "./components/GetMusicSheet";
 import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
 import type { Playlist, SmartPlaylist } from "./types";
 import { useMultiSelect } from "./hooks/useMultiSelect";
@@ -172,7 +173,11 @@ export default function App() {
   const [filterOpen,     setFilterOpen]    = useState(false);
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
-  const [theme,          setTheme]         = useState<Theme>("dark");
+  // The + in the header: legal places to get music (components/GetMusicSheet).
+  // The search is kept while the app is open, so a second site is one tap.
+  const [getMusicOpen,   setGetMusicOpen]  = useState(false);
+  const [getMusicQuery,  setGetMusicQuery] = useState("");
+  const [theme,         setTheme]         = useState<Theme>("dark");
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
   const [menuSong,       setMenuSong]      = useState<Song | null>(null);
@@ -498,6 +503,27 @@ export default function App() {
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
+    // The tour has a step on the +, so it never needs pointing out again.
+    Preferences.set({ key: "mptree_getmusic_seen", value: "1" }).catch(() => {});
+  }, []);
+
+  // ── The + for people who already had MPTree ───────────────────────────────
+  // New installs meet it in the tour. Everyone else gets its one step once,
+  // a moment after the library is up, and only on a calm screen (see
+  // getMusicTipShown further down).
+  const [getMusicTip, setGetMusicTip] = useState(false);
+  useEffect(() => {
+    if (!libraryReady || firstRunRef.current !== false) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    Preferences.get({ key: "mptree_getmusic_seen" }).then(({ value }) => {
+      if (!cancelled && !value) timer = setTimeout(() => setGetMusicTip(true), 1500);
+    }).catch(() => {});
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [libraryReady]);
+  const dismissGetMusicTip = useCallback(() => {
+    setGetMusicTip(false);
+    Preferences.set({ key: "mptree_getmusic_seen", value: "1" }).catch(() => {});
   }, []);
 
   // ── "A newer version is on the website" ───────────────────────────────────
@@ -2252,7 +2278,45 @@ export default function App() {
     setQueue(displayList); playSong(song, displayList);
   };
 
-  const onPressStart = (id: string, clientX: number, clientY: number) => {
+  // ── Get music: songs coming in from the browser ──────────────────────────
+  // Opening a site from the + remembers which songs were already here. For a
+  // quarter of an hour after, every return to MPTree looks again a few times:
+  // the usual resume scan, then 5 and 20 seconds on, since a download can
+  // finish after you are back. A new song in a Download folder gets a toast
+  // to play it. Only Download, so a cut or a synced song never pops up here.
+  const fetchWatchRef = useRef<{ known: Set<string>; until: number } | null>(null);
+  const openMusicSite = (url: string) => {
+    fetchWatchRef.current = { known: new Set(songsRef.current.map(s => s.id)), until: Date.now() + 15 * 60_000 };
+    setGetMusicOpen(false);
+    Browser.open({ url }).catch(() => showToast(t("Could not open the browser")));
+  };
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
+      timers.splice(0).forEach(clearTimeout);
+      const w = fetchWatchRef.current;
+      if (!isActive || !w || Date.now() > w.until) return;
+      for (const ms of [5000, 20000]) timers.push(setTimeout(() => { scanMusic(); }, ms));
+    });
+    return () => { timers.forEach(clearTimeout); sub.then(s => s.remove()).catch(() => {}); };
+  }, [scanMusic]);
+  useEffect(() => {
+    const w = fetchWatchRef.current;
+    if (!w) return;
+    if (Date.now() > w.until) { fetchWatchRef.current = null; return; }
+    const fresh = songs.filter(s => !w.known.has(s.id) && /\/downloads?\//i.test(s.uri));
+    songs.forEach(s => w.known.add(s.id));
+    if (fresh.length === 0) return;
+    const first = fresh[0];
+    showToast(
+      tn(fresh.length, "\"{name}\" is in your library", "{n} new songs are in your library", { name: dispName(first) }),
+      { label: t("Play"), onClick: () => handleTap(first) },
+    );
+    // Only a new library is news. The toast and the tap read this render's.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songs]);
+
+  const onPressStart =(id: string, clientX: number, clientY: number) => {
     pressStartX.current = clientX;
     pressStartY.current = clientY;
     // Long-press now starts multi-select, the standard Android gesture. The
@@ -2697,6 +2761,15 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, likedKey, lastPlayedKey, playCountKey, langPref]);
 
+  // The one-off pointer at the + waits for a calm screen: the header open with
+  // the + in view, and nothing else asking for attention. Until then it simply
+  // stays pending.
+  const getMusicTipShown = getMusicTip && libraryReady && !isInitializing
+    && !showOnboarding && !welcome && page === "songs" && chromeOpen && !selectMode && !playlistSelecting
+    && !settingsOpen && !binOpen && !cleanupOpen && !eqOpen && !proOpen && !lookOpen && !accountOpen
+    && !getMusicOpen && !playerExpanded && !menuSong && !editSong && !cutSong && !filterOpen
+    && !chromeMenuOpen && !multiAddOpen && !updateInfo && backupSheet.kind === "closed";
+
   // ── Android hardware / gesture Back ───────────────────────────────────────
   // Without a handler, Back closes the whole app from anywhere, even with a
   // sheet open. This walks ONE layer of UI at a time, topmost first, and only
@@ -2718,7 +2791,9 @@ export default function App() {
         return;
       }
       if (showOnboarding)      { finishOnboarding(); return; }
-      if (proOpen)             { setProOpen(false); return; }
+      if (getMusicTipShown)    { dismissGetMusicTip(); return; }
+      if (getMusicOpen)        { setGetMusicOpen(false); return; }
+      if (proOpen)            { setProOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
@@ -3389,7 +3464,10 @@ export default function App() {
             </button>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+            <button data-tour="plus" onClick={() => setGetMusicOpen(true)} aria-label={t("Get music")} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
+              <IC.Plus />
+            </button>
             <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
@@ -3833,6 +3911,12 @@ export default function App() {
                   <IC.Heart filled={false} size={28} />
                   <div style={{ marginTop: 12 }}>{t("No songs found")}</div>
                   <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{isFavFilter ? t("Like songs by double-tapping them") : t("Pull down to refresh")}</div>
+                  {/* Nothing on the device at all: show where music comes from. */}
+                  {libraryReady && songs.length === 0 && (
+                    <button onClick={() => setGetMusicOpen(true)} style={{ marginTop: 18, background: TH.accent, color: TH.playBtnFg, border: "none", borderRadius: 20, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      {t("Get music")}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -4405,7 +4489,12 @@ export default function App() {
           />
         )}
 
-        {/* ═══ BACKUP SHEET ════════════════════════════════════════════════ */}
+        {/* ═══ GET MUSIC ═══════════════════════════════════════════════════ */}
+        {getMusicOpen && (
+          <GetMusicSheet query={getMusicQuery} onQuery={setGetMusicQuery} onOpen={openMusicSite} onClose={() => setGetMusicOpen(false)} T={TH} />
+        )}
+
+        {/* ═══ BACKUP SHEET════════════════════════════════════════════════ */}
         <BackupSheet
           songs={songs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
           binSongs={removedSongs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
@@ -4492,6 +4581,9 @@ export default function App() {
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
         {!isInitializing && libraryReady && showOnboarding && !welcome && (
           <OnboardingOverlay onDone={finishOnboarding} T={TH} />
+        )}
+        {getMusicTipShown && (
+          <OnboardingOverlay onlyGetMusic onDone={dismissGetMusicTip} T={TH} />
         )}
 
         {/* ═══ LOADING SCREEN ══════════════════════════════════════════════
