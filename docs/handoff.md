@@ -9,7 +9,7 @@ account and sync, `Desktop/README.md` the Windows app.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
-| Android test build | 63, versionCode 89 (1.3.0 work: Personalise like Android's Wallpaper & style with Custom styles as a row and choices in a grid, background photo, icons back, multi-share, one backup row, review ask) | prerelease `v1.2.3-pro-test.63`, mp-tree.net/test, branch `personalise-2` |
+| Android test build | 64, versionCode 90 (1.3.0 work: Personalise like Android's Wallpaper & style, Aviela and Lantern side by side, background photo, icons back; multi-select with its own top bar and an icon bar, sharing several songs; one backup row; review ask) | prerelease `v1.2.3-pro-test.64`, mp-tree.net/test, branch `personalise-2` |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,7 +18,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 and 63 took 88 and 89). Next is 90. Next Windows is 0.1.6.
+Next Android versionCode is 88 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 64 took 88 to 90). Next is 91. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 

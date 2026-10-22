@@ -708,8 +708,6 @@ export const ES: Record<string, string> = {
   "Aviela and Lantern bring records of their own, under Custom styles.": "Aviela y Lantern traen sus propios discos, en Estilos propios.",
   "Take the style off": "Quitar el estilo",
   "Each colour is dark or light, and the app follows it.": "Cada color es oscuro o claro, y la app lo sigue.",
-  "Pink, with flowers": "Rosa, con flores",
-  "A style is a whole look in one: colour, header card, record and app icon. Tap one to change its parts.": "Un estilo es un aspecto completo: color, tarjeta superior, disco e icono. Tócalo para cambiar sus partes.",
   "The card at the top of the app, with the search and the buttons. Default takes the app's own colour.": "La tarjeta de arriba de la app, con la búsqueda y los botones. Predeterminada toma el color de la app.",
-  "Green light in the dark": "Luz verde en la oscuridad",
+  "Add to": "Añadir",
 };

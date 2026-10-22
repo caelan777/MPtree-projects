@@ -24,15 +24,15 @@ import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Ton
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
 // like at the top, large, getting smaller as the page is scrolled; under it one
-// row for each kind of choice: the two custom styles, the background photo,
-// the colours, the header card, the app icon and the record. A row opens its
-// choices on a page of its own, laid out over the whole width, with a way back.
+// the two custom styles side by side, then one row for each kind of choice:
+// the background photo, the colours, the header card, the app icon and the
+// record. A row opens its choices on a page of its own, laid out over the whole
+// width, with a way back; a style's page keeps its choices in sideways rows.
 //
 // Aviela is pink with flowers, and which flowers is a choice: its records, the
 // ways for the app to wear them, and a header card in white, pink or black.
 // Lantern is green light: its own records and header cards, on black, white or
-// paper. Put on, each brings its own app icon too. Tapping one on the custom
-// styles page opens its own page.
+// paper. Put on, each brings its own app icon too. Tapping one opens its page.
 //
 // Lantern asks something first, of whoever has Pro, the first time only: a
 // ring comes up with "Are you afraid?" (LanternGate). No lets them in. Yes
@@ -121,6 +121,59 @@ function Tile({ selected, onClick, label, children, T, locked }: {
     </button>
   );
 }
+
+function Row({ title, aside, children, T, framed }: { title: string; aside?: ReactNode; children: ReactNode; T: T; framed?: boolean }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  // Whether there is more to the right. A cut-off tile alone is easy to miss,
+  // so the edge fades and carries an arrow until the end is reached.
+  const [more, setMore] = useState(false);
+  const measure = () => {
+    const el = scroller.current;
+    if (el) setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: framed ? "0 14px" : "0 20px", marginBottom: 7 }}>
+        <span style={{ ...makeSH(T).lbl, margin: 0 }}>{title}</span>
+        {aside}
+      </div>
+      <div style={{ position: "relative" }}>
+        {/* Scrolls sideways on a narrow phone rather than wrapping into a grid
+            that pushes the last row off the sheet. */}
+        <div ref={scroller} onScroll={measure}
+          style={{ display: "flex", gap: 8, overflowX: "auto", padding: framed ? "2px 10px 4px" : "2px 16px 4px", scrollbarWidth: "none" }}>
+          {children}
+        </div>
+        <div aria-hidden style={{
+          position: "absolute", top: 0, right: 0, bottom: 0, width: 56, pointerEvents: "none",
+          background: `linear-gradient(to right, transparent, ${T.sheetBg} 85%)`,
+          opacity: more ? 1 : 0, transition: "opacity 0.2s",
+        }} />
+        {more && (
+          <button
+            onClick={() => scroller.current?.scrollBy({ left: scroller.current.clientWidth * 0.7, behavior: "smooth" })}
+            aria-label={t("More")}
+            style={{
+              position: "absolute", right: 8, top: 23, width: 28, height: 28, borderRadius: 14,
+              display: "grid", placeItems: "center", padding: 0, cursor: "pointer",
+              background: T.surface, border: `1px solid ${T.border}`, color: T.text,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+            }}
+          >
+            <IC.ChevronR />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 /** Choices laid out over the width of the page, as many to a line as fit. */
 function Grid({ children }: { children: ReactNode }) {
@@ -225,12 +278,12 @@ const Lock = ({ T }: { T: T }) => (
   </span>
 );
 
-/** A group of choices, as a panel with its name on top. */
+/** A group of choices on a style's page: a panel with its name on top and
+ *  its choices in a row that scrolls sideways. */
 function Group({ title, children, T }: { title: string; children: ReactNode; T: T }) {
   return (
-    <div style={{ margin: "12px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, padding: "14px 0 14px" }}>
-      <div style={{ ...makeSH(T).lbl, margin: "0 16px 4px" }}>{title}</div>
-      <Grid>{children}</Grid>
+    <div style={{ margin: "12px 12px 0", border: `1px solid ${T.border}`, borderRadius: 18, paddingBottom: 12 }}>
+      <Row T={T} framed title={title}>{children}</Row>
     </div>
   );
 }
@@ -280,12 +333,9 @@ function IconArt({ icon, size }: { icon: AppIcon; size: number }) {
 }
 
 type Point = { x: number; y: number };
-/** The pages under the small screens: the list of choices, the two styles,
- *  a style's own page, or one kind of choice on its own. */
-type Page = "main" | "styles" | "aviela" | "lantern" | "background" | "colours" | "card" | "icons" | "records";
-/** Where the back arrow goes from a page: a style's page back to the styles,
- *  everything else back to the list. */
-const parentOf = (p: Page): Page => (p === "aviela" || p === "lantern" ? "styles" : "main");
+/** The pages under the small screens: the list of choices, a style's own
+ *  page, or one kind of choice on its own. */
+type Page = "main" | "aviela" | "lantern" | "background" | "colours" | "card" | "icons" | "records";
 
 export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
@@ -418,7 +468,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
       if (reveal) return true;
       if (confirming) { setConfirming(false); return true; }
       if (asking) { setAsking(false); return true; }
-      if (page !== "main") { go(parentOf(page)); return true; }
+      if (page !== "main") { go("main"); return true; }
       if (changed) { setConfirming(true); return true; }
       return false;
     });
@@ -588,7 +638,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const stamp = `${theme}|${JSON.stringify(look)}|${bg.photo?.length ?? 0}|${bg.strength}`;
 
   // ── The list of choices, as Android lays out its own ──
-  const styleName = avielaOn ? "Aviela" : lanternOn ? "Lantern" : t("None");
   const colourName = dark ? DARKS.find(d => d.id === look.dark)?.label : LIGHTS.find(l => l.id === look.light)?.label;
   const cardName = card === "default" ? t("Default") : CARDS.find(c => c.id === card)?.label ?? AVIELA_CARD_NAMES[AVIELA_CARDS.indexOf(card)] ?? "Lantern";
   const recordName = VINYLS.find(v => v.id === vinyl)?.label
@@ -596,12 +645,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const iconName = ICONS.find(i => i.id === look.icon)?.label ?? "";
   const dot = (s: React.CSSProperties) => <span style={{ width: 34, height: 34, borderRadius: "50%", display: "block", ...s }} />;
   const choices: { id: Page; title: string; sub: string; art: ReactNode }[] = [
-    {
-      id: "styles", title: t("Custom styles"), sub: styleName,
-      art: avielaOn ? dot({ background: "#ffd5e6", backgroundImage: logoFlower(), backgroundSize: "58%", backgroundPosition: "center", backgroundRepeat: "no-repeat" })
-        : lanternOn ? dot({ background: "radial-gradient(circle, #35e08a 0 22%, rgba(53,224,138,0.35) 42%, #08120c 72%)" })
-        : dot({ border: `1.5px dashed ${T.muted}`, boxSizing: "border-box" }),
-    },
     {
       id: "background", title: t("Background"),
       sub: bg.photo ? t("Your photo, {n}%", { n: Math.round(bg.strength * 100) }) : t("None"),
@@ -655,24 +698,21 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           background: "transparent", border: `2px solid ${on ? T.accent : "transparent"}`, transition: "border-color 0.15s ease",
         }}>
         {key === "aviela"
-          ? <Swatch app={avielaApp} card={avielaCard} vinyl={look.aviela.record} flowers={look.aviela.flowers} tone={avielaTone} height={120} />
-          : <Swatch app={lanternApp} card={lanternCard} vinyl={look.lantern.record} height={120} />}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "9px 4px 0" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{key === "aviela" ? "Aviela" : "Lantern"}</span>
+          ? <Swatch app={avielaApp} card={avielaCard} vinyl={look.aviela.record} flowers={look.aviela.flowers} tone={avielaTone} height={104} />
+          : <Swatch app={lanternApp} card={lanternCard} vinyl={look.lantern.record} height={104} />}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "8px 4px 2px" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: on ? T.text : T.muted }}>{key === "aviela" ? "Aviela" : "Lantern"}</span>
           <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
             {(!pro || shut) && <Lock T={T} />}
             <IC.ChevronR />
           </span>
-        </div>
-        <div style={{ fontSize: 12.5, color: T.muted, padding: "2px 4px 2px", lineHeight: 1.4 }}>
-          {key === "aviela" ? t("Pink, with flowers") : t("Green light in the dark")}
         </div>
       </button>
     );
   };
 
   const TITLES: Record<Page, string> = {
-    main: t("Personalise"), styles: t("Custom styles"), aviela: "Aviela", lantern: "Lantern", background: t("Background"),
+    main: t("Personalise"), aviela: "Aviela", lantern: "Lantern", background: t("Background"),
     colours: t("Colours"), card: t("Header card"), icons: t("Icons"), records: t("Records"),
   };
   const keepLabel = needsPro ? (ADS_ON ? t("Keep it, free with an ad") : t("Keep it with Pro")) : t("Apply");
@@ -691,7 +731,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         <div style={{ ...sh.hdr, padding: "14px 20px 10px", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
             {page !== "main" && (
-              <button onClick={() => go(parentOf(page))} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
+              <button onClick={() => go("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
               </button>
             )}
@@ -729,26 +769,26 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
             </div>
           </div>
 
-          {/* Tall enough that the screens can always get small, however
-              short the page under them. */}
-          <div style={{ minHeight: win.h - Math.round(win.h * small), paddingBottom: 24 }}>
+          <div style={{ paddingBottom: 24 }}>
             {page === "main" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, padding: "4px 16px 0" }}>
-                {choices.map(choiceRow)}
-              </div>
-            ) : page === "styles" ? (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "4px 12px 0" }}>
+              <div style={{ padding: "0 16px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "4px 4px 8px" }}>
+                  <span style={{ ...sh.lbl, margin: 0 }}>{t("Custom styles")}</span>
+                  {/* Only while one is on: the way back to no style at all. */}
+                  {(avielaOn || lanternOn) && (
+                    <button onClick={() => pick(plain())} style={{ background: "transparent", border: "none", padding: "2px 0", color: T.muted, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline" }}>
+                      {t("Take the style off")}
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {styleTile("aviela")}
                   {styleTile("lantern")}
                 </div>
-                {(avielaOn || lanternOn) && (
-                  <button onClick={() => pick(plain())} style={{ ...sh.saveBtn, background: T.surface, color: T.text, fontSize: 14, margin: "16px 16px 0", width: "calc(100% - 32px)" }}>
-                    {t("Take the style off")}
-                  </button>
-                )}
-                <div style={note}>{t("A style is a whole look in one: colour, header card, record and app icon. Tap one to change its parts.")}</div>
-              </>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 16 }}>
+                  {choices.map(choiceRow)}
+                </div>
+              </div>
             ) : page === "aviela" ? (
               <>
                 <Group T={T} title={t("Record")}>

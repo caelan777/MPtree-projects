@@ -708,8 +708,6 @@ export const NL: Record<string, string> = {
   "Aviela and Lantern bring records of their own, under Custom styles.": "Aviela en Lantern hebben hun eigen platen, onder Eigen stijlen.",
   "Take the style off": "Stijl uitzetten",
   "Each colour is dark or light, and the app follows it.": "Elke kleur is donker of licht, en de app volgt die.",
-  "Pink, with flowers": "Roze, met bloemen",
-  "A style is a whole look in one: colour, header card, record and app icon. Tap one to change its parts.": "Een stijl is een hele look in één: kleur, bovenste kaart, plaat en app-icoon. Tik erop om de onderdelen aan te passen.",
   "The card at the top of the app, with the search and the buttons. Default takes the app's own colour.": "De kaart bovenaan de app, met het zoeken en de knoppen. Standaard krijgt de kleur van de app zelf.",
-  "Green light in the dark": "Groen licht in het donker",
+  "Add to": "Toevoegen",
 };

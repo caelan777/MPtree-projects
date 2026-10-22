@@ -27,7 +27,7 @@ import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
 import { applyLang, isLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
-import { MultiSelectBar } from "./components/MultiSelectBar";
+import { MultiSelectBar, SELECT_TOP_H } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet } from "./components/ProSheet";
@@ -2149,6 +2149,9 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Songs being picked in a playlist: PlaylistsView has its own select mode,
+  // and tells App so the header card can make way there too.
+  const [playlistSelecting, setPlaylistSelecting] = useState(false);
   const {
     selected,
     selectMode,
@@ -2764,7 +2767,8 @@ export default function App() {
   // Both tabs collapse — the Playlists grid runs off the bottom of the screen
   // just as readily as the song list does. Multi-select is the one exception:
   // it needs its own bar and the header's count visible.
-  const chromeCollapsed = !selectMode && !chromeOpen;
+  const selecting = selectMode || playlistSelecting;
+  const chromeCollapsed = !selecting && !chromeOpen;
 
   // ONE definition of how the fold moves, used by every piece that moves with
   // it: the header card, the mini-player, the list paddings, the two floating
@@ -2793,8 +2797,11 @@ export default function App() {
   // fold's own third of a second. A gap closing reads as the card arriving;
   // content sliding under a header that is standing still reads as a fault.
   const COLLAPSED_INSET = dims.cardTop + 54 + 14;
-  const songsInset      = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
-  const playlistsInset  = chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  // Picking songs, the header card makes way for MultiSelectBar's plain top
+  // bar, and the list starts under that instead.
+  const SELECT_INSET    = dims.cardTop - 2 + SELECT_TOP_H + 6;
+  const songsInset      = selecting ? SELECT_INSET : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
+  const playlistsInset  = selecting ? SELECT_INSET : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
   // Folding or unfolding the card while the list is scrolled: the list's top
   // padding changes at once, and the scroll position moves by the same amount,
   // so the rows on screen do not move at all. At the very top the list moves
@@ -3308,8 +3315,9 @@ export default function App() {
             // Deliberately not faded: at both of those moments the card's own
             // mark and the flying one are the same size in the same place, so
             // an instant swap is invisible and a fade would show two of them.
-            opacity:       chromeCollapsed && logoFloating && logoFlight !== "fold" ? 0 : 1,
-            pointerEvents: chromeCollapsed && logoFloating ? "none" : "auto",
+            // Picking songs, it makes way for the bar that says how many.
+            opacity:       selecting || (chromeCollapsed && logoFloating && logoFlight !== "fold") ? 0 : 1,
+            pointerEvents: selecting || (chromeCollapsed && logoFloating) ? "none" : "auto",
             transition: move("width", "height", "border-radius"),
           }}
         >
@@ -3382,29 +3390,6 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {/* In select mode the count gives way to Remove. It is the only action
-                in this mode that destroys anything, so it sits up here on its own
-                rather than in a row of four harmless chips where a mis-tap is easy.
-                The count is still shown, in the bar at the bottom. The confirm
-                sheet behind removeMultiConfirm is what actually guards it. */}
-            {selectMode && (
-              <button
-                onClick={selected.size === 0 ? undefined : () => setRemoveMultiConfirm(true)}
-                aria-label={t("Remove selected songs")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  background: selected.size > 0 ? CT.binBg : "transparent",
-                  border: "1px solid " + (selected.size > 0 ? CT.binBorder : CT.border),
-                  color: selected.size > 0 ? "#e8445a" : CT.muted,
-                  borderRadius: 20, padding: "6px 12px",
-                  fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                  cursor: selected.size > 0 ? "pointer" : "default",
-                  opacity: selected.size > 0 ? 1 : 0.5,
-                }}
-              >
-                <IC.Trash />Remove
-              </button>
-            )}
             <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
@@ -4074,6 +4059,7 @@ export default function App() {
               onShuffleMany={shuffleMany}
               onPlayManyNext={handlePlayManyNext}
               onShareMany={ids => { void shareSongs(ids); }}
+              onSelectingChange={setPlaylistSelecting}
               onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
               onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
               onCutSong={(song) => openCutSheet(song)}
@@ -4174,6 +4160,7 @@ export default function App() {
             onShuffleSelection={multiShuffleSelection}
             onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
             onShare={() => { void shareSongs([...selected]); }}
+            onDelete={() => setRemoveMultiConfirm(true)}
             onBulkEdit={() => { setMultiIds([...selected]); setBulkEditOpen(true); }}
             onAddToPlaylist={() => { setMultiIds([...selected]); setMultiAddOpen(true); }}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
