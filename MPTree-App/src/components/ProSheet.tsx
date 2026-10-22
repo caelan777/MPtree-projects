@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import { makeSH, type T } from "../themes";
+import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
@@ -148,7 +148,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   // edge to edge, so it steps over the status bar and the gesture bar itself.
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 450, display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
         <div style={{ ...column, display: "flex", justifyContent: "flex-end", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 0", flexShrink: 0 }}>
           <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>

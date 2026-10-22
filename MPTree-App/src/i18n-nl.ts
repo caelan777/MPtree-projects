@@ -699,7 +699,6 @@ export const NL: Record<string, string> = {
   "Choose a photo": "Kies een foto",
   "Your photo goes behind the whole app, under its colour. It stays on this device: it is not synced and not in a backup.": "Je foto komt achter de hele app, onder de kleur. Hij blijft op dit apparaat: hij wordt niet gesynchroniseerd en zit niet in een back-up.",
   "Try it as much as you like. Keeping it needs Pro.": "Probeer zoveel je wilt. Houden kan met Pro.",
-  "The icon changes when you tap Apply. On some phones it leaves the home screen: add it again from your app list.": "Het icoon verandert als je op Toepassen tikt. Op sommige telefoons verdwijnt het van het startscherm: zet het terug vanuit je lijst met apps.",
   "Free with an ad": "Gratis met een advertentie",
   "Styles, your own background, colours, icon and record.": "Stijlen, je eigen achtergrond, kleuren, icoon en plaat.",
   "Backup": "Back-up",
@@ -710,4 +709,10 @@ export const NL: Record<string, string> = {
   "Each colour is dark or light, and the app follows it.": "Elke kleur is donker of licht, en de app volgt die.",
   "The card at the top of the app, with the search and the buttons. Default takes the app's own colour.": "De kaart bovenaan de app, met het zoeken en de knoppen. Standaard krijgt de kleur van de app zelf.",
   "Add to": "Toevoegen",
+  "The new icon comes as soon as you leave MPTree.": "Het nieuwe icoon komt zodra je MPTree verlaat.",
+  "To change its icon, MPTree has to close for a moment. On some phones the icon then leaves the home screen: add it again from your app list.": "Om het icoon te wisselen moet MPTree even sluiten. Op sommige telefoons verdwijnt het icoon dan van het startscherm: zet het terug vanuit je lijst met apps.",
+  "Your new icon": "Je nieuwe icoon",
+  "To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.": "Om het icoon te wisselen moet MPTree even sluiten. Open het daarna weer vanaf je startscherm of je lijst met apps. Je muziek blijft spelen.",
+  "Close and change it": "Sluiten en wisselen",
+  "When I leave MPTree": "Als ik MPTree verlaat",
 };

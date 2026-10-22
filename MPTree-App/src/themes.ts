@@ -11,8 +11,10 @@ import type { DarkShade, LightShade, CardShade } from "./look";
 // marker and the one place a warm colour still earns its place.
 export const DARK = {
   accent:"#FFFFFF", surface:"#111111", card:"#141414", bg:"#000000",
+  // textSub a step brighter than muted, as in the light palette: the second
+  // line of a row has to be read, muted only has to be seen.
   muted:"#777777", dim:"#252525", border:"#2a2a2a",
-  text:"#ffffff", textSub:"#777777",
+  text:"#ffffff", textSub:"#9a9a9a",
   heart:"#e8445a", violet:"#7C3AED", repeat:"#0EA5E9",
   sheetBg:"#141414", overlayBg:"rgba(0,0,0,0.78)", playerBg:"#0c0c0c",
   inputBg:"#252525", chipBg:"#141414", chipBorder:"#2a2a2a", chipColor:"#cccccc",
@@ -119,6 +121,19 @@ export function paletteFor(theme: Theme, dark: DarkShade, light: LightShade): T 
 // measures from itself.
 
 /** The palette the header card is drawn with. */
+/** Whether a palette is a dark one: its ground darker than middle grey. */
+export function isDarkPalette(p: T): boolean {
+  const h = p.bg.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h.slice(0, 6), 16);
+  return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114 < 128;
+}
+
+/** The ground of a page of its own (Pro, Account & sync): in the dark the
+ *  sheet's grey, which lifts it off pure black, in the light the app's own. */
+export function pageGround(p: T): string {
+  return isDarkPalette(p) ? p.sheetBg : p.bg;
+}
+
 export function cardPalette(shade: CardShade, app: T): T {
   if (shade === "default") return app;
   const [ground, name] = shade.split(":") as ["dark" | "light", string];

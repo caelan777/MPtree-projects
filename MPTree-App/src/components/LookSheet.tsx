@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { makeSH, cardPalette, SHADE_PREVIEW, type T } from "../themes";
+import { makeSH, cardPalette, isDarkPalette, SHADE_PREVIEW, type T } from "../themes";
 import type { Theme } from "../types";
 import { t, tn } from "../i18n";
 import { IC } from "./Icons";
@@ -360,6 +360,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // The icon the launcher shows now. It only changes on Apply: switching it
   // can move it on the home screen, which is not for every tap.
   const [appIcon, setAppIcon] = useState<AppIcon>(look.icon);
+  // A new icon just applied, while MPTree asks when to switch to it.
+  const [iconAsk, setIconAsk] = useState<AppIcon | null>(null);
   useEffect(() => { System.getAppIcon().then(r => setAppIcon(r.icon as AppIcon)).catch(() => {}); }, []);
   // A background tried and not kept goes when the page does, however it goes.
   useEffect(() => () => endBackgroundPreview(), []);
@@ -420,12 +422,18 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Puts the launcher icon to what was applied, when it differs. */
+  /** A new icon was applied: ask when MPTree may close to switch to it. */
   const applyIcon = () => {
     const want = getLook().icon;
-    if (want === appIcon) return;
-    System.setAppIcon({ icon: want })
-      .then(() => { setAppIcon(want); onToast(t("Icon changed")); })
+    if (want !== appIcon) setIconAsk(want);
+  };
+  /** Now (MPTree closes itself) or once the app is left. */
+  const switchIcon = (restart: boolean) => {
+    const want = iconAsk;
+    setIconAsk(null);
+    if (!want) return;
+    System.setAppIcon({ icon: want, restart })
+      .then(() => { setAppIcon(want); if (!restart) onToast(t("The new icon comes as soon as you leave MPTree.")); })
       .catch(() => onToast(t("This phone did not let MPTree change its icon")));
   };
 
@@ -444,8 +452,9 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     keepPreview();
     void keepBackground();
     setKeptTheme(theme);
-    applyIcon();
-    onToast(t("Applied"));
+    // A new icon brings its own question, which says enough on its own.
+    if (getLook().icon !== appIcon) applyIcon();
+    else onToast(t("Applied"));
   };
   const leave = () => {
     if (changed) { setConfirming(true); return; }
@@ -464,6 +473,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // throws anything away.
   useEffect(() => {
     setLookBack(() => {
+      if (iconAsk) { switchIcon(false); return true; }
       if (cropSrc) { setCropSrc(null); return true; }
       if (reveal) return true;
       if (confirming) { setConfirming(false); return true; }
@@ -473,7 +483,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
       return false;
     });
     return () => setLookBack(null);
-  }, [cropSrc, reveal, confirming, asking, page, changed]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iconAsk, cropSrc, reveal, confirming, asking, page, changed]);
 
   /** Every pick is shown at once, and kept only by Apply. */
   const pick = (patch: Partial<Look>) => previewLook(patch);
@@ -674,12 +685,14 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     return (
       <button key={c.id} onClick={() => go(c.id)} style={{
         display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", cursor: "pointer",
-        background: T.surface, border: "none", fontFamily: "inherit", color: T.text, padding: "14px 16px",
+        // On the dark sheet the usual surface is darker than the sheet itself
+        // and the rows would sink into it; there they are lifted instead.
+        background: isDarkPalette(T) ? T.dim : T.surface, border: "none", fontFamily: "inherit", color: T.text, padding: "14px 16px",
         borderRadius: `${first ? 22 : 6}px ${first ? 22 : 6}px ${last ? 22 : 6}px ${last ? 22 : 6}px`,
       }}>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 16, fontWeight: 600 }}>{c.title}</span>
-          <span style={{ display: "block", fontSize: 13, color: T.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.sub}</span>
+          <span style={{ display: "block", fontSize: 13, color: T.textSub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.sub}</span>
         </span>
         <span style={{ width: 52, height: 52, borderRadius: 16, background: T.sheetBg, display: "grid", placeItems: "center", overflow: "hidden", flexShrink: 0 }}>{c.art}</span>
       </button>
@@ -701,7 +714,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           ? <Swatch app={avielaApp} card={avielaCard} vinyl={look.aviela.record} flowers={look.aviela.flowers} tone={avielaTone} height={104} />
           : <Swatch app={lanternApp} card={lanternCard} vinyl={look.lantern.record} height={104} />}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "8px 4px 2px" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: on ? T.text : T.muted }}>{key === "aviela" ? "Aviela" : "Lantern"}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: on ? T.text : T.textSub }}>{key === "aviela" ? "Aviela" : "Lantern"}</span>
           <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
             {(!pro || shut) && <Lock T={T} />}
             <IC.ChevronR />
@@ -928,7 +941,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                     </Tile>
                   ))}
                 </Grid>
-                <div style={note}>{t("The icon changes when you tap Apply. On some phones it leaves the home screen: add it again from your app list.")}</div>
+                <div style={note}>{t("To change its icon, MPTree has to close for a moment. On some phones the icon then leaves the home screen: add it again from your app list.")}</div>
               </>
             ) : (
               <>
@@ -968,6 +981,24 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         {cropSrc && (
           <CropSheet src={cropSrc} shape="background" T={T} onCancel={() => setCropSrc(null)}
             onUse={d => { previewBackground({ photo: d }); setCropSrc(null); }} />
+        )}
+
+        {iconAsk && (
+          <div role="dialog" aria-modal="true" onClick={() => switchIcon(false)} style={{
+            position: "fixed", inset: 0, zIndex: 495, background: T.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20, padding: "22px 20px 16px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><IconArt icon={iconAsk} size={64} /></div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{t("Your new icon")}</div>
+              <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.5, margin: "6px 0 18px" }}>
+                {t("To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.")}
+              </div>
+              <button onClick={() => switchIcon(true)} style={{ ...sh.saveBtn, fontSize: 15 }}>{t("Close and change it")}</button>
+              <button onClick={() => switchIcon(false)} style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
+                {t("When I leave MPTree")}
+              </button>
+            </div>
+          </div>
         )}
 
         {confirming && (

@@ -148,12 +148,26 @@ public class SystemPlugin extends Plugin {
     }
 
     // ── App icon (MPTree Pro) ────────────────────────────────────────────────
-    // The launcher entry is not MainActivity itself but one of four
+    // The launcher entry is not MainActivity itself but one of six
     // activity-aliases in AndroidManifest.xml, each pointing at MainActivity
     // with its own icon. Exactly one is enabled; switching enables the new one
     // before disabling the old, so there is never a moment with no icon at all.
+    //
+    // Switching takes the app's window with it on most phones: Android ends a
+    // task whose launcher entry was just switched off. So it is never done
+    // while MPTree is in front. It is kept as "pending" and done when the app
+    // leaves the screen (handleOnStop), or right away after MPTree has closed
+    // itself because the person asked it to. Playback goes on either way: the
+    // music service outlives the window.
 
     private static final String[] ICONS = { "classic", "light", "vinyl", "stamp", "aviela", "lantern" };
+
+    private static final String ICON_PREFS = "mptree_icon";
+    private static final String ICON_PENDING = "pending";
+
+    private android.content.SharedPreferences iconPrefs() {
+        return getContext().getSharedPreferences(ICON_PREFS, android.content.Context.MODE_PRIVATE);
+    }
 
     private ComponentName iconAlias(String icon) {
         String cls = "Icon" + Character.toUpperCase(icon.charAt(0)) + icon.substring(1);
@@ -162,6 +176,14 @@ public class SystemPlugin extends Plugin {
 
     @PluginMethod
     public void getAppIcon(PluginCall call) {
+        // One waiting to be switched to counts as the icon already.
+        String pending = iconPrefs().getString(ICON_PENDING, null);
+        if (pending != null) {
+            JSObject ret = new JSObject();
+            ret.put("icon", pending);
+            call.resolve(ret);
+            return;
+        }
         PackageManager pm = getContext().getPackageManager();
         String on = "classic";
         for (String icon : ICONS) {
@@ -196,24 +218,43 @@ public class SystemPlugin extends Plugin {
         }
     }
 
+    /** Keeps the icon to switch to. With restart: true MPTree then closes
+     *  itself, and the switch follows as it goes; otherwise the switch waits
+     *  until the app next leaves the screen. */
     @PluginMethod
     public void setAppIcon(PluginCall call) {
         String icon = call.getString("icon", "classic");
         boolean known = false;
         for (String i : ICONS) known |= i.equals(icon);
         if (!known) { call.reject("Unknown icon: " + icon); return; }
+        iconPrefs().edit().putString(ICON_PENDING, icon).commit();
+        call.resolve();
+        if (Boolean.TRUE.equals(call.getBoolean("restart", false)) && getActivity() != null) {
+            getActivity().runOnUiThread(() -> getActivity().finishAndRemoveTask());
+        }
+    }
+
+    @Override
+    protected void handleOnStop() {
+        super.handleOnStop();
+        String pending = iconPrefs().getString(ICON_PENDING, null);
+        if (pending == null) return;
+        iconPrefs().edit().remove(ICON_PENDING).commit();
         try {
-            PackageManager pm = getContext().getPackageManager();
-            pm.setComponentEnabledSetting(iconAlias(icon),
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
-            for (String other : ICONS) {
-                if (other.equals(icon)) continue;
-                pm.setComponentEnabledSetting(iconAlias(other),
-                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
-            }
-            call.resolve();
+            switchIcon(pending);
         } catch (Exception e) {
-            call.reject("Could not change the icon", e);
+            // Not switched: the picker shows the one that is really on next time.
+        }
+    }
+
+    private void switchIcon(String icon) {
+        PackageManager pm = getContext().getPackageManager();
+        pm.setComponentEnabledSetting(iconAlias(icon),
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
+        for (String other : ICONS) {
+            if (other.equals(icon)) continue;
+            pm.setComponentEnabledSetting(iconAlias(other),
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
         }
     }
 

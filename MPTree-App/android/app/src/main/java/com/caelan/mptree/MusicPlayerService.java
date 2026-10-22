@@ -1714,7 +1714,9 @@ public class MusicPlayerService extends Service {
                 .setShowActionsInCompactView(0, 1, 2);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                // The mark alone, white on nothing: Android draws the small icon
+                // as a shape, and the launcher icon came out as a dot.
+                .setSmallIcon(R.drawable.ic_stat_mptree)
                 .setLargeIcon(currentArtOrLogo())
                 .setContentTitle(currentTitle)
                 .setContentText(currentArtist)
