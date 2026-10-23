@@ -45,19 +45,23 @@ const rowStyle = (T: T): React.CSSProperties => ({
   cursor: "pointer", color: T.text, fontFamily: "inherit", textAlign: "left",
 });
 
-function Row({ icon, label, sub, right, onClick, first, T }: {
-  icon: ReactNode; label: string; sub?: string; right?: ReactNode; onClick: () => void; first?: boolean; T: T;
+/** `tag` goes under the text, not on the right: "Free with an ad" is wide,
+ *  and on a small phone with large text it squeezed the label to a word a
+ *  line and lay over it. The text takes all the room the right side leaves. */
+function Row({ icon, label, sub, tag, right, onClick, first, T }: {
+  icon: ReactNode; label: string; sub?: string; tag?: ReactNode; right?: ReactNode; onClick: () => void; first?: boolean; T: T;
 }) {
   return (
     <button onClick={onClick} style={{ ...rowStyle(T), marginTop: first ? 0 : 8 }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, minWidth: 0 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, minWidth: 0, flex: 1 }}>
         <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
-        <span style={{ minWidth: 0 }}>
+        <span style={{ minWidth: 0, flex: 1 }}>
           <span style={{ display: "block" }}>{label}</span>
           {sub && <span style={{ display: "block", fontSize: 12.5, color: T.muted, lineHeight: 1.45, marginTop: 2 }}>{sub}</span>}
+          {tag && <span style={{ display: "flex", marginTop: 6 }}>{tag}</span>}
         </span>
       </span>
-      {right ?? <IC.ChevronR />}
+      <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>{right ?? <IC.ChevronR />}</span>
     </button>
   );
 }
@@ -292,7 +296,7 @@ export function SettingsSheet({
             sub={sync.phase === "on"
               ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
               : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
-            right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
+            tag={!pro && <ProTag T={T} />}
           />
         </Section>}
 
@@ -305,7 +309,7 @@ export function SettingsSheet({
             icon={<BrushIcon />}
             label={t("Personalise")}
             sub={t("Styles, your own background, colours, icon and record.")}
-            right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
+            tag={!pro && <ProTag T={T} />}
           />
           {/* Size: text and rows together. One control rather than two: a
               bigger font in a row that stays the same height is a row that
@@ -451,7 +455,7 @@ export function SettingsSheet({
             sub={cleanupCount > 0
               ? tn(cleanupCount, "{n} voice note or clip found", "{n} voice notes or clips found")
               : t("Voice notes, recordings and clips under a minute.")}
-            right={<span style={{ display: "flex", alignItems: "center", gap: 6 }}>{!pro && <ProTag T={T} />}<IC.ChevronR /></span>}
+            tag={!pro && <ProTag T={T} />}
           />
         </Section>
 
