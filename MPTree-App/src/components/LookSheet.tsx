@@ -742,7 +742,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         onClick={e => e.stopPropagation()}
       >
         <div style={{ ...sh.hdr, padding: "14px 20px 10px", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flex: 1 }}>
             {page !== "main" && (
               <button onClick={() => go("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
@@ -755,11 +755,20 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           {page === "main" ? (
             <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
           ) : changed && (
+            // Short, in two lines: in one, "Keep it, free with an ad" was
+            // wider than a small phone and lay over the back arrow.
             <button onClick={needsPro ? onNeedPro : apply} style={{
-              flexShrink: 0, padding: "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
-              borderRadius: 18, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap",
+              flexShrink: 0, maxWidth: "70%", padding: needsPro ? "5px 12px" : "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
+              borderRadius: 18, fontFamily: "inherit", cursor: "pointer", lineHeight: 1.2, textAlign: "center",
             }}>
-              {keepLabel}
+              {needsPro ? (
+                <>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{t("Keep it")}</span>
+                  <span style={{ display: "block", fontSize: 11, fontWeight: 600, opacity: 0.85 }}>{ADS_ON ? t("Free with an ad") : t("With Pro")}</span>
+                </>
+              ) : (
+                <span style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}>{keepLabel}</span>
+              )}
             </button>
           )}
         </div>

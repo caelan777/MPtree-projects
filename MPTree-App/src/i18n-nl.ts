@@ -715,4 +715,6 @@ export const NL: Record<string, string> = {
   "To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.": "Om het icoon te wisselen moet MPTree even sluiten. Open het daarna weer vanaf je startscherm of je lijst met apps. Je muziek blijft spelen.",
   "Close and change it": "Sluiten en wisselen",
   "When I leave MPTree": "Als ik MPTree verlaat",
+  "Keep it": "Houden",
+  "With Pro": "Met Pro",
 };

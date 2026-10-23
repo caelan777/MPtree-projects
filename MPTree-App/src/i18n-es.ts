@@ -715,4 +715,6 @@ export const ES: Record<string, string> = {
   "To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.": "Para cambiar el icono, MPTree tiene que cerrarse un momento. Luego vuelve a abrirla desde la pantalla de inicio o tu lista de apps. La música sigue sonando.",
   "Close and change it": "Cerrar y cambiar",
   "When I leave MPTree": "Cuando salga de MPTree",
+  "Keep it": "Quedártelo",
+  "With Pro": "Con Pro",
 };
