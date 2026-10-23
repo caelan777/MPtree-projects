@@ -18,14 +18,15 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 99 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98). Next is 99. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99). Next is 100. Next Windows is 0.1.6.
 
 ## Waiting on Caelan
 
-1. **Upload 1.3.0 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`,
-   versionCode 92, built 22 October from `personalise-2`; release notes in
-   `docs/play-store-listing.md`). Everything of test builds 62 to 65, and of 1.2.9 (the
-   Pro film) if that was not uploaded. Nothing new to declare in Play Console.
+1. **Upload 1.3.1 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.1.aab`,
+   versionCode 99, built 24 October from `small-phones`; release notes in
+   `docs/play-store-listing.md`). The small-phone fixes and the quiet icon change of test
+   builds 70 and 71, on top of all of 1.3.0. If 1.3.0 (versionCode 92) was never uploaded,
+   this one replaces it: use 1.3.0's release notes then. Nothing new to declare.
 2. **Windows 0.1.5 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.5.msix`, built
    20 October, replaces the 0.1.4 that was never uploaded): the sign-in-again fix
    plus the full-screen Pro page (two equal cards: pay once, or the free week; no
