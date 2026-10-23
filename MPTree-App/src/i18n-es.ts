@@ -709,12 +709,7 @@ export const ES: Record<string, string> = {
   "Each colour is dark or light, and the app follows it.": "Cada color es oscuro o claro, y la app lo sigue.",
   "The card at the top of the app, with the search and the buttons. Default takes the app's own colour.": "La tarjeta de arriba de la app, con la búsqueda y los botones. Predeterminada toma el color de la app.",
   "Add to": "Añadir",
-  "The new icon comes as soon as you leave MPTree.": "El icono nuevo llega en cuanto salgas de MPTree.",
-  "To change its icon, MPTree has to close for a moment. On some phones the icon then leaves the home screen: add it again from your app list.": "Para cambiar el icono, MPTree tiene que cerrarse un momento. En algunos teléfonos el icono desaparece entonces de la pantalla de inicio: vuelve a añadirlo desde tu lista de apps.",
-  "Your new icon": "Tu icono nuevo",
-  "To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.": "Para cambiar el icono, MPTree tiene que cerrarse un momento. Luego vuelve a abrirla desde la pantalla de inicio o tu lista de apps. La música sigue sonando.",
-  "Close and change it": "Cerrar y cambiar",
-  "When I leave MPTree": "Cuando salga de MPTree",
   "Keep it": "Quedártelo",
   "With Pro": "Con Pro",
+  "The new icon comes when you leave MPTree. On some phones it then leaves the home screen: add it again from your app list.": "El icono nuevo llega cuando sales de MPTree. En algunos teléfonos desaparece entonces de la pantalla de inicio: vuelve a añadirlo desde tu lista de apps.",
 };
