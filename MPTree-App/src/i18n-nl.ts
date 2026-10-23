@@ -709,10 +709,7 @@ export const NL: Record<string, string> = {
   "Each colour is dark or light, and the app follows it.": "Elke kleur is donker of licht, en de app volgt die.",
   "The card at the top of the app, with the search and the buttons. Default takes the app's own colour.": "De kaart bovenaan de app, met het zoeken en de knoppen. Standaard krijgt de kleur van de app zelf.",
   "Add to": "Toevoegen",
-  "The new icon comes as soon as you leave MPTree.": "Het nieuwe icoon komt zodra je MPTree verlaat.",
-  "To change its icon, MPTree has to close for a moment. On some phones the icon then leaves the home screen: add it again from your app list.": "Om het icoon te wisselen moet MPTree even sluiten. Op sommige telefoons verdwijnt het icoon dan van het startscherm: zet het terug vanuit je lijst met apps.",
-  "Your new icon": "Je nieuwe icoon",
-  "To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.": "Om het icoon te wisselen moet MPTree even sluiten. Open het daarna weer vanaf je startscherm of je lijst met apps. Je muziek blijft spelen.",
-  "Close and change it": "Sluiten en wisselen",
-  "When I leave MPTree": "Als ik MPTree verlaat",
+  "Keep it": "Houden",
+  "With Pro": "Met Pro",
+  "The new icon comes when you leave MPTree. On some phones it then leaves the home screen: add it again from your app list.": "Het nieuwe icoon komt als je MPTree verlaat. Op sommige telefoons verdwijnt het dan van het startscherm: zet het terug vanuit je lijst met apps.",
 };

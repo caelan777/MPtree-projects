@@ -3418,7 +3418,10 @@ export default function App() {
             }}
           >
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div data-tour="search" style={{ flex: 1, display: "flex", alignItems: "center", background: CT.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${CT.border}` }}>
+                {/* minWidth 0: without it the box could not get narrower than the
+                    input's own width, and with large text on a small phone it
+                    ran out of the card. */}
+                <div data-tour="search" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: CT.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${CT.border}` }}>
                   {IC.Search(CT.muted)}
                   <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: CT.text, fontSize: 15, minWidth: 0 }} />
                   {search.length > 0 && (

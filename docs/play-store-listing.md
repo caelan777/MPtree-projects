@@ -8,6 +8,27 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.1 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.1.aab`
+(versionCode 99, built 2026-10-24 with `npm run build:play` from the branch `small-phones`; the next bundle or test
+build is 100). Test builds 70 and 71. It holds everything of 1.3.0 too: if 1.3.0 never went live, use 1.3.0's notes
+below instead, they cover the bigger changes. Nothing new to declare.
+
+```
+<en-GB>
+Fits smaller phones and larger text better: rows in Settings no longer squeeze their text, the button to keep a look in Personalise stays clear of the back arrow, and the search bar stays inside the card at the top. A new app icon now changes quietly the next time you leave MPTree, without a question.
+</en-GB>
+<nl-NL>
+Past beter op kleinere telefoons en bij grotere tekst: de regels in Instellingen persen hun tekst niet meer samen, de knop om een stijl te houden in Personaliseren blijft van de terugpijl af, en de zoekbalk blijft binnen de kaart bovenaan. Een nieuw app-icoon wisselt nu stil de volgende keer dat je MPTree verlaat, zonder vraag.
+</nl-NL>
+<es-ES>
+Se ve mejor en teléfonos pequeños y con texto grande: las filas de Ajustes ya no aprietan su texto, el botón para quedarte un estilo en Personalizar ya no tapa la flecha de volver y la barra de búsqueda se queda dentro de la tarjeta de arriba. Un icono nuevo cambia ahora sin preguntar la próxima vez que sales de MPTree.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.0 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`

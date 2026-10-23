@@ -360,8 +360,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // The icon the launcher shows now. It only changes on Apply: switching it
   // can move it on the home screen, which is not for every tap.
   const [appIcon, setAppIcon] = useState<AppIcon>(look.icon);
-  // A new icon just applied, while MPTree asks when to switch to it.
-  const [iconAsk, setIconAsk] = useState<AppIcon | null>(null);
   useEffect(() => { System.getAppIcon().then(r => setAppIcon(r.icon as AppIcon)).catch(() => {}); }, []);
   // A background tried and not kept goes when the page does, however it goes.
   useEffect(() => () => endBackgroundPreview(), []);
@@ -422,18 +420,14 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** A new icon was applied: ask when MPTree may close to switch to it. */
+  /** A new icon was applied. Nothing is asked and nothing closes: it is kept
+   *  as pending, and Android switches to it once MPTree is left
+   *  (SystemPlugin.handleOnStop). */
   const applyIcon = () => {
     const want = getLook().icon;
-    if (want !== appIcon) setIconAsk(want);
-  };
-  /** Now (MPTree closes itself) or once the app is left. */
-  const switchIcon = (restart: boolean) => {
-    const want = iconAsk;
-    setIconAsk(null);
-    if (!want) return;
-    System.setAppIcon({ icon: want, restart })
-      .then(() => { setAppIcon(want); if (!restart) onToast(t("The new icon comes as soon as you leave MPTree.")); })
+    if (want === appIcon) return;
+    System.setAppIcon({ icon: want, restart: false })
+      .then(() => setAppIcon(want))
       .catch(() => onToast(t("This phone did not let MPTree change its icon")));
   };
 
@@ -473,7 +467,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // throws anything away.
   useEffect(() => {
     setLookBack(() => {
-      if (iconAsk) { switchIcon(false); return true; }
       if (cropSrc) { setCropSrc(null); return true; }
       if (reveal) return true;
       if (confirming) { setConfirming(false); return true; }
@@ -483,8 +476,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
       return false;
     });
     return () => setLookBack(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [iconAsk, cropSrc, reveal, confirming, asking, page, changed]);
+  }, [cropSrc, reveal, confirming, asking, page, changed]);
 
   /** Every pick is shown at once, and kept only by Apply. */
   const pick = (patch: Partial<Look>) => previewLook(patch);
@@ -742,7 +734,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         onClick={e => e.stopPropagation()}
       >
         <div style={{ ...sh.hdr, padding: "14px 20px 10px", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flex: 1 }}>
             {page !== "main" && (
               <button onClick={() => go("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
@@ -755,11 +747,20 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           {page === "main" ? (
             <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
           ) : changed && (
+            // Short, in two lines: in one, "Keep it, free with an ad" was
+            // wider than a small phone and lay over the back arrow.
             <button onClick={needsPro ? onNeedPro : apply} style={{
-              flexShrink: 0, padding: "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
-              borderRadius: 18, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap",
+              flexShrink: 0, maxWidth: "70%", padding: needsPro ? "5px 12px" : "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
+              borderRadius: 18, fontFamily: "inherit", cursor: "pointer", lineHeight: 1.2, textAlign: "center",
             }}>
-              {keepLabel}
+              {needsPro ? (
+                <>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{t("Keep it")}</span>
+                  <span style={{ display: "block", fontSize: 11, fontWeight: 600, opacity: 0.85 }}>{ADS_ON ? t("Free with an ad") : t("With Pro")}</span>
+                </>
+              ) : (
+                <span style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}>{keepLabel}</span>
+              )}
             </button>
           )}
         </div>
@@ -941,7 +942,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                     </Tile>
                   ))}
                 </Grid>
-                <div style={note}>{t("To change its icon, MPTree has to close for a moment. On some phones the icon then leaves the home screen: add it again from your app list.")}</div>
+                <div style={note}>{t("The new icon comes when you leave MPTree. On some phones it then leaves the home screen: add it again from your app list.")}</div>
               </>
             ) : (
               <>
@@ -981,24 +982,6 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         {cropSrc && (
           <CropSheet src={cropSrc} shape="background" T={T} onCancel={() => setCropSrc(null)}
             onUse={d => { previewBackground({ photo: d }); setCropSrc(null); }} />
-        )}
-
-        {iconAsk && (
-          <div role="dialog" aria-modal="true" onClick={() => switchIcon(false)} style={{
-            position: "fixed", inset: 0, zIndex: 495, background: T.overlayBg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-          }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20, padding: "22px 20px 16px", boxShadow: "0 16px 48px rgba(0,0,0,0.4)", textAlign: "center" }}>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><IconArt icon={iconAsk} size={64} /></div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{t("Your new icon")}</div>
-              <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.5, margin: "6px 0 18px" }}>
-                {t("To change its icon, MPTree has to close for a moment. Then open it again from your home screen or app list. Your music keeps playing.")}
-              </div>
-              <button onClick={() => switchIcon(true)} style={{ ...sh.saveBtn, fontSize: 15 }}>{t("Close and change it")}</button>
-              <button onClick={() => switchIcon(false)} style={{ ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 4 }}>
-                {t("When I leave MPTree")}
-              </button>
-            </div>
-          </div>
         )}
 
         {confirming && (
