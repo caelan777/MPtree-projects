@@ -184,13 +184,16 @@ type StoredDay = { from: number; until: number };
 
 /** The rewarded ad unit: Google's test unit in a test build (watching our own
  *  real ads would break AdMob's rules), MPTree's own unit "Dagpas" in the Play
- *  build (AdMob > Apps > MPTree > Ad units). Empty means no ads in that build. */
+ *  build (AdMob > Apps > MPTree > Ad units). Empty means no ads in that build.
+ *  The iPhone build, sideloaded, only ever has Google's iOS test unit. */
+const IPHONE = Capacitor.getPlatform() === "ios";
 const AD_UNIT =
-  PRO_MODE === "free" ? "ca-app-pub-3940256099942544/5224354917"
+  IPHONE ? (PRO_MODE === "free" ? "ca-app-pub-3940256099942544/1712485313" : "")
+  : PRO_MODE === "free" ? "ca-app-pub-3940256099942544/5224354917"
   : PRO_MODE === "play" ? "ca-app-pub-3909703327280410/3472642383"
   : "";
 /** Whether this build can show the ad at all (not in a browser). */
-export const ADS_ON = AD_UNIT !== "" && Capacitor.getPlatform() === "android";
+export const ADS_ON = AD_UNIT !== "" && (Capacitor.getPlatform() === "android" || IPHONE);
 
 let dayTimer: ReturnType<typeof setTimeout> | undefined;
 

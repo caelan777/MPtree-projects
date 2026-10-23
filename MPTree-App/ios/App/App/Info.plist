@@ -55,6 +55,17 @@
 	<string>MPTree plays the songs in your Music library that are stored on this iPhone.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>MPTree shows an ad only when you ask for a day of Pro. Allowing this lets the ad fit your interests; saying no works just as well.</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>

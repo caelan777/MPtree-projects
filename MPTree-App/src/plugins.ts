@@ -243,7 +243,7 @@ const isWeb = platform === "web";
  *  MainViewController.swift) arrive one at a time; until one is in, the
  *  stand-in answers for it, as in the browser. Android has every plugin. */
 export const IS_IOS = platform === "ios";
-const IOS_SWIFT = ["MusicScanner", "AudioPlayer", "System"];
+const IOS_SWIFT = ["MusicScanner", "AudioPlayer", "System", "Ads"];
 const native = (name: string) => platform === "android" || (IS_IOS && IOS_SWIFT.includes(name));
 
 /** Whether signing in to an MPTree account can work here: the native Google

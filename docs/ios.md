@@ -60,15 +60,15 @@ browser's stand-in until then, so the app runs from the first build on.
 | AudioPlayer | Swift: AVPlayer, background, lock screen, speed, crossfade; no equaliser yet |
 | System | Swift: device, links, text size, app icons (the `AppIcon-*` sets from `Branding/build-alt-icons.mjs`) |
 | Billing | stand-in (Pro unlocks with a tap) |
-| Ads | stand-in, none yet |
+| Ads | Swift: Google's rewarded ad (GoogleMobileAds, Swift package) with its iOS test unit and test app id, and the "allow tracking?" question first; no EU consent screen yet |
 | Account, Sync | stand-in; Account & sync hidden in Settings |
 
 A Swift plugin is listed in `IOS_SWIFT` in `src/plugins.ts` and registered in
 `MainViewController.swift`. A new `.swift` file in `ios/App/App/` goes into the
 Xcode project with `node scripts/ios-sources.mjs`.
 
-Still to come: the test ad day; then account and sync once an iOS OAuth
-client exists in Google Cloud; the equaliser.
+Still to come: account and sync once an iOS OAuth client exists in Google
+Cloud; the equaliser; Google's EU consent screen for ads.
 
 Backups go where Android puts them, `Download/<name>` inside the MPTree
 folder (Files, MPTree, Download). Their copy of the songs has a `.nomedia`

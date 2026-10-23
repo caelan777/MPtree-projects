@@ -10,5 +10,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(MusicScannerPlugin())
         bridge?.registerPluginInstance(AudioPlayerPlugin())
         bridge?.registerPluginInstance(SystemPlugin())
+        bridge?.registerPluginInstance(AdsPlugin())
     }
 }

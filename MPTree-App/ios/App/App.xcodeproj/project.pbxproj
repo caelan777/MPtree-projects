@@ -19,6 +19,8 @@
 		17DEA351B81999D5DB4C3AA2 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF023ACC55C5B3172FD592A /* MainViewController.swift */; };
 		DFD156E71312E9CE6E5C065B /* MusicScannerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C7DCDC43DA3CB733E2DC11 /* MusicScannerPlugin.swift */; };
 		CDAF00542062B0A73B88E940 /* SystemPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7375E4484F6528A73A077C07 /* SystemPlugin.swift */; };
+		AD0000000000000000000003 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = AD0000000000000000000002 /* GoogleMobileAds */; };
+		4CFA46979C3A8130B73F07E6 /* AdsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC2506EBCDAA458BAA785C8D /* AdsPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +38,7 @@
 		ECF023ACC55C5B3172FD592A /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		E0C7DCDC43DA3CB733E2DC11 /* MusicScannerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicScannerPlugin.swift; sourceTree = "<group>"; };
 		7375E4484F6528A73A077C07 /* SystemPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemPlugin.swift; sourceTree = "<group>"; };
+		BC2506EBCDAA458BAA785C8D /* AdsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdsPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,6 +47,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				AD0000000000000000000003 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +76,7 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				BC2506EBCDAA458BAA785C8D /* AdsPlugin.swift */,
 				7375E4484F6528A73A077C07 /* SystemPlugin.swift */,
 				E0C7DCDC43DA3CB733E2DC11 /* MusicScannerPlugin.swift */,
 				ECF023ACC55C5B3172FD592A /* MainViewController.swift */,
@@ -104,6 +109,7 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				AD0000000000000000000002 /* GoogleMobileAds */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -136,6 +142,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				AD0000000000000000000001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -168,6 +175,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				4CFA46979C3A8130B73F07E6 /* AdsPlugin.swift in Sources */,
 				CDAF00542062B0A73B88E940 /* SystemPlugin.swift in Sources */,
 				DFD156E71312E9CE6E5C065B /* MusicScannerPlugin.swift in Sources */,
 				17DEA351B81999D5DB4C3AA2 /* MainViewController.swift in Sources */,
@@ -311,6 +319,10 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -334,6 +346,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -382,11 +398,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		AD0000000000000000000001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.11.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		AD0000000000000000000002 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AD0000000000000000000001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
