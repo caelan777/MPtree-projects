@@ -24,7 +24,7 @@ const Backdrop = memo(function Backdrop({ photo, sheetBg }: { photo?: string; sh
   return (
     <div style={{
       position: "absolute", inset: 0, zIndex: 0, overflow: "hidden",
-      pointerEvents: "none",
+      borderRadius: "20px 20px 0 0", pointerEvents: "none",
       // Its own layer, and nothing inside can affect anything outside it.
       contain: "paint", willChange: "transform",
     }}>
@@ -49,9 +49,14 @@ const Backdrop = memo(function Backdrop({ photo, sheetBg }: { photo?: string; sh
  *  hundred songs nobody is reading the list any more. */
 const MAX_UP_NEXT = 500;
 /** Rows are added as you scroll rather than all at once: 500 rows, each with
- *  its own cover lookup, would make opening the player stutter. */
+ *  its own cover lookup, would make opening the list stutter. */
 const FIRST_ROWS = 40;
 const MORE_ROWS = 60;
+
+/** The pill at the top of a sheet that says it can be pulled. */
+function Handle({ T }: { T: T }) {
+  return <div style={{ width: 36, height: 4, background: T.dim, borderRadius: 2, margin: "10px auto 0", flexShrink: 0 }} />;
+}
 
 // ─── PLAYER EXPAND SHEET ─────────────────────────────────────────────────────
 
@@ -67,8 +72,10 @@ type PlayerExpandSheetProps = {
   currentTime: number;
   duration: number;
   playMode: PlayMode;
-  /** Repeat the song that is on; separate from shuffle. */
+  /** Repeat the song that is on. */
   repeatOn: boolean;
+  /** Repeat the whole queue. The repeat button goes round off, all, one. */
+  repeatAll: boolean;
   isLiked: boolean;
   /** Current playback speed multiplier (1 = normal). */
   playbackSpeed: number;
@@ -93,6 +100,8 @@ type PlayerExpandSheetProps = {
   onToggleLike: () => void;
   onRemove: () => void;
   onShare: () => void;
+  /** "Skip" next to the next song: it goes to the end of the queue. */
+  onSkipUpNext: () => void;
   /** A song in "Next up" moved by its handle: positions counted from the
    *  first song after the one that is on. */
   onQueueMove: (from: number, to: number) => void;
@@ -123,13 +132,13 @@ type PlayerExpandSheetProps = {
 
 export function PlayerExpandSheet({
   song, dispName, dispArtist, customPhoto, backdropPhoto,
-  isPlaying, currentTime, duration, playMode, repeatOn, isLiked,
+  isPlaying, currentTime, duration, playMode, repeatOn, repeatAll, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
   upNextQueue, playNextQueue = [], sourceLabel, getDispName, getDispArtist, getCustomPhoto,
   onTogglePlay, onSkip, onToggleShuffle, onToggleRepeat,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
-  onQueueMove, onPlayFromQueue, onOpenSongMenu,
+  onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
   lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
@@ -165,43 +174,139 @@ export function PlayerExpandSheet({
   };
   const speedLabel = `${playbackSpeed}×`;
 
-  /** The shuffle or the repeat button: coloured, with a dot under it, while on. */
+  /** The shuffle or the repeat button: coloured, with a dot under it, while
+   *  on. Repeat this song wears a small 1. */
   const modeButton = (mode: "shuffle" | "repeat") => {
-    const on = mode === "shuffle" ? playMode === "shuffle" : repeatOn;
+    const on = mode === "shuffle" ? playMode === "shuffle" : repeatOn || repeatAll;
     const tint = mode === "shuffle" ? T.violet : T.repeat;
+    const label = mode === "shuffle" ? t("Shuffle") : repeatOn ? t("Repeat this song") : repeatAll ? t("Repeat all") : t("Repeat");
     return (
       <button
         onClick={mode === "shuffle" ? onToggleShuffle : onToggleRepeat}
         aria-pressed={on}
-        aria-label={mode === "shuffle" ? t("Shuffle") : t("Repeat")}
+        aria-label={label}
         style={{ background: "transparent", border: "none", color: on ? tint : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
       >
         {mode === "shuffle" ? <IC.Shuffle /> : <IC.Repeat />}
+        {mode === "repeat" && repeatOn && (
+          <span style={{ position: "absolute", top: 2, right: 0, minWidth: 13, height: 13, borderRadius: 7, background: tint, color: "#fff", fontSize: 9, fontWeight: 800, lineHeight: "13px", textAlign: "center" }}>1</span>
+        )}
         {on && <span style={{ position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: tint }} />}
       </button>
     );
   };
 
-  // ── Next up ───────────────────────────────────────────────────────────────
-  // Everything after the song that is on, in the order it will play. It used
-  // to show the pinned songs and one more; now it is the queue itself, so the
-  // list is what you will hear.
+  // ── The queue ─────────────────────────────────────────────────────────────
   const queue = upNextQueue ?? [];
   const curIdx = queue.findIndex(s => s.id === song.id);
   const upcoming = curIdx >= 0 ? queue.slice(curIdx + 1) : [];
   const listed = upcoming.slice(0, MAX_UP_NEXT - 1);
+  const nextSong = upcoming[0] ?? null;
   const pinned = new Set(playNextQueue);
-  const [rowsShown, setRowsShown] = useState(FIRST_ROWS);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const onBodyScroll = () => {
-    const el = scrollRef.current;
-    if (!el || rowsShown >= listed.length) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 900) setRowsShown(n => n + MORE_ROWS);
-  };
 
   const getName   = (s: Song) => getDispName   ? getDispName(s)   : s.title;
   const getArtist = (s: Song) => getDispArtist ? getDispArtist(s) : s.artist;
   const getPhoto  = (s: Song) => getCustomPhoto ? getCustomPhoto(s) : undefined;
+
+  // ── Close with a slide-down animation ─────────────────────────────────────
+  // `closing` swaps the CSS classes to the exit animations; the real onClose
+  // (which unmounts us) fires when the slide finishes. Guarded so double-taps
+  // during the animation don't call onClose twice.
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+  const animatedClose = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    setTimeout(onClose, 240); // matches .pes-sheet-out duration
+  };
+
+  // ── The "Next up" page ────────────────────────────────────────────────────
+  // The full queue is a page of its own that comes up over the player when
+  // you keep pushing upwards, and goes back down when you pull it at its top.
+  const [upOpen, setUpOpen]   = useState(false);
+  /** Pixels the page is pulled by a finger: up from closed, down from open. */
+  const [upPull, setUpPull]   = useState(0);
+  const [upSnap, setUpSnap]   = useState(false);
+  const [rowsShown, setRowsShown] = useState(FIRST_ROWS);
+  const listRef = useRef<HTMLDivElement>(null);
+  const onListScroll = () => {
+    const el = listRef.current;
+    if (!el || rowsShown >= listed.length) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 900) setRowsShown(n => n + MORE_ROWS);
+  };
+  const openUpNext = () => {
+    setUpSnap(true); setUpOpen(true); setUpPull(0);
+    setTimeout(() => setUpSnap(false), 300);
+  };
+  const closeUpNext = () => {
+    setUpSnap(true); setUpOpen(false); setUpPull(0);
+    setTimeout(() => setUpSnap(false), 300);
+  };
+
+  // ── Drags ─────────────────────────────────────────────────────────────────
+  // On the player, pulling down closes it from anywhere (not only the top
+  // bar), and pushing up brings the "Next up" page. On that page, pulling
+  // down while its list is at the top sends it back. A drag decides its
+  // direction once, after the first few pixels, and then follows the finger.
+  const [closeDragY, setCloseDragY] = useState(0);
+  const [closeSnap, setCloseSnap]   = useState(false);
+  const drag = useRef<{ y: number; x: number; mode: null | "close" | "up" | "back" | "none"; on: "player" | "page" } | null>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+  const vh = () => window.innerHeight || 800;
+
+  const dragStart = (on: "player" | "page") => (e: React.TouchEvent) => {
+    if (closingRef.current) return;
+    const el = e.target as HTMLElement;
+    // The timeline, the lyrics and a row's handle have drags of their own.
+    if (el.closest("input, [data-own-drag]")) { drag.current = null; return; }
+    drag.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, mode: null, on };
+    setCloseSnap(false);
+  };
+  const dragMove = (e: React.TouchEvent) => {
+    const d = drag.current;
+    if (!d || dragIdx !== null) return;
+    const dy = e.touches[0].clientY - d.y;
+    const dx = e.touches[0].clientX - d.x;
+    if (d.mode === null) {
+      if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+      if (Math.abs(dx) > Math.abs(dy)) { d.mode = "none"; return; }
+      if (d.on === "page") {
+        const atTop = (listRef.current?.scrollTop ?? 0) <= 0;
+        d.mode = dy > 0 && atTop ? "back" : "none";
+      } else {
+        const p = playerRef.current;
+        const atTop = !p || p.scrollTop <= 0;
+        const atBottom = !p || p.scrollTop + p.clientHeight >= p.scrollHeight - 2;
+        d.mode = dy > 0 && atTop ? "close" : dy < 0 && atBottom ? "up" : "none";
+      }
+    }
+    if (d.mode === "close") setCloseDragY(Math.max(0, dy));
+    else if (d.mode === "up") setUpPull(Math.max(0, -dy));
+    else if (d.mode === "back") setUpPull(Math.max(0, dy));
+  };
+  const dragEnd = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !d.mode || d.mode === "none") return;
+    if (d.mode === "close") {
+      if (closeDragY > vh() * 0.22) {
+        if (closingRef.current) return;
+        closingRef.current = true;
+        setCloseSnap(true);
+        setCloseDragY(vh());         // glide the rest of the way down
+        setTimeout(onClose, 260);
+      } else {
+        setCloseSnap(true);
+        setCloseDragY(0);            // snap back up
+        setTimeout(() => setCloseSnap(false), 280);
+      }
+    } else if (d.mode === "up") {
+      if (upPull > vh() * 0.15) openUpNext(); else closeUpNext();
+    } else if (d.mode === "back") {
+      if (upPull > vh() * 0.15) closeUpNext(); else openUpNext();
+    }
+  };
 
   // ── Moving a song by its handle ───────────────────────────────────────────
   // The handle alone starts a drag, so a row can still be scrolled past and
@@ -226,71 +331,38 @@ export function PlayerExpandSheet({
       if (y >= r.top && y <= r.bottom) { setDragOverIdx(j); break; }
     }
   };
-  const onListTouchEnd = () => {
-    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) onQueueMove(dragIdx, dragOverIdx);
+  const onListTouchEnd = (e: React.TouchEvent) => {
+    if (dragIdx === null) return;
+    e.stopPropagation();
+    if (dragOverIdx !== null && dragIdx !== dragOverIdx) onQueueMove(dragIdx, dragOverIdx);
     setDragIdx(null);
     setDragOverIdx(null);
   };
 
-  // ── Close with a slide-down animation ─────────────────────────────────────
-  // `closing` swaps the CSS classes to the exit animations; the real onClose
-  // (which unmounts us) fires when the slide finishes. Guarded so double-taps
-  // during the animation don't call onClose twice.
-  const [closing, setClosing] = useState(false);
-  const closingRef = useRef(false);
-  const animatedClose = () => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    setClosing(true);
-    setTimeout(onClose, 240); // matches .pes-sheet-out duration
-  };
-
-  // ── Gesture-driven drag-down-to-close ─────────────────────────────────────
-  // Mirrors the drag-up open: grabbing the top bar drags the player down
-  // live; releasing past ~22% of the screen closes it, and anything less snaps
-  // back. `closeSnap` turns the transition on for the settle, off while the
-  // finger is down.
-  const [closeDragY, setCloseDragY] = useState(0);
-  const [closeSnap, setCloseSnap]   = useState(false);
-  const closeDragStartRef = useRef<number | null>(null);
-  const startCloseDrag = (y: number) => { if (!closingRef.current) { closeDragStartRef.current = y; setCloseSnap(false); } };
-  const moveCloseDrag  = (y: number) => {
-    if (closeDragStartRef.current === null) return;
-    const dy = y - closeDragStartRef.current;
-    setCloseDragY(dy > 0 ? dy : 0);
-  };
-  const endCloseDrag = () => {
-    if (closeDragStartRef.current === null) return;
-    closeDragStartRef.current = null;
-    const vh = window.innerHeight || 800;
-    if (closeDragY > vh * 0.22) {
-      if (closingRef.current) return;
-      closingRef.current = true;
-      setCloseSnap(true);
-      setCloseDragY(vh);           // glide the rest of the way down
-      setTimeout(onClose, 260);
-    } else {
-      setCloseSnap(true);
-      setCloseDragY(0);            // snap back up
-      setTimeout(() => setCloseSnap(false), 280);
-    }
-  };
-
   const isDraggingOpen  = dragProgress !== null && !dragSettling;
-  const isDraggingClose = closeDragStartRef.current !== null;
+  const isDraggingClose = drag.current?.mode === "close";
   // Live transform: opening drag positions by progress; closing drag by pixels.
   const sheetTransform =
     dragProgress !== null ? `translateY(${Math.round((1 - dragProgress) * 100)}%)` :
     (closeDragY > 0 || closeSnap) ? `translateY(${Math.round(closeDragY)}px)` : undefined;
   const overlayOpacity =
     dragProgress !== null ? dragProgress :
-    closeDragY > 0 ? Math.max(0, 1 - closeDragY / ((window.innerHeight || 800) * 0.7)) : undefined;
+    closeDragY > 0 ? Math.max(0, 1 - closeDragY / (vh() * 0.7)) : undefined;
+  // Where the "Next up" page stands: off the bottom when closed, pulled up by
+  // the finger, at the top when open, pulled down by the finger.
+  const upTransform = upOpen
+    ? `translateY(${Math.round(upPull)}px)`
+    : `translateY(calc(100% - ${Math.round(upPull)}px))`;
+  const upMoving = drag.current?.mode === "up" || drag.current?.mode === "back";
 
-  const discSize = Math.min(300, (typeof window !== "undefined" ? window.innerWidth : 375) - 80);
+  // The record fills what the rest leaves, so the whole player fits on the
+  // screen without scrolling; on a very short one it scrolls instead.
+  const winW = typeof window !== "undefined" ? window.innerWidth : 375;
+  const discSize = Math.round(Math.max(150, Math.min(280, winW - 96, vh() - 560)));
 
-  /** One part of the bar under the transport. The bar is drawn like a
-   *  segmented control: a rounded track, the parts inside it rounded on their
-   *  outer side only. */
+  /** One part of the bar under the player. The bar is drawn like a segmented
+   *  control: a rounded track, the parts inside it rounded on their outer
+   *  side only. */
   const barPart = (key: string, label: string, on: boolean, onClick: () => void, body: React.ReactNode, at: "first" | "mid" | "last") => (
     <button
       key={key}
@@ -298,8 +370,8 @@ export function PlayerExpandSheet({
       aria-label={label}
       aria-pressed={on || undefined}
       style={{
-        flex: 1, minWidth: 0, height: 50,
-        borderRadius: at === "first" ? "25px 12px 12px 25px" : at === "last" ? "12px 25px 25px 12px" : 12,
+        flex: 1, minWidth: 0, height: 48,
+        borderRadius: at === "first" ? "24px 10px 10px 24px" : at === "last" ? "10px 24px 24px 10px" : 10,
         background: on ? T.accent : T.dim,
         color: on ? T.playBtnFg : T.text,
         border: "none", cursor: "pointer", fontFamily: "inherit",
@@ -311,15 +383,15 @@ export function PlayerExpandSheet({
     </button>
   );
 
-  /** A row in "Next up". Square edged: only the song that is on is drawn as a
-   *  rounded tile, so it stands out from the flat list under it. */
+  /** A row on the "Next up" page. Square edged: only the song that is on is
+   *  drawn as a rounded tile, so it stands out from the flat list under it. */
   const queueRow = (s: Song, i: number) => {
     const name = getName(s);
     const isDragging = dragIdx === i;
     const isOver = dragIdx !== null && dragOverIdx === i && dragIdx !== i;
     return (
       <div
-        key={s.id}
+        key={`${s.id}:${i}`}
         ref={el => { itemRefs.current[i] = el; }}
         onClick={() => { if (dragIdx === null) onPlayFromQueue(s); }}
         style={{
@@ -331,6 +403,7 @@ export function PlayerExpandSheet({
         }}
       >
         <div
+          data-own-drag=""
           onTouchStart={onHandleTouchStart(i)}
           onClick={e => e.stopPropagation()}
           aria-label={t("Drag to move")}
@@ -369,6 +442,10 @@ export function PlayerExpandSheet({
     );
   };
 
+  const countLine = upcoming.length === 0
+    ? t("Nothing lined up after this song.")
+    : tn(upcoming.length, "{n} song lined up.", "{n} songs lined up.");
+
   return (
     <div
       className={closing ? "pes-overlay-out" : dragProgress !== null || skipEnter ? undefined : "pes-overlay-in"}
@@ -393,14 +470,13 @@ export function PlayerExpandSheet({
           .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
         }
       `}</style>
-      {/* The whole screen. It used to be a sheet that stopped short of the
-          top; the player is the one place nothing else needs to show. */}
+      {/* The whole screen, with the rounded top of a sheet. */}
       <div
         className={closing ? "pes-sheet-out" : dragProgress !== null || skipEnter ? undefined : "pes-sheet-in"}
         style={{
           position: "absolute", inset: 0,
           background: T.sheetBg,
-          display: "flex", flexDirection: "column",
+          borderRadius: "20px 20px 0 0",
           overflow: "hidden",
           transform: sheetTransform,
           transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -408,65 +484,65 @@ export function PlayerExpandSheet({
       >
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
 
-        {/* Top bar = the drag-down-to-close grab area. It stays put while the
-            queue scrolls under it, so closing never needs a scroll back up. */}
+        {/* ── The player ─────────────────────────────────────────────────── */}
         <div
-          onTouchStart={e => startCloseDrag(e.touches[0].clientY)}
-          onTouchMove={e => moveCloseDrag(e.touches[0].clientY)}
-          onTouchEnd={endCloseDrag}
-          onTouchCancel={endCloseDrag}
+          ref={playerRef}
+          onTouchStart={dragStart("player")}
+          onTouchMove={dragMove}
+          onTouchEnd={dragEnd}
+          onTouchCancel={dragEnd}
           style={{
-            position: "relative", zIndex: 1, flexShrink: 0,
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            padding: "calc(env(safe-area-inset-top, 0px) + 10px) 16px 6px",
-            touchAction: "none",
+            position: "absolute", inset: 0, zIndex: 1,
+            display: "flex", flexDirection: "column",
+            overflowY: "auto", overscrollBehavior: "none",
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)", boxSizing: "border-box",
           }}
         >
-          <button onClick={animatedClose}
-            aria-label={t("Close player")}
-            style={{ width: 44, height: 44, borderRadius: 22, background: T.dim, border: "none", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <IC.ChevronDown />
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Swaps the record for the words. With no lyrics stored it opens
-                the sheet to add some, rather than showing an empty panel. */}
-            <button
-              onClick={toggleLyrics}
-              aria-label={t("Lyrics")}
-              aria-pressed={lyricsOpen}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6, height: 44,
-                background: lyricsOpen ? T.accent : T.dim,
-                border: "none", borderRadius: 22, padding: "0 16px",
-                color: lyricsOpen ? T.playBtnFg : T.text,
-                fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
-              }}
-            >
-              <IC.Lyrics />
-              <span>{t("Lyrics")}</span>
+          <Handle T={T} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px 0", flexShrink: 0 }}>
+            <button onClick={animatedClose}
+              aria-label={t("Close player")}
+              style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+              <IC.ChevronDown />
             </button>
-            <button
-              onClick={onOpenMenu}
-              aria-label={t("More options for {name}", { name: dispName })}
-              style={{ width: 44, height: 44, borderRadius: 22, background: T.dim, border: "none", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <IC.Dots />
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              {/* Swaps the record for the words. With no lyrics stored it opens
+                  the sheet to add some, rather than showing an empty panel. */}
+              <button
+                onClick={toggleLyrics}
+                aria-label={t("Lyrics")}
+                aria-pressed={lyricsOpen}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  background: lyricsOpen ? T.dim : "transparent",
+                  border: "none", borderRadius: 16, padding: "6px 10px",
+                  color: lyricsOpen ? T.text : T.muted,
+                  fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+                }}
+              >
+                <IC.Lyrics />
+                <span>{t("Lyrics")}</span>
+              </button>
+              <button
+                onClick={onOpenMenu}
+                aria-label={t("More options for {name}", { name: dispName })}
+                style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+                <IC.Dots />
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div
-          ref={scrollRef}
-          onScroll={onBodyScroll}
-          style={{
-            position: "relative", zIndex: 1, flex: 1, minHeight: 0,
-            overflowY: dragIdx !== null ? "hidden" : "auto", WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {/* ── The song that is on ── */}
-          <div style={{ padding: "8px 24px 0", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ margin: "12px 0 22px" }}>
+          {/* The card, with the border it always had. */}
+          <div style={{
+            background: T.card, borderRadius: 14, margin: "4px 16px 0", padding: "14px 14px 12px",
+            border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
+            flexShrink: 0,
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
               {lyricsOpen ? (
-                <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
+                <div data-own-drag="">
+                  <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
+                </div>
               ) : (
                 <SpinningDisc
                   size={discSize}
@@ -477,24 +553,24 @@ export function PlayerExpandSheet({
                   onNoCover={onNoCover}
                 />
               )}
-            </div>
-            <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
-              <div style={{ fontSize: 21, fontWeight: 700, color: T.text, wordBreak: "break-word", lineHeight: 1.3 }}>
-                {dispName}
-              </div>
-              {song.isCut && (
-                <span style={{
-                  fontSize: 10, background: T.dim, color: T.textSub,
-                  borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
-                }}>CUT</span>
-              )}
-              <div style={{ fontSize: 15, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
-                {dispArtist || t("Unknown Artist")}
+              <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
+                  {dispName}
+                </div>
+                {song.isCut && (
+                  <span style={{
+                    fontSize: 10, background: T.dim, color: T.textSub,
+                    borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
+                  }}>CUT</span>
+                )}
+                <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
+                  {dispArtist || t("Unknown Artist")}
+                </div>
               </div>
             </div>
 
             {/* Timeline */}
-            <div style={{ display: "flex", alignItems: "center", width: "100%", marginTop: 22 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
               <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
               <input
                 className="slider" type="range" min={0} max={duration || 100} value={currentTime}
@@ -507,7 +583,7 @@ export function PlayerExpandSheet({
             </div>
 
             {/* Transport */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20, marginTop: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
               {/* Shuffle and repeat used to be one button that went round
                   off, shuffle, repeat: reaching repeat meant shuffling first.
                   Each has its own now, at either end, with a dot when on. */}
@@ -516,55 +592,131 @@ export function PlayerExpandSheet({
               <button
                 onClick={onTogglePlay}
                 aria-label={isPlaying ? t("Pause") : t("Play")}
-                style={{ background: T.playBtnBg, border: "none", color: T.playBtnFg, width: 64, height: 64, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                style={{ background: T.playBtnBg, border: "none", color: T.playBtnFg, width: 56, height: 56, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               >
                 {isPlaying ? <IC.Pause /> : <IC.Play />}
               </button>
               <button onClick={() => onSkip(1)} aria-label={t("Next")} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipF /></button>
               {modeButton("repeat")}
             </div>
-
-            {/* ── Speed, like, share, remove ──────────────────────────────
-                One bar instead of four chips. Edit and Cut live behind the
-                "⋮" at the top: they take you out of the player entirely. */}
-            <div style={{
-              display: "flex", gap: 4, width: "100%", marginTop: 24, padding: 5,
-              borderRadius: 30, background: T.card, border: `1px solid ${T.border}`, boxSizing: "border-box",
-            }}>
-              {barPart("speed", t("Playback speed"), playbackSpeed !== 1, cycleSpeed,
-                <span style={{ fontSize: 15, fontWeight: 700 }}>{speedLabel}</span>, "first")}
-              {barPart("like", isLiked ? t("Unlike") : t("Like"), isLiked, onToggleLike,
-                <IC.Heart filled={isLiked} size={20} />, "mid")}
-              {barPart("share", t("Share"), false, onShare, <IC.Share />, "mid")}
-              {barPart("remove", t("Remove"), false, onRemove, <IC.Trash />, "last")}
-            </div>
           </div>
 
-          {/* ── Next up ─────────────────────────────────────────────────── */}
-          <div style={{ marginTop: 34, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, padding: "0 20px 14px" }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 26, fontWeight: 800, color: T.text, lineHeight: 1.15 }}>{t("Next up")}</div>
-                <div style={{ fontSize: 14, color: T.textSub, marginTop: 4 }}>
-                  {upcoming.length === 0 ? t("Nothing lined up after this song.") : tn(upcoming.length, "{n} song lined up.", "{n} songs lined up.")}
-                </div>
-              </div>
-              {sourceLabel && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 7, minWidth: 0, maxWidth: "52%",
-                  padding: "9px 14px", borderRadius: 20, background: T.dim, color: T.text,
-                  fontSize: 13, fontWeight: 600, flexShrink: 1,
-                }}>
-                  {playMode === "shuffle" ? <span style={{ display: "flex", color: T.violet, flexShrink: 0 }}><IC.Shuffle /></span> : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }} aria-hidden="true">
-                      <line x1="3" y1="6" x2="15" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="11" y2="18"/><path d="M19 15V5l3 1"/><circle cx="17" cy="16" r="2"/>
-                    </svg>
-                  )}
-                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sourceLabel}</span>
-                </div>
-              )}
-            </div>
+          {/* ── Speed, like, share, remove ────────────────────────────────
+              One bar instead of four chips. Edit and Cut live behind the
+              "⋮" at the top: they take you out of the player entirely. */}
+          <div style={{
+            display: "flex", gap: 4, margin: "14px 16px 0", padding: 5, flexShrink: 0,
+            borderRadius: 29, background: T.card, border: `1px solid ${T.border}`,
+          }}>
+            {barPart("speed", t("Playback speed"), playbackSpeed !== 1, cycleSpeed,
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{speedLabel}</span>, "first")}
+            {barPart("like", isLiked ? t("Unlike") : t("Like"), isLiked, onToggleLike,
+              <IC.Heart filled={isLiked} size={20} />, "mid")}
+            {barPart("share", t("Share"), false, onShare, <IC.Share />, "mid")}
+            {barPart("remove", t("Remove"), false, onRemove, <IC.Trash />, "last")}
+          </div>
 
+          {/* ── Up next: the one song, and a way to the rest ──────────────
+              The whole list is a page of its own: push up, or tap here. */}
+          <div style={{ margin: "16px 16px 0", flexShrink: 0 }}>
+            <button
+              onClick={openUpNext}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+                background: "transparent", border: "none", padding: "0 2px 8px", cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {t("Next up")}
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: T.muted }}>
+                {tn(upcoming.length, "{n} song", "{n} songs")}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+              </span>
+            </button>
+            {nextSong ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 10px", borderRadius: 10,
+                background: T.card, border: `1px solid ${T.border}`,
+              }}>
+                <AlbumArt title={getName(nextSong)} size={36} customPhoto={getPhoto(nextSong)} songPath={nextSong.uri} albumId={nextSong.albumId} T={T} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {getName(nextSong)}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {getArtist(nextSong) || t("Unknown Artist")}
+                  </div>
+                </div>
+                <button
+                  onClick={onSkipUpNext}
+                  title={t("Skip this song")}
+                  style={{
+                    background: "transparent", border: "none", color: T.muted,
+                    cursor: "pointer", padding: "4px 6px", display: "flex",
+                    alignItems: "center", gap: 4, flexShrink: 0,
+                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                  }}
+                >
+                  <IC.SkipF />
+                  {t("Skip")}
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: T.muted, padding: "4px 2px" }}>{countLine}</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── The "Next up" page ────────────────────────────────────────── */}
+        <div
+          onTouchStart={dragStart("page")}
+          onTouchMove={dragMove}
+          onTouchEnd={dragEnd}
+          onTouchCancel={dragEnd}
+          aria-hidden={!upOpen}
+          style={{
+            position: "absolute", inset: 0, zIndex: 2,
+            background: T.sheetBg, borderRadius: "20px 20px 0 0",
+            boxShadow: upOpen || upPull > 0 ? "0 -8px 30px rgba(0,0,0,0.35)" : "none",
+            display: "flex", flexDirection: "column",
+            transform: upTransform,
+            transition: upMoving ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+            visibility: upOpen || upPull > 0 || upSnap ? "visible" : "hidden",
+          }}
+        >
+          <Handle T={T} />
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, padding: "14px 20px 14px", flexShrink: 0 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: T.text, lineHeight: 1.15 }}>{t("Next up")}</div>
+              <div style={{ fontSize: 14, color: T.textSub, marginTop: 4 }}>{countLine}</div>
+            </div>
+            {sourceLabel && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 7, minWidth: 0, maxWidth: "52%",
+                padding: "9px 14px", borderRadius: 20, background: T.dim, color: T.text,
+                fontSize: 13, fontWeight: 600, flexShrink: 1,
+              }}>
+                {playMode === "shuffle" ? <span style={{ display: "flex", color: T.violet, flexShrink: 0 }}><IC.Shuffle /></span> : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                    <line x1="3" y1="6" x2="15" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="11" y2="18"/><path d="M19 15V5l3 1"/><circle cx="17" cy="16" r="2"/>
+                  </svg>
+                )}
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sourceLabel}</span>
+              </div>
+            )}
+          </div>
+
+          <div
+            ref={listRef}
+            onScroll={onListScroll}
+            style={{
+              flex: 1, minHeight: 0, overscrollBehavior: "none",
+              overflowY: dragIdx !== null ? "hidden" : "auto", WebkitOverflowScrolling: "touch",
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+            }}
+          >
             {/* The song that is on, at the head of the list: the one rounded
                 tile, with its bars moving while it plays. */}
             <div style={{
@@ -585,7 +737,7 @@ export function PlayerExpandSheet({
               onTouchCancel={dragIdx !== null ? onListTouchEnd : undefined}
               style={{ padding: "0 4px" }}
             >
-              {listed.slice(0, rowsShown).map(queueRow)}
+              {(upOpen || upPull > 0) && listed.slice(0, rowsShown).map(queueRow)}
             </div>
           </div>
         </div>

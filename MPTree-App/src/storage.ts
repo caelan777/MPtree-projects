@@ -21,6 +21,8 @@ export interface Session {
   /** Repeat the song that is on. Before it was its own switch it was
    *  playMode "repeat", which is still read as this. */
   repeat?:         boolean;
+  /** Repeat the whole queue: after the last song the first comes again. */
+  repeatAll?:      boolean;
   currentId?:      string;
   queueIds?:       string[];
   positionMs?:     number;
@@ -222,7 +224,7 @@ const SETTINGS_KEYS = [
   "mptree_mix_others", "mptree_auto_collapse",
   "mptree_logo_pos", "mptree_look",
 ];
-const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "repeat", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
+const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "repeat", "repeatAll", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
 
 function pickSession(from: Partial<Session>): Partial<Session> {
   const kept: Partial<Session> = {};

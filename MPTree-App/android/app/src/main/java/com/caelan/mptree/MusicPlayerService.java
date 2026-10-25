@@ -138,10 +138,12 @@ public class MusicPlayerService extends Service {
     public static final String MODE_OFF     = "off";
     public static final String MODE_SHUFFLE = "shuffle";
     public static final String MODE_REPEAT  = "repeat";
+    /** The whole queue again: after the last song the first comes. */
+    public static final String MODE_REPEAT_ALL = "repeatAll";
     private String playMode = MODE_OFF;
 
     public void setPlayMode(String mode) {
-        if (MODE_OFF.equals(mode) || MODE_SHUFFLE.equals(mode) || MODE_REPEAT.equals(mode)) {
+        if (MODE_OFF.equals(mode) || MODE_SHUFFLE.equals(mode) || MODE_REPEAT.equals(mode) || MODE_REPEAT_ALL.equals(mode)) {
             playMode = mode;
         }
     }
@@ -525,6 +527,7 @@ public class MusicPlayerService extends Service {
             crossfadeDurationMs = Math.max(0, s.optInt("crossfadeMs", 0));
             String mode = s.optString("playMode", MODE_OFF);
             playMode = s.optBoolean("repeat", false) || MODE_REPEAT.equals(mode) ? MODE_REPEAT
+                    : s.optBoolean("repeatAll", false) ? MODE_REPEAT_ALL
                     : MODE_SHUFFLE.equals(mode) ? MODE_SHUFFLE : MODE_OFF;
             double speed = s.optDouble("playbackSpeed", 1.0);
             if (speed > 0) playbackSpeed = (float) Math.max(0.25, Math.min(4.0, speed));
@@ -992,6 +995,7 @@ public class MusicPlayerService extends Service {
         if (MODE_REPEAT.equals(playMode)) return currentAsTrack();
         if (nativeQueue.isEmpty() || nativeQueueIndex < 0) return null;
         int next = nativeQueueIndex + 1;
+        if (next >= nativeQueue.size() && MODE_REPEAT_ALL.equals(playMode)) next = 0;
         if (next < 0 || next >= nativeQueue.size()) return null;
         return nativeQueue.get(next);
     }
@@ -1198,6 +1202,8 @@ public class MusicPlayerService extends Service {
         // Repeat is for when a song ends (advanceForCompletion). Next means
         // the next song, repeat on or not; it used to play the same one again.
         int next = nativeQueueIndex + dir;
+        // Repeat all goes round, both ways.
+        if (MODE_REPEAT_ALL.equals(playMode)) next = (next + nativeQueue.size()) % nativeQueue.size();
 
         if (next < 0 || next >= nativeQueue.size()) {
             // Queue exhausted: stop and notify JS to reset its transport UI.

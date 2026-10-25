@@ -228,6 +228,7 @@ export const PlaylistsView: React.FC<Props> = ({
       setActiveId(null);
       setActiveSmartId(null);
       setMenuSong(null);
+      setReordering(false);
     }
   }, [resetToListSignal]);
   const [creating,        setCreating]       = useState(false);
@@ -235,6 +236,12 @@ export const PlaylistsView: React.FC<Props> = ({
   const [renamingId,      setRenamingId]     = useState<string | null>(null);
   const [renameDraft,     setRenameDraft]    = useState("");
   const [confirmDeleteId, setConfirmDeleteId]= useState<string | null>(null);
+  // Moving playlists: on from "Reorder", or by holding a playlist. Each row
+  // then has a handle; dragging it moves the playlist, and the order is kept.
+  const [reordering,      setReordering]     = useState(false);
+  const [plDrag,          setPlDrag]         = useState<{ from: number; over: number } | null>(null);
+  const plRowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const plPress   = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; held: boolean }>({ timer: null, x: 0, y: 0, held: false });
   const [selectedAdd,     setSelectedAdd]    = useState<Set<string>>(new Set());
   const [addSearch,       setAddSearch]      = useState("");
   const [addSort,         setAddSort]        = useState<AddSortId>("newest");
@@ -319,7 +326,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // should not jump back to Songs), and to decide whether Android's Back
   // belongs to us or should leave the tab.
   const canPop = view !== "list" || selectMode || !!menuSong
-    || creating || !!renamingId || !!confirmDeleteId;
+    || creating || !!renamingId || !!confirmDeleteId || reordering;
   useEffect(() => { onDetailChange?.(canPop); }, [canPop, onDetailChange]);
 
   // ── Android Back, delegated from App ──────────────────────────────────────
@@ -330,6 +337,7 @@ export const PlaylistsView: React.FC<Props> = ({
     if (backSignal === lastBackSignalRef.current) return;
     lastBackSignalRef.current = backSignal;
     if (menuSong)         { setMenuSong(null); return; }
+    if (reordering)       { setReordering(false); return; }
     if (confirmDeleteId)  { setConfirmDeleteId(null); return; }
     if (renamingId)       { setRenamingId(null); return; }
     if (creating)         { setCreating(false); return; }
@@ -338,6 +346,47 @@ export const PlaylistsView: React.FC<Props> = ({
     if (view !== "list")  { setView("list"); setActiveId(null); setActiveSmartId(null); return; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backSignal]);
+
+  // ── Moving playlists ──────────────────────────────────────────────────────
+  // Holding a playlist turns moving on, the same as the Reorder button. Any
+  // movement first cancels the hold, so a scroll or a page swipe never does.
+  const plPressStart = (x: number, y: number) => {
+    if (reordering) return;
+    const p = plPress.current;
+    p.x = x; p.y = y; p.held = false;
+    if (p.timer) clearTimeout(p.timer);
+    p.timer = setTimeout(() => { p.timer = null; p.held = true; onHaptic?.(); setReordering(true); }, 500);
+  };
+  const plPressMove = (x: number, y: number) => {
+    const p = plPress.current;
+    if (p.timer && (Math.abs(x - p.x) > 8 || Math.abs(y - p.y) > 8)) { clearTimeout(p.timer); p.timer = null; }
+  };
+  const plPressEnd = () => {
+    const p = plPress.current;
+    if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+  };
+  const plDragMove = (e: React.TouchEvent) => {
+    if (!plDrag) return;
+    e.stopPropagation();
+    const y = e.touches[0].clientY;
+    for (let j = 0; j < playlists.length; j++) {
+      const el = plRowRefs.current[j];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) { if (j !== plDrag.over) setPlDrag({ ...plDrag, over: j }); break; }
+    }
+  };
+  const plDragEnd = (e: React.TouchEvent) => {
+    if (!plDrag) return;
+    e.stopPropagation();
+    const { from, over } = plDrag;
+    setPlDrag(null);
+    if (from === over) return;
+    const next = [...playlists];
+    const [moved] = next.splice(from, 1);
+    next.splice(over, 0, moved);
+    onPlaylistsChange(next);
+  };
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const dispName   = (s: Song) => meta[s.id]?.customName   || s.title;
@@ -1003,8 +1052,22 @@ export const PlaylistsView: React.FC<Props> = ({
             </div>
 
             {/* User playlists */}
-            <div style={{ padding: "18px 16px 4px", fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              {tr("My playlists ({n})", { n: playlists.length })}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 16px 4px" }}>
+              <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {tr("My playlists ({n})", { n: playlists.length })}
+              </span>
+              {(playlists.length > 1 || reordering) && (
+                <button
+                  onClick={() => { onHaptic?.(); setReordering(!reordering); }}
+                  style={{
+                    background: reordering ? t.accent : "transparent", color: reordering ? t.playBtnFg : t.muted,
+                    border: reordering ? "none" : `1px solid ${t.border}`, borderRadius: 14, padding: "4px 12px",
+                    fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+                  }}
+                >
+                  {reordering ? tr("Done") : tr("Reorder")}
+                </button>
+              )}
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
@@ -1012,19 +1075,54 @@ export const PlaylistsView: React.FC<Props> = ({
                 <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New\" to create your first one")}</div>
               </div>
             ) : (
-              playlists.map(pl => {
+              <div
+                onTouchMove={plDrag ? plDragMove : undefined}
+                onTouchEnd={plDrag ? plDragEnd : undefined}
+                onTouchCancel={plDrag ? plDragEnd : undefined}
+              >
+              {playlists.map((pl, i) => {
                 const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
+                const isDragging = plDrag?.from === i;
+                const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
                 return (
                   <div
                     key={pl.id}
-                    onClick={() => { setActiveId(pl.id); setView("detail"); }}
+                    ref={el => { plRowRefs.current[i] = el; }}
+                    onClick={() => {
+                      if (plPress.current.held) { plPress.current.held = false; return; }
+                      if (reordering) return;
+                      setActiveId(pl.id); setView("detail");
+                    }}
+                    onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchEnd={plPressEnd}
+                    onMouseDown={e => plPressStart(e.clientX, e.clientY)}
+                    onMouseMove={e => plPressMove(e.clientX, e.clientY)}
+                    onMouseUp={plPressEnd}
+                    onMouseLeave={plPressEnd}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: "12px 16px",
+                      padding: reordering ? "12px 16px 12px 4px" : "12px 16px",
                       borderBottom: `1px solid ${t.border}60`,
-                      cursor: "pointer",
+                      cursor: reordering ? "default" : "pointer",
+                      opacity: isDragging ? 0.4 : 1,
+                      boxShadow: isOver ? `inset 0 ${plDrag!.from < i ? -2 : 2}px 0 ${t.accent}` : "none",
+                      userSelect: "none",
                     }}
                   >
+                    {reordering && (
+                      <div
+                        onTouchStart={e => { e.stopPropagation(); plPressEnd(); setPlDrag({ from: i, over: i }); }}
+                        aria-label={tr("Drag to move")}
+                        style={{ color: t.muted, display: "flex", flexShrink: 0, padding: "12px 4px 12px 12px", touchAction: "none", cursor: "grab" }}
+                      >
+                        <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+                          <circle cx="3.5" cy="3" r="1.7"/><circle cx="10.5" cy="3" r="1.7"/>
+                          <circle cx="3.5" cy="9" r="1.7"/><circle cx="10.5" cy="9" r="1.7"/>
+                          <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
+                        </svg>
+                      </div>
+                    )}
                     <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} playing={playingFrom === `pl:${pl.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
 
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -1035,7 +1133,7 @@ export const PlaylistsView: React.FC<Props> = ({
                     </div>
 
                     {/* Quick-play button */}
-                    {count > 0 && (
+                    {count > 0 && !reordering && (
                       <button
                         onClick={e => {
                           e.stopPropagation();
@@ -1048,10 +1146,11 @@ export const PlaylistsView: React.FC<Props> = ({
                       </button>
                     )}
 
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
                   </div>
                 );
-              })
+              })}
+              </div>
             )}
             {/* The floating mini-player sits over the bottom of this list. The
                 detail views already reserved room for it; the playlist list did

@@ -145,10 +145,14 @@ async function deleteFileAtUri(uri: string): Promise<boolean> {
 // songs, playlist songs and the playlists list. The mini player stays one size;
 // its height is a fixed number the list padding and both floating buttons are
 // laid out against.
+//
+// The steps were 0.9, 1 and 1.15: on a phone that already had large text,
+// Medium and Large looked the same next to another phone. They are further
+// apart now, so the step itself can be seen.
 const SIZE_TABLE: Record<UiSize, { text: number; row: number }> = {
-  small:  { text: 0.9,  row: 60 },
+  small:  { text: 0.86, row: 58 },
   medium: { text: 1,    row: 68 },
-  large:  { text: 1.15, row: 78 },
+  large:  { text: 1.22, row: 84 },
 };
 
 export default function App() {
@@ -163,6 +167,9 @@ export default function App() {
   // next to shuffle, so a shuffled queue can have a song on repeat in it.
   // (PlayMode still knows "repeat" from when the two were one setting.)
   const [repeatOn,       setRepeatOn]      = useState(false);
+  // Repeat the whole queue: after the last song the first comes again. The
+  // player's repeat button goes round off, all, this song.
+  const [repeatAll,      setRepeatAll]     = useState(false);
   const [search,         setSearch]        = useState("");
   const [filter,         setFilter]        = useState<FilterId>("newest");
   // Narrow the list to one artist. Separate from `filter` because it is a
@@ -277,6 +284,12 @@ export default function App() {
   // very next scroll event. `null` means "no override, follow the scroll".
   const [chromeOpen, setChromeOpenState] = useState(true);
   const chromeOpenRef = useRef(true);
+  // Whether the fold takes the mini-player with it. Scrolling folds the
+  // header alone and leaves the player where it is; the logo folds both.
+  const [playerFolded, setPlayerFolded] = useState(false);
+  // How far the list has gone one way since it last went the other, so a
+  // finger's small wobble neither folds nor unfolds the header.
+  const scrollTravelRef = useRef(0);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
@@ -688,6 +701,7 @@ export default function App() {
   const curRef       = useRef<Song | null>(null);
   const playModeRef  = useRef<PlayMode>("off");
   const repeatOnRef  = useRef(false);
+  const repeatAllRef = useRef(false);
   const filterRef    = useRef<FilterId>("newest");
   const currentTimeRef  = useRef<number>(0);
   const sessionReadyRef = useRef(false);
@@ -743,6 +757,7 @@ export default function App() {
   useEffect(() => { curRef.current = currentSong; }, [currentSong]);
   useEffect(() => { playModeRef.current = playMode; }, [playMode]);
   useEffect(() => { repeatOnRef.current = repeatOn; }, [repeatOn]);
+  useEffect(() => { repeatAllRef.current = repeatAll; }, [repeatAll]);
   useEffect(() => { removedRef.current = removedSongs; }, [removedSongs]);
   useEffect(() => { filterRef.current = filter; }, [filter]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
@@ -824,6 +839,7 @@ export default function App() {
         filter:       filterRef.current,
         playMode:     playModeRef.current,
         repeat:       repeatOnRef.current,
+        repeatAll:    repeatAllRef.current,
         currentId:    curRef.current?.id,
         queueIds:     playModeRef.current === "shuffle"
                         ? queueRef.current.map(s => s.id)
@@ -966,6 +982,7 @@ export default function App() {
         if (session.filter)   setFilter(session.filter);
         if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
         setRepeatOn(session.repeat === true || session.playMode === "repeat");
+        setRepeatAll(session.repeatAll === true);
         if (session.crossfadeMs != null) {
           setCrossfadeMs(session.crossfadeMs);
           crossfadeMsRef.current = session.crossfadeMs;
@@ -993,7 +1010,7 @@ export default function App() {
           playNextQueueRef.current = session.playNextQueue;
         }
 
-        AudioPlayer.setPlayMode({ mode: session.repeat ? "repeat" : session.playMode ?? "off" }).catch(() => {});
+        AudioPlayer.setPlayMode({ mode: session.repeat ? "repeat" : session.repeatAll ? "repeatAll" : session.playMode ?? "off" }).catch(() => {});
         if (session.crossfadeMs)  AudioPlayer.setCrossfadeDuration({ milliseconds: session.crossfadeMs }).catch(() => {});
         if (session.playbackSpeed && session.playbackSpeed !== 1) AudioPlayer.setPlaybackSpeed({ speed: session.playbackSpeed }).catch(() => {});
         if (session.eqEnabled)    AudioPlayer.setEqualizerEnabled({ enabled: true }).catch(() => {});
@@ -1041,15 +1058,15 @@ export default function App() {
     if (!sessionReadyRef.current) return;
     flushSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, playMode, repeatOn, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
+  }, [filter, playMode, repeatOn, repeatAll, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
 
   useEffect(() => { if (!sessionReadyRef.current || meta === statsMetaRef.current) return; saveMeta(meta); }, [meta]);
 
   useEffect(() => {
     if (!sessionReadyRef.current) return;
     // The service only needs to know about repeat; shuffle is the queue's order.
-    AudioPlayer.setPlayMode({ mode: repeatOn ? "repeat" : playMode }).catch(() => {});
-  }, [playMode, repeatOn]);
+    AudioPlayer.setPlayMode({ mode: repeatOn ? "repeat" : repeatAll ? "repeatAll" : playMode }).catch(() => {});
+  }, [playMode, repeatOn, repeatAll]);
 
   useEffect(() => {
     if (!sessionReadyRef.current) return;
@@ -1486,7 +1503,8 @@ export default function App() {
     const q = queue.length > 1 ? queue : displayList;
     const idx = q.findIndex(s => s.id === currentSong.id);
     if (idx === -1) return;
-    const nxt = q[idx + dir];
+    // Repeat all goes round: after the last song the first, and back.
+    const nxt = q[idx + dir] ?? (repeatAll ? q[(idx + dir + q.length) % q.length] : undefined);
     if (!nxt) return;
     if (q !== queue) setQueue(q);
     playSong(nxt, q);
@@ -1600,6 +1618,22 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toNativeTrack]);
 
+  /** "Skip" next to the next song in the player: it goes to the end of the
+   *  queue, and the one after it is next. */
+  const skipUpNext = () => {
+    const cur = curRef.current;
+    const q = queueRef.current;
+    const at = cur ? q.findIndex(s => s.id === cur.id) : -1;
+    if (at < 0 || at + 1 >= q.length) return;
+    const newQ = [...q];
+    const [skipped] = newQ.splice(at + 1, 1);
+    newQ.push(skipped);
+    setQueue(newQ);
+    queueRef.current = newQ;
+    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: at }).catch(() => {});
+    pinsInOrder(newQ, at + 1);
+  };
+
   /** A tap on a song in "Next up": it plays now and the queue stays as it is,
    *  so what follows it is still what the list showed. */
   const playFromQueue = (song: Song) => {
@@ -1630,6 +1664,7 @@ export default function App() {
   // ── Shuffle FAB ───────────────────────────────────────────────────────────
   const flipRepeat = (on: boolean) => {
     setRepeatOn(on); repeatOnRef.current = on;
+    setRepeatAll(false); repeatAllRef.current = false;
     showToast(on ? t("Repeat on") : t("Repeat off"));
   };
   const onShufflePressStart = () => { shufflePressTimer.current = setTimeout(() => { hapticImpact("medium"); flipRepeat(!repeatOnRef.current); }, 600); };
@@ -1637,7 +1672,7 @@ export default function App() {
   const onShuffleClick = () => {
     hapticImpact("light");
     // While repeat is on the button shows it, and a tap turns it off.
-    if (repeatOn) { flipRepeat(false); return; }
+    if (repeatOn || repeatAll) { flipRepeat(false); return; }
     if (!displayList.length) return;
     openChrome();
     const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; setPlaySource(null); playSong(q[0], q);
@@ -1686,11 +1721,15 @@ export default function App() {
     showToast(t("Shuffle on"));
   };
 
-  // The full player's repeat button. Repeat leaves shuffle alone: the queue
-  // stays as it is, and the song that is on plays again when it ends.
+  // The full player's repeat button goes round: off, the whole queue, this
+  // song. Repeat leaves shuffle alone: the queue stays as it is.
   const toggleRepeatFromPlayer = () => {
     hapticImpact("light");
-    flipRepeat(!repeatOn);
+    const all = !repeatOn && !repeatAll;
+    const one = repeatAll;
+    setRepeatAll(all); repeatAllRef.current = all;
+    setRepeatOn(one); repeatOnRef.current = one;
+    showToast(all ? t("Repeat all") : one ? t("Repeat this song") : t("Repeat off"));
   };
 
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
@@ -2127,6 +2166,7 @@ export default function App() {
       if (session.filter) setFilter(session.filter);
       if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
       setRepeatOn(session.repeat === true || session.playMode === "repeat");
+      setRepeatAll(session.repeatAll === true);
       if (session.crossfadeMs != null) setCrossfadeMs(session.crossfadeMs);
       if (session.playbackSpeed != null && session.playbackSpeed > 0) setPlaybackSpeed(session.playbackSpeed);
       if (session.eqEnabled != null) setEqEnabled(session.eqEnabled);
@@ -2154,7 +2194,7 @@ export default function App() {
   useEffect(() => {
     if (syncStarted.current) syncChanged();
   }, [songs, removedSongs, playlists, theme, uiSize, langPref, updateNotices, mixOthers, look,
-      filter, playMode, repeatOn, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
+      filter, playMode, repeatOn, repeatAll, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
   // Meta on its own, so a play count alone does not start a round (see
   // statsMetaRef); it goes along with the next one.
   useEffect(() => {
@@ -2430,11 +2470,16 @@ export default function App() {
     const updated = [s, ...removedSongs];
     setRemovedSongs(updated); saveRemovedTracksToStorage(updated);
     setSongs(prev => { const next = prev.filter(x => x.id !== s.id); saveCutTracksToStorage(next.filter(x => x.isCut)); return next; });
+    // The song after it plays, from the queue it was in: a playlist stays a
+    // playlist. The player stays open on that song; with nothing left it goes.
     if (wasPlaying) {
-      if (playMode === "shuffle") { const idx = queue.findIndex(x => x.id === s.id); const rq = queue.filter(x => x.id !== s.id); setQueue(rq); const nxt = rq[idx] ?? rq[0]; if (nxt) playSong(nxt, rq); else { setCurrent(null); setPlaying(false); } }
-      else { const rl = displayList.filter(x => x.id !== s.id); const idx = displayList.findIndex(x => x.id === s.id); const nxt = rl[idx] ?? rl[idx - 1]; if (nxt) { setQueue(rl); playSong(nxt, rl); } else { setCurrent(null); setPlaying(false); } }
+      const q = queue.length ? queue : displayList;
+      const idx = q.findIndex(x => x.id === s.id);
+      const rq = q.filter(x => x.id !== s.id);
+      const nxt = rq[idx] ?? rq[idx - 1] ?? rq[0];
+      if (nxt) { setQueue(rq); playSong(nxt, rq); } else { setCurrent(null); setPlaying(false); setPlayerExpanded(false); }
     }
-    setRemoveSong(null); setMenuSong(null); setPlayerExpanded(false);
+    setRemoveSong(null); setMenuSong(null);
     showToast(t("Moved to bin"), { label: t("Undo"), onClick: () => restoreSongs([s]) });
     scanMusic(updated);
   };
@@ -2811,6 +2856,7 @@ export default function App() {
   // it needs its own bar and the header's count visible.
   const selecting = selectMode || playlistSelecting;
   const chromeCollapsed = !selecting && !chromeOpen;
+  const playerHidden    = chromeCollapsed && playerFolded;
 
   // ONE definition of how the fold moves, used by every piece that moves with
   // it: the header card, the mini-player, the list paddings, the two floating
@@ -2896,14 +2942,25 @@ export default function App() {
       return;
     }
     if (chromeManualRef.current !== null) return;
-    // Only a genuine downward drag folds it away. Scrolling back up leaves the
-    // chrome hidden until you actually reach the top, which is what keeps the
-    // list from flickering mid-scroll.
-    // Far enough down that the rows can stay exactly where they are while the
-    // card folds: the list scrolls back by what the card gives up.
-    if (top > prev + 2 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
+    // Travel in one direction, reset when it turns: a wobble of a few pixels
+    // either way is not a wish to fold or unfold.
+    const step = top - prev;
+    if (step === 0) return;
+    if (Math.sign(step) !== Math.sign(scrollTravelRef.current)) scrollTravelRef.current = 0;
+    scrollTravelRef.current += step;
+    // Scrolling back up brings the header back straight away, not only at
+    // the top of the list.
+    if (scrollTravelRef.current < -24) {
+      if (!chromeOpen) setChromeOpen(true);
+      return;
+    }
+    // A downward drag folds the header away; the player stays. Far enough
+    // down that the rows can stay exactly where they are while the card
+    // folds: the list scrolls back by what the card gives up.
+    if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
       // Only hint on the transition, not on every scroll event while folded.
       if (chromeOpen) showCollapseHint();
+      setPlayerFolded(false);
       setChromeOpen(false);
     }
   };
@@ -2913,6 +2970,8 @@ export default function App() {
     setChromeAnimate(true);
     const next = !chromeOpen;
     chromeManualRef.current = next;
+    // The logo folds everything, the player included.
+    setPlayerFolded(!next);
     setChromeOpen(next);
   };
 
@@ -3017,7 +3076,7 @@ export default function App() {
   const logoFloating = logoPos !== null || logoDrag !== null;
   const logoDragging = logoDrag !== null;
   const openCardBottom = dims.cardTop + (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 10;
-  const openBottomH    = (currentSong && !selectMode ? 113 : 0) + (selectMode ? 100 : 0);
+  const openBottomH    = (currentSong && !selecting ? 113 : 0) + (selectMode ? 100 : 0);
   const openMinY = openCardBottom;
   const openMaxY = Math.max(openMinY, bandMaxY - openBottomH);
   const yMin = chromeCollapsed ? bandMinY : openMinY;
@@ -3173,12 +3232,15 @@ export default function App() {
   // 45px when the timeline moved out of it, so this came down from 158; the
   // shuffle FAB, the scroll-to-top button and the list's bottom padding all
   // offset from here, and a stale number leaves a visible gap under the player.
-  const playerH    = currentSong && !selectMode && !chromeCollapsed ? 113 : 0;
+  // Picking songs in a playlist hides it as well: the selection bar takes its
+  // place, and the player used to show half above that bar.
+  const playerH    = currentSong && !selecting && !playerHidden ? 113 : 0;
   const selectBarH = selectMode ? 100 : 0;
   const bottomH    = playerH + selectBarH;
   // Repeat first: with both on, the button shows repeat, and a tap ends it.
-  const modeBg     = repeatOn ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
-  const modeShadow = repeatOn ? "0 0 16px rgba(14,165,233,0.4)" : playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : "none";
+  const anyRepeat  = repeatOn || repeatAll;
+  const modeBg     = anyRepeat ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
+  const modeShadow = anyRepeat ? "0 0 16px rgba(14,165,233,0.4)" : playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : "none";
   const filterLabel = FILTER_OPTIONS.find((o: { id: FilterId; label: string }) => o.id === filter)?.label ?? "Sort";
   const filterText = t(filterLabel);
   const selectedSongs = displayList.filter(s => selected.has(s.id));
@@ -3792,7 +3854,7 @@ export default function App() {
               </button>
               <div style={{ padding: "0 12px", fontSize: 12, color: TH.muted, lineHeight: 1.5 }}>
                 {autoCollapse
-                  ? t("The header and player fold away as you scroll down.")
+                  ? t("The header folds away as you scroll down and comes back as you scroll up.")
                   : t("They only fold when you tap the logo.")}
               </div>
 
@@ -4056,8 +4118,8 @@ export default function App() {
                   onMouseDown={onShufflePressStart} onMouseUp={onShufflePressEnd}
                   onMouseLeave={() => { if (shufflePressTimer.current) clearTimeout(shufflePressTimer.current); }}
                   onClick={onShuffleClick}
-                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: !repeatOn && playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
-                  {repeatOn ? <IC.Repeat /> : <IC.Shuffle />}
+                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: !anyRepeat && playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
+                  {anyRepeat ? <IC.Repeat /> : <IC.Shuffle />}
                 </button>
               </div>
             )}
@@ -4122,7 +4184,7 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selectMode && (() => {
+        {currentSong && !selecting && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -4135,9 +4197,9 @@ export default function App() {
                 zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: chromeCollapsed ? "translateY(calc(100% + 26px))" : "translateY(0)",
-                opacity: chromeCollapsed ? 0 : 1,
-                pointerEvents: chromeCollapsed ? "none" : "auto",
+                transform: playerHidden ? "translateY(calc(100% + 26px))" : "translateY(0)",
+                opacity: playerHidden ? 0 : 1,
+                pointerEvents: playerHidden ? "none" : "auto",
                 transition: chromeAnimate
                   ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
@@ -4280,7 +4342,6 @@ export default function App() {
           />
         )}
         {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
-        {removeSong && <ConfirmSheet title={t("Remove song")} body={t("\"{name}\" will be moved to the bin. You can restore it from Settings.", { name: dispName(removeSong) })} confirmLabel={t("Move to bin")} onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
@@ -4341,6 +4402,7 @@ export default function App() {
                 duration={duration}
                 playMode={playMode}
                 repeatOn={false}
+                repeatAll={false}
                 isLiked={isLiked(lookSong)}
                 playbackSpeed={playbackSpeed}
                 onPlaybackSpeedChange={() => {}}
@@ -4361,6 +4423,7 @@ export default function App() {
                 onShare={() => {}}
                 lyrics={getMeta(lookSong).customLyrics}
                 onAddLyrics={() => {}}
+                onSkipUpNext={() => {}}
                 onQueueMove={() => {}}
                 onPlayFromQueue={() => {}}
                 onOpenSongMenu={() => {}}
@@ -4490,6 +4553,7 @@ export default function App() {
               duration={duration}
               playMode={playMode}
               repeatOn={repeatOn}
+              repeatAll={repeatAll}
               isLiked={isLiked(currentSong)}
               playbackSpeed={playbackSpeed}
               onPlaybackSpeedChange={setPlaybackSpeed}
@@ -4506,11 +4570,13 @@ export default function App() {
               onSeekStart={() => setDragging(true)}
               onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
               onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
-              onRemove={() => { setPlayerExpanded(false); setRemoveSong(currentSong); }}
+              // The player stays open: the question comes over it.
+              onRemove={() => setRemoveSong(currentSong)}
               onShare={() => shareSong(currentSong)}
               lyrics={getMeta(currentSong).customLyrics}
               onAddLyrics={() => openLyricsSheet(currentSong)}
               sourceLabel={playSourceLabel}
+              onSkipUpNext={skipUpNext}
               onQueueMove={moveInQueue}
               onPlayFromQueue={playFromQueue}
               onOpenSongMenu={s => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(s); }}
@@ -4524,6 +4590,8 @@ export default function App() {
           );
         })()}
 
+        {/* After the player, so the question comes over it. */}
+        {removeSong && <ConfirmSheet title={t("Remove song")} body={t("\"{name}\" will be moved to the bin. You can restore it from Settings.", { name: dispName(removeSong) })} confirmLabel={t("Move to bin")} onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {eqOpen && (
           <EQSheet
             eqInfo={eqInfo}
