@@ -8,6 +8,27 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.2 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.2.aab`
+(versionCode 105, built 2026-10-25 with `npm run build:play` from the branch `full-player`; the next bundle or test
+build is 106). Test builds 72 to 76. It holds everything of 1.3.1 too: if 1.3.1 (versionCode 99) never went up,
+this one replaces it, and its notes can say a line about smaller phones as well. Nothing new to declare.
+
+```
+<en-GB>
+A new player: push up for the whole queue, up to 500 songs, and drag songs into a new order. Repeat now goes round all songs or one. Songs from a playlist play in the playlist, and its cover shows it. Put your playlists in your own order. Scrolling folds the header and the player stays. Removing a song keeps the player open.
+</en-GB>
+<nl-NL>
+Een nieuwe speler: veeg omhoog voor de hele wachtrij, tot 500 nummers, en sleep nummers in een andere volgorde. Herhalen kan nu alles of één nummer. Nummers uit een playlist spelen in die playlist, en de cover laat het zien. Zet je playlists in je eigen volgorde. Scrollen klapt de kop in, de speler blijft staan. Verwijderen houdt de speler open.
+</nl-NL>
+<es-ES>
+Un reproductor nuevo: desliza hacia arriba para ver toda la cola, hasta 500 canciones, y arrástralas a otro orden. Repetir puede ser todo o una canción. Las canciones de una lista suenan en esa lista y su portada lo muestra. Ordena tus listas como quieras. Al bajar se pliega la cabecera y el reproductor se queda. Quitar una canción deja el reproductor abierto.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.1 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.1.aab`
