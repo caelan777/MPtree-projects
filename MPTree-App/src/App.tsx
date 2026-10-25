@@ -274,14 +274,13 @@ export default function App() {
 
   // ── Collapsing chrome ─────────────────────────────────────────────────────
   // Scrolling DOWN the Songs list folds the header card (tabs, search, sort)
-  // and the mini-player away, leaving just the round MPTree logo top-left, so
-  // the list gets the whole screen. Scrolling back to the very top restores
-  // them, tapping the logo toggles manually, and holding it turns the automatic
-  // part off entirely.
+  // away, leaving just the round MPTree logo top-left; scrolling back up brings
+  // it back. Tapping the logo folds or unfolds it by hand (the player too), and
+  // holding it turns the automatic part off entirely.
   //
-  // A manual toggle wins over the scroll rule until you reach the top again —
-  // otherwise tapping the logo to peek at the controls would be undone by the
-  // very next scroll event. `null` means "no override, follow the scroll".
+  // A tap used to win over the scroll rule until the list reached the top
+  // again, which looked like the tap had switched automatic folding off. It is
+  // no override now: the next scroll carries on folding and unfolding.
   const [chromeOpen, setChromeOpenState] = useState(true);
   const chromeOpenRef = useRef(true);
   // Whether the fold takes the mini-player with it. Scrolling folds the
@@ -290,10 +289,15 @@ export default function App() {
   // How far the list has gone one way since it last went the other, so a
   // finger's small wobble neither folds nor unfolds the header.
   const scrollTravelRef = useRef(0);
+  // Set when the list is moved to make up for the header folding or
+  // unfolding: that one scroll is the app's, the next ones are the finger's.
+  // (The general guard for the app's own scrolls keeps itself going while
+  // events come in, so it swallowed a drag that began right after a tap on
+  // the logo, which looked like folding had stopped working.)
+  const insetJumpRef = useRef(false);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
-  const chromeManualRef = useRef<boolean | null>(null);
   // Collapsing must be caused by the user dragging the list downward. Comparing
   // against the previous offset keeps incidental scroll events — the ones that
   // fire when the mini-player appears or the list re-renders after shuffle or a
@@ -326,65 +330,16 @@ export default function App() {
   // Animate the fold by default; suppressed for the scroll-to-top button, which
   // should just be there when you arrive.
   const [chromeAnimate, setChromeAnimateState] = useState(true);
-  // Mirrored so setChromeOpen, below, knows in the same handler whether this
-  // particular fold is being animated.
   const chromeAnimateRef = useRef(true);
   const setChromeAnimate = useCallback((v: boolean) => {
     chromeAnimateRef.current = v;
     setChromeAnimateState(v);
   }, []);
-
-  // ── The logo's flight, when the button has been moved ────────────────────
-  // With the button parked somewhere else, unfolding does not move the button.
-  // The mark flies out of it to the top left, and the card grows from there;
-  // folding runs it backwards: the card closes into the top left, then the mark
-  // flies back into the button. The button itself stays put and sits empty
-  // while the header is open.
-  //
-  //   "home"  the mark is on its way to the top left; the card waits, folded
-  //   "fold"  the card is closing into the top left, the mark still in it
-  //   "out"   the mark is on its way back to the button
-  //
-  // While "home" runs the card is drawn as folded even though the header is
-  // already open, so everything that moves with the card (the list padding, the
-  // player) waits with it and they still arrive together.
-  const LOGO_FLY_MS = 260;
-  const FOLD_MS     = 340;   // CHROME_MOTION's duration
-  const [logoFlight, setLogoFlight] = useState<null | "home" | "fold" | "out">(null);
-  const logoFlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const logoParkedRef   = useRef(false);
-  // Every open and fold goes through here, so the flight cannot be skipped by
-  // one of the several places that fold the header.
+  // Every open and fold goes through here, so the ref never lags the state.
   const setChromeOpen = useCallback((next: boolean) => {
-    const was = chromeOpenRef.current;
     chromeOpenRef.current = next;
     setChromeOpenState(next);
-    if (next === was) return;
-    if (logoFlightTimer.current) { clearTimeout(logoFlightTimer.current); logoFlightTimer.current = null; }
-    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (!logoParkedRef.current || !chromeAnimateRef.current || reduced) { setLogoFlight(null); return; }
-    // A flight ends when its animation does (endLogoFlight, from the flying
-    // element's animationend). Timing it from here instead ended it early: the
-    // clock started at the tap, the animation only once React had drawn the
-    // element, and on a busy frame that is a tenth of a second later, so the
-    // mark vanished short of where it was going. The timers below are only a
-    // backstop for a tab that never finishes the animation (hidden, say).
-    const BACKSTOP = LOGO_FLY_MS + 400;
-    if (next) {
-      setLogoFlight("home");
-      logoFlightTimer.current = setTimeout(() => { logoFlightTimer.current = null; setLogoFlight(null); }, BACKSTOP);
-    } else {
-      setLogoFlight("fold");
-      logoFlightTimer.current = setTimeout(() => {
-        setLogoFlight("out");
-        logoFlightTimer.current = setTimeout(() => { logoFlightTimer.current = null; setLogoFlight(null); }, BACKSTOP);
-      }, FOLD_MS);
-    }
   }, []);
-  const endLogoFlight = () => {
-    if (logoFlightTimer.current) { clearTimeout(logoFlightTimer.current); logoFlightTimer.current = null; }
-    setLogoFlight(null);
-  };
   // When off, only the logo toggles the chrome; scrolling leaves it alone.
   const [autoCollapse, setAutoCollapse] = useState(true);
   const autoCollapseRef = useRef(true);
@@ -396,8 +351,6 @@ export default function App() {
       .catch(() => {});
   }, []);
   useEffect(() => { loadAutoCollapse(); }, [loadAutoCollapse]);
-  // The same for where the collapse button is parked, which is set up further down.
-  const loadLogoPosRef = useRef<() => void>(() => {});
   const CHROME_COLLAPSE_AT = 80;
   // Scrolls the app performs itself (jumping to the playing track, the
   // scroll-to-top button) must not be mistaken for the user dragging the list.
@@ -442,10 +395,8 @@ export default function App() {
 
   // Bring the chrome back. Playing something — tapping a song, hitting shuffle
   // — should never leave you looking at a folded-away player, so those paths
-  // call this. The manual override is cleared too, otherwise a later scroll
-  // down would be ignored.
+  // call this.
   const openChrome = useCallback(() => {
-    chromeManualRef.current = null;
     setChromeAnimate(true);
     setChromeOpen(true);
   }, []);
@@ -2161,7 +2112,6 @@ export default function App() {
     settings: async () => {
       await loadPrefs();
       loadAutoCollapse();
-      loadLogoPosRef.current();
       const session = await loadSession();
       if (session.filter) setFilter(session.filter);
       if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
@@ -2901,11 +2851,11 @@ export default function App() {
     prevSongsInset.current = songsInset;
     if (!el || !delta) return;
     if (el.scrollTop > 0) {
-      beginProgrammaticScroll();
+      insetJumpRef.current = true;
       el.scrollTop += delta;
     }
     pendingScroll.current?.();
-  }, [songsInset, beginProgrammaticScroll]);
+  }, [songsInset]);
   // How far the list's top moves when the card folds, per tab.
   const foldGap = (from: "songs" | "playlists") =>
     (from === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 14 - (54 + 14);
@@ -2930,6 +2880,7 @@ export default function App() {
     if (from !== page) return;
     const prev = lastRef.current;
     lastRef.current = top;
+    if (insetJumpRef.current) { insetJumpRef.current = false; return; }
     // A scroll the app started (jumping to the playing track after shuffle or
     // skip) is not the user asking for more list room.
     if (programmaticScrolling()) return;
@@ -2937,11 +2888,9 @@ export default function App() {
     // not even to restore it at the top.
     if (!autoCollapseRef.current) return;
     if (top <= 4) {
-      chromeManualRef.current = null;
       setChromeOpen(true);
       return;
     }
-    if (chromeManualRef.current !== null) return;
     // Travel in one direction, reset when it turns: a wobble of a few pixels
     // either way is not a wish to fold or unfold.
     const step = top - prev;
@@ -2969,8 +2918,9 @@ export default function App() {
     hapticImpact("light");
     setChromeAnimate(true);
     const next = !chromeOpen;
-    chromeManualRef.current = next;
-    // The logo folds everything, the player included.
+    // The logo folds everything, the player included. Scrolling goes on
+    // working from here: the next turn of the list starts its count afresh.
+    scrollTravelRef.current = 0;
     setPlayerFolded(!next);
     setChromeOpen(next);
   };
@@ -2981,9 +2931,6 @@ export default function App() {
   const setAutoCollapseEnabled = (next: boolean) => {
     autoCollapseRef.current = next;
     setAutoCollapse(next);
-    // Re-enabling hands control back to the scroll position, so forget any
-    // override the user set while it was off.
-    if (next) chromeManualRef.current = null;
     Preferences.set({ key: "mptree_auto_collapse", value: next ? "1" : "0" }).catch(() => {});
   };
 
@@ -2991,7 +2938,6 @@ export default function App() {
   const logoLongPressed  = useRef(false);
   const onLogoPressStart = () => {
     logoLongPressed.current = false;
-    setMenuFromBall(false);   // the parked button sets it back straight after
     logoPressTimer.current = setTimeout(() => {
       logoLongPressed.current = true;
       hapticImpact("medium");
@@ -3002,172 +2948,17 @@ export default function App() {
     if (logoPressTimer.current) { clearTimeout(logoPressTimer.current); logoPressTimer.current = null; }
   };
   const onLogoClick = () => {
-    // Swallow the click that follows a long-press or a drag, or either would
-    // also toggle the fold on the way out.
+    // Swallow the click that follows a long-press, or it would also toggle
+    // the fold on the way out.
     if (logoLongPressed.current) { logoLongPressed.current = false; return; }
     toggleChrome();
   };
 
-  // ── Moving the collapse button ─────────────────────────────────────────────
-  // While the chrome is folded, the round logo can be dragged out of the top
-  // left and left anywhere in the band below it. The position applies ONLY while
-  // folded: expanding puts the card back where the whole header expects to be,
-  // and the button flies home into it.
-  //
-  // Stored as fractions OF THE BAND rather than of the viewport. A viewport
-  // fraction breaks the moment the viewport does: 0.9 of an 800px screen is a
-  // legal 720, and 0.9 of the 400px left when the keyboard opens is 360, which
-  // is inside the strip at the bottom the band exists to keep clear. Normalised
-  // to the band, any resize keeps the button in the same relative place and the
-  // clamp holds by construction. Pixels are derived at render from the live
-  // viewport, so there is one source of truth and nothing to re-clamp on read.
-  const LOGO_SIZE  = 54;
-  const HOME_X     = 12;
-  // Drop it this close to the docked spot and it goes home rather than parking
-  // a few pixels off it. Has to be larger than the button, or the nearest place
-  // you could actually drop it would already be outside the zone and the snap
-  // would never fire.
-  const DOCK_RADIUS = 70;
-  // Below the docked spot, and clear of the shuffle and scroll-to-top buttons at
-  // the bottom, which sit above this one and would otherwise draw over it. The
-  // mini-player cannot be in the way: it is gone whenever the chrome is folded.
-  const BAND_BOTTOM_GUARD = 80;
-  const [logoPos,  setLogoPos]  = useState<{ fx: number; fy: number } | null>(null);
-  const [logoDrag, setLogoDrag] = useState<{ x: number; y: number } | null>(null);
-  const [overRemove, setOverRemove] = useState(false);
-  useEffect(() => { logoParkedRef.current = logoPos !== null; }, [logoPos]);
-  // Where the button is parked is one of the settings the account keeps.
-  useEffect(() => { if (syncStarted.current) syncChanged(); }, [logoPos]);
-  // Which button the options panel was opened from. With the button parked and
-  // the header open there are two logos on screen, and the panel belongs next
-  // to the one you held.
-  const [menuFromBall, setMenuFromBall] = useState(false);
-  useEffect(() => {
-    const load = () => {
-      Preferences.get({ key: "mptree_logo_pos" })
-        .then(({ value }) => {
-          if (!value) return;
-          const p = JSON.parse(value) as { fx?: unknown; fy?: unknown };
-          if (typeof p.fx === "number" && typeof p.fy === "number") {
-            setLogoPos({ fx: Math.min(1, Math.max(0, p.fx)), fy: Math.min(1, Math.max(0, p.fy)) });
-          }
-        })
-        .catch(() => {});
-    };
-    loadLogoPosRef.current = load;
-    load();
-  }, []);
+  // The collapse button could once be dragged anywhere on the screen. That is
+  // gone: the logo folds and unfolds, and holding it opens its options. A spot
+  // stored by an older version is forgotten.
+  useEffect(() => { Preferences.remove({ key: "mptree_logo_pos" }).catch(() => {}); }, []);
 
-  const bandMinX = HOME_X;
-  const bandMaxX = Math.max(HOME_X, dims.vw - LOGO_SIZE - 12);
-  // The band starts at the docked spot itself rather than below it. Starting it
-  // under the button put every reachable drop point further from home than the
-  // dock radius, so "drop it near the top left and it goes home" could not
-  // happen at all.
-  const bandMinY = dims.cardTop;
-  const bandMaxY = Math.max(bandMinY, dims.vh - LOGO_SIZE - BAND_BOTTOM_GUARD);
-  const parkedX  = logoPos ? bandMinX + logoPos.fx * (bandMaxX - bandMinX) : HOME_X;
-  const parkedY  = logoPos ? bandMinY + logoPos.fy * (bandMaxY - bandMinY) : dims.cardTop;
-  // Where the free-floating button is drawn. Dragging wins over the stored spot.
-  // With the header open the button stays where it was left, but it is kept off
-  // the things the open header brings with it: below the card, and above the
-  // mini player and the two buttons that ride on top of it. Folding puts it back
-  // on its stored spot; the stored spot itself never changes for this.
-  const logoFloating = logoPos !== null || logoDrag !== null;
-  const logoDragging = logoDrag !== null;
-  const openCardBottom = dims.cardTop + (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 10;
-  const openBottomH    = (currentSong && !selecting ? 113 : 0) + (selectMode ? 100 : 0);
-  const openMinY = openCardBottom;
-  const openMaxY = Math.max(openMinY, bandMaxY - openBottomH);
-  const yMin = chromeCollapsed ? bandMinY : openMinY;
-  const yMax = chromeCollapsed ? bandMaxY : openMaxY;
-  const floatX = logoDrag ? logoDrag.x : parkedX;
-  const floatY = logoDrag ? logoDrag.y : Math.min(yMax, Math.max(yMin, parkedY));
-  // The mark sits in the button only while it is folded and at rest. Open, or
-  // with the mark in flight, the button is an empty socket.
-  const ballHasMark = chromeCollapsed && logoFlight === null;
-
-  // The remove target, centred at the bottom. Hit-tested against the finger
-  // rather than the button, which is clamped short of it.
-  const removeCX = dims.vw / 2;
-  const removeCY = dims.vh - 40 - LOGO_SIZE / 2;
-  const nearPoint = (x: number, y: number, cx: number, cy: number, r: number) =>
-    Math.hypot(x - cx, y - cy) <= r;
-
-  const dockLogo = () => {
-    setLogoPos(null);
-    setLogoDrag(null);
-    setOverRemove(false);
-    hapticImpact("medium");
-    Preferences.remove({ key: "mptree_logo_pos" }).catch(() => {});
-  };
-
-  // One grab, driven by either touch or mouse. The live position lives in the
-  // ref as well as in state: state is for drawing, and the window-level mouse
-  // listeners below are closed over the render that started the drag, so reading
-  // the drop position out of state there would read it as it was on mousedown.
-  const logoGrab = useRef<{
-    dx: number; dy: number; x0: number; y0: number;
-    moved: boolean; x: number; y: number; over: boolean;
-  } | null>(null);
-
-  const logoGrabStart = (cx: number, cy: number, rect: DOMRect) => {
-    logoGrab.current = {
-      dx: cx - rect.left, dy: cy - rect.top, x0: cx, y0: cy,
-      moved: false, x: rect.left, y: rect.top, over: false,
-    };
-  };
-
-  const logoGrabMove = (cx: number, cy: number) => {
-    const g = logoGrab.current;
-    // From the docked spot it can only be pulled out while folded; once parked
-    // it moves in either state.
-    if (!g || (!chromeCollapsed && logoPos === null)) return;
-    if (!g.moved) {
-      // 14px rather than the usual 8: this button also answers a tap and a hold,
-      // and a hold on a 54px target rolls a few pixels under the thumb.
-      if (Math.abs(cx - g.x0) < 14 && Math.abs(cy - g.y0) < 14) return;
-      g.moved = true;
-      onLogoPressEnd();                 // a drag is not a hold
-      logoLongPressed.current = true;   // nor a tap: swallow the click it ends on
-      hapticImpact("light");
-    }
-    g.x = Math.min(bandMaxX, Math.max(bandMinX, cx - g.dx));
-    g.y = Math.min(yMax, Math.max(yMin, cy - g.dy));
-    g.over = nearPoint(cx, cy, removeCX, removeCY, 52);
-    setLogoDrag({ x: g.x, y: g.y });
-    setOverRemove(g.over);
-  };
-
-  const logoGrabEnd = () => {
-    const g = logoGrab.current;
-    logoGrab.current = null;
-    onLogoPressEnd();
-    if (!g || !g.moved) return;
-    // The click that follows this drag is swallowed by the flag set in
-    // logoGrabMove. Release the flag straight after, in its own task: a click
-    // is dispatched in the same task as the mouseup or touchend, so this always
-    // runs after it. Without this the flag survives a drag that ends off the
-    // button, which never produces a click at all, and eats the next tap.
-    window.setTimeout(() => { logoLongPressed.current = false; }, 0);
-    setLogoDrag(null);
-    setOverRemove(false);
-    // Pulled out of the docked spot and then the header opened under it (a
-    // crossfade into the next track calls openChrome): the drag started from a
-    // button that no longer exists, so there is nothing sensible to save.
-    if (!chromeCollapsed && logoPos === null) return;
-    if (g.over || nearPoint(g.x, g.y, HOME_X, dims.cardTop, DOCK_RADIUS)) { dockLogo(); return; }
-    const next = {
-      fx: bandMaxX > bandMinX ? (g.x - bandMinX) / (bandMaxX - bandMinX) : 0,
-      fy: bandMaxY > bandMinY ? (g.y - bandMinY) / (bandMaxY - bandMinY) : 0,
-    };
-    setLogoPos(next);
-    hapticImpact("light");
-    Preferences.set({ key: "mptree_logo_pos", value: JSON.stringify(next) }).catch(() => {});
-  };
-
-  // The card's own surface, shared with the floating button so the two are the
-  // same object wherever it is sitting.
   // The header card's own palette: the app's, or a Pro shade picked for the
   // card alone. Everything inside the card and the folded logo button is drawn
   // with CT rather than TH. Paint only, never a dimension. See cardPalette.
@@ -3184,49 +2975,12 @@ export default function App() {
       : "0 8px 32px rgba(0,0,0,0.45)",
   };
 
-  // Where the logo's own options panel and the collapse hint go. Both belong to
-  // the button, so they follow it rather than staying pinned to the top left.
-  const LOGO_MENU_W = 268;
-  const LOGO_MENU_H = 210;   // generous; the panel is clamped on screen either way
-  const anchored    = logoFloating && (chromeCollapsed || menuFromBall);
-  const logoMenuLeft = anchored ? Math.max(12, Math.min(floatX, dims.vw - LOGO_MENU_W - 12)) : 12;
-  const logoMenuTop  = anchored
-    ? (floatY + LOGO_SIZE + 8 + LOGO_MENU_H <= dims.vh - 12
-        ? floatY + LOGO_SIZE + 8
-        : Math.max(12, floatY - LOGO_MENU_H - 8))
-    : cardBottom;
-  const hintAtBall = chromeCollapsed && logoFloating;
-  const hintLeft = hintAtBall ? Math.min(floatX + 62, Math.max(12, dims.vw - 250)) : 74;
-  const hintTop  = hintAtBall ? floatY + 14 : dims.cardTop + 14;
-
-  // Attached to both the docked layer and the floating button, so the gesture is
-  // the same wherever the button happens to be.
-  const logoHandlers = {
-    onClick: onLogoClick,
-    onTouchStart: (e: React.TouchEvent<HTMLElement>) => {
-      const t = e.touches[0];
-      logoGrabStart(t.clientX, t.clientY, e.currentTarget.getBoundingClientRect());
-      onLogoPressStart();
-    },
-    onTouchMove:   (e: React.TouchEvent<HTMLElement>) => logoGrabMove(e.touches[0].clientX, e.touches[0].clientY),
-    onTouchEnd:    () => logoGrabEnd(),
-    onTouchCancel: () => logoGrabEnd(),
-    // The mouse path exists so this can be driven in a browser during
-    // development. The listeners go on the window because the cursor leaves the
-    // 54px button immediately.
-    onMouseDown: (e: React.MouseEvent<HTMLElement>) => {
-      logoGrabStart(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
-      onLogoPressStart();
-      const mv = (ev: MouseEvent) => logoGrabMove(ev.clientX, ev.clientY);
-      const up = () => {
-        window.removeEventListener("mousemove", mv);
-        window.removeEventListener("mouseup", up);
-        logoGrabEnd();
-      };
-      window.addEventListener("mousemove", mv);
-      window.addEventListener("mouseup", up);
-    },
-  };
+  // Where the logo's own options panel and the collapse hint go: under the
+  // header, and next to the folded button.
+  const logoMenuLeft = 12;
+  const logoMenuTop  = cardBottom;
+  const hintLeft = 74;
+  const hintTop  = dims.cardTop + 14;
 
   // 18px bottom offset + the card's own measured height (95px). The card lost
   // 45px when the timeline moved out of it, so this came down from 158; the
@@ -3373,7 +3127,6 @@ export default function App() {
         /* A row arriving at the top of a list. Used by the new-playlist field in
            PlaylistsView, which is a fresh mount and so has nothing to
            transition from. */
-        @keyframes mpFly { from { transform: translate3d(var(--fx0), var(--fy0), 0) scale(var(--fs0)); } to { transform: translate3d(var(--fx1), var(--fy1), 0) scale(var(--fs1)); } }
         @property --mpr { syntax: "<length>"; inherits: false; initial-value: 0px; }
         @keyframes mpReveal { from { --mpr: 0px; } to { --mpr: 150vmax; } }
         @keyframes mpRowIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
@@ -3413,15 +3166,10 @@ export default function App() {
             width:  chromeCollapsed ? 54 : "calc(100% - 24px)",
             height: chromeCollapsed ? 54 : (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2,
             borderRadius: chromeCollapsed ? "50%" : 22,
-            // The card is the collapse button too, until the button is moved
-            // away: then, folded, there is nothing here at all. It shows while
-            // it closes, and appears the moment the flying mark lands in it.
-            // Deliberately not faded: at both of those moments the card's own
-            // mark and the flying one are the same size in the same place, so
-            // an instant swap is invisible and a fade would show two of them.
-            // Picking songs, it makes way for the bar that says how many.
-            opacity:       selecting || (chromeCollapsed && logoFloating && logoFlight !== "fold") ? 0 : 1,
-            pointerEvents: selecting || (chromeCollapsed && logoFloating) ? "none" : "auto",
+            // The card is the collapse button too. Picking songs, it makes way
+            // for the bar that says how many.
+            opacity:       selecting ? 0 : 1,
+            pointerEvents: selecting ? "none" : "auto",
             transition: move("width", "height", "border-radius"),
           }}
         >
@@ -3455,8 +3203,7 @@ export default function App() {
               onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label={t("Collapse header")}
               data-tour="logo"
-              // Hidden while the mark flies in to take its place.
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", position: "relative", color: CT.text, opacity: logoFlight === "home" ? 0 : 1 }}
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", position: "relative", color: CT.text }}
             >
               <Logo size={48} color={CT.text} />
               {look.flowers === "mark" && (
@@ -3575,17 +3322,15 @@ export default function App() {
           <div
             style={{
               position: "absolute", inset: 0,
-              // With the button parked elsewhere this layer only shows while the
-              // card folds; at rest the parked button carries the mark, and on
-              // the way open the mark is in flight, so a second one here would
-              // show as a ghost while the card grows.
-              opacity: chromeCollapsed && (!logoFloating || logoFlight === "fold") ? 1 : 0,
+              opacity: chromeCollapsed ? 1 : 0,
               pointerEvents: chromeCollapsed ? "auto" : "none",
               transition: chromeAnimate ? "opacity 0.15s ease" : "none",
             }}
           >
             <button
-              {...logoHandlers}
+              onClick={onLogoClick}
+              onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
+              onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label={t("Show search and player")}
               style={{
                 // Pinned left rather than centred: while the card is still wide,
@@ -3595,118 +3340,13 @@ export default function App() {
                 width: "100%", height: "100%", display: "flex", alignItems: "center",
                 justifyContent: "flex-start", paddingLeft: 11,
                 background: "transparent", border: "none", cursor: "pointer",
-                color: CT.text, touchAction: "none",
+                color: CT.text,
               }}
             >
               <Logo size={30} color={CT.text} />
             </button>
           </div>
         </div>
-
-        {/* ── The collapse button, once it has been moved ───────────────────
-            Its own fixed element rather than the card relocated. The card's
-            content is laid out at calc(100vw - 26px) from the card's left edge,
-            so moving the card would drag the whole header row diagonally across
-            the screen for the 150ms the inner takes to fade in. This way the
-            card keeps its geometry and its measurements exactly, and the mark
-            visibly flies home into the card as the card grows there. */}
-        {logoFloating && (
-          <button
-            {...logoHandlers}
-            onTouchStart={e => { logoHandlers.onTouchStart(e); setMenuFromBall(true); }}
-            onMouseDown={e => { logoHandlers.onMouseDown(e); setMenuFromBall(true); }}
-            aria-label={chromeCollapsed ? t("Show search and player") : t("Hide search and player")}
-            style={{
-              position: "fixed", top: 0, left: 0,
-              width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
-              transform: `translate3d(${floatX}px, ${floatY}px, 0)`,
-              ...CARD_SKIN,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: CT.text, cursor: "pointer", zIndex: 60, touchAction: "none",
-              opacity: overRemove ? 0.4 : 1,
-              // Empty, it goes grey: the card's near-black on a black list was
-              // all but invisible.
-              ...(ballHasMark ? null : { background: CT.dim, borderColor: CT.muted + "66" }),
-              // No transform easing while it is following a finger.
-              transition: logoDragging
-                ? "opacity 0.15s ease"
-                : chromeAnimate
-                  ? `transform ${CHROME_MOTION}, opacity 0.2s ease`
-                  : "opacity 0.2s ease",
-            }}
-          >
-            {ballHasMark
-              ? <Logo size={30} color={CT.text} />
-              // The socket: faint enough to read as "empty", present enough to
-              // read as a button rather than a stray disc.
-              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${CT.muted}` }} />}
-          </button>
-        )}
-
-        {/* ── The mark in flight ────────────────────────────────────────────
-            Between the parked button and the top left. Its start and end points
-            are exactly where the two resting marks are drawn (the button's
-            centred one at +12, the folded card's left-pinned one at 12 + 1
-            border + 11 padding, both 12 down), so the hand-overs at either end
-            do not show. A keyframe rather than a transition, so it needs no
-            extra render to be placed at the start first. */}
-        {(logoFlight === "home" || logoFlight === "out") && (() => {
-          // From the parked spot, not the drawn one: opening moves the button
-          // off the card's path while the mark is already on its way.
-          const ball = { x: parkedX + 12, y: parkedY + 12, s: 1 };
-          // Going out it leaves the folded card's 30px mark. Coming home the
-          // card is already growing, so it lands on the open header's 48px logo
-          // instead and grows to its size on the way.
-          const folded = { x: HOME_X + 12, y: dims.cardTop + 12, s: 1 };
-          const open   = { x: HOME_X + 15, y: dims.cardTop + 9, s: 48 / 30 };
-          const [a, b] = logoFlight === "home" ? [ball, open] : [folded, ball];
-          return (
-            <div
-              key={logoFlight}
-              aria-hidden="true"
-              onAnimationEnd={endLogoFlight}
-              style={{
-                position: "fixed", top: 0, left: 0, zIndex: 61, pointerEvents: "none",
-                display: "flex", color: CT.text,
-                "--fx0": `${a.x}px`, "--fy0": `${a.y}px`, "--fx1": `${b.x}px`, "--fy1": `${b.y}px`,
-                "--fs0": a.s, "--fs1": b.s, transformOrigin: "0 0",
-                animation: `mpFly ${LOGO_FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
-              } as React.CSSProperties}
-            >
-              <Logo size={30} color={CT.text} />
-            </div>
-          );
-        })()}
-
-        {/* ── Drop here to send it back ─────────────────────────────────────
-            Only while dragging. Hit-tested against the finger, not the button,
-            which is clamped to a band that stops short of here. */}
-        {logoDragging && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: "fixed", left: 0, right: 0, bottom: 40, zIndex: 510,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-              pointerEvents: "none", animation: "mpFadeIn 0.16s ease both",
-            }}
-          >
-            <div style={{ fontSize: 12, color: overRemove ? "#e8445a" : TH.muted, fontWeight: 600 }}>
-              {t("Back to the top left")}
-            </div>
-            <div style={{
-              width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: overRemove ? TH.binBg : TH.sheetBg,
-              border: `1px solid ${overRemove ? TH.binBorder : TH.border}`,
-              color: overRemove ? "#e8445a" : TH.muted,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
-              transform: `scale(${overRemove ? 1.14 : 1})`,
-              transition: "transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease",
-            }}>
-              <IC.Close />
-            </div>
-          </div>
-        )}
 
         {/* ── Collapse hint ────────────────────────────────────────────────
             The first few times the chrome folds itself away, say so. Without
@@ -3860,21 +3500,6 @@ export default function App() {
 
               {/* Only once the button has been moved. The X you drop it on is
                   the other way back, and that one you have to find. */}
-              {logoPos && (
-                <button
-                  onClick={() => { dockLogo(); setChromeMenuOpen(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, width: "100%",
-                    marginTop: 10, background: "transparent", border: "none",
-                    borderTop: `1px solid ${TH.border}`, cursor: "pointer",
-                    padding: "12px 12px 4px", color: TH.text,
-                    fontFamily: "inherit", fontSize: 15, textAlign: "left",
-                  }}
-                >
-                  <span style={{ display: "flex", color: TH.muted }}><IC.Close /></span>
-                  <span>{t("Move the button back")}</span>
-                </button>
-              )}
             </div>
           </>
         )}
@@ -4074,14 +3699,11 @@ export default function App() {
                   // second while the list races past reads as a glitch.
                   //
                   // With automatic collapsing off, though, the fold is the
-                  // user's to set: this button used to force the header open
-                  // and throw the manual override away, so folding it by hand
-                  // and then tapping here quietly undid the setting. It only
-                  // scrolls now, exactly as handleChromeScroll only scrolls.
+                  // user's to set: it only scrolls then, exactly as
+                  // handleChromeScroll only scrolls.
                   const auto = autoCollapseRef.current;
                   if (auto) {
                     setChromeAnimate(false);
-                    chromeManualRef.current = null;
                     setChromeOpen(true);
                   }
                   scrollAndHold(() => {

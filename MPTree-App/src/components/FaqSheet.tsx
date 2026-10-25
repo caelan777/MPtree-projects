@@ -34,10 +34,6 @@ const FAQ: { q: string; a: string }[] = [
     a: "Yes. Settings > Audio > Play alongside other apps. With it on, another app making sound no longer pauses MPTree.",
   },
   {
-    q: "Can I move the round logo button?",
-    a: "Yes. When the header is folded away, hold the logo and drag it wherever you like. Drop it on the cross at the bottom, or near the top left, to put it back.",
-  },
-  {
     q: "Something is wrong, or I have an idea.",
     a: "Settings > Send feedback opens an email to the person who makes MPTree. It already says which version and phone you have, so you only need to say what happened.",
   },
