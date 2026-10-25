@@ -1,4 +1,4 @@
-import { useState, useRef, memo } from "react";
+import { useState, useRef, useLayoutEffect, memo } from "react";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
@@ -52,6 +52,9 @@ const MAX_UP_NEXT = 500;
  *  its own cover lookup, would make opening the list stutter. */
 const FIRST_ROWS = 40;
 const MORE_ROWS = 60;
+/** The least room above and below the bar under the player's card. */
+const GAP_ABOVE = 14;
+const GAP_BELOW = 16;
 
 /** The pill at the top of a sheet that says it can be pulled. */
 function Handle({ T }: { T: T }) {
@@ -355,10 +358,23 @@ export function PlayerExpandSheet({
     : `translateY(calc(100% - ${Math.round(upPull)}px))`;
   const upMoving = drag.current?.mode === "up" || drag.current?.mode === "back";
 
-  // The record fills what the rest leaves, so the whole player fits on the
-  // screen without scrolling; on a very short one it scrolls instead.
+  // The record fills what the rest leaves: the player is measured after each
+  // render, and the record grows or shrinks by the room that is left over (or
+  // missing), so the next song sits on the bottom edge with no gap under it.
+  // Once the record is as wide as the card allows, what is still left is
+  // shared out above and below the bar. On a very short screen it scrolls.
   const winW = typeof window !== "undefined" ? window.innerWidth : 375;
-  const discSize = Math.round(Math.max(150, Math.min(280, winW - 96, vh() - 560)));
+  const discMax = Math.min(380, winW - 64);
+  const [discSize, setDiscSize] = useState(() => Math.round(Math.max(140, Math.min(discMax, vh() - 560))));
+  const gapAboveRef = useRef<HTMLDivElement>(null);
+  const gapBelowRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const p = playerRef.current, a = gapAboveRef.current, b = gapBelowRef.current;
+    if (!p || !a || !b) return;
+    const spare = (a.offsetHeight - GAP_ABOVE) + (b.offsetHeight - GAP_BELOW) - (p.scrollHeight - p.clientHeight);
+    const next = Math.round(Math.max(140, Math.min(discMax, discSize + spare)));
+    if (Math.abs(next - discSize) >= 2) setDiscSize(next);
+  });
 
   /** One part of the bar under the player. The bar is drawn like a segmented
    *  control: a rounded track, the parts inside it rounded on their outer
@@ -470,11 +486,14 @@ export function PlayerExpandSheet({
           .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
         }
       `}</style>
-      {/* The whole screen, with the rounded top of a sheet. */}
+      {/* The whole screen under the status bar, with the rounded top of a
+          sheet. The WebView runs edge to edge, so the bar's height has to be
+          left free here or the top of the player sits under the clock. */}
       <div
         className={closing ? "pes-sheet-out" : dragProgress !== null || skipEnter ? undefined : "pes-sheet-in"}
         style={{
-          position: "absolute", inset: 0,
+          position: "absolute", left: 0, right: 0, bottom: 0,
+          top: "calc(env(safe-area-inset-top, 0px) + 8px)",
           background: T.sheetBg,
           borderRadius: "20px 20px 0 0",
           overflow: "hidden",
@@ -601,11 +620,13 @@ export function PlayerExpandSheet({
             </div>
           </div>
 
+          <div ref={gapAboveRef} style={{ flex: "1 0 auto", minHeight: GAP_ABOVE }} />
+
           {/* ── Speed, like, share, remove ────────────────────────────────
               One bar instead of four chips. Edit and Cut live behind the
               "⋮" at the top: they take you out of the player entirely. */}
           <div style={{
-            display: "flex", gap: 4, margin: "14px 16px 0", padding: 5, flexShrink: 0,
+            display: "flex", gap: 4, margin: "0 16px", padding: 5, flexShrink: 0,
             borderRadius: 29, background: T.card, border: `1px solid ${T.border}`,
           }}>
             {barPart("speed", t("Playback speed"), playbackSpeed !== 1, cycleSpeed,
@@ -618,7 +639,8 @@ export function PlayerExpandSheet({
 
           {/* ── Up next: the one song, and a way to the rest ──────────────
               The whole list is a page of its own: push up, or tap here. */}
-          <div style={{ margin: "16px 16px 0", flexShrink: 0 }}>
+          <div ref={gapBelowRef} style={{ flex: "1 0 auto", minHeight: GAP_BELOW }} />
+          <div style={{ margin: "0 16px", flexShrink: 0 }}>
             <button
               onClick={openUpNext}
               style={{
