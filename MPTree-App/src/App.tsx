@@ -678,6 +678,13 @@ export default function App() {
   // so a playlist turned into everything the moment the mode button was
   // touched, which is the only way to reach repeat.
   const playContextRef = useRef<Song[] | null>(null);
+  // Where the music is playing from: null for the Songs page, else the
+  // playlist it was started in ("pl:<id>", or "smart:<id>" for an auto
+  // playlist). A playlist plays inside the playlist: the Songs page then
+  // neither marks the song nor scrolls to it, and the playlist's cover says so.
+  const [playSource, setPlaySourceState] = useState<string | null>(null);
+  const playSourceRef = useRef<string | null>(null);
+  const setPlaySource = (key: string | null) => { playSourceRef.current = key; setPlaySourceState(key); };
   const curRef       = useRef<Song | null>(null);
   const playModeRef  = useRef<PlayMode>("off");
   const repeatOnRef  = useRef(false);
@@ -1206,7 +1213,8 @@ export default function App() {
   // the header would fold away every time you hit shuffle or skip, because the
   // resulting jump looks exactly like a downward drag.
   useEffect(() => {
-    if (!currentSong) return;
+    // Music from a playlist stays in the playlist: the Songs page keeps its place.
+    if (!currentSong || playSourceRef.current) return;
     // Armed here, up front, rather than only next to the scroll call: the list
     // can settle and emit scroll events before this effect's timer fires, and
     // any of those arriving unguarded would fold the header away.
@@ -1497,6 +1505,7 @@ export default function App() {
     if (!cur) {
       const q = [song];
       playContextRef.current = q;
+      setPlaySource(null);
       setQueue(q);
       playSong(song, q);
       return;
@@ -1539,6 +1548,7 @@ export default function App() {
     const cur = curRef.current;
     if (!cur) {
       playContextRef.current = chosen;
+      setPlaySource(null);
       setQueue(chosen);
       playSong(chosen[0], chosen);
       return;
@@ -1561,21 +1571,44 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
 
-  const handleSkipCurrentUpNext = useCallback(() => {
-    const q = queueRef.current;
+  // ── The player's "Next up" list ───────────────────────────────────────────
+  // Pins are used up in queue order (see the track-change handler), so after
+  // the queue changes by hand they are put back in the order they now play.
+  const pinsInOrder = (q: Song[], from: number) => {
+    const pins = new Set(playNextQueueRef.current);
+    const kept = q.slice(from).filter(s => pins.has(s.id)).map(s => s.id);
+    setPlayNextQueue(kept);
+    playNextQueueRef.current = kept;
+  };
+
+  /** A song in "Next up" moved by its handle. Positions count from the first
+   *  song after the one that is on. */
+  const moveInQueue = useCallback((from: number, to: number) => {
     const cur = curRef.current;
-    if (!cur || q.length === 0) return;
-    const idx = q.findIndex(s => s.id === cur.id);
-    const pinnedSet = new Set(playNextQueueRef.current);
-    const skipTargetIdx = q.findIndex((s, i) => i > idx && !pinnedSet.has(s.id));
-    if (skipTargetIdx === -1) return;
-    const newQ = [...q];
-    const [skipped] = newQ.splice(skipTargetIdx, 1);
-    newQ.push(skipped);
+    const q = queueRef.current;
+    const at = cur ? q.findIndex(s => s.id === cur.id) : -1;
+    if (at < 0) return;
+    const rest = q.slice(at + 1);
+    const [moved] = rest.splice(from, 1);
+    if (!moved) return;
+    rest.splice(to, 0, moved);
+    const newQ = [...q.slice(0, at + 1), ...rest];
     setQueue(newQ);
-    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: idx }).catch(() => {});
+    queueRef.current = newQ;
+    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: at }).catch(() => {});
+    pinsInOrder(newQ, at + 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toNativeTrack]);
+
+  /** A tap on a song in "Next up": it plays now and the queue stays as it is,
+   *  so what follows it is still what the list showed. */
+  const playFromQueue = (song: Song) => {
+    const q = queueRef.current;
+    const at = q.findIndex(s => s.id === song.id);
+    if (at < 0) return;
+    playSong(song, q);
+    pinsInOrder(q, at + 1);
+  };
 
   // Fisher–Yates shuffle — uniform distribution. The old
   // `sort(() => Math.random() - 0.5)` is biased (comparator isn't a consistent
@@ -1607,7 +1640,7 @@ export default function App() {
     if (repeatOn) { flipRepeat(false); return; }
     if (!displayList.length) return;
     openChrome();
-    const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; playSong(q[0], q);
+    const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; setPlaySource(null); playSong(q[0], q);
     showToast(isFavFilter ? t("Shuffling favorites") : t("Shuffling all songs"));
   };
 
@@ -2242,6 +2275,7 @@ export default function App() {
     // Honour shuffle. This used to always queue displayList in order, so with
     // shuffle already on (typically restored from the previous session) tapping
     // a song silently played the library sequentially from that point.
+    setPlaySource(null);
     if (playMode === "shuffle") {
       const q = [song, ...buildShuffleQ(displayList.filter(s => s.id !== song.id))];
       playContextRef.current = displayList;
@@ -2308,6 +2342,7 @@ export default function App() {
     const shuffled = [...chosen].sort(() => Math.random() - 0.5);
     setPlayMode("shuffle");
     playContextRef.current = chosen;
+    setPlaySource(null);
     setQueue(shuffled);
     playSong(shuffled[0], shuffled);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2640,13 +2675,14 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean) => {
+  const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean, source: string) => {
     if (!playlistSongs.length) return;
     openChrome();
     // Stay on the Playlists tab. The queue is set to the playlist's songs below,
     // so playback and skip stay inside the playlist; there is no reason to yank
     // the user back to the Songs tab.
     playContextRef.current = playlistSongs;
+    setPlaySource(source);
     if (shuffle) {
       const q = shuffleArray(playlistSongs);
       setPlayMode("shuffle");
@@ -2696,6 +2732,12 @@ export default function App() {
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, likedKey, lastPlayedKey, playCountKey, langPref]);
+
+  /** What the player's "Next up" says the music comes from. */
+  const playSourceLabel =
+    playSource === null ? (isFavFilter ? t("Favorites") : t("All songs"))
+    : playSource.startsWith("smart:") ? smartPlaylists.find(p => `smart:${p.id}` === playSource)?.name
+    : playlists.find(p => `pl:${p.id}` === playSource)?.name;
 
   // ── Android hardware / gesture Back ───────────────────────────────────────
   // Without a handler, Back closes the whole app from anywhere, even with a
@@ -3841,7 +3883,8 @@ export default function App() {
                 <>
                   {virtTopPad > 0 && <div style={{ height: virtTopPad }} aria-hidden="true" />}
                   {visibleSongs.map((song) => {
-                    const isActive   = currentSong?.id === song.id;
+                    // Not marked here when it plays from a playlist: it plays there.
+                    const isActive   = currentSong?.id === song.id && !playSource;
                     const liked      = isLiked(song);
                     const isSelected = selected.has(song.id);
                     const m          = getMeta(song);
@@ -3860,17 +3903,15 @@ export default function App() {
                             onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
                             onClick={() => handleTap(song)}
                             style={{
-                              display: "flex", alignItems: "center", padding: "0 16px", gap: 10, cursor: "pointer",
+                              display: "flex", alignItems: "center", padding: "0 8px", margin: "0 8px", gap: 10, cursor: "pointer",
                               height: ROW_H, boxSizing: "border-box",
+                              // The playing row is a rounded tile with moving
+                              // bars on its art. The accent bar that ran down
+                              // its left edge is gone: the tile says it alone.
+                              borderRadius: 14,
                               background: isSelected ? TH.violet + "18" : isActive ? TH.card : "transparent",
+                              boxShadow: isActive && !isSelected ? `inset 0 0 0 1px ${TH.border}` : "none",
                               transition: "background 0.15s",
-                              // The playing row used to be marked only by a
-                              // slightly lighter background, which is easy to
-                              // miss. It now also carries the accent bar down
-                              // its left edge and animated bars on its art.
-                              borderLeft: isSelected ? `3px solid ${TH.violet}`
-                                        : isActive   ? `3px solid ${TH.accent}`
-                                        : "3px solid transparent",
                             }}>
                             {selectMode && (
                               <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${isSelected ? TH.violet : TH.border}`, background: isSelected ? TH.violet : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
@@ -4049,7 +4090,8 @@ export default function App() {
               meta={meta}
               onPlaylistsChange={handlePlaylistsChange}
               onPlayPlaylist={handlePlayPlaylist}
-              onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
+              onPlaySong={(song, list, source) => { openChrome(); setPlayMode("off"); playContextRef.current = list; setPlaySource(source); playSong(song, list); }}
+              playingFrom={playSource}
               currentSongId={currentSong?.id ?? null}
               isPlaying={isPlaying}
               onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
@@ -4319,8 +4361,9 @@ export default function App() {
                 onShare={() => {}}
                 lyrics={getMeta(lookSong).customLyrics}
                 onAddLyrics={() => {}}
-                onPlayNextReorder={() => {}}
-                onSkipCurrentUpNext={() => {}}
+                onQueueMove={() => {}}
+                onPlayFromQueue={() => {}}
+                onOpenSongMenu={() => {}}
                 onOpenMenu={() => {}}
                 onClose={() => {}}
                 dragProgress={null}
@@ -4340,7 +4383,7 @@ export default function App() {
             suspects={cleanupSuspects}
             meta={meta}
             onBin={ids => { setCleanupOpen(false); removeMany(ids); }}
-            onPlay={(song, list) => { setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
+            onPlay={(song, list) => { setPlayMode("off"); playContextRef.current = list; setPlaySource(null); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}
@@ -4399,7 +4442,7 @@ export default function App() {
             deleted={signedIn ? sync.deleted : undefined}
             deletedLoading={signedIn && !sync.deletedLoaded && !sync.problem}
             onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
-            onPlaySong={(song, list) => { setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
+            onPlaySong={(song, list) => { setPlayMode("off"); playContextRef.current = list; setPlaySource(null); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}
@@ -4467,8 +4510,10 @@ export default function App() {
               onShare={() => shareSong(currentSong)}
               lyrics={getMeta(currentSong).customLyrics}
               onAddLyrics={() => openLyricsSheet(currentSong)}
-              onPlayNextReorder={newQ => { setPlayNextQueue(newQ); playNextQueueRef.current = newQ; }}
-              onSkipCurrentUpNext={handleSkipCurrentUpNext}
+              sourceLabel={playSourceLabel}
+              onQueueMove={moveInQueue}
+              onPlayFromQueue={playFromQueue}
+              onOpenSongMenu={s => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(s); }}
               onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}
               onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
               dragProgress={playerExpanded ? null : expandDrag}

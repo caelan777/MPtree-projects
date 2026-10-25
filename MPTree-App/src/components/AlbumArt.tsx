@@ -34,8 +34,9 @@ type AlbumArtProps = {
   T: T;
 };
 
-/** Four bars that rise and fall while a track plays. */
-function PlayingBars({ size, color }: { size: number; color: string }) {
+/** Four bars that rise and fall while a track plays. Also the playlist cover's
+ *  "playing from here" mark. */
+export function PlayingBars({ size, color, still = false }: { size: number; color: string; still?: boolean }) {
   const barW = Math.max(2, Math.round(size * 0.075));
   const gap = Math.max(2, Math.round(size * 0.06));
   return (
@@ -44,7 +45,7 @@ function PlayingBars({ size, color }: { size: number; color: string }) {
         <span
           key={i}
           className="mp-eqbar"
-          style={{ width: barW, background: color, borderRadius: 1, animationDelay: `${i * 0.16}s` }}
+          style={{ width: barW, background: color, borderRadius: 1, animationDelay: `${i * 0.16}s`, animationPlayState: still ? "paused" : undefined }}
         />
       ))}
     </div>
