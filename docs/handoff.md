@@ -10,7 +10,7 @@ own notes in `docs/ios.md` on the `ios` branch.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working. 1.3.0 (92) and 1.3.1 (99) built; see "Waiting on Caelan" |
-| Android test build | 76, versionCode 104 (1.3.2: the player back as a sheet as tall as it needs with the record at 268, Next up as a page of its own, repeat all, playlists in order, the header folds alone, the logo no longer moves) | prerelease `v1.2.3-pro-test.76`, mp-tree.net/test, branch `full-player` (not merged) |
+| Android test build | 76, versionCode 104 (1.3.2: the player back as a sheet as tall as it needs with the record at 268, Next up as a page of its own, repeat all, playlists in order, the header folds alone, the logo no longer moves) | prerelease `v1.2.3-pro-test.76`, mp-tree.net/test, branch `full-player` (merged into main) |
 | iPhone | 1.3.1 build 5 (not on a phone yet) | branch `ios`, built by GitHub Actions, `MPTree-iPhone-5.ipa` in the repo root (not committed) |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
@@ -29,7 +29,7 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
 | `main` | Android 1.3.1, website | pushed (`cb7e765`) |
 | `small-phones` | test builds 70 and 71, 1.3.1 | merged into main and into `ios` |
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
-| `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | pushed, not merged |
+| `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
@@ -41,7 +41,7 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
    this one replaces it: use 1.3.0's release notes then. Nothing new to declare. If the
    old AD_ID warning about earlier test builds shows, "Release without permission".
    **Or skip straight to 1.3.2** (`MPTree-1.3.2.aab`, versionCode 105, built 25 October from
-   `full-player`, not merged into main yet; release notes in `docs/play-store-listing.md`):
+   `full-player`, merged into main; release notes in `docs/play-store-listing.md`):
    the new player, Next up, repeat all, playlists in order, on top of all of 1.3.1. Not yet
    seen on a phone in its final form (test build 76 has the same code).
 2. **AdMob: ad pods off.** People saw several ads in a row for one day of Pro. MPTree asks
