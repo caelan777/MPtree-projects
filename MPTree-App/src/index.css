@@ -13,6 +13,11 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+  /* The app shell sets this too. It is here as well for what is portalled
+     straight into the body (the playlist's selection bar, its song menu, the
+     cover crop): without it those came up in the WebView's serif default,
+     which is what holding a song in a playlist looked like. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 #root {

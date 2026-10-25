@@ -145,10 +145,14 @@ async function deleteFileAtUri(uri: string): Promise<boolean> {
 // songs, playlist songs and the playlists list. The mini player stays one size;
 // its height is a fixed number the list padding and both floating buttons are
 // laid out against.
+//
+// The steps were 0.9, 1 and 1.15: on a phone that already had large text,
+// Medium and Large looked the same next to another phone. They are further
+// apart now, so the step itself can be seen.
 const SIZE_TABLE: Record<UiSize, { text: number; row: number }> = {
-  small:  { text: 0.9,  row: 60 },
+  small:  { text: 0.86, row: 58 },
   medium: { text: 1,    row: 68 },
-  large:  { text: 1.15, row: 78 },
+  large:  { text: 1.22, row: 84 },
 };
 
 export default function App() {
@@ -163,6 +167,9 @@ export default function App() {
   // next to shuffle, so a shuffled queue can have a song on repeat in it.
   // (PlayMode still knows "repeat" from when the two were one setting.)
   const [repeatOn,       setRepeatOn]      = useState(false);
+  // Repeat the whole queue: after the last song the first comes again. The
+  // player's repeat button goes round off, all, this song.
+  const [repeatAll,      setRepeatAll]     = useState(false);
   const [search,         setSearch]        = useState("");
   const [filter,         setFilter]        = useState<FilterId>("newest");
   // Narrow the list to one artist. Separate from `filter` because it is a
@@ -267,20 +274,30 @@ export default function App() {
 
   // ── Collapsing chrome ─────────────────────────────────────────────────────
   // Scrolling DOWN the Songs list folds the header card (tabs, search, sort)
-  // and the mini-player away, leaving just the round MPTree logo top-left, so
-  // the list gets the whole screen. Scrolling back to the very top restores
-  // them, tapping the logo toggles manually, and holding it turns the automatic
-  // part off entirely.
+  // away, leaving just the round MPTree logo top-left; scrolling back up brings
+  // it back. Tapping the logo folds or unfolds it by hand (the player too), and
+  // holding it turns the automatic part off entirely.
   //
-  // A manual toggle wins over the scroll rule until you reach the top again —
-  // otherwise tapping the logo to peek at the controls would be undone by the
-  // very next scroll event. `null` means "no override, follow the scroll".
+  // A tap used to win over the scroll rule until the list reached the top
+  // again, which looked like the tap had switched automatic folding off. It is
+  // no override now: the next scroll carries on folding and unfolding.
   const [chromeOpen, setChromeOpenState] = useState(true);
   const chromeOpenRef = useRef(true);
+  // Whether the fold takes the mini-player with it. Scrolling folds the
+  // header alone and leaves the player where it is; the logo folds both.
+  const [playerFolded, setPlayerFolded] = useState(false);
+  // How far the list has gone one way since it last went the other, so a
+  // finger's small wobble neither folds nor unfolds the header.
+  const scrollTravelRef = useRef(0);
+  // Set when the list is moved to make up for the header folding or
+  // unfolding: that one scroll is the app's, the next ones are the finger's.
+  // (The general guard for the app's own scrolls keeps itself going while
+  // events come in, so it swallowed a drag that began right after a tap on
+  // the logo, which looked like folding had stopped working.)
+  const insetJumpRef = useRef(false);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
-  const chromeManualRef = useRef<boolean | null>(null);
   // Collapsing must be caused by the user dragging the list downward. Comparing
   // against the previous offset keeps incidental scroll events — the ones that
   // fire when the mini-player appears or the list re-renders after shuffle or a
@@ -313,65 +330,16 @@ export default function App() {
   // Animate the fold by default; suppressed for the scroll-to-top button, which
   // should just be there when you arrive.
   const [chromeAnimate, setChromeAnimateState] = useState(true);
-  // Mirrored so setChromeOpen, below, knows in the same handler whether this
-  // particular fold is being animated.
   const chromeAnimateRef = useRef(true);
   const setChromeAnimate = useCallback((v: boolean) => {
     chromeAnimateRef.current = v;
     setChromeAnimateState(v);
   }, []);
-
-  // ── The logo's flight, when the button has been moved ────────────────────
-  // With the button parked somewhere else, unfolding does not move the button.
-  // The mark flies out of it to the top left, and the card grows from there;
-  // folding runs it backwards: the card closes into the top left, then the mark
-  // flies back into the button. The button itself stays put and sits empty
-  // while the header is open.
-  //
-  //   "home"  the mark is on its way to the top left; the card waits, folded
-  //   "fold"  the card is closing into the top left, the mark still in it
-  //   "out"   the mark is on its way back to the button
-  //
-  // While "home" runs the card is drawn as folded even though the header is
-  // already open, so everything that moves with the card (the list padding, the
-  // player) waits with it and they still arrive together.
-  const LOGO_FLY_MS = 260;
-  const FOLD_MS     = 340;   // CHROME_MOTION's duration
-  const [logoFlight, setLogoFlight] = useState<null | "home" | "fold" | "out">(null);
-  const logoFlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const logoParkedRef   = useRef(false);
-  // Every open and fold goes through here, so the flight cannot be skipped by
-  // one of the several places that fold the header.
+  // Every open and fold goes through here, so the ref never lags the state.
   const setChromeOpen = useCallback((next: boolean) => {
-    const was = chromeOpenRef.current;
     chromeOpenRef.current = next;
     setChromeOpenState(next);
-    if (next === was) return;
-    if (logoFlightTimer.current) { clearTimeout(logoFlightTimer.current); logoFlightTimer.current = null; }
-    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (!logoParkedRef.current || !chromeAnimateRef.current || reduced) { setLogoFlight(null); return; }
-    // A flight ends when its animation does (endLogoFlight, from the flying
-    // element's animationend). Timing it from here instead ended it early: the
-    // clock started at the tap, the animation only once React had drawn the
-    // element, and on a busy frame that is a tenth of a second later, so the
-    // mark vanished short of where it was going. The timers below are only a
-    // backstop for a tab that never finishes the animation (hidden, say).
-    const BACKSTOP = LOGO_FLY_MS + 400;
-    if (next) {
-      setLogoFlight("home");
-      logoFlightTimer.current = setTimeout(() => { logoFlightTimer.current = null; setLogoFlight(null); }, BACKSTOP);
-    } else {
-      setLogoFlight("fold");
-      logoFlightTimer.current = setTimeout(() => {
-        setLogoFlight("out");
-        logoFlightTimer.current = setTimeout(() => { logoFlightTimer.current = null; setLogoFlight(null); }, BACKSTOP);
-      }, FOLD_MS);
-    }
   }, []);
-  const endLogoFlight = () => {
-    if (logoFlightTimer.current) { clearTimeout(logoFlightTimer.current); logoFlightTimer.current = null; }
-    setLogoFlight(null);
-  };
   // When off, only the logo toggles the chrome; scrolling leaves it alone.
   const [autoCollapse, setAutoCollapse] = useState(true);
   const autoCollapseRef = useRef(true);
@@ -383,8 +351,6 @@ export default function App() {
       .catch(() => {});
   }, []);
   useEffect(() => { loadAutoCollapse(); }, [loadAutoCollapse]);
-  // The same for where the collapse button is parked, which is set up further down.
-  const loadLogoPosRef = useRef<() => void>(() => {});
   const CHROME_COLLAPSE_AT = 80;
   // Scrolls the app performs itself (jumping to the playing track, the
   // scroll-to-top button) must not be mistaken for the user dragging the list.
@@ -429,10 +395,8 @@ export default function App() {
 
   // Bring the chrome back. Playing something — tapping a song, hitting shuffle
   // — should never leave you looking at a folded-away player, so those paths
-  // call this. The manual override is cleared too, otherwise a later scroll
-  // down would be ignored.
+  // call this.
   const openChrome = useCallback(() => {
-    chromeManualRef.current = null;
     setChromeAnimate(true);
     setChromeOpen(true);
   }, []);
@@ -678,9 +642,17 @@ export default function App() {
   // so a playlist turned into everything the moment the mode button was
   // touched, which is the only way to reach repeat.
   const playContextRef = useRef<Song[] | null>(null);
+  // Where the music is playing from: null for the Songs page, else the
+  // playlist it was started in ("pl:<id>", or "smart:<id>" for an auto
+  // playlist). A playlist plays inside the playlist: the Songs page then
+  // neither marks the song nor scrolls to it, and the playlist's cover says so.
+  const [playSource, setPlaySourceState] = useState<string | null>(null);
+  const playSourceRef = useRef<string | null>(null);
+  const setPlaySource = (key: string | null) => { playSourceRef.current = key; setPlaySourceState(key); };
   const curRef       = useRef<Song | null>(null);
   const playModeRef  = useRef<PlayMode>("off");
   const repeatOnRef  = useRef(false);
+  const repeatAllRef = useRef(false);
   const filterRef    = useRef<FilterId>("newest");
   const currentTimeRef  = useRef<number>(0);
   const sessionReadyRef = useRef(false);
@@ -736,6 +708,7 @@ export default function App() {
   useEffect(() => { curRef.current = currentSong; }, [currentSong]);
   useEffect(() => { playModeRef.current = playMode; }, [playMode]);
   useEffect(() => { repeatOnRef.current = repeatOn; }, [repeatOn]);
+  useEffect(() => { repeatAllRef.current = repeatAll; }, [repeatAll]);
   useEffect(() => { removedRef.current = removedSongs; }, [removedSongs]);
   useEffect(() => { filterRef.current = filter; }, [filter]);
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
@@ -817,6 +790,7 @@ export default function App() {
         filter:       filterRef.current,
         playMode:     playModeRef.current,
         repeat:       repeatOnRef.current,
+        repeatAll:    repeatAllRef.current,
         currentId:    curRef.current?.id,
         queueIds:     playModeRef.current === "shuffle"
                         ? queueRef.current.map(s => s.id)
@@ -959,6 +933,7 @@ export default function App() {
         if (session.filter)   setFilter(session.filter);
         if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
         setRepeatOn(session.repeat === true || session.playMode === "repeat");
+        setRepeatAll(session.repeatAll === true);
         if (session.crossfadeMs != null) {
           setCrossfadeMs(session.crossfadeMs);
           crossfadeMsRef.current = session.crossfadeMs;
@@ -986,7 +961,7 @@ export default function App() {
           playNextQueueRef.current = session.playNextQueue;
         }
 
-        AudioPlayer.setPlayMode({ mode: session.repeat ? "repeat" : session.playMode ?? "off" }).catch(() => {});
+        AudioPlayer.setPlayMode({ mode: session.repeat ? "repeat" : session.repeatAll ? "repeatAll" : session.playMode ?? "off" }).catch(() => {});
         if (session.crossfadeMs)  AudioPlayer.setCrossfadeDuration({ milliseconds: session.crossfadeMs }).catch(() => {});
         if (session.playbackSpeed && session.playbackSpeed !== 1) AudioPlayer.setPlaybackSpeed({ speed: session.playbackSpeed }).catch(() => {});
         if (session.eqEnabled)    AudioPlayer.setEqualizerEnabled({ enabled: true }).catch(() => {});
@@ -1034,15 +1009,15 @@ export default function App() {
     if (!sessionReadyRef.current) return;
     flushSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, playMode, repeatOn, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
+  }, [filter, playMode, repeatOn, repeatAll, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
 
   useEffect(() => { if (!sessionReadyRef.current || meta === statsMetaRef.current) return; saveMeta(meta); }, [meta]);
 
   useEffect(() => {
     if (!sessionReadyRef.current) return;
     // The service only needs to know about repeat; shuffle is the queue's order.
-    AudioPlayer.setPlayMode({ mode: repeatOn ? "repeat" : playMode }).catch(() => {});
-  }, [playMode, repeatOn]);
+    AudioPlayer.setPlayMode({ mode: repeatOn ? "repeat" : repeatAll ? "repeatAll" : playMode }).catch(() => {});
+  }, [playMode, repeatOn, repeatAll]);
 
   useEffect(() => {
     if (!sessionReadyRef.current) return;
@@ -1206,7 +1181,8 @@ export default function App() {
   // the header would fold away every time you hit shuffle or skip, because the
   // resulting jump looks exactly like a downward drag.
   useEffect(() => {
-    if (!currentSong) return;
+    // Music from a playlist stays in the playlist: the Songs page keeps its place.
+    if (!currentSong || playSourceRef.current) return;
     // Armed here, up front, rather than only next to the scroll call: the list
     // can settle and emit scroll events before this effect's timer fires, and
     // any of those arriving unguarded would fold the header away.
@@ -1478,7 +1454,8 @@ export default function App() {
     const q = queue.length > 1 ? queue : displayList;
     const idx = q.findIndex(s => s.id === currentSong.id);
     if (idx === -1) return;
-    const nxt = q[idx + dir];
+    // Repeat all goes round: after the last song the first, and back.
+    const nxt = q[idx + dir] ?? (repeatAll ? q[(idx + dir + q.length) % q.length] : undefined);
     if (!nxt) return;
     if (q !== queue) setQueue(q);
     playSong(nxt, q);
@@ -1497,6 +1474,7 @@ export default function App() {
     if (!cur) {
       const q = [song];
       playContextRef.current = q;
+      setPlaySource(null);
       setQueue(q);
       playSong(song, q);
       return;
@@ -1539,6 +1517,7 @@ export default function App() {
     const cur = curRef.current;
     if (!cur) {
       playContextRef.current = chosen;
+      setPlaySource(null);
       setQueue(chosen);
       playSong(chosen[0], chosen);
       return;
@@ -1561,21 +1540,60 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, toNativeTrack]);
 
-  const handleSkipCurrentUpNext = useCallback(() => {
-    const q = queueRef.current;
+  // ── The player's "Next up" list ───────────────────────────────────────────
+  // Pins are used up in queue order (see the track-change handler), so after
+  // the queue changes by hand they are put back in the order they now play.
+  const pinsInOrder = (q: Song[], from: number) => {
+    const pins = new Set(playNextQueueRef.current);
+    const kept = q.slice(from).filter(s => pins.has(s.id)).map(s => s.id);
+    setPlayNextQueue(kept);
+    playNextQueueRef.current = kept;
+  };
+
+  /** A song in "Next up" moved by its handle. Positions count from the first
+   *  song after the one that is on. */
+  const moveInQueue = useCallback((from: number, to: number) => {
     const cur = curRef.current;
-    if (!cur || q.length === 0) return;
-    const idx = q.findIndex(s => s.id === cur.id);
-    const pinnedSet = new Set(playNextQueueRef.current);
-    const skipTargetIdx = q.findIndex((s, i) => i > idx && !pinnedSet.has(s.id));
-    if (skipTargetIdx === -1) return;
-    const newQ = [...q];
-    const [skipped] = newQ.splice(skipTargetIdx, 1);
-    newQ.push(skipped);
+    const q = queueRef.current;
+    const at = cur ? q.findIndex(s => s.id === cur.id) : -1;
+    if (at < 0) return;
+    const rest = q.slice(at + 1);
+    const [moved] = rest.splice(from, 1);
+    if (!moved) return;
+    rest.splice(to, 0, moved);
+    const newQ = [...q.slice(0, at + 1), ...rest];
     setQueue(newQ);
-    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: idx }).catch(() => {});
+    queueRef.current = newQ;
+    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: at }).catch(() => {});
+    pinsInOrder(newQ, at + 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toNativeTrack]);
+
+  /** "Skip" next to the next song in the player: it goes to the end of the
+   *  queue, and the one after it is next. */
+  const skipUpNext = () => {
+    const cur = curRef.current;
+    const q = queueRef.current;
+    const at = cur ? q.findIndex(s => s.id === cur.id) : -1;
+    if (at < 0 || at + 1 >= q.length) return;
+    const newQ = [...q];
+    const [skipped] = newQ.splice(at + 1, 1);
+    newQ.push(skipped);
+    setQueue(newQ);
+    queueRef.current = newQ;
+    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: at }).catch(() => {});
+    pinsInOrder(newQ, at + 1);
+  };
+
+  /** A tap on a song in "Next up": it plays now and the queue stays as it is,
+   *  so what follows it is still what the list showed. */
+  const playFromQueue = (song: Song) => {
+    const q = queueRef.current;
+    const at = q.findIndex(s => s.id === song.id);
+    if (at < 0) return;
+    playSong(song, q);
+    pinsInOrder(q, at + 1);
+  };
 
   // Fisher–Yates shuffle — uniform distribution. The old
   // `sort(() => Math.random() - 0.5)` is biased (comparator isn't a consistent
@@ -1597,6 +1615,7 @@ export default function App() {
   // ── Shuffle FAB ───────────────────────────────────────────────────────────
   const flipRepeat = (on: boolean) => {
     setRepeatOn(on); repeatOnRef.current = on;
+    setRepeatAll(false); repeatAllRef.current = false;
     showToast(on ? t("Repeat on") : t("Repeat off"));
   };
   const onShufflePressStart = () => { shufflePressTimer.current = setTimeout(() => { hapticImpact("medium"); flipRepeat(!repeatOnRef.current); }, 600); };
@@ -1604,10 +1623,10 @@ export default function App() {
   const onShuffleClick = () => {
     hapticImpact("light");
     // While repeat is on the button shows it, and a tap turns it off.
-    if (repeatOn) { flipRepeat(false); return; }
+    if (repeatOn || repeatAll) { flipRepeat(false); return; }
     if (!displayList.length) return;
     openChrome();
-    const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; playSong(q[0], q);
+    const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; setPlaySource(null); playSong(q[0], q);
     showToast(isFavFilter ? t("Shuffling favorites") : t("Shuffling all songs"));
   };
 
@@ -1653,11 +1672,15 @@ export default function App() {
     showToast(t("Shuffle on"));
   };
 
-  // The full player's repeat button. Repeat leaves shuffle alone: the queue
-  // stays as it is, and the song that is on plays again when it ends.
+  // The full player's repeat button goes round: off, the whole queue, this
+  // song. Repeat leaves shuffle alone: the queue stays as it is.
   const toggleRepeatFromPlayer = () => {
     hapticImpact("light");
-    flipRepeat(!repeatOn);
+    const all = !repeatOn && !repeatAll;
+    const one = repeatAll;
+    setRepeatAll(all); repeatAllRef.current = all;
+    setRepeatOn(one); repeatOnRef.current = one;
+    showToast(all ? t("Repeat all") : one ? t("Repeat this song") : t("Repeat off"));
   };
 
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
@@ -2089,11 +2112,11 @@ export default function App() {
     settings: async () => {
       await loadPrefs();
       loadAutoCollapse();
-      loadLogoPosRef.current();
       const session = await loadSession();
       if (session.filter) setFilter(session.filter);
       if (session.playMode) setPlayMode(session.playMode === "repeat" ? "off" : session.playMode);
       setRepeatOn(session.repeat === true || session.playMode === "repeat");
+      setRepeatAll(session.repeatAll === true);
       if (session.crossfadeMs != null) setCrossfadeMs(session.crossfadeMs);
       if (session.playbackSpeed != null && session.playbackSpeed > 0) setPlaybackSpeed(session.playbackSpeed);
       if (session.eqEnabled != null) setEqEnabled(session.eqEnabled);
@@ -2121,7 +2144,7 @@ export default function App() {
   useEffect(() => {
     if (syncStarted.current) syncChanged();
   }, [songs, removedSongs, playlists, theme, uiSize, langPref, updateNotices, mixOthers, look,
-      filter, playMode, repeatOn, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
+      filter, playMode, repeatOn, repeatAll, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, autoCollapse]);
   // Meta on its own, so a play count alone does not start a round (see
   // statsMetaRef); it goes along with the next one.
   useEffect(() => {
@@ -2242,6 +2265,7 @@ export default function App() {
     // Honour shuffle. This used to always queue displayList in order, so with
     // shuffle already on (typically restored from the previous session) tapping
     // a song silently played the library sequentially from that point.
+    setPlaySource(null);
     if (playMode === "shuffle") {
       const q = [song, ...buildShuffleQ(displayList.filter(s => s.id !== song.id))];
       playContextRef.current = displayList;
@@ -2308,6 +2332,7 @@ export default function App() {
     const shuffled = [...chosen].sort(() => Math.random() - 0.5);
     setPlayMode("shuffle");
     playContextRef.current = chosen;
+    setPlaySource(null);
     setQueue(shuffled);
     playSong(shuffled[0], shuffled);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2395,11 +2420,16 @@ export default function App() {
     const updated = [s, ...removedSongs];
     setRemovedSongs(updated); saveRemovedTracksToStorage(updated);
     setSongs(prev => { const next = prev.filter(x => x.id !== s.id); saveCutTracksToStorage(next.filter(x => x.isCut)); return next; });
+    // The song after it plays, from the queue it was in: a playlist stays a
+    // playlist. The player stays open on that song; with nothing left it goes.
     if (wasPlaying) {
-      if (playMode === "shuffle") { const idx = queue.findIndex(x => x.id === s.id); const rq = queue.filter(x => x.id !== s.id); setQueue(rq); const nxt = rq[idx] ?? rq[0]; if (nxt) playSong(nxt, rq); else { setCurrent(null); setPlaying(false); } }
-      else { const rl = displayList.filter(x => x.id !== s.id); const idx = displayList.findIndex(x => x.id === s.id); const nxt = rl[idx] ?? rl[idx - 1]; if (nxt) { setQueue(rl); playSong(nxt, rl); } else { setCurrent(null); setPlaying(false); } }
+      const q = queue.length ? queue : displayList;
+      const idx = q.findIndex(x => x.id === s.id);
+      const rq = q.filter(x => x.id !== s.id);
+      const nxt = rq[idx] ?? rq[idx - 1] ?? rq[0];
+      if (nxt) { setQueue(rq); playSong(nxt, rq); } else { setCurrent(null); setPlaying(false); setPlayerExpanded(false); }
     }
-    setRemoveSong(null); setMenuSong(null); setPlayerExpanded(false);
+    setRemoveSong(null); setMenuSong(null);
     showToast(t("Moved to bin"), { label: t("Undo"), onClick: () => restoreSongs([s]) });
     scanMusic(updated);
   };
@@ -2640,13 +2670,14 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean) => {
+  const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean, source: string) => {
     if (!playlistSongs.length) return;
     openChrome();
     // Stay on the Playlists tab. The queue is set to the playlist's songs below,
     // so playback and skip stay inside the playlist; there is no reason to yank
     // the user back to the Songs tab.
     playContextRef.current = playlistSongs;
+    setPlaySource(source);
     if (shuffle) {
       const q = shuffleArray(playlistSongs);
       setPlayMode("shuffle");
@@ -2696,6 +2727,12 @@ export default function App() {
     ];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, likedKey, lastPlayedKey, playCountKey, langPref]);
+
+  /** What the player's "Next up" says the music comes from. */
+  const playSourceLabel =
+    playSource === null ? (isFavFilter ? t("Favorites") : t("All songs"))
+    : playSource.startsWith("smart:") ? smartPlaylists.find(p => `smart:${p.id}` === playSource)?.name
+    : playlists.find(p => `pl:${p.id}` === playSource)?.name;
 
   // ── Android hardware / gesture Back ───────────────────────────────────────
   // Without a handler, Back closes the whole app from anywhere, even with a
@@ -2769,6 +2806,7 @@ export default function App() {
   // it needs its own bar and the header's count visible.
   const selecting = selectMode || playlistSelecting;
   const chromeCollapsed = !selecting && !chromeOpen;
+  const playerHidden    = chromeCollapsed && playerFolded;
 
   // ONE definition of how the fold moves, used by every piece that moves with
   // it: the header card, the mini-player, the list paddings, the two floating
@@ -2813,11 +2851,11 @@ export default function App() {
     prevSongsInset.current = songsInset;
     if (!el || !delta) return;
     if (el.scrollTop > 0) {
-      beginProgrammaticScroll();
+      insetJumpRef.current = true;
       el.scrollTop += delta;
     }
     pendingScroll.current?.();
-  }, [songsInset, beginProgrammaticScroll]);
+  }, [songsInset]);
   // How far the list's top moves when the card folds, per tab.
   const foldGap = (from: "songs" | "playlists") =>
     (from === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 14 - (54 + 14);
@@ -2842,6 +2880,7 @@ export default function App() {
     if (from !== page) return;
     const prev = lastRef.current;
     lastRef.current = top;
+    if (insetJumpRef.current) { insetJumpRef.current = false; return; }
     // A scroll the app started (jumping to the playing track after shuffle or
     // skip) is not the user asking for more list room.
     if (programmaticScrolling()) return;
@@ -2849,19 +2888,28 @@ export default function App() {
     // not even to restore it at the top.
     if (!autoCollapseRef.current) return;
     if (top <= 4) {
-      chromeManualRef.current = null;
       setChromeOpen(true);
       return;
     }
-    if (chromeManualRef.current !== null) return;
-    // Only a genuine downward drag folds it away. Scrolling back up leaves the
-    // chrome hidden until you actually reach the top, which is what keeps the
-    // list from flickering mid-scroll.
-    // Far enough down that the rows can stay exactly where they are while the
-    // card folds: the list scrolls back by what the card gives up.
-    if (top > prev + 2 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
+    // Travel in one direction, reset when it turns: a wobble of a few pixels
+    // either way is not a wish to fold or unfold.
+    const step = top - prev;
+    if (step === 0) return;
+    if (Math.sign(step) !== Math.sign(scrollTravelRef.current)) scrollTravelRef.current = 0;
+    scrollTravelRef.current += step;
+    // Scrolling back up brings the header back straight away, not only at
+    // the top of the list.
+    if (scrollTravelRef.current < -24) {
+      if (!chromeOpen) setChromeOpen(true);
+      return;
+    }
+    // A downward drag folds the header away; the player stays. Far enough
+    // down that the rows can stay exactly where they are while the card
+    // folds: the list scrolls back by what the card gives up.
+    if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
       // Only hint on the transition, not on every scroll event while folded.
       if (chromeOpen) showCollapseHint();
+      setPlayerFolded(false);
       setChromeOpen(false);
     }
   };
@@ -2870,7 +2918,10 @@ export default function App() {
     hapticImpact("light");
     setChromeAnimate(true);
     const next = !chromeOpen;
-    chromeManualRef.current = next;
+    // The logo folds everything, the player included. Scrolling goes on
+    // working from here: the next turn of the list starts its count afresh.
+    scrollTravelRef.current = 0;
+    setPlayerFolded(!next);
     setChromeOpen(next);
   };
 
@@ -2880,9 +2931,6 @@ export default function App() {
   const setAutoCollapseEnabled = (next: boolean) => {
     autoCollapseRef.current = next;
     setAutoCollapse(next);
-    // Re-enabling hands control back to the scroll position, so forget any
-    // override the user set while it was off.
-    if (next) chromeManualRef.current = null;
     Preferences.set({ key: "mptree_auto_collapse", value: next ? "1" : "0" }).catch(() => {});
   };
 
@@ -2890,7 +2938,6 @@ export default function App() {
   const logoLongPressed  = useRef(false);
   const onLogoPressStart = () => {
     logoLongPressed.current = false;
-    setMenuFromBall(false);   // the parked button sets it back straight after
     logoPressTimer.current = setTimeout(() => {
       logoLongPressed.current = true;
       hapticImpact("medium");
@@ -2901,172 +2948,17 @@ export default function App() {
     if (logoPressTimer.current) { clearTimeout(logoPressTimer.current); logoPressTimer.current = null; }
   };
   const onLogoClick = () => {
-    // Swallow the click that follows a long-press or a drag, or either would
-    // also toggle the fold on the way out.
+    // Swallow the click that follows a long-press, or it would also toggle
+    // the fold on the way out.
     if (logoLongPressed.current) { logoLongPressed.current = false; return; }
     toggleChrome();
   };
 
-  // ── Moving the collapse button ─────────────────────────────────────────────
-  // While the chrome is folded, the round logo can be dragged out of the top
-  // left and left anywhere in the band below it. The position applies ONLY while
-  // folded: expanding puts the card back where the whole header expects to be,
-  // and the button flies home into it.
-  //
-  // Stored as fractions OF THE BAND rather than of the viewport. A viewport
-  // fraction breaks the moment the viewport does: 0.9 of an 800px screen is a
-  // legal 720, and 0.9 of the 400px left when the keyboard opens is 360, which
-  // is inside the strip at the bottom the band exists to keep clear. Normalised
-  // to the band, any resize keeps the button in the same relative place and the
-  // clamp holds by construction. Pixels are derived at render from the live
-  // viewport, so there is one source of truth and nothing to re-clamp on read.
-  const LOGO_SIZE  = 54;
-  const HOME_X     = 12;
-  // Drop it this close to the docked spot and it goes home rather than parking
-  // a few pixels off it. Has to be larger than the button, or the nearest place
-  // you could actually drop it would already be outside the zone and the snap
-  // would never fire.
-  const DOCK_RADIUS = 70;
-  // Below the docked spot, and clear of the shuffle and scroll-to-top buttons at
-  // the bottom, which sit above this one and would otherwise draw over it. The
-  // mini-player cannot be in the way: it is gone whenever the chrome is folded.
-  const BAND_BOTTOM_GUARD = 80;
-  const [logoPos,  setLogoPos]  = useState<{ fx: number; fy: number } | null>(null);
-  const [logoDrag, setLogoDrag] = useState<{ x: number; y: number } | null>(null);
-  const [overRemove, setOverRemove] = useState(false);
-  useEffect(() => { logoParkedRef.current = logoPos !== null; }, [logoPos]);
-  // Where the button is parked is one of the settings the account keeps.
-  useEffect(() => { if (syncStarted.current) syncChanged(); }, [logoPos]);
-  // Which button the options panel was opened from. With the button parked and
-  // the header open there are two logos on screen, and the panel belongs next
-  // to the one you held.
-  const [menuFromBall, setMenuFromBall] = useState(false);
-  useEffect(() => {
-    const load = () => {
-      Preferences.get({ key: "mptree_logo_pos" })
-        .then(({ value }) => {
-          if (!value) return;
-          const p = JSON.parse(value) as { fx?: unknown; fy?: unknown };
-          if (typeof p.fx === "number" && typeof p.fy === "number") {
-            setLogoPos({ fx: Math.min(1, Math.max(0, p.fx)), fy: Math.min(1, Math.max(0, p.fy)) });
-          }
-        })
-        .catch(() => {});
-    };
-    loadLogoPosRef.current = load;
-    load();
-  }, []);
+  // The collapse button could once be dragged anywhere on the screen. That is
+  // gone: the logo folds and unfolds, and holding it opens its options. A spot
+  // stored by an older version is forgotten.
+  useEffect(() => { Preferences.remove({ key: "mptree_logo_pos" }).catch(() => {}); }, []);
 
-  const bandMinX = HOME_X;
-  const bandMaxX = Math.max(HOME_X, dims.vw - LOGO_SIZE - 12);
-  // The band starts at the docked spot itself rather than below it. Starting it
-  // under the button put every reachable drop point further from home than the
-  // dock radius, so "drop it near the top left and it goes home" could not
-  // happen at all.
-  const bandMinY = dims.cardTop;
-  const bandMaxY = Math.max(bandMinY, dims.vh - LOGO_SIZE - BAND_BOTTOM_GUARD);
-  const parkedX  = logoPos ? bandMinX + logoPos.fx * (bandMaxX - bandMinX) : HOME_X;
-  const parkedY  = logoPos ? bandMinY + logoPos.fy * (bandMaxY - bandMinY) : dims.cardTop;
-  // Where the free-floating button is drawn. Dragging wins over the stored spot.
-  // With the header open the button stays where it was left, but it is kept off
-  // the things the open header brings with it: below the card, and above the
-  // mini player and the two buttons that ride on top of it. Folding puts it back
-  // on its stored spot; the stored spot itself never changes for this.
-  const logoFloating = logoPos !== null || logoDrag !== null;
-  const logoDragging = logoDrag !== null;
-  const openCardBottom = dims.cardTop + (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2 + 10;
-  const openBottomH    = (currentSong && !selectMode ? 113 : 0) + (selectMode ? 100 : 0);
-  const openMinY = openCardBottom;
-  const openMaxY = Math.max(openMinY, bandMaxY - openBottomH);
-  const yMin = chromeCollapsed ? bandMinY : openMinY;
-  const yMax = chromeCollapsed ? bandMaxY : openMaxY;
-  const floatX = logoDrag ? logoDrag.x : parkedX;
-  const floatY = logoDrag ? logoDrag.y : Math.min(yMax, Math.max(yMin, parkedY));
-  // The mark sits in the button only while it is folded and at rest. Open, or
-  // with the mark in flight, the button is an empty socket.
-  const ballHasMark = chromeCollapsed && logoFlight === null;
-
-  // The remove target, centred at the bottom. Hit-tested against the finger
-  // rather than the button, which is clamped short of it.
-  const removeCX = dims.vw / 2;
-  const removeCY = dims.vh - 40 - LOGO_SIZE / 2;
-  const nearPoint = (x: number, y: number, cx: number, cy: number, r: number) =>
-    Math.hypot(x - cx, y - cy) <= r;
-
-  const dockLogo = () => {
-    setLogoPos(null);
-    setLogoDrag(null);
-    setOverRemove(false);
-    hapticImpact("medium");
-    Preferences.remove({ key: "mptree_logo_pos" }).catch(() => {});
-  };
-
-  // One grab, driven by either touch or mouse. The live position lives in the
-  // ref as well as in state: state is for drawing, and the window-level mouse
-  // listeners below are closed over the render that started the drag, so reading
-  // the drop position out of state there would read it as it was on mousedown.
-  const logoGrab = useRef<{
-    dx: number; dy: number; x0: number; y0: number;
-    moved: boolean; x: number; y: number; over: boolean;
-  } | null>(null);
-
-  const logoGrabStart = (cx: number, cy: number, rect: DOMRect) => {
-    logoGrab.current = {
-      dx: cx - rect.left, dy: cy - rect.top, x0: cx, y0: cy,
-      moved: false, x: rect.left, y: rect.top, over: false,
-    };
-  };
-
-  const logoGrabMove = (cx: number, cy: number) => {
-    const g = logoGrab.current;
-    // From the docked spot it can only be pulled out while folded; once parked
-    // it moves in either state.
-    if (!g || (!chromeCollapsed && logoPos === null)) return;
-    if (!g.moved) {
-      // 14px rather than the usual 8: this button also answers a tap and a hold,
-      // and a hold on a 54px target rolls a few pixels under the thumb.
-      if (Math.abs(cx - g.x0) < 14 && Math.abs(cy - g.y0) < 14) return;
-      g.moved = true;
-      onLogoPressEnd();                 // a drag is not a hold
-      logoLongPressed.current = true;   // nor a tap: swallow the click it ends on
-      hapticImpact("light");
-    }
-    g.x = Math.min(bandMaxX, Math.max(bandMinX, cx - g.dx));
-    g.y = Math.min(yMax, Math.max(yMin, cy - g.dy));
-    g.over = nearPoint(cx, cy, removeCX, removeCY, 52);
-    setLogoDrag({ x: g.x, y: g.y });
-    setOverRemove(g.over);
-  };
-
-  const logoGrabEnd = () => {
-    const g = logoGrab.current;
-    logoGrab.current = null;
-    onLogoPressEnd();
-    if (!g || !g.moved) return;
-    // The click that follows this drag is swallowed by the flag set in
-    // logoGrabMove. Release the flag straight after, in its own task: a click
-    // is dispatched in the same task as the mouseup or touchend, so this always
-    // runs after it. Without this the flag survives a drag that ends off the
-    // button, which never produces a click at all, and eats the next tap.
-    window.setTimeout(() => { logoLongPressed.current = false; }, 0);
-    setLogoDrag(null);
-    setOverRemove(false);
-    // Pulled out of the docked spot and then the header opened under it (a
-    // crossfade into the next track calls openChrome): the drag started from a
-    // button that no longer exists, so there is nothing sensible to save.
-    if (!chromeCollapsed && logoPos === null) return;
-    if (g.over || nearPoint(g.x, g.y, HOME_X, dims.cardTop, DOCK_RADIUS)) { dockLogo(); return; }
-    const next = {
-      fx: bandMaxX > bandMinX ? (g.x - bandMinX) / (bandMaxX - bandMinX) : 0,
-      fy: bandMaxY > bandMinY ? (g.y - bandMinY) / (bandMaxY - bandMinY) : 0,
-    };
-    setLogoPos(next);
-    hapticImpact("light");
-    Preferences.set({ key: "mptree_logo_pos", value: JSON.stringify(next) }).catch(() => {});
-  };
-
-  // The card's own surface, shared with the floating button so the two are the
-  // same object wherever it is sitting.
   // The header card's own palette: the app's, or a Pro shade picked for the
   // card alone. Everything inside the card and the folded logo button is drawn
   // with CT rather than TH. Paint only, never a dimension. See cardPalette.
@@ -3083,60 +2975,26 @@ export default function App() {
       : "0 8px 32px rgba(0,0,0,0.45)",
   };
 
-  // Where the logo's own options panel and the collapse hint go. Both belong to
-  // the button, so they follow it rather than staying pinned to the top left.
-  const LOGO_MENU_W = 268;
-  const LOGO_MENU_H = 210;   // generous; the panel is clamped on screen either way
-  const anchored    = logoFloating && (chromeCollapsed || menuFromBall);
-  const logoMenuLeft = anchored ? Math.max(12, Math.min(floatX, dims.vw - LOGO_MENU_W - 12)) : 12;
-  const logoMenuTop  = anchored
-    ? (floatY + LOGO_SIZE + 8 + LOGO_MENU_H <= dims.vh - 12
-        ? floatY + LOGO_SIZE + 8
-        : Math.max(12, floatY - LOGO_MENU_H - 8))
-    : cardBottom;
-  const hintAtBall = chromeCollapsed && logoFloating;
-  const hintLeft = hintAtBall ? Math.min(floatX + 62, Math.max(12, dims.vw - 250)) : 74;
-  const hintTop  = hintAtBall ? floatY + 14 : dims.cardTop + 14;
-
-  // Attached to both the docked layer and the floating button, so the gesture is
-  // the same wherever the button happens to be.
-  const logoHandlers = {
-    onClick: onLogoClick,
-    onTouchStart: (e: React.TouchEvent<HTMLElement>) => {
-      const t = e.touches[0];
-      logoGrabStart(t.clientX, t.clientY, e.currentTarget.getBoundingClientRect());
-      onLogoPressStart();
-    },
-    onTouchMove:   (e: React.TouchEvent<HTMLElement>) => logoGrabMove(e.touches[0].clientX, e.touches[0].clientY),
-    onTouchEnd:    () => logoGrabEnd(),
-    onTouchCancel: () => logoGrabEnd(),
-    // The mouse path exists so this can be driven in a browser during
-    // development. The listeners go on the window because the cursor leaves the
-    // 54px button immediately.
-    onMouseDown: (e: React.MouseEvent<HTMLElement>) => {
-      logoGrabStart(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
-      onLogoPressStart();
-      const mv = (ev: MouseEvent) => logoGrabMove(ev.clientX, ev.clientY);
-      const up = () => {
-        window.removeEventListener("mousemove", mv);
-        window.removeEventListener("mouseup", up);
-        logoGrabEnd();
-      };
-      window.addEventListener("mousemove", mv);
-      window.addEventListener("mouseup", up);
-    },
-  };
+  // Where the logo's own options panel and the collapse hint go: under the
+  // header, and next to the folded button.
+  const logoMenuLeft = 12;
+  const logoMenuTop  = cardBottom;
+  const hintLeft = 74;
+  const hintTop  = dims.cardTop + 14;
 
   // 18px bottom offset + the card's own measured height (95px). The card lost
   // 45px when the timeline moved out of it, so this came down from 158; the
   // shuffle FAB, the scroll-to-top button and the list's bottom padding all
   // offset from here, and a stale number leaves a visible gap under the player.
-  const playerH    = currentSong && !selectMode && !chromeCollapsed ? 113 : 0;
+  // Picking songs in a playlist hides it as well: the selection bar takes its
+  // place, and the player used to show half above that bar.
+  const playerH    = currentSong && !selecting && !playerHidden ? 113 : 0;
   const selectBarH = selectMode ? 100 : 0;
   const bottomH    = playerH + selectBarH;
   // Repeat first: with both on, the button shows repeat, and a tap ends it.
-  const modeBg     = repeatOn ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
-  const modeShadow = repeatOn ? "0 0 16px rgba(14,165,233,0.4)" : playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : "none";
+  const anyRepeat  = repeatOn || repeatAll;
+  const modeBg     = anyRepeat ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
+  const modeShadow = anyRepeat ? "0 0 16px rgba(14,165,233,0.4)" : playMode === "shuffle" ? `0 0 16px ${TH.violet}73` : "none";
   const filterLabel = FILTER_OPTIONS.find((o: { id: FilterId; label: string }) => o.id === filter)?.label ?? "Sort";
   const filterText = t(filterLabel);
   const selectedSongs = displayList.filter(s => selected.has(s.id));
@@ -3269,7 +3127,6 @@ export default function App() {
         /* A row arriving at the top of a list. Used by the new-playlist field in
            PlaylistsView, which is a fresh mount and so has nothing to
            transition from. */
-        @keyframes mpFly { from { transform: translate3d(var(--fx0), var(--fy0), 0) scale(var(--fs0)); } to { transform: translate3d(var(--fx1), var(--fy1), 0) scale(var(--fs1)); } }
         @property --mpr { syntax: "<length>"; inherits: false; initial-value: 0px; }
         @keyframes mpReveal { from { --mpr: 0px; } to { --mpr: 150vmax; } }
         @keyframes mpRowIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
@@ -3309,15 +3166,10 @@ export default function App() {
             width:  chromeCollapsed ? 54 : "calc(100% - 24px)",
             height: chromeCollapsed ? 54 : (page === "songs" ? dims.innerH : dims.innerH - dims.extraH) + 2,
             borderRadius: chromeCollapsed ? "50%" : 22,
-            // The card is the collapse button too, until the button is moved
-            // away: then, folded, there is nothing here at all. It shows while
-            // it closes, and appears the moment the flying mark lands in it.
-            // Deliberately not faded: at both of those moments the card's own
-            // mark and the flying one are the same size in the same place, so
-            // an instant swap is invisible and a fade would show two of them.
-            // Picking songs, it makes way for the bar that says how many.
-            opacity:       selecting || (chromeCollapsed && logoFloating && logoFlight !== "fold") ? 0 : 1,
-            pointerEvents: selecting || (chromeCollapsed && logoFloating) ? "none" : "auto",
+            // The card is the collapse button too. Picking songs, it makes way
+            // for the bar that says how many.
+            opacity:       selecting ? 0 : 1,
+            pointerEvents: selecting ? "none" : "auto",
             transition: move("width", "height", "border-radius"),
           }}
         >
@@ -3351,8 +3203,7 @@ export default function App() {
               onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label={t("Collapse header")}
               data-tour="logo"
-              // Hidden while the mark flies in to take its place.
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", position: "relative", color: CT.text, opacity: logoFlight === "home" ? 0 : 1 }}
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", position: "relative", color: CT.text }}
             >
               <Logo size={48} color={CT.text} />
               {look.flowers === "mark" && (
@@ -3471,17 +3322,15 @@ export default function App() {
           <div
             style={{
               position: "absolute", inset: 0,
-              // With the button parked elsewhere this layer only shows while the
-              // card folds; at rest the parked button carries the mark, and on
-              // the way open the mark is in flight, so a second one here would
-              // show as a ghost while the card grows.
-              opacity: chromeCollapsed && (!logoFloating || logoFlight === "fold") ? 1 : 0,
+              opacity: chromeCollapsed ? 1 : 0,
               pointerEvents: chromeCollapsed ? "auto" : "none",
               transition: chromeAnimate ? "opacity 0.15s ease" : "none",
             }}
           >
             <button
-              {...logoHandlers}
+              onClick={onLogoClick}
+              onTouchStart={onLogoPressStart} onTouchEnd={onLogoPressEnd} onTouchCancel={onLogoPressEnd}
+              onMouseDown={onLogoPressStart} onMouseUp={onLogoPressEnd} onMouseLeave={onLogoPressEnd}
               aria-label={t("Show search and player")}
               style={{
                 // Pinned left rather than centred: while the card is still wide,
@@ -3491,118 +3340,13 @@ export default function App() {
                 width: "100%", height: "100%", display: "flex", alignItems: "center",
                 justifyContent: "flex-start", paddingLeft: 11,
                 background: "transparent", border: "none", cursor: "pointer",
-                color: CT.text, touchAction: "none",
+                color: CT.text,
               }}
             >
               <Logo size={30} color={CT.text} />
             </button>
           </div>
         </div>
-
-        {/* ── The collapse button, once it has been moved ───────────────────
-            Its own fixed element rather than the card relocated. The card's
-            content is laid out at calc(100vw - 26px) from the card's left edge,
-            so moving the card would drag the whole header row diagonally across
-            the screen for the 150ms the inner takes to fade in. This way the
-            card keeps its geometry and its measurements exactly, and the mark
-            visibly flies home into the card as the card grows there. */}
-        {logoFloating && (
-          <button
-            {...logoHandlers}
-            onTouchStart={e => { logoHandlers.onTouchStart(e); setMenuFromBall(true); }}
-            onMouseDown={e => { logoHandlers.onMouseDown(e); setMenuFromBall(true); }}
-            aria-label={chromeCollapsed ? t("Show search and player") : t("Hide search and player")}
-            style={{
-              position: "fixed", top: 0, left: 0,
-              width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
-              transform: `translate3d(${floatX}px, ${floatY}px, 0)`,
-              ...CARD_SKIN,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: CT.text, cursor: "pointer", zIndex: 60, touchAction: "none",
-              opacity: overRemove ? 0.4 : 1,
-              // Empty, it goes grey: the card's near-black on a black list was
-              // all but invisible.
-              ...(ballHasMark ? null : { background: CT.dim, borderColor: CT.muted + "66" }),
-              // No transform easing while it is following a finger.
-              transition: logoDragging
-                ? "opacity 0.15s ease"
-                : chromeAnimate
-                  ? `transform ${CHROME_MOTION}, opacity 0.2s ease`
-                  : "opacity 0.2s ease",
-            }}
-          >
-            {ballHasMark
-              ? <Logo size={30} color={CT.text} />
-              // The socket: faint enough to read as "empty", present enough to
-              // read as a button rather than a stray disc.
-              : <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: "50%", border: `1.5px solid ${CT.muted}` }} />}
-          </button>
-        )}
-
-        {/* ── The mark in flight ────────────────────────────────────────────
-            Between the parked button and the top left. Its start and end points
-            are exactly where the two resting marks are drawn (the button's
-            centred one at +12, the folded card's left-pinned one at 12 + 1
-            border + 11 padding, both 12 down), so the hand-overs at either end
-            do not show. A keyframe rather than a transition, so it needs no
-            extra render to be placed at the start first. */}
-        {(logoFlight === "home" || logoFlight === "out") && (() => {
-          // From the parked spot, not the drawn one: opening moves the button
-          // off the card's path while the mark is already on its way.
-          const ball = { x: parkedX + 12, y: parkedY + 12, s: 1 };
-          // Going out it leaves the folded card's 30px mark. Coming home the
-          // card is already growing, so it lands on the open header's 48px logo
-          // instead and grows to its size on the way.
-          const folded = { x: HOME_X + 12, y: dims.cardTop + 12, s: 1 };
-          const open   = { x: HOME_X + 15, y: dims.cardTop + 9, s: 48 / 30 };
-          const [a, b] = logoFlight === "home" ? [ball, open] : [folded, ball];
-          return (
-            <div
-              key={logoFlight}
-              aria-hidden="true"
-              onAnimationEnd={endLogoFlight}
-              style={{
-                position: "fixed", top: 0, left: 0, zIndex: 61, pointerEvents: "none",
-                display: "flex", color: CT.text,
-                "--fx0": `${a.x}px`, "--fy0": `${a.y}px`, "--fx1": `${b.x}px`, "--fy1": `${b.y}px`,
-                "--fs0": a.s, "--fs1": b.s, transformOrigin: "0 0",
-                animation: `mpFly ${LOGO_FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both`,
-              } as React.CSSProperties}
-            >
-              <Logo size={30} color={CT.text} />
-            </div>
-          );
-        })()}
-
-        {/* ── Drop here to send it back ─────────────────────────────────────
-            Only while dragging. Hit-tested against the finger, not the button,
-            which is clamped to a band that stops short of here. */}
-        {logoDragging && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: "fixed", left: 0, right: 0, bottom: 40, zIndex: 510,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-              pointerEvents: "none", animation: "mpFadeIn 0.16s ease both",
-            }}
-          >
-            <div style={{ fontSize: 12, color: overRemove ? "#e8445a" : TH.muted, fontWeight: 600 }}>
-              {t("Back to the top left")}
-            </div>
-            <div style={{
-              width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: "50%",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: overRemove ? TH.binBg : TH.sheetBg,
-              border: `1px solid ${overRemove ? TH.binBorder : TH.border}`,
-              color: overRemove ? "#e8445a" : TH.muted,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
-              transform: `scale(${overRemove ? 1.14 : 1})`,
-              transition: "transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease",
-            }}>
-              <IC.Close />
-            </div>
-          </div>
-        )}
 
         {/* ── Collapse hint ────────────────────────────────────────────────
             The first few times the chrome folds itself away, say so. Without
@@ -3750,27 +3494,12 @@ export default function App() {
               </button>
               <div style={{ padding: "0 12px", fontSize: 12, color: TH.muted, lineHeight: 1.5 }}>
                 {autoCollapse
-                  ? t("The header and player fold away as you scroll down.")
+                  ? t("The header folds away as you scroll down and comes back as you scroll up.")
                   : t("They only fold when you tap the logo.")}
               </div>
 
               {/* Only once the button has been moved. The X you drop it on is
                   the other way back, and that one you have to find. */}
-              {logoPos && (
-                <button
-                  onClick={() => { dockLogo(); setChromeMenuOpen(false); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, width: "100%",
-                    marginTop: 10, background: "transparent", border: "none",
-                    borderTop: `1px solid ${TH.border}`, cursor: "pointer",
-                    padding: "12px 12px 4px", color: TH.text,
-                    fontFamily: "inherit", fontSize: 15, textAlign: "left",
-                  }}
-                >
-                  <span style={{ display: "flex", color: TH.muted }}><IC.Close /></span>
-                  <span>{t("Move the button back")}</span>
-                </button>
-              )}
             </div>
           </>
         )}
@@ -3841,7 +3570,8 @@ export default function App() {
                 <>
                   {virtTopPad > 0 && <div style={{ height: virtTopPad }} aria-hidden="true" />}
                   {visibleSongs.map((song) => {
-                    const isActive   = currentSong?.id === song.id;
+                    // Not marked here when it plays from a playlist: it plays there.
+                    const isActive   = currentSong?.id === song.id && !playSource;
                     const liked      = isLiked(song);
                     const isSelected = selected.has(song.id);
                     const m          = getMeta(song);
@@ -3860,17 +3590,15 @@ export default function App() {
                             onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
                             onClick={() => handleTap(song)}
                             style={{
-                              display: "flex", alignItems: "center", padding: "0 16px", gap: 10, cursor: "pointer",
+                              display: "flex", alignItems: "center", padding: "0 8px", margin: "0 8px", gap: 10, cursor: "pointer",
                               height: ROW_H, boxSizing: "border-box",
+                              // The playing row is a rounded tile with moving
+                              // bars on its art. The accent bar that ran down
+                              // its left edge is gone: the tile says it alone.
+                              borderRadius: 14,
                               background: isSelected ? TH.violet + "18" : isActive ? TH.card : "transparent",
+                              boxShadow: isActive && !isSelected ? `inset 0 0 0 1px ${TH.border}` : "none",
                               transition: "background 0.15s",
-                              // The playing row used to be marked only by a
-                              // slightly lighter background, which is easy to
-                              // miss. It now also carries the accent bar down
-                              // its left edge and animated bars on its art.
-                              borderLeft: isSelected ? `3px solid ${TH.violet}`
-                                        : isActive   ? `3px solid ${TH.accent}`
-                                        : "3px solid transparent",
                             }}>
                             {selectMode && (
                               <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${isSelected ? TH.violet : TH.border}`, background: isSelected ? TH.violet : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
@@ -3971,14 +3699,11 @@ export default function App() {
                   // second while the list races past reads as a glitch.
                   //
                   // With automatic collapsing off, though, the fold is the
-                  // user's to set: this button used to force the header open
-                  // and throw the manual override away, so folding it by hand
-                  // and then tapping here quietly undid the setting. It only
-                  // scrolls now, exactly as handleChromeScroll only scrolls.
+                  // user's to set: it only scrolls then, exactly as
+                  // handleChromeScroll only scrolls.
                   const auto = autoCollapseRef.current;
                   if (auto) {
                     setChromeAnimate(false);
-                    chromeManualRef.current = null;
                     setChromeOpen(true);
                   }
                   scrollAndHold(() => {
@@ -4015,8 +3740,8 @@ export default function App() {
                   onMouseDown={onShufflePressStart} onMouseUp={onShufflePressEnd}
                   onMouseLeave={() => { if (shufflePressTimer.current) clearTimeout(shufflePressTimer.current); }}
                   onClick={onShuffleClick}
-                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: !repeatOn && playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
-                  {repeatOn ? <IC.Repeat /> : <IC.Shuffle />}
+                  style={{ width: 52, height: 52, borderRadius: "50%", background: modeBg, border: "none", color: !anyRepeat && playMode === "shuffle" && styleTint === LANTERN_GREEN ? "#04140b" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: modeShadow || "0 4px 18px rgba(0,0,0,0.3)", transition: "background 0.25s, box-shadow 0.25s" }}>
+                  {anyRepeat ? <IC.Repeat /> : <IC.Shuffle />}
                 </button>
               </div>
             )}
@@ -4049,7 +3774,8 @@ export default function App() {
               meta={meta}
               onPlaylistsChange={handlePlaylistsChange}
               onPlayPlaylist={handlePlayPlaylist}
-              onPlaySong={(song, list) => { openChrome(); setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
+              onPlaySong={(song, list, source) => { openChrome(); setPlayMode("off"); playContextRef.current = list; setPlaySource(source); playSong(song, list); }}
+              playingFrom={playSource}
               currentSongId={currentSong?.id ?? null}
               isPlaying={isPlaying}
               onToggleLike={(song) => { hapticImpact("light"); setMeta(prev => { const cur = prev[song.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [song.id]: { ...cur, liked: nowLiked } }; }); }}
@@ -4080,7 +3806,7 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selectMode && (() => {
+        {currentSong && !selecting && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -4093,9 +3819,9 @@ export default function App() {
                 zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: chromeCollapsed ? "translateY(calc(100% + 26px))" : "translateY(0)",
-                opacity: chromeCollapsed ? 0 : 1,
-                pointerEvents: chromeCollapsed ? "none" : "auto",
+                transform: playerHidden ? "translateY(calc(100% + 26px))" : "translateY(0)",
+                opacity: playerHidden ? 0 : 1,
+                pointerEvents: playerHidden ? "none" : "auto",
                 transition: chromeAnimate
                   ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
@@ -4238,7 +3964,6 @@ export default function App() {
           />
         )}
         {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
-        {removeSong && <ConfirmSheet title={t("Remove song")} body={t("\"{name}\" will be moved to the bin. You can restore it from Settings.", { name: dispName(removeSong) })} confirmLabel={t("Move to bin")} onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
@@ -4299,6 +4024,7 @@ export default function App() {
                 duration={duration}
                 playMode={playMode}
                 repeatOn={false}
+                repeatAll={false}
                 isLiked={isLiked(lookSong)}
                 playbackSpeed={playbackSpeed}
                 onPlaybackSpeedChange={() => {}}
@@ -4319,8 +4045,10 @@ export default function App() {
                 onShare={() => {}}
                 lyrics={getMeta(lookSong).customLyrics}
                 onAddLyrics={() => {}}
-                onPlayNextReorder={() => {}}
-                onSkipCurrentUpNext={() => {}}
+                onSkipUpNext={() => {}}
+                onQueueMove={() => {}}
+                onPlayFromQueue={() => {}}
+                onOpenSongMenu={() => {}}
                 onOpenMenu={() => {}}
                 onClose={() => {}}
                 dragProgress={null}
@@ -4340,7 +4068,7 @@ export default function App() {
             suspects={cleanupSuspects}
             meta={meta}
             onBin={ids => { setCleanupOpen(false); removeMany(ids); }}
-            onPlay={(song, list) => { setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
+            onPlay={(song, list) => { setPlayMode("off"); playContextRef.current = list; setPlaySource(null); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}
@@ -4399,7 +4127,7 @@ export default function App() {
             deleted={signedIn ? sync.deleted : undefined}
             deletedLoading={signedIn && !sync.deletedLoaded && !sync.problem}
             onRestoreDeleted={fps => { void restoreDeleted(fps); showToast(t("Coming back from your other devices")); }}
-            onPlaySong={(song, list) => { setPlayMode("off"); playContextRef.current = list; playSong(song, list); }}
+            onPlaySong={(song, list) => { setPlayMode("off"); playContextRef.current = list; setPlaySource(null); playSong(song, list); }}
             onTogglePlay={togglePlay}
             currentSongId={currentSong?.id ?? null}
             isPlaying={isPlaying}
@@ -4447,6 +4175,7 @@ export default function App() {
               duration={duration}
               playMode={playMode}
               repeatOn={repeatOn}
+              repeatAll={repeatAll}
               isLiked={isLiked(currentSong)}
               playbackSpeed={playbackSpeed}
               onPlaybackSpeedChange={setPlaybackSpeed}
@@ -4463,12 +4192,16 @@ export default function App() {
               onSeekStart={() => setDragging(true)}
               onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
               onToggleLike={() => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); }}
-              onRemove={() => { setPlayerExpanded(false); setRemoveSong(currentSong); }}
+              // The player stays open: the question comes over it.
+              onRemove={() => setRemoveSong(currentSong)}
               onShare={() => shareSong(currentSong)}
               lyrics={getMeta(currentSong).customLyrics}
               onAddLyrics={() => openLyricsSheet(currentSong)}
-              onPlayNextReorder={newQ => { setPlayNextQueue(newQ); playNextQueueRef.current = newQ; }}
-              onSkipCurrentUpNext={handleSkipCurrentUpNext}
+              sourceLabel={playSourceLabel}
+              onSkipUpNext={skipUpNext}
+              onQueueMove={moveInQueue}
+              onPlayFromQueue={playFromQueue}
+              onOpenSongMenu={s => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(s); }}
               onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}
               onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
               dragProgress={playerExpanded ? null : expandDrag}
@@ -4479,6 +4212,8 @@ export default function App() {
           );
         })()}
 
+        {/* After the player, so the question comes over it. */}
+        {removeSong && <ConfirmSheet title={t("Remove song")} body={t("\"{name}\" will be moved to the bin. You can restore it from Settings.", { name: dispName(removeSong) })} confirmLabel={t("Move to bin")} onConfirm={() => doRemove(removeSong)} onCancel={() => setRemoveSong(null)} T={TH} />}
         {eqOpen && (
           <EQSheet
             eqInfo={eqInfo}

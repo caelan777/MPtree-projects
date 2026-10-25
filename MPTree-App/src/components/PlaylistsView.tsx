@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
 import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX } from "../utils";
 import { CropSheet } from "./CropSheet";
-import { AlbumArt } from "./AlbumArt";
+import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar } from "./MultiSelectBar";
 import { IC } from "./Icons";
@@ -26,10 +26,15 @@ interface Props {
   songs:              Song[];
   meta:               Record<string, SongMeta>;
   onPlaylistsChange:  (updated: Playlist[]) => void;
-  /** Called when user taps Play All or Shuffle — wire to App's playSong + setPlayMode */
-  onPlayPlaylist:     (playlistSongs: Song[], shuffle: boolean) => void;
+  /** Called when user taps Play All or Shuffle — wire to App's playSong + setPlayMode.
+   *  `source` names the playlist: "pl:<id>", or "smart:<id>" for an auto one. */
+  onPlayPlaylist:     (playlistSongs: Song[], shuffle: boolean, source: string) => void;
   /** Play a single tapped song, using the surrounding list as the queue. */
-  onPlaySong:         (song: Song, listSongs: Song[]) => void;
+  onPlaySong:         (song: Song, listSongs: Song[], source: string) => void;
+  /** The playlist the music is playing from, in the same "pl:"/"smart:" form,
+   *  or null when it plays from the Songs page. Its cover gets the playing
+   *  bars, and only its own list marks the song that is on. */
+  playingFrom?:       string | null;
   /** id of the currently-playing song, to highlight it in the lists. */
   currentSongId?:     string | null;
   /** Whether the current song is playing (for the play/pause indicator). */
@@ -89,18 +94,32 @@ interface Props {
 /** Shared icon tile: playlist list rows, the detail header, and the fallback
  *  when a playlist has no cover photo. Top level, so it keeps its identity
  *  across renders instead of being rebuilt as a new type each time. */
-function PlaylistArt({ photo, size, iconSize, onClick, T: t }: { photo?: string; size: number; iconSize?: number; onClick?: () => void; T: T }) {
+function PlaylistArt({ photo, size, iconSize, onClick, playing, T: t }: {
+  photo?: string; size: number; iconSize?: number; onClick?: () => void;
+  /** The music is playing from this playlist: "on" moves the bars, "paused"
+   *  holds them still. Left out for every other playlist. */
+  playing?: "on" | "paused";
+  T: T;
+}) {
   return (
     <div
       onClick={onClick}
+      aria-label={playing ? tr("Playing from this playlist") : undefined}
       style={{
+        position: "relative",
         width: size, height: size, borderRadius: size >= 80 ? 16 : 12, flexShrink: 0,
         background: photo ? `center/cover no-repeat url(${photo})` : t.dim,
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: onClick ? "pointer" : "default", overflow: "hidden",
+        boxShadow: playing ? `0 0 0 2px ${t.accent}` : "none",
       }}
     >
-      {!photo && (
+      {playing && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <PlayingBars size={size} color="#ffffff" still={playing === "paused"} />
+        </div>
+      )}
+      {!photo && !playing && (
         <svg width={iconSize ?? 22} height={iconSize ?? 22} viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2">
           <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
         </svg>
@@ -187,7 +206,7 @@ export const PlaylistsView: React.FC<Props> = ({
   topInset = 0,
   rowH = 68,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
-  onPlaySong, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
+  onPlaySong, playingFrom = null, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
@@ -209,6 +228,7 @@ export const PlaylistsView: React.FC<Props> = ({
       setActiveId(null);
       setActiveSmartId(null);
       setMenuSong(null);
+      setReordering(false);
     }
   }, [resetToListSignal]);
   const [creating,        setCreating]       = useState(false);
@@ -216,6 +236,12 @@ export const PlaylistsView: React.FC<Props> = ({
   const [renamingId,      setRenamingId]     = useState<string | null>(null);
   const [renameDraft,     setRenameDraft]    = useState("");
   const [confirmDeleteId, setConfirmDeleteId]= useState<string | null>(null);
+  // Moving playlists: on from "Reorder", or by holding a playlist. Each row
+  // then has a handle; dragging it moves the playlist, and the order is kept.
+  const [reordering,      setReordering]     = useState(false);
+  const [plDrag,          setPlDrag]         = useState<{ from: number; over: number } | null>(null);
+  const plRowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const plPress   = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; held: boolean }>({ timer: null, x: 0, y: 0, held: false });
   const [selectedAdd,     setSelectedAdd]    = useState<Set<string>>(new Set());
   const [addSearch,       setAddSearch]      = useState("");
   const [addSort,         setAddSort]        = useState<AddSortId>("newest");
@@ -285,11 +311,13 @@ export const PlaylistsView: React.FC<Props> = ({
   useEffect(() => {
     if (view !== "detail" && view !== "smartDetail") return;
     if (!currentSongId) return;
+    const open = view === "detail" ? `pl:${activeId}` : `smart:${activeSmartId}`;
+    if (playingFrom !== open) return;
     const t = setTimeout(() => {
       currentRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
     return () => clearTimeout(t);
-  }, [currentSongId, view]);
+  }, [currentSongId, view, playingFrom, activeId, activeSmartId]);
   useEffect(() => { if (resetToListSignal) exitSelect(); }, [resetToListSignal, exitSelect]);
 
   // ── Depth reporting ───────────────────────────────────────────────────────
@@ -298,7 +326,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // should not jump back to Songs), and to decide whether Android's Back
   // belongs to us or should leave the tab.
   const canPop = view !== "list" || selectMode || !!menuSong
-    || creating || !!renamingId || !!confirmDeleteId;
+    || creating || !!renamingId || !!confirmDeleteId || reordering;
   useEffect(() => { onDetailChange?.(canPop); }, [canPop, onDetailChange]);
 
   // ── Android Back, delegated from App ──────────────────────────────────────
@@ -309,6 +337,7 @@ export const PlaylistsView: React.FC<Props> = ({
     if (backSignal === lastBackSignalRef.current) return;
     lastBackSignalRef.current = backSignal;
     if (menuSong)         { setMenuSong(null); return; }
+    if (reordering)       { setReordering(false); return; }
     if (confirmDeleteId)  { setConfirmDeleteId(null); return; }
     if (renamingId)       { setRenamingId(null); return; }
     if (creating)         { setCreating(false); return; }
@@ -317,6 +346,47 @@ export const PlaylistsView: React.FC<Props> = ({
     if (view !== "list")  { setView("list"); setActiveId(null); setActiveSmartId(null); return; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backSignal]);
+
+  // ── Moving playlists ──────────────────────────────────────────────────────
+  // Holding a playlist turns moving on, the same as the Reorder button. Any
+  // movement first cancels the hold, so a scroll or a page swipe never does.
+  const plPressStart = (x: number, y: number) => {
+    if (reordering) return;
+    const p = plPress.current;
+    p.x = x; p.y = y; p.held = false;
+    if (p.timer) clearTimeout(p.timer);
+    p.timer = setTimeout(() => { p.timer = null; p.held = true; onHaptic?.(); setReordering(true); }, 500);
+  };
+  const plPressMove = (x: number, y: number) => {
+    const p = plPress.current;
+    if (p.timer && (Math.abs(x - p.x) > 8 || Math.abs(y - p.y) > 8)) { clearTimeout(p.timer); p.timer = null; }
+  };
+  const plPressEnd = () => {
+    const p = plPress.current;
+    if (p.timer) { clearTimeout(p.timer); p.timer = null; }
+  };
+  const plDragMove = (e: React.TouchEvent) => {
+    if (!plDrag) return;
+    e.stopPropagation();
+    const y = e.touches[0].clientY;
+    for (let j = 0; j < playlists.length; j++) {
+      const el = plRowRefs.current[j];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) { if (j !== plDrag.over) setPlDrag({ ...plDrag, over: j }); break; }
+    }
+  };
+  const plDragEnd = (e: React.TouchEvent) => {
+    if (!plDrag) return;
+    e.stopPropagation();
+    const { from, over } = plDrag;
+    setPlDrag(null);
+    if (from === over) return;
+    const next = [...playlists];
+    const [moved] = next.splice(from, 1);
+    next.splice(over, 0, moved);
+    onPlaylistsChange(next);
+  };
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const dispName   = (s: Song) => meta[s.id]?.customName   || s.title;
@@ -337,7 +407,9 @@ export const PlaylistsView: React.FC<Props> = ({
   // Called as a function, the JSX it returns simply becomes part of this
   // component's tree and reconciles by key like any other element.
   const renderSongRow = ({ song, list, inPlaylist }: { song: Song; idx: number; list: Song[]; inPlaylist: boolean }) => {
-    const isCurrent = currentSongId === song.id;
+    const source = inPlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`;
+    // Marked only in the list it is playing from.
+    const isCurrent = currentSongId === song.id && playingFrom === source;
     const isSelected = selectedIds.has(song.id);
     const startPress = (x: number, y: number) => {
       pressStartX.current = x;
@@ -367,7 +439,7 @@ export const PlaylistsView: React.FC<Props> = ({
       if (longPressed.current) return;
       // While selecting, a tap toggles the row instead of playing it.
       if (selectMode && inPlaylist) { toggleSelect(song.id); return; }
-      onPlaySong(song, list);
+      onPlaySong(song, list, source);
     };
 
     return (
@@ -384,11 +456,13 @@ export const PlaylistsView: React.FC<Props> = ({
         onMouseLeave={endPress}
         style={{
           display: "flex", alignItems: "center",
-          padding: "0 16px", gap: 10, cursor: "pointer",
+          padding: "0 8px", margin: "0 8px", gap: 10, cursor: "pointer",
           height: rowH, boxSizing: "border-box",
+          // The playing row is a rounded tile, as on the Songs page.
+          borderRadius: 14,
           background: isSelected ? t.violet + "18" : isCurrent ? t.card : "transparent",
+          boxShadow: isCurrent && !isSelected ? `inset 0 0 0 1px ${t.border}` : "none",
           transition: "background 0.15s",
-          borderLeft: isCurrent && !isSelected ? `3px solid ${t.accent}` : "3px solid transparent",
         }}
       >
         {selectMode && inPlaylist && (
@@ -938,13 +1012,14 @@ export const PlaylistsView: React.FC<Props> = ({
               {smartPlaylists.map(sp => {
                 const count = sp.songIds.length;
                 const cardStyle = SMART_CARD_STYLES[sp.id] ?? FALLBACK_SMART_STYLE;
+                const playingHere = playingFrom === `smart:${sp.id}`;
                 return (
                   <div
                     key={sp.id}
                     onClick={() => { setActiveSmartId(sp.id); setView("smartDetail"); }}
                     style={{
                       position: "relative", height: 160, borderRadius: 16, padding: 16,
-                      background: t.card, border: `1px solid ${t.border}`,
+                      background: t.card, border: `1px solid ${playingHere ? t.accent : t.border}`,
                       color: t.text,
                       display: "flex", flexDirection: "column", justifyContent: "space-between",
                       cursor: "pointer", overflow: "hidden",
@@ -962,14 +1037,37 @@ export const PlaylistsView: React.FC<Props> = ({
                     <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: t.muted }}>
                       {tn(count, "{n} song", "{n} songs")}
                     </div>
+                    {/* Playing from here: the same bars a playlist cover gets. */}
+                    {playingHere && (
+                      <div aria-label={tr("Playing from this playlist")} style={{
+                        position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
+                        background: t.accent, display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <PlayingBars size={34} color={t.playBtnFg} still={!isPlaying} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
             {/* User playlists */}
-            <div style={{ padding: "18px 16px 4px", fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              {tr("My playlists ({n})", { n: playlists.length })}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 16px 4px" }}>
+              <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {tr("My playlists ({n})", { n: playlists.length })}
+              </span>
+              {(playlists.length > 1 || reordering) && (
+                <button
+                  onClick={() => { onHaptic?.(); setReordering(!reordering); }}
+                  style={{
+                    background: reordering ? t.accent : "transparent", color: reordering ? t.playBtnFg : t.muted,
+                    border: reordering ? "none" : `1px solid ${t.border}`, borderRadius: 14, padding: "4px 12px",
+                    fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+                  }}
+                >
+                  {reordering ? tr("Done") : tr("Reorder")}
+                </button>
+              )}
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
@@ -977,20 +1075,55 @@ export const PlaylistsView: React.FC<Props> = ({
                 <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New\" to create your first one")}</div>
               </div>
             ) : (
-              playlists.map(pl => {
+              <div
+                onTouchMove={plDrag ? plDragMove : undefined}
+                onTouchEnd={plDrag ? plDragEnd : undefined}
+                onTouchCancel={plDrag ? plDragEnd : undefined}
+              >
+              {playlists.map((pl, i) => {
                 const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
+                const isDragging = plDrag?.from === i;
+                const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
                 return (
                   <div
                     key={pl.id}
-                    onClick={() => { setActiveId(pl.id); setView("detail"); }}
+                    ref={el => { plRowRefs.current[i] = el; }}
+                    onClick={() => {
+                      if (plPress.current.held) { plPress.current.held = false; return; }
+                      if (reordering) return;
+                      setActiveId(pl.id); setView("detail");
+                    }}
+                    onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchEnd={plPressEnd}
+                    onMouseDown={e => plPressStart(e.clientX, e.clientY)}
+                    onMouseMove={e => plPressMove(e.clientX, e.clientY)}
+                    onMouseUp={plPressEnd}
+                    onMouseLeave={plPressEnd}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: "12px 16px",
+                      padding: reordering ? "12px 16px 12px 4px" : "12px 16px",
                       borderBottom: `1px solid ${t.border}60`,
-                      cursor: "pointer",
+                      cursor: reordering ? "default" : "pointer",
+                      opacity: isDragging ? 0.4 : 1,
+                      boxShadow: isOver ? `inset 0 ${plDrag!.from < i ? -2 : 2}px 0 ${t.accent}` : "none",
+                      userSelect: "none",
                     }}
                   >
-                    <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} T={t} />
+                    {reordering && (
+                      <div
+                        onTouchStart={e => { e.stopPropagation(); plPressEnd(); setPlDrag({ from: i, over: i }); }}
+                        aria-label={tr("Drag to move")}
+                        style={{ color: t.muted, display: "flex", flexShrink: 0, padding: "12px 4px 12px 12px", touchAction: "none", cursor: "grab" }}
+                      >
+                        <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+                          <circle cx="3.5" cy="3" r="1.7"/><circle cx="10.5" cy="3" r="1.7"/>
+                          <circle cx="3.5" cy="9" r="1.7"/><circle cx="10.5" cy="9" r="1.7"/>
+                          <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
+                        </svg>
+                      </div>
+                    )}
+                    <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} playing={playingFrom === `pl:${pl.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pl.name}</div>
@@ -1000,12 +1133,12 @@ export const PlaylistsView: React.FC<Props> = ({
                     </div>
 
                     {/* Quick-play button */}
-                    {count > 0 && (
+                    {count > 0 && !reordering && (
                       <button
                         onClick={e => {
                           e.stopPropagation();
                           const ps = pl.songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => !!s);
-                          onPlayPlaylist(ps, false);
+                          onPlayPlaylist(ps, false, `pl:${pl.id}`);
                         }}
                         style={{ background: t.accent, border: "none", width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                       >
@@ -1013,10 +1146,11 @@ export const PlaylistsView: React.FC<Props> = ({
                       </button>
                     )}
 
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
                   </div>
                 );
-              })
+              })}
+              </div>
             )}
             {/* The floating mini-player sits over the bottom of this list. The
                 detail views already reserved room for it; the playlist list did
@@ -1033,7 +1167,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {/* Cover photo + play/shuffle */}
             <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
               <div style={{ position: "relative" }}>
-                <PlaylistArt photo={activePlaylist.coverPhoto} size={84} iconSize={32} onClick={pickCoverPhoto} T={t} />
+                <PlaylistArt photo={activePlaylist.coverPhoto} size={84} iconSize={32} onClick={pickCoverPhoto} playing={playingFrom === `pl:${activePlaylist.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
                 <div
                   onClick={pickCoverPhoto}
                   style={{
@@ -1075,7 +1209,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {/* Play / Shuffle */}
             <div style={{ display: "flex", gap: 10, padding: "0 16px 12px", borderBottom: `1px solid ${t.border}` }}>
               <button
-                onClick={() => { onPlayPlaylist(playlistSongs, false); }}
+                onClick={() => { onPlayPlaylist(playlistSongs, false, `pl:${activePlaylist.id}`); }}
                 disabled={playlistSongs.length === 0}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -1089,7 +1223,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 {tr("Play All")}
               </button>
               <button
-                onClick={() => { onPlayPlaylist(playlistSongs, true); }}
+                onClick={() => { onPlayPlaylist(playlistSongs, true, `pl:${activePlaylist.id}`); }}
                 disabled={playlistSongs.length === 0}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -1125,7 +1259,7 @@ export const PlaylistsView: React.FC<Props> = ({
         {view === "smartDetail" && activeSmartPlaylist && (
           <>
             <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
-              <PlaylistArt size={84} iconSize={32} T={t} />
+              <PlaylistArt size={84} iconSize={32} playing={playingFrom === `smart:${activeSmartPlaylist.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: t.muted }}>
                   {tn(smartPlaylistSongs.length, "{n} song", "{n} songs")}
@@ -1138,7 +1272,7 @@ export const PlaylistsView: React.FC<Props> = ({
 
             <div style={{ display: "flex", gap: 10, padding: "0 16px 12px", borderBottom: `1px solid ${t.border}` }}>
               <button
-                onClick={() => { onPlayPlaylist(smartPlaylistSongs, false); }}
+                onClick={() => { onPlayPlaylist(smartPlaylistSongs, false, `smart:${activeSmartPlaylist.id}`); }}
                 disabled={smartPlaylistSongs.length === 0}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -1152,7 +1286,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 {tr("Play All")}
               </button>
               <button
-                onClick={() => { onPlayPlaylist(smartPlaylistSongs, true); }}
+                onClick={() => { onPlayPlaylist(smartPlaylistSongs, true, `smart:${activeSmartPlaylist.id}`); }}
                 disabled={smartPlaylistSongs.length === 0}
                 style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -1296,7 +1430,7 @@ export const PlaylistsView: React.FC<Props> = ({
           customPhoto={meta[menuSong.song.id]?.customPhoto}
           isLiked={isLiked(menuSong.song)}
           playlists={playlists}
-          onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song]); }}
+          onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song], m.inPlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`); }}
           onPlayNext={() => { onPlayNext(menuSong.song); setMenuSong(null); }}
           onAddToPlaylist={id => { addSongToPlaylist(id, menuSong.song.id); setMenuSong(null); }}
           onCreatePlaylistWithSong={name => { createPlaylistWithSong(name, menuSong.song.id); setMenuSong(null); }}
