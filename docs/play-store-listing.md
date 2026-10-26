@@ -8,6 +8,27 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.3 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.3.aab`
+(versionCode 108, built 2026-10-26 with `npm run build:play` from the branch `select-fixes`; the next bundle or test
+build is 109). Test builds 77 and 78. Upload by 28 October so the Halloween days (28 October to 1 November) are
+live in time. Nothing new to declare: the ad is the same rewarded ad as before.
+
+```
+<en-GB>
+A Halloween surprise from 28 October to 1 November, with a treat. When your day of Pro ends, MPTree asks first, and one more ad keeps it. Selecting songs in a playlist now looks like the Songs page, a new cover for many songs at once sticks, and Edit no longer opens under the selection bar. Next up is as tall as the player and closes from its top, however far you scrolled.
+</en-GB>
+<nl-NL>
+Een Halloween-verrassing van 28 oktober tot 1 november, met iets lekkers. Loopt je dag Pro af, dan vraagt MPTree het eerst en houdt nog één advertentie Pro aan. Nummers selecteren in een playlist ziet er nu uit als bij Nummers, een nieuwe cover voor veel nummers tegelijk blijft staan en Bewerken opent niet meer onder de selectiebalk. Hierna is even hoog als de speler en sluit vanaf de bovenkant, hoe ver je ook scrolt.
+</nl-NL>
+<es-ES>
+Una sorpresa de Halloween del 28 de octubre al 1 de noviembre, con premio. Cuando acaba tu día de Pro, MPTree pregunta antes y un anuncio más lo mantiene. Seleccionar canciones en una lista se ve ahora como en Canciones, una portada nueva para muchas canciones a la vez se queda y Editar ya no se abre bajo la barra de selección. A continuación es tan alto como el reproductor y se cierra desde arriba, aunque hayas bajado.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.2 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.2.aab`

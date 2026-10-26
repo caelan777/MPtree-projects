@@ -53,7 +53,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const [openPart, setOpenPart] = useState<null | "devices" | "how">(null);
   const viaAccount = useAccountPro();
   const adDay = useAdDay();
-  const proFromAccount = viaAccount && adDay.state !== "live";
+  const proFromAccount = viaAccount && adDay.state === "off";
   // "Saved 2 minutes ago" keeps moving while the page is open.
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick(n => n + 1), 20_000); return () => clearInterval(id); }, []);
