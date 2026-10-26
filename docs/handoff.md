@@ -26,11 +26,11 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
 
 | Branch | What | State |
 |---|---|---|
-| `main` | Android 1.3.2, website | pushed (`612bbcf`) |
+| `main` | Android 1.3.3, website | pushed (`cf2264d`) |
 | `small-phones` | test builds 70 and 71, 1.3.1 | merged into main and into `ios` |
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
 | `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
-| `select-fixes` | test builds 77 and 78 and the 1.3.3 bundle: Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | pushed, not merged |
+| `select-fixes` | test builds 77 and 78 and the 1.3.3 bundle: Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | merged into main (cf2264d) |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
