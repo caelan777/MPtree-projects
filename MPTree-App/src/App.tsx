@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Filesystem, Directory } from "@capacitor/filesystem";
@@ -3186,7 +3187,9 @@ export default function App() {
             style={{
               boxSizing: "border-box", width: "calc(100vw - 26px)", padding: "8px 14px 12px",
               opacity: chromeCollapsed ? 0 : 1,
-              pointerEvents: chromeCollapsed ? "none" : "auto",
+              // `selecting` too: the card's own "none" does not reach a child
+              // that says "auto", so the hidden sort button stayed tappable.
+              pointerEvents: chromeCollapsed || selecting ? "none" : "auto",
               // Deliberately NOT the shared CHROME_MOTION timing: the two
               // logos (this one at 48px, the collapsed one at 30px) overlap
               // during the swap, and fading them over a third of a second
@@ -3264,7 +3267,7 @@ export default function App() {
             style={{
               paddingTop: 6,
               opacity: page === "songs" ? 1 : 0,
-              pointerEvents: page === "songs" ? "auto" : "none",
+              pointerEvents: page === "songs" && !selecting ? "auto" : "none",
               transition: "opacity 0.2s ease",
             }}
           >
@@ -3430,7 +3433,7 @@ export default function App() {
             an absolutely-positioned dropdown inside it was clipped along with
             everything else — the menu opened and was simply invisible. Anchored
             here to `cardBottom`, which already tracks the card's bottom edge. */}
-        {filterOpen && page === "songs" && !chromeCollapsed && (
+        {filterOpen && page === "songs" && !chromeCollapsed && !selecting && (
           <>
             <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
             <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
@@ -3908,16 +3911,20 @@ export default function App() {
           />
         )}
 
-        {bulkEditOpen && (
+        {/* Both portalled to <body>: in a playlist the selection bars are
+            there (PlaylistsView portals them), and from in here these sheets
+            opened underneath them, Apply hidden behind the bottom bar. */}
+        {bulkEditOpen && createPortal(
           <BulkEditSheet
             count={multiIds.length}
             onSave={u => { applyBulkEdit(multiIds, u); setBulkEditOpen(false); exitSelectMode(); }}
             onClose={() => setBulkEditOpen(false)}
             T={TH}
-          />
+          />,
+          document.body
         )}
 
-        {multiAddOpen && (
+        {multiAddOpen && createPortal(
           <AddToPlaylistSheet
             count={multiIds.length}
             playlists={playlists}
@@ -3925,7 +3932,8 @@ export default function App() {
             onCreatePlaylist={name => { handleCreatePlaylistWithSongs(name, multiIds); setMultiAddOpen(false); exitSelectMode(); }}
             onClose={() => setMultiAddOpen(false)}
             T={TH}
-          />
+          />,
+          document.body
         )}
 
         {/* ═══ SHEETS ══════════════════════════════════════════════════════ */}

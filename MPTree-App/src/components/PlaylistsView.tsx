@@ -255,6 +255,10 @@ export const PlaylistsView: React.FC<Props> = ({
   const pressStartX = useRef(0);
   const pressStartY = useRef(0);
   const longPressed = useRef(false);
+  // A finger is followed by mouse events the browser makes up for it. Those
+  // would restart the press and let the click after a long press toggle a row
+  // (another one, once the page has moved up for the selection bar).
+  const lastTouchAt = useRef(0);
   // The scrollable body + the currently-playing row, so we can (a) cancel a
   // pending long-press the instant the list scrolls — touching a momentum
   // scroll to stop it used to register as a long-press and open select/edit —
@@ -446,11 +450,11 @@ export const PlaylistsView: React.FC<Props> = ({
       <div
         ref={isCurrent ? currentRowRef : undefined}
         onClick={handleClick}
-        onTouchStart={e => startPress(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchStart={e => { lastTouchAt.current = Date.now(); startPress(e.touches[0].clientX, e.touches[0].clientY); }}
         onTouchMove={e => movePress(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={endPress}
         onTouchCancel={endPress}
-        onMouseDown={e => startPress(e.clientX, e.clientY)}
+        onMouseDown={e => { if (Date.now() - lastTouchAt.current > 1500) startPress(e.clientX, e.clientY); }}
         onMouseMove={e => movePress(e.clientX, e.clientY)}
         onMouseUp={endPress}
         onMouseLeave={endPress}
@@ -782,8 +786,10 @@ export const PlaylistsView: React.FC<Props> = ({
       {/* ── Header ──────────────────────────────────────────────────────── */}
       {/* Only rendered for detail/smartDetail/addSongs — the "list" view's
           back arrow + "+ New" now live inline in the "Auto playlists" row
-          below instead of their own dedicated header row. */}
-      {view !== "list" && (
+          below instead of their own dedicated header row. Picking songs, the
+          selection bar takes its place: two back arrows and two titles on top
+          of each other looked broken. */}
+      {view !== "list" && !selectMode && (
         <div style={{
           display: "flex", alignItems: "center",
           padding: "14px 16px",
@@ -1164,7 +1170,9 @@ export const PlaylistsView: React.FC<Props> = ({
         {/* ════ PLAYLIST DETAIL (user playlist) ═══════════════════════════ */}
         {view === "detail" && activePlaylist && (
           <>
-            {/* Cover photo + play/shuffle */}
+            {/* Cover photo + play/shuffle. Away while picking songs, so the
+                page is the bar, the rows and the actions, as on Songs. */}
+            {!selectMode && <>
             <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
               <div style={{ position: "relative" }}>
                 <PlaylistArt photo={activePlaylist.coverPhoto} size={84} iconSize={32} onClick={pickCoverPhoto} playing={playingFrom === `pl:${activePlaylist.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
@@ -1240,6 +1248,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 {tr("Shuffle")}
               </button>
             </div>
+            </>}
 
             {playlistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>

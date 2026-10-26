@@ -132,8 +132,13 @@ export function BulkEditSheet({ count, onSave, onClose, T }: BulkEditSheetProps)
           </button>
         </div>
       </div>
+      {/* Inside the overlay in React's tree, so a tap in the crop window
+          bubbled up to the overlay's "tap outside closes" and threw the whole
+          edit away, the new cover with it. */}
       {cropSrc && (
-        <CropSheet src={cropSrc} T={T} onCancel={() => setCropSrc(null)} onUse={d => { setPhoto(d); setCropSrc(null); }} />
+        <div onClick={e => e.stopPropagation()}>
+          <CropSheet src={cropSrc} T={T} onCancel={() => setCropSrc(null)} onUse={d => { setPhoto(d); setCropSrc(null); }} />
+        </div>
       )}
     </div>
   );

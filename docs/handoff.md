@@ -1,4 +1,4 @@
-# Handoff, 25 October 2026
+# Handoff, 26 October 2026
 
 Where the work stands, for whoever picks it up next. Read `CLAUDE.md` first, then
 the "Where things stand" part of `docs/roadmap.md`. `docs/account.md` explains the
@@ -9,8 +9,8 @@ own notes in `docs/ios.md` on the `ios` branch.
 
 | Thing | Version | Where |
 |---|---|---|
-| Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working. 1.3.0 (92) and 1.3.1 (99) built; see "Waiting on Caelan" |
-| Android test build | 76, versionCode 104 (1.3.2: the player back as a sheet as tall as it needs with the record at 268, Next up as a page of its own, repeat all, playlists in order, the header folds alone, the logo no longer moves) | prerelease `v1.2.3-pro-test.76`, mp-tree.net/test, branch `full-player` (merged into main) |
+| Android on Google Play | 1.3.2, versionCode 105 (the new player, Next up, repeat all, playlists in order) | live by 26 October; Caelan says it works well on his phone. 1.3.1 (99) was skipped |
+| Android test build | 77, versionCode 106 (1.3.3: selecting fixes. The hidden sort button no longer answers while selecting; selecting in a playlist looks like Songs; a new cover in Edit for many songs sticks; Edit and Add to open above the selection bars; Next up is as tall as the player and can always be pulled down by its top) | prerelease `v1.2.3-pro-test.77`, mp-tree.net/test, branch `select-fixes` |
 | iPhone | 1.3.1 build 5 (not on a phone yet) | branch `ios`, built by GitHub Actions, `MPTree-iPhone-5.ipa` in the repo root (not committed) |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
@@ -20,30 +20,22 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105). Next is 106. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test build 77 took 106). Next is 107. Next Windows is 0.1.6.
 
 ## Branches
 
 | Branch | What | State |
 |---|---|---|
-| `main` | Android 1.3.1, website | pushed (`cb7e765`) |
+| `main` | Android 1.3.2, website | pushed (`612bbcf`) |
 | `small-phones` | test builds 70 and 71, 1.3.1 | merged into main and into `ios` |
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
 | `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
+| `select-fixes` | test build 77 (1.3.3): Caelan's six selecting and Next up bugs of 26 October | pushed, not merged |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
 
-1. **Upload 1.3.1 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.1.aab`,
-   versionCode 99, built 24 October from `small-phones`; release notes in
-   `docs/play-store-listing.md`). The small-phone fixes and the quiet icon change of test
-   builds 70 and 71, on top of all of 1.3.0. If 1.3.0 (versionCode 92) was never uploaded,
-   this one replaces it: use 1.3.0's release notes then. Nothing new to declare. If the
-   old AD_ID warning about earlier test builds shows, "Release without permission".
-   **Or skip straight to 1.3.2** (`MPTree-1.3.2.aab`, versionCode 105, built 25 October from
-   `full-player`, merged into main; release notes in `docs/play-store-listing.md`):
-   the new player, Next up, repeat all, playlists in order, on top of all of 1.3.1. Not yet
-   seen on a phone in its final form (test build 76 has the same code).
+1. **Try test build 77** and say how selecting and Next up feel on the phone. Still open from his list of 26 October: the pop-up when the day of Pro ends (not built; see the ads memory) and which Halloween ideas to make.
 2. **AdMob: ad pods off.** People saw several ads in a row for one day of Pro. MPTree asks
    for one rewarded ad per tap; Google's "Ad pods" (two videos in one impression, on by
    default) do the rest. AdMob, Apps, MPTree, Ad units, Dagpas, Advanced settings: untick
