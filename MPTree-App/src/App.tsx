@@ -32,6 +32,8 @@ import { MultiSelectBar, SELECT_TOP_H } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet } from "./components/ProSheet";
+import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
+import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet } from "./components/LookSheet";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
@@ -45,7 +47,8 @@ import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
 import { useBackground, loadBackground } from "./background";
 import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
-import { usePro, loadPro } from "./pro";
+import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, giveDay } from "./pro";
+import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
@@ -733,6 +736,32 @@ export default function App() {
   const look = useLook();
   const pro  = usePro();
   const [proOpen,     setProOpen]     = useState(false);
+  // A day of Pro for an ad that is up: MPTree asks for another ad, and pro.ts
+  // keeps Pro on until it is answered. After the second "Not now", one last
+  // word on how to get Pro back.
+  const adDay = useAdDay();
+  const [proOffNote, setProOffNote] = useState(false);
+  const adStage: AdDayStage | null = adDay.state === "ask" ? adDay.round : proOffNote && !pro ? "off" : null;
+  const adNotNow = () => {
+    if (adDay.state !== "ask") { setProOffNote(false); return; }
+    if (notNowAdDay() === "off") setProOffNote(true);
+  };
+  const adWatch = async () => {
+    const r = await watchAdForPro();
+    if (r === "pro") { setProOffNote(false); showToast(t("Pro is on for 24 hours")); return true; }
+    showToast(adFailText(r));
+    return false;
+  };
+
+  // Halloween: in the Halloween days the first tap on Settings scares, and
+  // then "Happy Halloween" brings a treat (halloween.ts, pro.ts giveDay).
+  // After "Thanks", Settings opens, since that is what was tapped.
+  const [halloween, setHalloween] = useState<null | "scare" | { treat: ReturnType<typeof giveDay> }>(null);
+  const openSettings = async () => {
+    if (await halloweenDue()) { markHalloweenDone(); setHalloween("scare"); return; }
+    setSettingsOpen(true);
+  };
+  const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
   const [lookOpen,    setLookOpen]    = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -2735,6 +2764,10 @@ export default function App() {
     : playSource.startsWith("smart:") ? smartPlaylists.find(p => `smart:${p.id}` === playSource)?.name
     : playlists.find(p => `pl:${p.id}` === playSource)?.name;
 
+  // Not over the splash, the welcome or the tour, and out of the way while the
+  // Pro page it opens with "Buy Pro" is up.
+  const showAdPrompt = adStage !== null && !proOpen && !isInitializing && !welcome && !showOnboarding && !halloween;
+
   // ── Android hardware / gesture Back ───────────────────────────────────────
   // Without a handler, Back closes the whole app from anywhere, even with a
   // sheet open. This walks ONE layer of UI at a time, topmost first, and only
@@ -2756,7 +2789,9 @@ export default function App() {
         return;
       }
       if (showOnboarding)      { finishOnboarding(); return; }
+      if (halloween)           { if (halloween !== "scare") closeHalloween(); return; }
       if (proOpen)             { setProOpen(false); return; }
+      if (showAdPrompt)        { adNotNow(); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
@@ -3244,7 +3279,7 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <button data-tour="settings" onClick={() => setSettingsOpen(true)} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
+            <button data-tour="settings" onClick={() => { void openSettings(); }} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
           </div>
@@ -4098,6 +4133,17 @@ export default function App() {
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
             T={TH} />
+        )}
+        {halloween === "scare" && (
+          <HalloweenScare
+            onBoo={() => { hapticImpact("heavy"); setTimeout(() => hapticImpact("heavy"), 140); }}
+            onDone={() => setHalloween({ treat: giveDay() })} />
+        )}
+        {halloween && halloween !== "scare" && (
+          <HalloweenSheet treat={halloween.treat} onClose={closeHalloween} T={TH} />
+        )}
+        {showAdPrompt && adStage !== null && (
+          <AdDayPrompt stage={adStage} onWatch={adWatch} onBuy={() => setProOpen(true)} onNotNow={adNotNow} T={TH} />
         )}
 
         {welcome && (

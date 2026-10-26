@@ -35,6 +35,10 @@ import { t } from "./i18n";
 // Pro can also be had for a day by watching one ad: a rewarded video, which
 // only counts when watched to the end. The Pro page offers it next to buying,
 // as often as they like. The day is kept on the device.
+//
+// When the day is up, MPTree asks whether to watch another ad (AdDayPrompt in
+// App), and Pro stays on until it is answered. "Not now" keeps Pro on for one
+// more hour, after which it asks once more; "Not now" again turns Pro off.
 // (Until 1.2.5 this was a free week, once; a week still running when the app
 // is updated runs out the same way.)
 
@@ -50,10 +54,14 @@ export const PRO_MODE: ProMode =
 type Stored = { owned: boolean; via: "play" | "free"; since: number; tag?: string | null };
 const KEY = "mptree_pro";
 
-/** A day of Pro for an ad: running until `until`, or not. */
+/** A day of Pro for an ad: running until `until`, or not. `extra`: the one
+ *  more hour that "Not now" gave. "ask": the time is up and MPTree is asking
+ *  for another ad; Pro stays on until they answer. Round 2 comes after the
+ *  extra hour, and its "Not now" turns Pro off. */
 export type AdDay =
   | { state: "off" }
-  | { state: "live"; from: number; until: number };
+  | { state: "live"; from: number; until: number; extra?: boolean }
+  | { state: "ask"; from: number; until: number; round: 1 | 2 };
 
 let owned = false;
 /** Which MPTree account the Pro bought here belongs to; null when Play has
@@ -65,7 +73,9 @@ let adDay: AdDay = { state: "off" };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach(l => l());
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
-const snapshot = () => owned || fromAccount || adDay.state === "live";
+/** A day for an ad gives Pro, running or asking. */
+const dayOn = () => adDay.state !== "off";
+const snapshot = () => owned || fromAccount || dayOn();
 const ownedSnapshot = () => owned;
 const accountSnapshot = () => fromAccount && !owned;
 const adDaySnapshot = () => adDay;
@@ -89,7 +99,7 @@ export function hasPro(): boolean { return snapshot(); }
 /** Bought on this device (or unlocked in a test build), not a day or the account. */
 export function ownsPro(): boolean { return owned; }
 /** Pro only because the signed in account has it. */
-export function proFromAccountOnly(): boolean { return fromAccount && !owned && adDay.state !== "live"; }
+export function proFromAccountOnly(): boolean { return fromAccount && !owned && !dayOn(); }
 
 /** An MPTree account, as Play keeps it with a purchase: a hash, so the
  *  email itself never goes to Play. */
@@ -123,10 +133,13 @@ const ACCOUNT_KEY = "mptree_pro_account";
 export function setAccountPro(on: boolean): void {
   if (on === fromAccount) return;
   fromAccount = on;
-  if (on) Preferences.set({ key: ACCOUNT_KEY, value: "1" }).catch(() => {});
+  if (on) {
+    Preferences.set({ key: ACCOUNT_KEY, value: "1" }).catch(() => {});
+    if (adDay.state === "ask") endDay();
+  }
   else {
     Preferences.remove({ key: ACCOUNT_KEY }).catch(() => {});
-    if (!owned && adDay.state !== "live") dropProLook();
+    if (!owned && !dayOn()) dropProLook();
   }
   emit();
 }
@@ -167,9 +180,11 @@ function setOwned(next: boolean, via: Stored["via"], tag: string | null = null) 
   setLost(!next && (via === "play" || was || lost));
   if (next) {
     Preferences.set({ key: KEY, value: JSON.stringify({ owned: true, via, since: Date.now(), tag } satisfies Stored) }).catch(() => {});
+    // Bought while being asked for another ad: nothing left to ask.
+    if (adDay.state === "ask") endDay();
   } else {
     Preferences.remove({ key: KEY }).catch(() => {});
-    if (was && !fromAccount && adDay.state !== "live") dropProLook();
+    if (was && !fromAccount && !dayOn()) dropProLook();
   }
   if (was !== next) emit();
 }
@@ -180,7 +195,12 @@ const AD_DAY_KEY = "mptree_ad_day";
 /** Where the free week was kept, read once so a week still running ends as it would have. */
 const OLD_TRIAL_KEY = "mptree_trial";
 const DAY = 24 * 60 * 60 * 1000;
-type StoredDay = { from: number; until: number };
+const HOUR = 60 * 60 * 1000;
+type StoredDay = { from: number; until: number; extra?: boolean; ask?: 1 | 2 };
+
+function storeDay(d: StoredDay) {
+  Preferences.set({ key: AD_DAY_KEY, value: JSON.stringify(d) }).catch(() => {});
+}
 
 /** The rewarded ad unit: Google's test unit in a test build (watching our own
  *  real ads would break AdMob's rules), MPTree's own unit "Dagpas" in the Play
@@ -191,11 +211,14 @@ const AD_UNIT =
   : "";
 /** Whether this build can show the ad at all (not in a browser). */
 export const ADS_ON = AD_UNIT !== "" && Capacitor.getPlatform() === "android";
+/** Whether to ask for another ad when the day is up. In the dev server too,
+ *  so the question can be seen in a browser (the ad itself then fails). */
+const CAN_ASK = ADS_ON || import.meta.env.DEV;
 
 let dayTimer: ReturnType<typeof setTimeout> | undefined;
 
-function runDay(from: number, until: number) {
-  adDay = { state: "live", from, until };
+function runDay(from: number, until: number, extra = false) {
+  adDay = { state: "live", from, until, ...(extra ? { extra } : {}) };
   clearTimeout(dayTimer);
   // Checked hourly and on every return to the app: Android freezes timers in
   // the background anyway.
@@ -203,18 +226,52 @@ function runDay(from: number, until: number) {
   emit();
 }
 
-/** Ends the day once its time is up. A clock turned back past the start ends
- *  it too, or winding the clock would make it last forever. */
+/** Asks for another ad once the time is up. A clock turned back past the start
+ *  counts as up too, or winding the clock would make it last forever. Where no
+ *  ad can be shown there is nothing to ask, and the day simply ends. */
 function checkDay() {
   if (adDay.state !== "live") return;
   const now = Date.now();
-  if (now < adDay.until && now >= adDay.from) { runDay(adDay.from, adDay.until); return; }
-  endDay();
+  if (now < adDay.until && now >= adDay.from) { runDay(adDay.from, adDay.until, adDay.extra); return; }
+  if (!CAN_ASK || owned || fromAccount) { endDay(); return; }
+  clearTimeout(dayTimer);
+  const round = adDay.extra ? 2 : 1;
+  adDay = { state: "ask", from: adDay.from, until: adDay.until, round };
+  storeDay({ from: adDay.from, until: adDay.until, ask: round });
+  emit();
+}
+
+/** "Not now" on the question. The first time Pro stays on for one more hour
+ *  and then MPTree asks again; the second time Pro turns off. */
+export function notNowAdDay(): "hour" | "off" {
+  if (adDay.state !== "ask") return "off";
+  if (adDay.round === 2) { endDay(); return "off"; }
+  const now = Date.now();
+  storeDay({ from: now, until: now + HOUR, extra: true });
+  runDay(now, now + HOUR, true);
+  return "hour";
+}
+
+/** A day of Pro as a gift (the Halloween treat): 24 hours from now, or 24 on
+ *  top of a day that is still running. Nothing for someone who has Pro for
+ *  good. Says which it was and when the day now ends. */
+export function giveDay(): { kind: "day" | "added"; until: number } | null {
+  if (owned || fromAccount) return null;
+  const now = Date.now();
+  if (adDay.state === "live" && now < adDay.until && now >= adDay.from) {
+    const until = adDay.until + DAY;
+    storeDay({ from: adDay.from, until });
+    runDay(adDay.from, until);
+    return { kind: "added", until };
+  }
+  storeDay({ from: now, until: now + DAY });
+  runDay(now, now + DAY);
+  return { kind: "day", until: now + DAY };
 }
 
 function endDay() {
   clearTimeout(dayTimer);
-  if (adDay.state !== "live") return;
+  if (adDay.state === "off") return;
   Preferences.remove({ key: AD_DAY_KEY }).catch(() => {});
   adDay = { state: "off" };
   if (!owned && !fromAccount) dropProLook();
@@ -241,9 +298,18 @@ export async function watchAdForPro(): Promise<AdResult> {
   }
   const now = Date.now();
   const day: StoredDay = { from: now, until: now + DAY };
-  Preferences.set({ key: AD_DAY_KEY, value: JSON.stringify(day) }).catch(() => {});
+  storeDay(day);
   runDay(day.from, day.until);
   return "pro";
+}
+
+/** What to tell someone whose ad did not give them Pro. */
+export function adFailText(r: AdResult): string {
+  return r === "offline" ? t("The ad needs an internet connection.")
+    : r === "closed" ? t("The ad was closed early, so Pro did not turn on.")
+    : r === "none" ? t("There is no ad to show right now. Try again later.")
+    : r === "consent" ? t("Ads are turned off in your privacy choices.")
+    : t("The ad could not be shown. Try again in a moment.");
 }
 
 /** "23 h 12 min" or "12 min": what is left of the day. */
@@ -281,9 +347,13 @@ export async function loadPro(): Promise<void> {
     }
     await Preferences.remove({ key: OLD_TRIAL_KEY });
     const s = value ? (JSON.parse(value) as StoredDay) : null;
-    if (s) {
-      // Ended while MPTree was closed: endDay puts the look back now.
-      adDay = { state: "live", from: s.from, until: s.until };
+    if (s?.ask) {
+      // Closed while the question was up: it is asked again.
+      adDay = { state: "ask", from: s.from, until: s.until, round: s.ask };
+      emit();
+    } else if (s) {
+      // Up while MPTree was closed: the question comes now.
+      adDay = { state: "live", from: s.from, until: s.until, ...(s.extra ? { extra: true } : {}) };
       checkDay();
     }
   } catch { /* no day */ }
@@ -343,7 +413,10 @@ export function lockProForTesting(): void {
   setOwned(false, "free");
 }
 
-/** Test builds only: the day for an ad ends now. */
+/** Test builds only: the day for an ad (or the extra hour) is up now, so the
+ *  question comes straight away. */
 export function endAdDayForTesting(): void {
-  if (PRO_MODE === "free") endDay();
+  if (PRO_MODE !== "free" || adDay.state !== "live") return;
+  adDay = { ...adDay, until: Date.now() };
+  checkDay();
 }

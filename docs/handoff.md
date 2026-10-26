@@ -10,7 +10,7 @@ own notes in `docs/ios.md` on the `ios` branch.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.3.2, versionCode 105 (the new player, Next up, repeat all, playlists in order) | live by 26 October; Caelan says it works well on his phone. 1.3.1 (99) was skipped |
-| Android test build | 77, versionCode 106 (1.3.3: selecting fixes. The hidden sort button no longer answers while selecting; selecting in a playlist looks like Songs; a new cover in Edit for many songs sticks; Edit and Add to open above the selection bars; Next up is as tall as the player and can always be pulled down by its top) | prerelease `v1.2.3-pro-test.77`, mp-tree.net/test, branch `select-fixes` |
+| Android test build | 78, versionCode 107 (1.3.3: Halloween and the question when a day of Pro ends, on top of 77's selecting fixes. The hidden sort button no longer answers while selecting; selecting in a playlist looks like Songs; a new cover in Edit for many songs sticks; Edit and Add to open above the selection bars; Next up is as tall as the player and can always be pulled down by its top) | prerelease `v1.2.3-pro-test.78`, mp-tree.net/test, branch `select-fixes` |
 | iPhone | 1.3.1 build 5 (not on a phone yet) | branch `ios`, built by GitHub Actions, `MPTree-iPhone-5.ipa` in the repo root (not committed) |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
@@ -20,7 +20,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test build 77 took 106). Next is 107. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107). Next is 108. Next Windows is 0.1.6.
 
 ## Branches
 
@@ -30,12 +30,14 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
 | `small-phones` | test builds 70 and 71, 1.3.1 | merged into main and into `ios` |
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
 | `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
-| `select-fixes` | test build 77 (1.3.3): Caelan's six selecting and Next up bugs of 26 October | pushed, not merged |
+| `select-fixes` | test builds 77 and 78 (1.3.3): Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | pushed, not merged |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
 
-1. **Try test build 77** and say how selecting and Next up feel on the phone. Still open from his list of 26 October: the pop-up when the day of Pro ends (not built; see the ads memory) and which Halloween ideas to make.
+1. **Try test build 78**, then the 1.3.3 bundle for Play, uploaded by 28 October so Halloween is live in time.
+   - **When a day of Pro ends** (`AdDayPrompt`, `pro.ts` "ask"): Pro stays on until it is answered. "Not now" gives one more hour, then it asks again; "Not now" again turns Pro off and says how to get it back. In a test build "End the 24 hours" brings it straight away.
+   - **Halloween** (`halloween.ts`, `HalloweenScare`): 28 October to 1 November, the first tap on Settings plays a short scare (dark, eyes, grin, two vibrations, no sound), then "Happy Halloween" with a treat: a day of Pro, 24 hours on top of a running day, nothing for owners. Once per phone per year. Test builds have it every day, once per app start. Caelan dropped the owl, the cobwebs and the Spooky playlist.
 2. **AdMob: ad pods off.** People saw several ads in a row for one day of Pro. MPTree asks
    for one rewarded ad per tap; Google's "Ad pods" (two videos in one impression, on by
    default) do the rest. AdMob, Apps, MPTree, Ad units, Dagpas, Advanced settings: untick
