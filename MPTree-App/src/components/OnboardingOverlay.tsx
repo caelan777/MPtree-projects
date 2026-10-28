@@ -31,7 +31,7 @@ const STEPS: Step[] = [
   {
     target: '[data-tour="logo"]',
     title: "The logo is a button",
-    body: "Tap it to fold the header and the player away and give the list the whole screen. Tap again to bring them back. Hold it for options, and while it is folded you can drag it wherever you want it.",
+    body: "Tap it to fold the header and the player away and give the list the whole screen. Tap again to bring them back. Scrolling down folds the header by itself, and scrolling up brings it back. Hold the logo for options.",
   },
   {
     target: '[data-tour="search"]',

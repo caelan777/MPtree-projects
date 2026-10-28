@@ -6,7 +6,7 @@ import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
   useOwnsPro, useAccountPro, useAdDay, buyPro, restorePro, proPrice, lockProForTesting,
-  watchAdForPro, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
+  watchAdForPro, adFailText, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
 } from "../pro";
 import { useSync, signIn } from "../sync/engine";
 import { GoogleG } from "./AccountSheet";
@@ -80,11 +80,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     const r = await watchAdForPro();
     setBusy(null);
     if (r === "pro") { onToast(t("Pro is on for 24 hours")); onClose(); }
-    else if (r === "offline") onToast(t("The ad needs an internet connection."));
-    else if (r === "closed") onToast(t("The ad was closed early, so Pro did not turn on."));
-    else if (r === "none") onToast(t("There is no ad to show right now. Try again later."));
-    else if (r === "consent") onToast(t("Ads are turned off in your privacy choices."));
-    else onToast(t("The ad could not be shown. Try again in a moment."));
+    else onToast(adFailText(r));
   };
 
   // Each line says what it does for you, not what it is called inside.

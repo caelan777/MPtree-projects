@@ -8,6 +8,90 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.5 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`
+(versionCode 112, built 2026-10-28 with `npm run build:play` from the branch `playlists-redesign`; the next bundle or test
+build is 113). Test builds 79 to 81; 1.3.4 never went to Play, so these notes cover both. Nothing new to declare: no new
+permissions, the ad is the same rewarded ad, and the TikTok row in About only opens a link.
+
+```
+<en-GB>
+Playlists have a new look: each one is a card with its photo as a record sleeve, grows open from its row and swipes back. The ⋮ menu and selecting share one card of tiles, with everything for a single song. MPTree starts by flying through its logo. Bigger rows on big phones, with the length under the name. Tap the record in the player to change its photo. TikTok is in About. Next up keeps your playlist after reopening, and the first tap after swiping to Playlists works.
+</en-GB>
+<nl-NL>
+Playlists zien er nieuw uit: elke playlist is een kaart met de foto als platenhoes, groeit open uit zijn rij en swipe je terug. Het ⋮-menu en selecteren delen één kaart met tegels, met alles voor één nummer. MPTree start door het logo heen. Grotere rijen op grote telefoons, met de duur onder de naam. Tik op de plaat in de speler om de foto te wijzigen. TikTok staat bij Over MPTree. Hierna onthoudt je playlist na opnieuw openen.
+</nl-NL>
+<es-ES>
+Las listas tienen un aspecto nuevo: cada una es una tarjeta con su foto como funda de disco, se abre desde su fila y vuelve deslizando. El menú ⋮ y la selección comparten una tarjeta de botones, con todo para una canción. MPTree arranca volando a través de su logo. Filas más grandes en teléfonos grandes, con la duración bajo el nombre. Toca el disco en el reproductor para cambiar su foto. TikTok está en Acerca de. A continuación recuerda tu lista al volver a abrir.
+</es-ES>
+```
+
+---
+
+## Release notes for 1.3.3 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.3.aab`
+(versionCode 108, built 2026-10-26 with `npm run build:play` from the branch `select-fixes`; the next bundle or test
+build is 109). Test builds 77 and 78. Upload by 28 October so the Halloween days (28 October to 1 November) are
+live in time. Nothing new to declare: the ad is the same rewarded ad as before.
+
+```
+<en-GB>
+A Halloween surprise from 28 October to 1 November, with a treat. When your day of Pro ends, MPTree asks first, and one more ad keeps it. Selecting songs in a playlist now looks like the Songs page, a new cover for many songs at once sticks, and Edit no longer opens under the selection bar. Next up is as tall as the player and closes from its top, however far you scrolled.
+</en-GB>
+<nl-NL>
+Een Halloween-verrassing van 28 oktober tot 1 november, met iets lekkers. Loopt je dag Pro af, dan vraagt MPTree het eerst en houdt nog één advertentie Pro aan. Nummers selecteren in een playlist ziet er nu uit als bij Nummers, een nieuwe cover voor veel nummers tegelijk blijft staan en Bewerken opent niet meer onder de selectiebalk. Hierna is even hoog als de speler en sluit vanaf de bovenkant, hoe ver je ook scrolt.
+</nl-NL>
+<es-ES>
+Una sorpresa de Halloween del 28 de octubre al 1 de noviembre, con premio. Cuando acaba tu día de Pro, MPTree pregunta antes y un anuncio más lo mantiene. Seleccionar canciones en una lista se ve ahora como en Canciones, una portada nueva para muchas canciones a la vez se queda y Editar ya no se abre bajo la barra de selección. A continuación es tan alto como el reproductor y se cierra desde arriba, aunque hayas bajado.
+</es-ES>
+```
+
+---
+
+## Release notes for 1.3.2 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.2.aab`
+(versionCode 105, built 2026-10-25 with `npm run build:play` from the branch `full-player`; the next bundle or test
+build is 106). Test builds 72 to 76. It holds everything of 1.3.1 too: if 1.3.1 (versionCode 99) never went up,
+this one replaces it, and its notes can say a line about smaller phones as well. Nothing new to declare.
+
+```
+<en-GB>
+A new player: push up for the whole queue, up to 500 songs, and drag songs into a new order. Repeat now goes round all songs or one. Songs from a playlist play in the playlist, and its cover shows it. Put your playlists in your own order. Scrolling folds the header and the player stays. Removing a song keeps the player open.
+</en-GB>
+<nl-NL>
+Een nieuwe speler: veeg omhoog voor de hele wachtrij, tot 500 nummers, en sleep nummers in een andere volgorde. Herhalen kan nu alles of één nummer. Nummers uit een playlist spelen in die playlist, en de cover laat het zien. Zet je playlists in je eigen volgorde. Scrollen klapt de kop in, de speler blijft staan. Verwijderen houdt de speler open.
+</nl-NL>
+<es-ES>
+Un reproductor nuevo: desliza hacia arriba para ver toda la cola, hasta 500 canciones, y arrástralas a otro orden. Repetir puede ser todo o una canción. Las canciones de una lista suenan en esa lista y su portada lo muestra. Ordena tus listas como quieras. Al bajar se pliega la cabecera y el reproductor se queda. Quitar una canción deja el reproductor abierto.
+</es-ES>
+```
+
+---
+
+## Release notes for 1.3.1 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.1.aab`
+(versionCode 99, built 2026-10-24 with `npm run build:play` from the branch `small-phones`; the next bundle or test
+build is 100). Test builds 70 and 71. It holds everything of 1.3.0 too: if 1.3.0 never went live, use 1.3.0's notes
+below instead, they cover the bigger changes. Nothing new to declare.
+
+```
+<en-GB>
+Fits smaller phones and larger text better: rows in Settings no longer squeeze their text, the button to keep a look in Personalise stays clear of the back arrow, and the search bar stays inside the card at the top. A new app icon now changes quietly the next time you leave MPTree, without a question.
+</en-GB>
+<nl-NL>
+Past beter op kleinere telefoons en bij grotere tekst: de regels in Instellingen persen hun tekst niet meer samen, de knop om een stijl te houden in Personaliseren blijft van de terugpijl af, en de zoekbalk blijft binnen de kaart bovenaan. Een nieuw app-icoon wisselt nu stil de volgende keer dat je MPTree verlaat, zonder vraag.
+</nl-NL>
+<es-ES>
+Se ve mejor en teléfonos pequeños y con texto grande: las filas de Ajustes ya no aprietan su texto, el botón para quedarte un estilo en Personalizar ya no tapa la flecha de volver y la barra de búsqueda se queda dentro de la tarjeta de arriba. Un icono nuevo cambia ahora sin preguntar la próxima vez que sales de MPTree.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.0 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`

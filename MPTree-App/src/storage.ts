@@ -21,8 +21,17 @@ export interface Session {
   /** Repeat the song that is on. Before it was its own switch it was
    *  playMode "repeat", which is still read as this. */
   repeat?:         boolean;
+  /** Repeat the whole queue: after the last song the first comes again. */
+  repeatAll?:      boolean;
   currentId?:      string;
+  /** The queue, when it is not simply the Songs list in its order: shuffled,
+   *  or a playlist's. */
   queueIds?:       string[];
+  /** Where the music plays from: "pl:<id>", "smart:<id>", or absent for the
+   *  Songs page. Without it a reopened app forgot the playlist, said "All
+   *  songs" over its queue, and fell back to the whole library at the next
+   *  song. */
+  playSource?:     string;
   positionMs?:     number;
   isPlaying?:      boolean;
   crossfadeMs?:    number;
@@ -220,9 +229,9 @@ export interface BackupParts {
 const SETTINGS_KEYS = [
   "mptree_ui_size", "mptree_lang", "mptree_update_notices",
   "mptree_mix_others", "mptree_auto_collapse",
-  "mptree_logo_pos", "mptree_look",
+  "mptree_look",
 ];
-const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "repeat", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
+const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "repeat", "repeatAll", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
 
 function pickSession(from: Partial<Session>): Partial<Session> {
   const kept: Partial<Session> = {};

@@ -1,15 +1,17 @@
-# Handoff, 22 October 2026
+# Handoff, 26 October 2026
 
 Where the work stands, for whoever picks it up next. Read `CLAUDE.md` first, then
 the "Where things stand" part of `docs/roadmap.md`. `docs/account.md` explains the
-account and sync, `Desktop/README.md` the Windows app.
+account and sync, `Desktop/README.md` the Windows app. The iPhone version has its
+own notes in `docs/ios.md` on the `ios` branch.
 
 ## What is live
 
 | Thing | Version | Where |
 |---|---|---|
-| Android on Google Play | 1.2.8, versionCode 85 (the ad for a day of Pro) | live by 20 October, ads confirmed working |
-| Android test build | 71, versionCode 98 (1.3.1 work: small phones with large text: Settings rows put the Pro tag under their text, Personalise's keep button fits next to the back arrow, the search bar stays inside its card; a new app icon changes quietly when MPTree is left, with no question) | prerelease `v1.2.3-pro-test.71`, mp-tree.net/test, branch `small-phones` |
+| Android on Google Play | 1.3.2, versionCode 105 (the new player, Next up, repeat all, playlists in order) | live by 26 October; Caelan says it works well on his phone. 1.3.1 (99) was skipped |
+| Android test build | 82, versionCode 113 (1.3.5 as it goes to Play: 81 plus the artist or Unknown artist back in the mini player; 81: on a phone 390 px wide or more a song row is 10 px taller with a bigger cover and name; the length sits under the name and the artist on the right where the length was; 80: the "⋮" menu is the selection's card of tiles; one song picked has everything the menu has; Uit playlist and Prullenbak instead of two Verwijderen, Prullenbak in a playlist too; every "are you sure?" is that card, and Remove photo asks; inside a playlist the tabs read Playlists › name; a playlist grows out of its row, swipes away to the list, and a new one opens at once in a card that fits large text; the splash flies through the mark, no dots, no tagline; TikTok @mp_tree3 in About; a tap on the record in the big player changes the photo (hold for the picture disc); no "Unknown artist"; Next up keeps the playlist after a reopen) | prerelease `v1.2.3-pro-test.82`, mp-tree.net/test, branch `playlists-redesign` |
+| iPhone | 1.3.1 build 5 (not on a phone yet) | branch `ios`, built by GitHub Actions, `MPTree-iPhone-5.ipa` in the repo root (not committed) |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
 
@@ -18,60 +20,129 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 99 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98). Next is 99. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109, test build 80 took 110, test build 81 took 111, 1.3.5 took 112, test build 82 took 113). Next is 114. Next Windows is 0.1.6.
+
+## Branches
+
+| Branch | What | State |
+|---|---|---|
+| `main` | Android 1.3.3, website | pushed (`cf2264d`) |
+| `small-phones` | test builds 70 and 71, 1.3.1 | merged into main and into `ios` |
+| `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
+| `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
+| `select-fixes` | test builds 77 and 78 and the 1.3.3 bundle: Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | merged into main (cf2264d) |
+| `playlists-redesign` | test builds 79 to 81 and the 1.3.5 bundle: the playlist card, About, selecting, the menu as tiles, the fly-through, the queue after a reopen, bigger rows on big phones (Caelan's lists of 28 October) | merged into main (4ad530e) |
+| `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
 
-1. **Upload 1.3.0 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.0.aab`,
-   versionCode 92, built 22 October from `personalise-2`; release notes in
-   `docs/play-store-listing.md`). Everything of test builds 62 to 65, and of 1.2.9 (the
-   Pro film) if that was not uploaded. Nothing new to declare in Play Console.
-2. **Windows 0.1.5 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.5.msix`, built
+1. **Upload 1.3.5 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`,
+   versionCode 112, built 28 October from `playlists-redesign`, now merged into main; release notes in `docs/play-store-listing.md`).
+   Test build 81 plus one change: the mini player names the artist again, or Unknown artist, where the lists now leave it empty.
+1. **Upload 1.3.3 to Play by 28 October** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.3.aab`,
+   versionCode 108, built 26 October from `select-fixes`; release notes in `docs/play-store-listing.md`),
+   so the Halloween days are live in time. Same code as test build 78.
+   - **When a day of Pro ends** (`AdDayPrompt`, `pro.ts` "ask"): Pro stays on until it is answered. "Not now" gives one more hour, then it asks again; "Not now" again turns Pro off and says how to get it back. In a test build "End the 24 hours" brings it straight away.
+   - **Halloween** (`halloween.ts`, `HalloweenScare`): 28 October to 1 November, the first tap on Settings plays a short scare (dark, eyes, grin, two vibrations, no sound), then "Happy Halloween" with a treat: a day of Pro, 24 hours on top of a running day, nothing for owners. Once per phone per year. Test builds have it every day, once per app start. Caelan dropped the owl, the cobwebs and the Spooky playlist.
+2. **AdMob: ad pods off.** People saw several ads in a row for one day of Pro. MPTree asks
+   for one rewarded ad per tap; Google's "Ad pods" (two videos in one impression, on by
+   default) do the rest. AdMob, Apps, MPTree, Ad units, Dagpas, Advanced settings: untick
+   **Ad pods**, and **Interactive** for only video and image ads. Google decides the length
+   (5 to 30 seconds); that cannot be set. Not confirmed whether it was done.
+3. **Play listing: name and short description with keywords** (proposed 25 October, not
+   in `docs/play-store-listing.md` yet). Play Console, Grow users, Store presence, Store
+   listings, then each language:
+   - en-GB: `MPTree: Offline Music Player`,
+     `Offline MP3 & music player with equalizer, playlists, crossfade and sleep timer`
+   - nl-NL: `MPTree: Offline muziekspeler`,
+     `Offline mp3- en muziekspeler met equalizer, afspeellijsten, crossfade en timer`
+   - es-ES: `MPTree: Reproductor de música`,
+     `Música sin conexión: reproductor MP3 con ecualizador, listas y temporizador`
+
+   In the full description: "offline music player", "MP3 player" and "music player" a few
+   times each, "equalizer" in the American spelling, the formats (MP3, FLAC, M4A, OGG,
+   WAV, AAC), and ringtone, cutting songs, sleep timer, lyrics and backup. Never "free",
+   "best", "no ads" (MPTree has the rewarded ad) or "download music". Judge after 2 to 4
+   weeks.
+4. **The iPhone on Caelan's phone.** Sideloadly (v0.71.1) fails with Apple's
+   "Login failed (-80046)" for everyone on Windows since 21 October
+   (github.com/SideloadlyiOS/Sideloadly-Download/issues/24, still open on 24 October).
+   Caelan waits for a fix; until then no more Start presses (failed sign-ins can get the
+   Apple ID blocked from sideloading). Then: Sideloadly, `MPTree-iPhone-5.ipa`, the Apple
+   ID on the phone, Developer Mode on, trust the profile (steps in `docs/ios.md`). The other
+   way is the Apple Developer Program (€99 a year) and TestFlight, which needs the cloud
+   build changed to sign and upload.
+5. **Windows 0.1.5 MSIX** (`Desktop/src-tauri/target/msix/MPTree-0.1.5.msix`, built
    20 October, replaces the 0.1.4 that was never uploaded): the sign-in-again fix
    plus the full-screen Pro page (two equal cards: pay once, or the free week; no
    ads and no film on Windows) and the triangle Account & sync page, with this
    computer drawn as a laptop. Upload in Partner Center. Only then bump the `windows`
    block of `Website/version.json` to 0.1.5: its notice sends installer users to
    the Store.
-3. **Lemon Squeezy** still "under review" since 5 October. Caelan waits a week from
-   15 October; he was given a status message for support@lemonsqueezy.com. Setup is
-   complete except 2FA. After approval: copy the product to live mode, a live
-   webhook to `https://mp-tree.net/api/pay` (events `order_created`,
-   `order_refunded`, same secret as `LEMON_WEBHOOK_SECRET`), delete the test
-   webhook, set `LEMON_PRODUCT_ID` and drop `LEMON_ALLOW_TEST` in Cloudflare, clear
-   test entries from KV `mptree-pro`, put the live link in `Desktop/.env.local`,
-   build Windows with it, tick "purchases outside the Store commerce system" in
-   Partner Center, then one real purchase and refund.
+6. **Lemon Squeezy** still "under review" since 5 October. Setup is complete except
+   2FA. After approval: copy the product to live mode, a live webhook to
+   `https://mp-tree.net/api/pay` (events `order_created`, `order_refunded`, same secret
+   as `LEMON_WEBHOOK_SECRET`), delete the test webhook, set `LEMON_PRODUCT_ID` and drop
+   `LEMON_ALLOW_TEST` in Cloudflare, clear test entries from KV `mptree-pro`, put the
+   live link in `Desktop/.env.local`, build Windows with it, tick "purchases outside the
+   Store commerce system" in Partner Center, then one real purchase and refund.
 
-## Ads (merged into main on 18 October)
+## The iPhone version (branch `ios`)
 
-- **Rewarded ads instead of the free week (Android only)**, on the branch
-  `rewarded-ads`, merged into main on 18 October for 1.2.8. Test build 58
-  is made from it. The Pro page there shows buying and the ad as two equal cards
-  (design B of https://claude.ai/artifact/HfXts2MANZazZggR3LNmyW). Someone without Pro who
-  taps something Pro (a Pro record or shade, Clean up, sync paused) gets the Pro
-  page with "Watch an ad for 24 hours of Pro" under the buy button. Since test
-  build 59 the ad card shows however the Pro page opens, also from the Settings
-  card, which now says "Free for a day with an ad, or pay once". One rewarded video watched to the end
-  is 24 hours of Pro, as often as they like. `pro.ts` (the day, key
-  `mptree_ad_day`; a free week still running is carried over once), `AdsPlugin.java`
-  (AdMob 25.5.0 + Google's consent form, UMP 3.2.0), a "Privacy choices for ads"
-  row in Settings when Google says it is needed (EU/UK). `TrialOverSheet` is gone.
-  Typecheck, tests and the Java compile pass; not run on a device. Privacy page
-  (new Ads part) and `docs/play-store-listing.md` (description, Data safety, Ads:
-  yes, Advertising ID) are updated on the branch.
-  AdMob: publisher pub-3909703327280410, app id
-  ca-app-pub-3909703327280410~7778718905 (`admobAppId` in build.gradle), rewarded
-  unit "Dagpas" ca-app-pub-3909703327280410/3472642383 (`AD_UNIT` for the Play
-  build; the test build keeps Google's test unit on purpose). EU consent message
-  "MPTree EU" published (Consent, Do not consent, Manage options).
-  `Website/app-ads.txt` is live (pushed on its own). AdMob "Verify app" failed
-  right after that push, most likely because it had crawled before the file was
-  there; Caelan presses Check for updates again on 18 October. The app still
-  "Requires review" in AdMob.
-  Done for 1.2.8: branch merged, privacy page live (dated 18 October), "no ads"
-  gone from `Website/index.html`, the splash says "your music · on your device".
-  Windows keeps the free week.
+The same React app in Capacitor 8 (Swift Package Manager), with Swift plugins in
+`MPTree-App/ios/App/App/` that keep the Android plugins' names and methods. Built on
+GitHub's free Macs (`.github/workflows/ios.yml`, on every push to `ios`), unsigned, as
+`MPTree.ipa`; Sideloadly signs it with an Apple ID. Builds 1 to 5 all compiled; none of
+the Swift has run on a real iPhone yet.
+
+- **Songs:** an iPhone app cannot scan the phone. MusicScannerPlugin.swift reads the
+  MPTree folder in the Files app, folders given to it (bookmarks, everything inside),
+  and the Music library when switched on (only songs on the phone that Apple does not
+  lock). Settings, Library: Add songs, Music folders, Music library. Ids survive app
+  updates (`docs/…`, `f<key>/…`, `lib/<id>`). A folder with `.nomedia` is skipped, so a
+  backup's song copies do not show twice.
+- **Player:** AudioPlayerPlugin.swift on AVPlayer, native is the source of truth as on
+  Android; background, lock screen, speed, crossfade. No equaliser yet.
+- **Also:** app icons (the `AppIcon-*` sets from `Branding/build-alt-icons.mjs`; iOS
+  switches at once and says so itself), cuts as AAC, lyrics, the test ad day (Google
+  Mobile Ads 13.11 with Google's iOS test unit, "allow tracking?" first).
+- **Not yet:** account and sync (needs an iOS OAuth client in Google Cloud; hidden in
+  Settings until then), the equaliser, Google's EU consent screen, the widget (not
+  possible with a free Apple ID), buying Pro (a free Apple ID cannot sell; Pro has the
+  test unlock).
+- `npm run build:ios` is the web app for it (`__DISTRIBUTION__` "appstore", Pro test on).
+  New Swift files go into the Xcode project with `node scripts/ios-sources.mjs`.
+
+Decided with Caelan: free sideloading first, everything that is possible now, songs from
+the folder, added folders and the Music library ("access to all files" does not exist on
+iOS).
+
+## Get music (shelved, branch `get-music`)
+
+The + in the header came back on 22 October as Get music: a full-screen page with a 36 s
+tutorial film (`brag-output/getmusic.mp4`, script `brag-output/getmusic-script.md`, voice
+ElevenLabs Megan), Bandcamp and Qobuz opened in the browser, and a big arrow at the +
+after the tour. Caelan shelved it the same evening; it is not in main or 1.3.1. If it
+comes back, first test a Bandcamp download on a real phone.
+
+Refused, and stays refused: mp3juice (a YouTube rip site) in a TikTok or in the app, and
+a row for "illegal sites, MPTree not responsible". Google Play bans apps that encourage
+infringement, whatever the disclaimer; that is why the old + went on 2 August. Real
+in-app downloads would need a paid deal with Jamendo, whose API terms forbid offline use
+in an app with ads or Pro.
+
+## Ads
+
+- Rewarded ads instead of the free week (Android only), since 1.2.8. One rewarded video
+  watched to the end is 24 hours of Pro, as often as they like (`pro.ts`, key
+  `mptree_ad_day`; `AdsPlugin.java` with AdMob 25.5.0 and Google's consent form, UMP
+  3.2.0). Pro things say "Free with an ad". A "Privacy choices for ads" row in Settings
+  when Google says it is needed (EU/UK). Windows keeps the free week.
+- AdMob: publisher pub-3909703327280410, app id ca-app-pub-3909703327280410~7778718905
+  (`admobAppId` in build.gradle), rewarded unit "Dagpas"
+  ca-app-pub-3909703327280410/3472642383 (the Play build; test builds use Google's test
+  unit on purpose). EU consent message "MPTree EU" published. `Website/app-ads.txt` live.
+- Look at the AdMob numbers again in early November.
 
 ## Parked by Caelan (18 October): sync, to watch
 
@@ -84,55 +155,36 @@ conflict goes to the later device clock. Look at Play reviews and mail for
 
 ## In the working tree, not committed
 
+- `MPTree-iPhone-5.ipa` in the repo root: iPhone build 5, for Sideloadly.
 - `Branding/build-reddit-post.mjs` and `Branding/social/mptree-reddit-1080x1350.png`
   (the Reddit poster). Commit only when asked.
-- Leave alone: the change in `.gitignore`, `Branding/tiktok/`, `brag-output/`,
-  `Branding/store/app-screens/`, `Branding/social/colours/`.
-
-## Done this week, for context
-
-- Account & sync page (Android, 1.2.6): design B from the canvas
-  https://claude.ai/artifact/QHFuSQLBKb9UNurRbqNdre. The devices in a triangle,
-  this one on top, dots running along a line while songs go that way (slowly both
-  ways when all is in step), one plain sentence below, then rows: playlists and
-  likes, songs over mobile data, add or remove devices (folds open), what syncs.
-  The Windows app still has the old page.
-
-- Crossfade (Android, test build 56): the song fading in plays in an audio session
-  of its own with an equalizer set the same way, and takes the session over at the
-  end. Sharing one session made the ending song cut out on many phones. Not heard
-  on a device yet.
-- Sync (both apps, test build 55, Windows 0.1.4): signing in again no longer brings
-  back what the other devices binned or deleted; `joinSong` in `sync/model.ts`
-  takes the account's bin. Covered by tests.
-- Windows Store builds must be made with
-  `VITE_CHECKOUT_URL="" npm run app:build:store` until the shop is live, or the
-  test checkout link from `.env.local` ends up in them. Whether the live 0.1.3 has
-  it was not checked; 0.1.4 does not.
+- Leave alone: the change in `.gitignore`, `Branding/tiktok/`, `brag-output/` (films,
+  including the Get music one), `Branding/store/app-screens/` (also
+  `capture/flows-getmusic-film.mjs`), `Branding/social/colours/`.
+- On branches other than `ios`, `MPTree-App/ios/` holds leftovers of the iOS build
+  (`App/App/public`, `capacitor.config.json`, `config.xml`) that the `ios` branch
+  ignores. Harmless.
 
 ## Decided by Caelan
 
-- Rewarded ads replace the free week on Android (17 October, changing his earlier
-  "no ads for now"): 24 hours of Pro per ad, unlimited, offered only after tapping
-  something Pro. Windows keeps the free week.
+- Rewarded ads replace the free week on Android (17 October): 24 hours of Pro per ad,
+  unlimited. Banners between songs and an ad on every Pro tap were turned down
+  (22 October).
 - Loading screen white for light-mode users is fine.
 - Pro is not free on Windows. The repository stays public. Uploading to Play and
   Partner Center, Google sign-in and payment details are his.
-- Rejected, do not bring back: plus page, extra widgets, the in-app web
-  download, a website APK. (The app icon picker was rejected on 13 October and
-  asked back by Caelan on 22 October, with an icon each for Aviela and Lantern.)
+- Rejected, do not bring back: extra widgets, the in-app web download page, a website
+  APK, rip sites in any form. Get music is shelved, not rejected.
 - No reward for a review: Google Play does not allow it. The review card
   (`src/review.ts`) asks once, from the second day, after ten songs, for nothing.
-- Ads stay the one rewarded ad for a day of Pro; Pro things say "Free with an
-  ad". Banners between songs and an ad on every Pro tap were turned down on
-  22 October (AdMob banners cannot sit in the list; Google discourages ads on
-  every tap). Look at the AdMob numbers again in early November.
-- Aviela's flower editor ("Make your own", flowers placed by hand) was in test
-  build 62 only; Caelan had it taken out again on 22 October.
-- The app icon is never switched while MPTree is in front: Android ends the
-  window when its launcher entry changes. SystemPlugin keeps it as pending and
-  switches in handleOnStop. Since test build 71 Personalise asks nothing and
-  shows no message (Caelan's call); the Icons page says it comes when MPTree is left.
+- Aviela's flower editor was in test build 62 only; taken out on 22 October.
+- The app icon is never switched while MPTree is in front on Android: Android ends the
+  window when its launcher entry changes. SystemPlugin keeps it as pending and switches
+  in handleOnStop. Since test build 71 Personalise asks nothing and shows no message; the
+  Icons page says it comes when MPTree is left. On the iPhone it switches at once.
+- Small phones (24 October): the Pro tag goes under a Settings row's text, Personalise's
+  keep button on a sub-page is two lines ("Keep it" / "Free with an ad"), the search box
+  has `minWidth: 0`.
 
 ## How to build
 
@@ -141,23 +193,29 @@ Android, inside `MPTree-App/`, with
 
 - Test APK: `npm run build:test`, `npx cap sync android`, `./gradlew assembleRelease`,
   copy to `MPTree-pro-test.apk` in the repo root, `gh release create
-  v1.2.3-pro-test.N ... --prerelease`, then `Website/test.html` (link, build number,
-  what is new). gh is at `/c/Program Files/GitHub CLI/gh.exe`.
+  v1.2.3-pro-test.N ... --prerelease --latest=false --target <pushed SHA>`, then
+  `Website/test.html` on main (link, build number, what is new). gh is at
+  `/c/Program Files/GitHub CLI/gh.exe`.
 - Play bundle: `npm run build:play`, `npx cap sync android`, `./gradlew bundleRelease`,
   copy to `MPTree-<version>.aab`, release notes in `docs/play-store-listing.md`.
 - Add `--offline -Dorg.gradle.jvmargs="-Xmx900m -XX:MaxMetaspaceSize=384m" -Dorg.gradle.workers.max=2`,
-  then `./gradlew --stop`. Never `gradlew clean`.
+  then `./gradlew --stop`. Never `gradlew clean`. If Gradle dies with "insufficient
+  memory", stop the preview dev servers, or ask Caelan to close Chrome.
+
+iPhone: push to `ios`; the workflow builds it (about 2 to 3 minutes) and attaches
+`MPTree-iPhone-<run>` with `MPTree.ipa`. `gh run download <id> -n MPTree-iPhone-<n>`.
 
 Windows, inside `Desktop/`: version in `package.json`, `src-tauri/tauri.conf.json`,
-`src-tauri/Cargo.toml` and `Cargo.lock`. Store package as above. The laptop runs
+`src-tauri/Cargo.toml` and `Cargo.lock`. Store builds with
+`VITE_CHECKOUT_URL="" npm run app:build:store` until the shop is live. The laptop runs
 out of memory with Chrome open; ask Caelan to close it rather than changing build
 settings.
 
 ## House rules
 
 No em or en dashes. Replies to Caelan in Dutch. Nothing that reads as generated.
-Black and white brand; violet only for shuffle and selection, pink for Aviela,
-green for Lantern. Pro adds, never takes away. "Device", not "phone", in account
-and sync wording. Secrets stay in the gitignored files. Commit and push only when
-asked. Temp files inside the project folder, deleted after use. Edit each app
-separately; no shared packages.
+Black and white brand; violet only
+for shuffle and selection, pink for Aviela, green for Lantern. Pro adds, never takes
+away. "Device", not "phone", in account and sync wording. Secrets stay in the
+gitignored files. Commit and push only when asked. Temp files inside the project
+folder, deleted after use. Edit each app separately; no shared packages.

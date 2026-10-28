@@ -4,15 +4,16 @@ import { t } from "../i18n";
 import type { Song, Playlist } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { IC } from "./Icons";
-import { IS_IOS } from "../plugins";
+import { SongActionTiles } from "./MultiSelectBar";
+import { floatCard, roundBtn } from "./cardStyles";
 
 // ─── SONG MENU SHEET ─────────────────────────────────────────────────────────
-// The per-song action menu, opened from the "⋮" button on a row. Replaces the
-// old long-press-to-expand-the-row menu, which was undiscoverable and fought
-// with scrolling. Long-press now starts multi-select instead, the way most
-// music apps behave.
+// The per-song action menu, opened from the "⋮" button on a row. It is the
+// selection's actions card: the same floating card, the same tiles four to a
+// row, the same round close button. Picking one song and opening its menu
+// therefore look like one thing, which they are.
 //
-// Two panes live in here: the action list, and the "add to playlist" picker.
+// Two panes live in here: the tiles, and the "add to playlist" picker.
 // Keeping the picker inline avoids a second stacked overlay for what is really
 // one continuous choice.
 
@@ -42,6 +43,8 @@ type SongMenuSheetProps = {
   /** Only supplied when the menu was opened from inside a real playlist:
    *  pulls the song out of that playlist without touching the library. */
   onRemoveFromPlaylist?: () => void;
+  /** The playlist the menu was opened in, said under the artist. */
+  inPlaylistName?: string;
   onClose: () => void;
   T: T;
 };
@@ -49,106 +52,77 @@ type SongMenuSheetProps = {
 export function SongMenuSheet({
   song, dispName, dispArtist, customPhoto, isLiked, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
-  onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist, onClose, T,
+  onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist,
+  inPlaylistName, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
   const [pane, setPane] = useState<"actions" | "playlists">("actions");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const sub = [dispArtist, inPlaylistName && t("in {name}", { name: inPlaylistName })].filter(Boolean).join(" · ");
 
   const row = (
     key: string,
     icon: React.ReactNode,
     label: string,
     onClick: () => void,
-    opts: { danger?: boolean; trailing?: React.ReactNode } = {},
+    trailing?: React.ReactNode,
   ) => (
     <button
       key={key}
       onClick={onClick}
       style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         width: "100%", background: "transparent", border: "none",
-        padding: "14px 20px", cursor: "pointer", fontFamily: "inherit",
-        color: opts.danger ? T.heart : T.text, fontSize: 15, textAlign: "left",
+        padding: "13px 8px", cursor: "pointer", fontFamily: "inherit",
+        color: T.text, fontSize: 15, textAlign: "left",
       }}
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
         <span style={{ display: "flex", width: 20, justifyContent: "center", flexShrink: 0 }}>{icon}</span>
-        {label}
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
       </span>
-      {opts.trailing}
+      {trailing}
     </button>
   );
 
   return (
-    <div style={sh.overlay} onClick={onClose}>
+    <div style={{ ...sh.overlay, padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 12px)", boxSizing: "border-box" }} onClick={onClose}>
       <div
-        style={{ ...sh.sheet, paddingBottom: 24, maxHeight: "80vh", display: "flex", flexDirection: "column" }}
+        style={{ ...floatCard(T), width: "100%", maxHeight: "82vh", display: "flex", flexDirection: "column", padding: 12, animation: "mpCardUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both" }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={sh.handle} />
-
-        {/* Song header — identifies what the actions apply to. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 20px 14px", flexShrink: 0 }}>
+        {/* Song header: what the tiles apply to. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "2px 2px 12px 4px", flexShrink: 0 }}>
           <AlbumArt title={dispName} size={44} active={false} customPhoto={customPhoto} songPath={song.uri} albumId={song.albumId} T={T} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: "700", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ fontSize: 16, fontWeight: "700", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {dispName}
             </div>
-            <div style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {dispArtist || t("Unknown Artist")}
-            </div>
+            {sub && (
+              <div style={{ fontSize: 13, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {sub}
+              </div>
+            )}
           </div>
-          <button onClick={onClose} style={sh.xBtn}><IC.Close /></button>
+          <button onClick={onClose} aria-label={t("Close")} style={roundBtn(T)}><IC.Close /></button>
         </div>
 
-        <div style={{ height: 1, background: T.border, flexShrink: 0 }} />
+        <div style={{ height: 1, background: T.border, margin: "0 -12px 12px", flexShrink: 0 }} />
 
         {pane === "actions" ? (
-          <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
-            {/* ── The three that change the song itself ──────────────────────
-                Ringtone, Photo and Edit sit up here as full targets rather than
-                in the list below, because they are the ones people come to this
-                menu to do. The rest of the list is one-tap verbs; these three
-                open something. */}
-            <div style={{ display: "flex", gap: 8, padding: "12px 20px 6px" }}>
-              {/* An iPhone has no ringtones for apps to set. */}
-              {!IS_IOS && <BigAction icon={<IC.Bell />}  label={t("Set as ringtone")} onClick={onSetRingtone} T={T} />}
-              <BigAction icon={<IC.Photo />} label={t("Photo")}    onClick={onChangePhoto} T={T} />
-              <BigAction icon={<IC.Edit />}  label={t("Edit")}     onClick={onEdit}        T={T} />
-            </div>
-            <div style={{ height: 1, background: T.border, margin: "8px 20px 2px" }} />
-            {row("play", <IC.Play />, t("Play"), onPlay)}
-            {row("next", (
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>
-              </svg>
-            ), t("Play next"), onPlayNext)}
-            {row("add", <IC.Plus />, t("Add to playlist"), () => setPane("playlists"), { trailing: <IC.ChevronR /> })}
-            {row("lyrics", <IC.Lyrics />, t("Lyrics"), onEditLyrics)}
-            {row("cut", <IC.Scissors />, t("Cut"), onCut)}
-            {row("like", <IC.Heart filled={isLiked} size={17} />, isLiked ? t("Unlike") : t("Like"), onToggleLike)}
-            {row("share", <IC.Share />, t("Share"), onShare)}
-            <div style={{ height: 1, background: T.border, margin: "6px 20px" }} />
-            {onRemoveFromPlaylist && row("unpin", (
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-                <line x1="3" y1="3" x2="21" y2="21"/>
-              </svg>
-            ), t("Remove from playlist"), onRemoveFromPlaylist)}
-            {/* Always spelled out the same way, in the playlist and out of it.
-                It reads identically wherever you meet it, and it says what it
-                actually does rather than leaving "Remove" to be guessed at. */}
-            {row("remove", <IC.Trash />, t("Remove from library"), onRemove, { danger: true })}
-          </div>
+          <SongActionTiles T={T} a={{
+            isLiked, onPlay, onPlayNext, onToggleLike, onShare, onEditLyrics, onCut, onSetRingtone,
+            onChangePhoto, onEdit, onRemoveFromPlaylist, onBin: onRemove,
+            onAddToPlaylist: () => setPane("playlists"),
+          }} />
         ) : (
-          <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", margin: "-4px -4px 0" }}>
             <button
               onClick={() => setPane("actions")}
               style={{
                 display: "flex", alignItems: "center", gap: 8, width: "100%",
-                background: "transparent", border: "none", padding: "12px 20px",
+                background: "transparent", border: "none", padding: "4px 8px 10px",
                 cursor: "pointer", color: T.muted, fontSize: 13, fontFamily: "inherit",
                 fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
               }}
@@ -158,7 +132,7 @@ export function SongMenuSheet({
             </button>
 
             {creating ? (
-              <div style={{ padding: "0 20px 8px" }}>
+              <div style={{ padding: "0 4px 8px" }}>
                 <input
                   autoFocus value={newName} onChange={e => setNewName(e.target.value)}
                   placeholder={t("Playlist name")} style={sh.inp}
@@ -170,14 +144,14 @@ export function SongMenuSheet({
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   <button
                     onClick={() => { setCreating(false); setNewName(""); }}
-                    style={{ flex: 1, padding: 12, background: T.dim, color: T.text, border: "none", borderRadius: 12, fontSize: 14, fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ flex: 1, minWidth: 0, padding: 12, background: T.dim, color: T.text, border: "none", borderRadius: 14, fontSize: 14, fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}
                   >
                     {t("Cancel")}
                   </button>
                   <button
                     onClick={() => { if (newName.trim()) onCreatePlaylistWithSong(newName.trim()); }}
                     disabled={!newName.trim()}
-                    style={{ flex: 1, padding: 12, background: T.accent, color: T.playBtnFg, border: "none", borderRadius: 12, fontSize: 14, fontWeight: "700", cursor: newName.trim() ? "pointer" : "default", opacity: newName.trim() ? 1 : 0.5, fontFamily: "inherit" }}
+                    style={{ flex: 1, minWidth: 0, padding: 12, background: T.accent, color: T.playBtnFg, border: "none", borderRadius: 14, fontSize: 14, fontWeight: "700", cursor: newName.trim() ? "pointer" : "default", opacity: newName.trim() ? 1 : 0.5, fontFamily: "inherit" }}
                   >
                     {t("Create")}
                   </button>
@@ -188,7 +162,7 @@ export function SongMenuSheet({
             )}
 
             {playlists.length === 0 && !creating && (
-              <div style={{ padding: "18px 20px 24px", color: T.muted, fontSize: 13, lineHeight: 1.6 }}>
+              <div style={{ padding: "12px 8px 16px", color: T.muted, fontSize: 13, lineHeight: 1.6 }}>
                 {t("No playlists yet. Create one to add this song to it.")}
               </div>
             )}
@@ -202,39 +176,14 @@ export function SongMenuSheet({
                 </svg>,
                 pl.name,
                 () => { if (!already) onAddToPlaylist(pl.id); },
-                {
-                  trailing: already
-                    ? <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.muted, fontSize: 12 }}>{IC.Check(T.muted)} {t("Added")}</span>
-                    : <span style={{ color: T.muted, fontSize: 12 }}>{pl.songIds.length}</span>,
-                },
+                already
+                  ? <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.muted, fontSize: 12, flexShrink: 0 }}>{IC.Check(T.muted)} {t("Added")}</span>
+                  : <span style={{ color: T.muted, fontSize: 12, flexShrink: 0 }}>{pl.songIds.length}</span>,
               );
             })}
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-/** One of the three large targets at the top of the menu. Equal widths, so the
- *  row reads as a set of three rather than three things that happen to be next
- *  to each other. */
-function BigAction({ icon, label, onClick, T }: {
-  icon: React.ReactNode; label: string; onClick: () => void; T: T;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1, minWidth: 0,
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
-        padding: "14px 6px",
-        background: T.chipBg, border: "1px solid " + T.chipBorder, borderRadius: 12,
-        color: T.text, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
-      }}
-    >
-      {icon}
-      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{label}</span>
-    </button>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, memo } from "react";
 import type { T } from "../themes";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { SpinningDisc } from "./SpinningDisc";
@@ -45,6 +45,19 @@ const Backdrop = memo(function Backdrop({ photo, sheetBg }: { photo?: string; sh
   );
 });
 
+/** How far down "Next up" goes. A whole library can be the queue; past a few
+ *  hundred songs nobody is reading the list any more. */
+const MAX_UP_NEXT = 500;
+/** Rows are added as you scroll rather than all at once: 500 rows, each with
+ *  its own cover lookup, would make opening the list stutter. */
+const FIRST_ROWS = 40;
+const MORE_ROWS = 60;
+
+/** The pill at the top of a sheet that says it can be pulled. */
+function Handle({ T }: { T: T }) {
+  return <div style={{ width: 36, height: 4, background: T.dim, borderRadius: 2, margin: "10px auto 0", flexShrink: 0 }} />;
+}
+
 // ─── PLAYER EXPAND SHEET ─────────────────────────────────────────────────────
 
 type PlayerExpandSheetProps = {
@@ -59,8 +72,10 @@ type PlayerExpandSheetProps = {
   currentTime: number;
   duration: number;
   playMode: PlayMode;
-  /** Repeat the song that is on; separate from shuffle. */
+  /** Repeat the song that is on. */
   repeatOn: boolean;
+  /** Repeat the whole queue. The repeat button goes round off, all, one. */
+  repeatAll: boolean;
   isLiked: boolean;
   /** Current playback speed multiplier (1 = normal). */
   playbackSpeed: number;
@@ -68,6 +83,9 @@ type PlayerExpandSheetProps = {
   // Up Next
   upNextQueue?: Song[];
   playNextQueue?: string[];
+  /** What the queue was drawn from ("All songs", a playlist's name), shown
+   *  next to "Next up". Left out when there is nothing sensible to call it. */
+  sourceLabel?: string;
   getDispName?: (s: Song) => string;
   getDispArtist?: (s: Song) => string;
   getCustomPhoto?: (s: Song) => string | undefined;
@@ -82,19 +100,28 @@ type PlayerExpandSheetProps = {
   onToggleLike: () => void;
   onRemove: () => void;
   onShare: () => void;
-  onPlayNextReorder: (newQueue: string[]) => void;
-  onSkipCurrentUpNext: () => void;
+  /** "Skip" next to the next song: it goes to the end of the queue. */
+  onSkipUpNext: () => void;
+  /** A song in "Next up" moved by its handle: positions counted from the
+   *  first song after the one that is on. */
+  onQueueMove: (from: number, to: number) => void;
+  /** A tap on a song in "Next up": it plays now, and the queue stays. */
+  onPlayFromQueue: (song: Song) => void;
+  /** The "⋮" on a row in "Next up". */
+  onOpenSongMenu: (song: Song) => void;
   /** Lyrics saved for this song, if any. Their absence is what makes the Lyrics
    *  button offer to add some instead of showing an empty panel. */
   lyrics?: string;
   /** Opens the sheet where lyrics are pasted or searched for. */
   onAddLyrics: () => void;
   /** Opens the same "⋮" action sheet the list rows use, for this track. The
-   *  chips below cover the common actions; the menu adds Play next and Add to
+   *  bar below covers the common actions; the menu adds Play next and Add to
    *  playlist, which have nowhere else to live once you are in the player. */
   onOpenMenu: () => void;
   /** A tap on the record of a song without a cover. */
   onNoCover?: () => void;
+  /** A tap on the record: change the song's photo. */
+  onChangePhoto?: () => void;
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -107,13 +134,14 @@ type PlayerExpandSheetProps = {
 
 export function PlayerExpandSheet({
   song, dispName, dispArtist, customPhoto, backdropPhoto,
-  isPlaying, currentTime, duration, playMode, repeatOn, isLiked,
+  isPlaying, currentTime, duration, playMode, repeatOn, repeatAll, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
-  upNextQueue, playNextQueue = [], getDispName, getDispArtist, getCustomPhoto,
+  upNextQueue, playNextQueue = [], sourceLabel, getDispName, getDispArtist, getCustomPhoto,
   onTogglePlay, onSkip, onToggleShuffle, onToggleRepeat,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
-  onPlayNextReorder, onSkipCurrentUpNext, lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover,
+  onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
+  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
@@ -148,90 +176,35 @@ export function PlayerExpandSheet({
   };
   const speedLabel = `${playbackSpeed}×`;
 
-  /** The shuffle or the repeat button: coloured, with a dot under it, while on. */
+  /** The shuffle or the repeat button: coloured, with a dot under it, while
+   *  on. Repeat this song wears a small 1. */
   const modeButton = (mode: "shuffle" | "repeat") => {
-    const on = mode === "shuffle" ? playMode === "shuffle" : repeatOn;
+    const on = mode === "shuffle" ? playMode === "shuffle" : repeatOn || repeatAll;
     const tint = mode === "shuffle" ? T.violet : T.repeat;
+    const label = mode === "shuffle" ? t("Shuffle") : repeatOn ? t("Repeat this song") : repeatAll ? t("Repeat all") : t("Repeat");
     return (
       <button
         onClick={mode === "shuffle" ? onToggleShuffle : onToggleRepeat}
         aria-pressed={on}
-        aria-label={mode === "shuffle" ? t("Shuffle") : t("Repeat")}
+        aria-label={label}
         style={{ background: "transparent", border: "none", color: on ? tint : T.muted, cursor: "pointer", padding: 6, display: "flex", position: "relative" }}
       >
         {mode === "shuffle" ? <IC.Shuffle /> : <IC.Repeat />}
+        {mode === "repeat" && repeatOn && (
+          <span style={{ position: "absolute", top: 2, right: 0, minWidth: 13, height: 13, borderRadius: 7, background: tint, color: "#fff", fontSize: 9, fontWeight: 800, lineHeight: "13px", textAlign: "center" }}>1</span>
+        )}
         {on && <span style={{ position: "absolute", bottom: 1, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: "50%", background: tint }} />}
       </button>
     );
   };
 
-  // ── touch-based drag-and-drop for pinned queue ────────────────────────────
-  // We track which index is being dragged and which slot we're hovering over.
-  const [dragIdx,     setDragIdx]     = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-
-  // ref to item elements so we can hit-test touch position
-  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  // touch start: record which item the user grabbed
-  const onTouchStartDrag = (i: number) => (e: React.TouchEvent) => {
-    e.preventDefault(); // prevent page scroll while dragging
-    e.stopPropagation();
-    setDragIdx(i);
-    setDragOverIdx(i);
-  };
-
-  // touch move: find which item the finger is over
-  const onTouchMoveDrag = (e: React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const touch = e.touches[0];
-    for (let j = 0; j < itemRefs.current.length; j++) {
-      const el = itemRefs.current[j];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
-        setDragOverIdx(j);
-        break;
-      }
-    }
-  };
-
-  // touch end: commit the reorder
-  const onTouchEndDrag = (e: React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
-      const newQ = [...playNextQueue];
-      const [moved] = newQ.splice(dragIdx, 1);
-      newQ.splice(dragOverIdx, 0, moved);
-      onPlayNextReorder(newQ);
-    }
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
-
-  const handleRemovePinned = (idx: number) => {
-    const newQ = [...playNextQueue];
-    newQ.splice(idx, 1);
-    onPlayNextReorder(newQ);
-  };
-
-  // ── resolve the "normal" next song (first non-pinned after current) ────────
-  const normalNext: Song | null = (() => {
-    if (!upNextQueue || upNextQueue.length === 0) return null;
-    const curIdx = upNextQueue.findIndex(s => s.id === song.id);
-    const rest = curIdx >= 0 ? upNextQueue.slice(curIdx + 1) : upNextQueue;
-    const pinnedSet = new Set(playNextQueue);
-    return rest.find(s => !pinnedSet.has(s.id)) ?? null;
-  })();
-
-  // resolve Song objects for the pinned queue
-  const pinnedSongs: (Song | null)[] = playNextQueue.map(id =>
-    upNextQueue?.find(s => s.id === id) ?? null
-  );
-
-  const showUpNext = pinnedSongs.length > 0 || normalNext !== null;
+  // ── The queue ─────────────────────────────────────────────────────────────
+  const queue = upNextQueue ?? [];
+  const curIdx = queue.findIndex(s => s.id === song.id);
+  const upcoming = curIdx >= 0 ? queue.slice(curIdx + 1) : [];
+  const listed = upcoming.slice(0, MAX_UP_NEXT - 1);
+  const nextSong = upcoming[0] ?? null;
+  const pinned = new Set(playNextQueue);
 
   const getName   = (s: Song) => getDispName   ? getDispName(s)   : s.title;
   const getArtist = (s: Song) => getDispArtist ? getDispArtist(s) : s.artist;
@@ -250,52 +223,238 @@ export function PlayerExpandSheet({
     setTimeout(onClose, 240); // matches .pes-sheet-out duration
   };
 
-  // ── Gesture-driven drag-down-to-close ─────────────────────────────────────
-  // Mirrors the drag-up open: grabbing the top zone (handle + header) drags
-  // the sheet down live; releasing past ~22% of the screen closes it, and
-  // anything less snaps back. `closeSnap` turns the transition on for the
-  // settle, off while the finger is down.
+  // ── The "Next up" page ────────────────────────────────────────────────────
+  // The full queue is a page of its own that comes up over the player when
+  // you keep pushing upwards, and goes back down when you pull it at its top.
+  const [upOpen, setUpOpen]   = useState(false);
+  /** Pixels the page is pulled by a finger: up from closed, down from open. */
+  const [upPull, setUpPull]   = useState(0);
+  const [upSnap, setUpSnap]   = useState(false);
+  const [rowsShown, setRowsShown] = useState(FIRST_ROWS);
+  const listRef = useRef<HTMLDivElement>(null);
+  const onListScroll = () => {
+    const el = listRef.current;
+    if (!el || rowsShown >= listed.length) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 900) setRowsShown(n => n + MORE_ROWS);
+  };
+  const openUpNext = () => {
+    setUpSnap(true); setUpOpen(true); setUpPull(0);
+    setTimeout(() => setUpSnap(false), 300);
+  };
+  const closeUpNext = () => {
+    setUpSnap(true); setUpOpen(false); setUpPull(0);
+    setTimeout(() => setUpSnap(false), 300);
+  };
+
+  // ── Drags ─────────────────────────────────────────────────────────────────
+  // On the player, pulling down closes it from anywhere (not only the top
+  // bar), and pushing up brings the "Next up" page. On that page, pulling
+  // down while its list is at the top sends it back. A drag decides its
+  // direction once, after the first few pixels, and then follows the finger.
   const [closeDragY, setCloseDragY] = useState(0);
   const [closeSnap, setCloseSnap]   = useState(false);
-  const closeDragStartRef = useRef<number | null>(null);
-  const startCloseDrag = (y: number) => { if (!closingRef.current) { closeDragStartRef.current = y; setCloseSnap(false); } };
-  const moveCloseDrag  = (y: number) => {
-    if (closeDragStartRef.current === null) return;
-    const dy = y - closeDragStartRef.current;
-    setCloseDragY(dy > 0 ? dy : 0);
+  const drag = useRef<{ y: number; x: number; mode: null | "close" | "up" | "back" | "none"; on: "player" | "page"; inList: boolean } | null>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+  const vh = () => window.innerHeight || 800;
+
+  const dragStart = (on: "player" | "page") => (e: React.TouchEvent) => {
+    if (closingRef.current) return;
+    const el = e.target as HTMLElement;
+    // The timeline, the lyrics and a row's handle have drags of their own.
+    if (el.closest("input, [data-own-drag]")) { drag.current = null; return; }
+    drag.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, mode: null, on, inList: !!el.closest("[data-up-list]") };
+    setCloseSnap(false);
   };
-  const endCloseDrag = () => {
-    if (closeDragStartRef.current === null) return;
-    closeDragStartRef.current = null;
-    const vh = window.innerHeight || 800;
-    if (closeDragY > vh * 0.22) {
-      if (closingRef.current) return;
-      closingRef.current = true;
-      setCloseSnap(true);
-      setCloseDragY(vh);           // glide the rest of the way down
-      setTimeout(onClose, 260);
-    } else {
-      setCloseSnap(true);
-      setCloseDragY(0);            // snap back up
-      setTimeout(() => setCloseSnap(false), 280);
+  const dragMove = (e: React.TouchEvent) => {
+    const d = drag.current;
+    if (!d || dragIdx !== null) return;
+    const dy = e.touches[0].clientY - d.y;
+    const dx = e.touches[0].clientX - d.x;
+    if (d.mode === null) {
+      if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+      if (Math.abs(dx) > Math.abs(dy)) { d.mode = "none"; return; }
+      if (d.on === "page") {
+        // The handle and the title pull the page down wherever the list is;
+        // only in the list itself does a downward drag scroll back first.
+        const atTop = !d.inList || (listRef.current?.scrollTop ?? 0) <= 0;
+        d.mode = dy > 0 && atTop ? "back" : "none";
+      } else {
+        const p = playerRef.current;
+        const atTop = !p || p.scrollTop <= 0;
+        const atBottom = !p || p.scrollTop + p.clientHeight >= p.scrollHeight - 2;
+        d.mode = dy > 0 && atTop ? "close" : dy < 0 && atBottom ? "up" : "none";
+      }
+    }
+    if (d.mode === "close") setCloseDragY(Math.max(0, dy));
+    else if (d.mode === "up") setUpPull(Math.max(0, -dy));
+    else if (d.mode === "back") setUpPull(Math.max(0, dy));
+  };
+  const dragEnd = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !d.mode || d.mode === "none") return;
+    if (d.mode === "close") {
+      if (closeDragY > vh() * 0.22) {
+        if (closingRef.current) return;
+        closingRef.current = true;
+        setCloseSnap(true);
+        setCloseDragY(vh());         // glide the rest of the way down
+        setTimeout(onClose, 260);
+      } else {
+        setCloseSnap(true);
+        setCloseDragY(0);            // snap back up
+        setTimeout(() => setCloseSnap(false), 280);
+      }
+    } else if (d.mode === "up") {
+      if (upPull > vh() * 0.15) openUpNext(); else closeUpNext();
+    } else if (d.mode === "back") {
+      if (upPull > vh() * 0.15) closeUpNext(); else openUpNext();
     }
   };
 
+  // ── Moving a song by its handle ───────────────────────────────────────────
+  // The handle alone starts a drag, so a row can still be scrolled past and
+  // tapped. While a drag is on, the list does not scroll under the finger.
+  const [dragIdx,     setDragIdx]     = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const onHandleTouchStart = (i: number) => (e: React.TouchEvent) => {
+    e.stopPropagation();
+    setDragIdx(i);
+    setDragOverIdx(i);
+  };
+  const onListTouchMove = (e: React.TouchEvent) => {
+    if (dragIdx === null) return;
+    e.stopPropagation();
+    const y = e.touches[0].clientY;
+    for (let j = 0; j < itemRefs.current.length; j++) {
+      const el = itemRefs.current[j];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) { setDragOverIdx(j); break; }
+    }
+  };
+  const onListTouchEnd = (e: React.TouchEvent) => {
+    if (dragIdx === null) return;
+    e.stopPropagation();
+    if (dragOverIdx !== null && dragIdx !== dragOverIdx) onQueueMove(dragIdx, dragOverIdx);
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
   const isDraggingOpen  = dragProgress !== null && !dragSettling;
-  const isDraggingClose = closeDragStartRef.current !== null;
+  const isDraggingClose = drag.current?.mode === "close";
   // Live transform: opening drag positions by progress; closing drag by pixels.
   const sheetTransform =
     dragProgress !== null ? `translateY(${Math.round((1 - dragProgress) * 100)}%)` :
     (closeDragY > 0 || closeSnap) ? `translateY(${Math.round(closeDragY)}px)` : undefined;
   const overlayOpacity =
     dragProgress !== null ? dragProgress :
-    closeDragY > 0 ? Math.max(0, 1 - closeDragY / ((window.innerHeight || 800) * 0.7)) : undefined;
+    closeDragY > 0 ? Math.max(0, 1 - closeDragY / (vh() * 0.7)) : undefined;
+  // Where the "Next up" page stands: off the bottom when closed, pulled up by
+  // the finger, at the top when open, pulled down by the finger.
+  const upTransform = upOpen
+    ? `translateY(${Math.round(upPull)}px)`
+    : `translateY(calc(100% - ${Math.round(upPull)}px))`;
+  const upMoving = drag.current?.mode === "up" || drag.current?.mode === "back";
+
+  // The record at the size it always had. The player is as tall as what it
+  // holds, so nothing is stretched to fill a screen.
+  const winW = typeof window !== "undefined" ? window.innerWidth : 375;
+  const discSize = Math.min(268, winW - 84);
+
+  /** One part of the bar under the player. The bar is drawn like a segmented
+   *  control: a rounded track, the parts inside it rounded on their outer
+   *  side only. */
+  const barPart = (key: string, label: string, on: boolean, onClick: () => void, body: React.ReactNode, at: "first" | "mid" | "last") => (
+    <button
+      key={key}
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={on || undefined}
+      style={{
+        flex: 1, minWidth: 0, height: 48,
+        borderRadius: at === "first" ? "24px 10px 10px 24px" : at === "last" ? "10px 24px 24px 10px" : 10,
+        background: on ? T.accent : T.dim,
+        color: on ? T.playBtnFg : T.text,
+        border: "none", cursor: "pointer", fontFamily: "inherit",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "background 0.15s, color 0.15s",
+      }}
+    >
+      {body}
+    </button>
+  );
+
+  /** A row on the "Next up" page. Square edged: only the song that is on is
+   *  drawn as a rounded tile, so it stands out from the flat list under it. */
+  const queueRow = (s: Song, i: number) => {
+    const name = getName(s);
+    const isDragging = dragIdx === i;
+    const isOver = dragIdx !== null && dragOverIdx === i && dragIdx !== i;
+    return (
+      <div
+        key={`${s.id}:${i}`}
+        ref={el => { itemRefs.current[i] = el; }}
+        onClick={() => { if (dragIdx === null) onPlayFromQueue(s); }}
+        style={{
+          display: "flex", alignItems: "center", gap: 12,
+          height: 64, padding: "0 8px 0 4px", cursor: "pointer",
+          opacity: isDragging ? 0.4 : 1,
+          boxShadow: isOver ? `inset 0 ${dragIdx! < i ? -2 : 2}px 0 ${T.accent}` : "none",
+          transition: "opacity 0.12s",
+        }}
+      >
+        <div
+          data-own-drag=""
+          onTouchStart={onHandleTouchStart(i)}
+          onClick={e => e.stopPropagation()}
+          aria-label={t("Drag to move")}
+          style={{ color: T.muted, display: "flex", flexShrink: 0, padding: "12px 8px 12px 12px", touchAction: "none", cursor: "grab" }}
+        >
+          <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+            <circle cx="3.5" cy="3" r="1.7"/><circle cx="10.5" cy="3" r="1.7"/>
+            <circle cx="3.5" cy="9" r="1.7"/><circle cx="10.5" cy="9" r="1.7"/>
+            <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
+          </svg>
+        </div>
+        <AlbumArt title={name} size={44} customPhoto={getPhoto(s)} songPath={s.uri} albumId={s.albumId} T={T} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {name}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+            {pinned.has(s.id) && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: T.textSub, background: T.dim, borderRadius: 4, padding: "1px 5px", letterSpacing: "0.04em", flexShrink: 0 }}>
+                {t("NEXT")}
+              </span>
+            )}
+            <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {getArtist(s)}
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={e => { e.stopPropagation(); onOpenSongMenu(s); }}
+          aria-label={t("More options for {name}", { name })}
+          style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex", flexShrink: 0 }}
+        >
+          <IC.Dots />
+        </button>
+      </div>
+    );
+  };
+
+  const countLine = upcoming.length === 0
+    ? t("Nothing lined up after this song.")
+    : tn(upcoming.length, "{n} song lined up.", "{n} songs lined up.");
 
   return (
     <div
       className={closing ? "pes-overlay-out" : dragProgress !== null || skipEnter ? undefined : "pes-overlay-in"}
-      style={{ position: "fixed", inset: 0, background: T.overlayBg, zIndex: 400, display: "flex", alignItems: "flex-end", opacity: overlayOpacity, transition: isDraggingOpen || isDraggingClose ? "none" : "opacity 0.25s ease" }}
-      onClick={animatedClose}
+      style={{ position: "fixed", inset: 0, background: T.overlayBg, zIndex: 400, opacity: overlayOpacity, transition: isDraggingOpen || isDraggingClose ? "none" : "opacity 0.25s ease" }}
+      onClick={() => { if (upOpen) closeUpNext(); else animatedClose(); }}
     >
       <style>{`
         @keyframes pesSlideUp   { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -316,288 +475,291 @@ export function PlayerExpandSheet({
           .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
         }
       `}</style>
+      {/* A sheet from the bottom, as tall as the player needs, with the list
+          dimmed above it. Never taller than the screen under the status bar
+          (the WebView runs edge to edge); on a short screen it scrolls. */}
       <div
         className={closing ? "pes-sheet-out" : dragProgress !== null || skipEnter ? undefined : "pes-sheet-in"}
         onClick={e => e.stopPropagation()}
         style={{
+          position: "absolute", left: 0, right: 0, bottom: 0,
+          maxHeight: "calc(100% - env(safe-area-inset-top, 0px) - 8px)",
+          display: "flex", flexDirection: "column",
           background: T.sheetBg,
           borderRadius: "20px 20px 0 0",
-          width: "100%",
-          paddingBottom: 32,
-          maxHeight: "92vh",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-          position: "relative",
+          overflow: "hidden",
           transform: sheetTransform,
           transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
-          touchAction: closeDragY > 0 ? "none" : undefined,
         }}
       >
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
 
-        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column" }}>
-        {/* Top zone = the drag-down-to-close grab area (handle + header row). */}
+        {/* ── The player ─────────────────────────────────────────────────── */}
         <div
-          onTouchStart={e => startCloseDrag(e.touches[0].clientY)}
-          onTouchMove={e => moveCloseDrag(e.touches[0].clientY)}
-          onTouchEnd={endCloseDrag}
-          onTouchCancel={endCloseDrag}
-          style={{ flexShrink: 0 }}
+          ref={playerRef}
+          onTouchStart={dragStart("player")}
+          onTouchMove={dragMove}
+          onTouchEnd={dragEnd}
+          onTouchCancel={dragEnd}
+          style={{
+            position: "relative", zIndex: 1, flex: "0 1 auto", minHeight: 0,
+            display: "flex", flexDirection: "column",
+            overflowY: "auto", overscrollBehavior: "none",
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)", boxSizing: "border-box",
+          }}
         >
-        <div style={{ width: 36, height: 4, background: T.dim, borderRadius: 2, margin: "12px auto 0", flexShrink: 0 }} />
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px 0", flexShrink: 0 }}>
-          <button
-            onClick={onOpenMenu}
-            aria-label={t("More options for {name}", { name: dispName })}
-            style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
-            <IC.Dots />
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            {/* Swaps the record for the words. With no lyrics stored it opens
-                the sheet to add some, rather than showing an empty panel. */}
-            <button
-              onClick={toggleLyrics}
-              aria-label={t("Lyrics")}
-              aria-pressed={lyricsOpen}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                background: lyricsOpen ? T.dim : "transparent",
-                border: "none", borderRadius: 16, padding: "6px 10px",
-                color: lyricsOpen ? T.text : T.muted,
-                fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
-              }}
-            >
-              <IC.Lyrics />
-              <span>{t("Lyrics")}</span>
-            </button>
+          <Handle T={T} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 14px 0", flexShrink: 0 }}>
             <button onClick={animatedClose}
               aria-label={t("Close player")}
               style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
               <IC.ChevronDown />
             </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              {/* Swaps the record for the words. With no lyrics stored it opens
+                  the sheet to add some, rather than showing an empty panel. */}
+              <button
+                onClick={toggleLyrics}
+                aria-label={t("Lyrics")}
+                aria-pressed={lyricsOpen}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  background: lyricsOpen ? T.dim : "transparent",
+                  border: "none", borderRadius: 16, padding: "6px 10px",
+                  color: lyricsOpen ? T.text : T.muted,
+                  fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+                }}
+              >
+                <IC.Lyrics />
+                <span>{t("Lyrics")}</span>
+              </button>
+              <button
+                onClick={onOpenMenu}
+                aria-label={t("More options for {name}", { name: dispName })}
+                style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+                <IC.Dots />
+              </button>
+            </div>
           </div>
-        </div>
-        </div>
 
-        {/* Card matching the "hold song" look */}
-        <div style={{
-          background: T.card, borderRadius: 14, margin: "4px 16px 0", padding: "14px 14px 12px",
-          border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
-          flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 16, marginTop: 6 }}>
-            {lyricsOpen ? (
-              <LyricsPanel
-                text={lyrics ?? ""}
-                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
-                onEdit={onAddLyrics}
-                T={T}
-              />
-            ) : (
-              <SpinningDisc
-                size={Math.min(268, (typeof window !== "undefined" ? window.innerWidth : 375) - 84)}
-                spinning={isPlaying}
-                title={dispName}
-                customPhoto={customPhoto}
-                tappable
-                onNoCover={onNoCover}
-              />
-            )}
-            <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
-              <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
-                {dispName}
-              </div>
-              {song.isCut && (
-                <span style={{
-                  fontSize: 10, background: T.dim, color: T.textSub,
-                  borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
-                }}>CUT</span>
+          {/* The card, with the border it always had. */}
+          <div style={{
+            background: T.card, borderRadius: 14, margin: "4px 16px 0", padding: "14px 14px 12px",
+            border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
+            flexShrink: 0,
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
+              {lyricsOpen ? (
+                <div data-own-drag="">
+                  <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
+                </div>
+              ) : (
+                <SpinningDisc
+                  size={discSize}
+                  spinning={isPlaying}
+                  title={dispName}
+                  customPhoto={customPhoto}
+                  tappable
+                  onNoCover={onNoCover}
+                  onPhoto={onChangePhoto}
+                />
               )}
-              <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
-                {dispArtist || t("Unknown Artist")}
+              <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
+                  {dispName}
+                </div>
+                {song.isCut && (
+                  <span style={{
+                    fontSize: 10, background: T.dim, color: T.textSub,
+                    borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
+                  }}>CUT</span>
+                )}
+                <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
+                  {dispArtist}
+                </div>
               </div>
             </div>
+
+            {/* Timeline */}
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
+              <input
+                className="slider" type="range" min={0} max={duration || 100} value={currentTime}
+                onMouseDown={onSeekStart} onTouchStart={onSeekStart}
+                onChange={e => onSeek(Number(e.target.value))}
+                onMouseUp={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
+                onTouchEnd={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
+              />
+              <span style={{ fontSize: 11, color: T.muted, width: 34, textAlign: "right" }}>{fmt(duration)}</span>
+            </div>
+
+            {/* Transport */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
+              {/* Shuffle and repeat used to be one button that went round
+                  off, shuffle, repeat: reaching repeat meant shuffling first.
+                  Each has its own now, at either end, with a dot when on. */}
+              {modeButton("shuffle")}
+              <button onClick={() => onSkip(-1)} aria-label={t("Previous")} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipB /></button>
+              <button
+                onClick={onTogglePlay}
+                aria-label={isPlaying ? t("Pause") : t("Play")}
+                style={{ background: T.playBtnBg, border: "none", color: T.playBtnFg, width: 56, height: 56, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              >
+                {isPlaying ? <IC.Pause /> : <IC.Play />}
+              </button>
+              <button onClick={() => onSkip(1)} aria-label={t("Next")} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipF /></button>
+              {modeButton("repeat")}
+            </div>
           </div>
 
-          {/* Timeline */}
-          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-            <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
-            <input
-              className="slider" type="range" min={0} max={duration || 100} value={currentTime}
-              onMouseDown={onSeekStart} onTouchStart={onSeekStart}
-              onChange={e => onSeek(Number(e.target.value))}
-              onMouseUp={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-              onTouchEnd={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-            />
-            <span style={{ fontSize: 11, color: T.muted, width: 34, textAlign: "right" }}>{fmt(duration)}</span>
+          <div style={{ height: 14, flexShrink: 0 }} />
+
+          {/* ── Speed, like, share, remove ────────────────────────────────
+              One bar instead of four chips. Edit and Cut live behind the
+              "⋮" at the top: they take you out of the player entirely. */}
+          <div style={{
+            display: "flex", gap: 4, margin: "0 16px", padding: 5, flexShrink: 0,
+            borderRadius: 29, background: T.card, border: `1px solid ${T.border}`,
+          }}>
+            {barPart("speed", t("Playback speed"), playbackSpeed !== 1, cycleSpeed,
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{speedLabel}</span>, "first")}
+            {barPart("like", isLiked ? t("Unlike") : t("Like"), isLiked, onToggleLike,
+              <IC.Heart filled={isLiked} size={20} />, "mid")}
+            {barPart("share", t("Share"), false, onShare, <IC.Share />, "mid")}
+            {barPart("remove", t("Remove"), false, onRemove, <IC.Trash />, "last")}
           </div>
 
-          {/* Transport */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
-            {/* Shuffle and repeat used to be one button that went round
-                off, shuffle, repeat: reaching repeat meant shuffling first.
-                Each has its own now, at either end, with a dot when on. */}
-            {modeButton("shuffle")}
-            <button onClick={() => onSkip(-1)} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipB /></button>
+          {/* ── Up next: the one song, and a way to the rest ──────────────
+              The whole list is a page of its own: push up, or tap here. */}
+          <div style={{ height: 16, flexShrink: 0 }} />
+          <div style={{ margin: "0 16px", flexShrink: 0 }}>
             <button
-              onClick={onTogglePlay}
-              style={{ background: T.playBtnBg, border: "none", color: T.playBtnFg, width: 54, height: 54, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              onClick={openUpNext}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+                background: "transparent", border: "none", padding: "0 2px 8px", cursor: "pointer", fontFamily: "inherit",
+              }}
             >
-              {isPlaying ? <IC.Pause /> : <IC.Play />}
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {t("Next up")}
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: T.muted }}>
+                {tn(upcoming.length, "{n} song", "{n} songs")}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+              </span>
             </button>
-            <button onClick={() => onSkip(1)} style={{ background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 6, display: "flex" }}><IC.SkipF /></button>
-            {modeButton("repeat")}
+            {nextSong ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 10px", borderRadius: 10,
+                background: T.card, border: `1px solid ${T.border}`,
+              }}>
+                <AlbumArt title={getName(nextSong)} size={36} customPhoto={getPhoto(nextSong)} songPath={nextSong.uri} albumId={nextSong.albumId} T={T} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {getName(nextSong)}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {getArtist(nextSong)}
+                  </div>
+                </div>
+                <button
+                  onClick={onSkipUpNext}
+                  title={t("Skip this song")}
+                  style={{
+                    background: "transparent", border: "none", color: T.muted,
+                    cursor: "pointer", padding: "4px 6px", display: "flex",
+                    alignItems: "center", gap: 4, flexShrink: 0,
+                    fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                  }}
+                >
+                  <IC.SkipF />
+                  {t("Skip")}
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: T.muted, padding: "4px 2px" }}>{countLine}</div>
+            )}
           </div>
         </div>
 
-        {/* ── Action chips ─────────────────────────────────────────────────
-            Edit and Cut used to sit here too. They are one-off, deliberate
-            actions that take you out of the player entirely, so they belong
-            with the rest of the per-song actions behind the "⋮" above rather
-            than competing with Like and Share for a spot next to the
-            transport. ─────────────────────────────────────────────────────── */}
-        <div style={{ padding: "14px 16px 0", display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          {/* The speed, moved here from the transport to make room for repeat. */}
-          <button className="chip" onClick={cycleSpeed} title={t("Playback speed")}
-            style={playbackSpeed !== 1 ? { border: `1px solid ${T.accent}`, color: T.text } : undefined}>
-            {speedLabel}
-          </button>
-          <button className="chip" onClick={onToggleLike}>
-            <IC.Heart filled={isLiked} size={15} />
-            {isLiked ? t("Unlike") : t("Like")}
-          </button>
-          <button className="chip" onClick={onShare}><IC.Share /> {t("Share")}</button>
-          <button className="chip red" onClick={onRemove}><IC.Trash /> {t("Remove")}</button>
-        </div>
+        {/* ── The "Next up" page: inside the sheet, so it is exactly as tall
+              as the player and comes up over it, not over the whole screen. */}
+        <div
+          onClick={e => e.stopPropagation()}
+          onTouchStart={dragStart("page")}
+          onTouchMove={dragMove}
+          onTouchEnd={dragEnd}
+          onTouchCancel={dragEnd}
+          aria-hidden={!upOpen}
+          style={{
+            position: "absolute", inset: 0, zIndex: 2,
+            background: T.sheetBg, borderRadius: "20px 20px 0 0",
+            boxShadow: upOpen || upPull > 0 ? "0 -8px 30px rgba(0,0,0,0.35)" : "none",
+            display: "flex", flexDirection: "column",
+            transform: upTransform,
+            transition: upMoving ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+            visibility: upOpen || upPull > 0 || upSnap ? "visible" : "hidden",
+          }}
+        >
+          <div onClick={closeUpNext} style={{ cursor: "pointer", paddingBottom: 4, flexShrink: 0 }}><Handle T={T} /></div>
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, padding: "14px 20px 14px", flexShrink: 0 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: T.text, lineHeight: 1.15 }}>{t("Next up")}</div>
+              <div style={{ fontSize: 14, color: T.textSub, marginTop: 4 }}>{countLine}</div>
+            </div>
+            {sourceLabel && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 7, minWidth: 0, maxWidth: "52%",
+                padding: "9px 14px", borderRadius: 20, background: T.dim, color: T.text,
+                fontSize: 13, fontWeight: 600, flexShrink: 1,
+              }}>
+                {playMode === "shuffle" ? <span style={{ display: "flex", color: T.violet, flexShrink: 0 }}><IC.Shuffle /></span> : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                    <line x1="3" y1="6" x2="15" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="11" y2="18"/><path d="M19 15V5l3 1"/><circle cx="17" cy="16" r="2"/>
+                  </svg>
+                )}
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sourceLabel}</span>
+              </div>
+            )}
+          </div>
 
-        {/* ── Up Next panel ────────────────────────────────────────────────── */}
-        {showUpNext && (
-          <div style={{ margin: "16px 16px 0", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: "700", color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                {t("Up Next")}
-              </span>
-              <span style={{ fontSize: 11, color: T.muted }}>
-                {pinnedSongs.filter(Boolean).length + (normalNext ? 1 : 0)} songs
-              </span>
+          <div
+            ref={listRef}
+            data-up-list=""
+            onScroll={onListScroll}
+            style={{
+              flex: 1, minHeight: 0, overscrollBehavior: "none",
+              overflowY: dragIdx !== null ? "hidden" : "auto", WebkitOverflowScrolling: "touch",
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+            }}
+          >
+            {/* The song that is on, at the head of the list: the one rounded
+                tile, with its bars moving while it plays. */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              margin: "0 12px 6px", padding: "10px 14px", borderRadius: 18,
+              background: T.card, border: `1px solid ${T.border}`,
+            }}>
+              <AlbumArt title={dispName} size={44} active playing={isPlaying} customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: T.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispName}</div>
+                <div style={{ fontSize: 13, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist}</div>
+              </div>
             </div>
 
-            {/* container: touch events for drag live here so move/end are always caught */}
             <div
-              onTouchMove={dragIdx !== null ? onTouchMoveDrag : undefined}
-              onTouchEnd={dragIdx !== null ? onTouchEndDrag : undefined}
-              style={{ display: "flex", flexDirection: "column", gap: 2 }}
+              onTouchMove={dragIdx !== null ? onListTouchMove : undefined}
+              onTouchEnd={dragIdx !== null ? onListTouchEnd : undefined}
+              onTouchCancel={dragIdx !== null ? onListTouchEnd : undefined}
+              style={{ padding: "0 4px" }}
             >
-              {/* ── Pinned / Play Next items ── */}
-              {pinnedSongs.map((s, i) => {
-                if (!s) return null;
-                const name   = getName(s);
-                const artist = getArtist(s);
-                const photo  = getPhoto(s);
-                const isDragging = dragIdx === i;
-                const isOver     = dragOverIdx === i && dragIdx !== null && dragIdx !== i;
-                return (
-                  <div
-                    key={s.id + i}
-                    ref={el => { itemRefs.current[i] = el; }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "8px 10px",
-                      borderRadius: 10,
-                      background: isOver ? T.dim : T.card,
-                      border: `1px solid ${isOver ? T.accent : T.border}`,
-                      opacity: isDragging ? 0.4 : 1,
-                      transform: isOver ? "scale(1.02)" : "scale(1)",
-                      transition: "opacity 0.12s, transform 0.12s, border-color 0.12s",
-                      touchAction: "none", // critical: tells browser not to scroll
-                    }}
-                  >
-                    {/* drag handle — only this triggers the drag */}
-                    <div
-                      onTouchStart={onTouchStartDrag(i)}
-                      style={{ color: T.muted, display: "flex", flexShrink: 0, cursor: "grab", padding: "4px 2px" }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="3" y1="7" x2="21" y2="7"/>
-                        <line x1="3" y1="12" x2="21" y2="12"/>
-                        <line x1="3" y1="17" x2="21" y2="17"/>
-                      </svg>
-                    </div>
-                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={s.uri} albumId={s.albumId} T={T} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {name}
-                      </div>
-                      <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {artist || t("Unknown Artist")}
-                      </div>
-                    </div>
-                    <span style={{
-                      fontSize: 9, fontWeight: "700", color: T.textSub,
-                      background: T.dim, borderRadius: 4, padding: "2px 6px",
-                      whiteSpace: "nowrap", flexShrink: 0, letterSpacing: "0.04em",
-                    }}>
-                      {t("NEXT")}
-                    </span>
-                    <button
-                      onClick={() => handleRemovePinned(i)}
-                      title={t("Remove from queue")}
-                      style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}
-                    >
-                      <IC.Close />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {/* ── Normal next song ── */}
-              {normalNext && (() => {
-                const name   = getName(normalNext);
-                const artist = getArtist(normalNext);
-                const photo  = getPhoto(normalNext);
-                return (
-                  <div
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "8px 10px",
-                      borderRadius: 10,
-                      background: T.card,
-                      border: `1px solid ${T.border}`,
-                    }}
-                  >
-                    <AlbumArt title={name} size={36} active={false} customPhoto={photo} songPath={normalNext.uri} albumId={normalNext.albumId} T={T} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: "600", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {name}
-                      </div>
-                      <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {artist || t("Unknown Artist")}
-                      </div>
-                    </div>
-                    {/* Skip button with label */}
-                    <button
-                      onClick={onSkipCurrentUpNext}
-                      title={t("Skip this song")}
-                      style={{
-                        background: "transparent", border: "none", color: T.muted,
-                        cursor: "pointer", padding: "4px 6px", display: "flex",
-                        alignItems: "center", gap: 4, flexShrink: 0,
-                        fontSize: 12, fontWeight: "600",
-                      }}
-                    >
-                      <IC.SkipF />
-                      {t("Skip")}
-                    </button>
-                  </div>
-                );
-              })()}
+              {(upOpen || upPull > 0) && listed.slice(0, rowsShown).map(queueRow)}
             </div>
           </div>
-        )}
         </div>
       </div>
+
     </div>
   );
 }
