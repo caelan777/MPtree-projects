@@ -120,6 +120,8 @@ type PlayerExpandSheetProps = {
   onOpenMenu: () => void;
   /** A tap on the record of a song without a cover. */
   onNoCover?: () => void;
+  /** A tap on the record: change the song's photo. */
+  onChangePhoto?: () => void;
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -139,7 +141,7 @@ export function PlayerExpandSheet({
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
-  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover,
+  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
@@ -429,7 +431,7 @@ export function PlayerExpandSheet({
               </span>
             )}
             <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {getArtist(s) || t("Unknown Artist")}
+              {getArtist(s)}
             </span>
           </div>
         </div>
@@ -559,6 +561,7 @@ export function PlayerExpandSheet({
                   customPhoto={customPhoto}
                   tappable
                   onNoCover={onNoCover}
+                  onPhoto={onChangePhoto}
                 />
               )}
               <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
@@ -572,7 +575,7 @@ export function PlayerExpandSheet({
                   }}>CUT</span>
                 )}
                 <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
-                  {dispArtist || t("Unknown Artist")}
+                  {dispArtist}
                 </div>
               </div>
             </div>
@@ -657,7 +660,7 @@ export function PlayerExpandSheet({
                     {getName(nextSong)}
                   </div>
                   <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {getArtist(nextSong) || t("Unknown Artist")}
+                    {getArtist(nextSong)}
                   </div>
                 </div>
                 <button
@@ -741,7 +744,7 @@ export function PlayerExpandSheet({
               <AlbumArt title={dispName} size={44} active playing={isPlaying} customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: T.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispName}</div>
-                <div style={{ fontSize: 13, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist || t("Unknown Artist")}</div>
+                <div style={{ fontSize: 13, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist}</div>
               </div>
             </div>
 

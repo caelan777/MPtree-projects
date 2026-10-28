@@ -24,7 +24,14 @@ export interface Session {
   /** Repeat the whole queue: after the last song the first comes again. */
   repeatAll?:      boolean;
   currentId?:      string;
+  /** The queue, when it is not simply the Songs list in its order: shuffled,
+   *  or a playlist's. */
   queueIds?:       string[];
+  /** Where the music plays from: "pl:<id>", "smart:<id>", or absent for the
+   *  Songs page. Without it a reopened app forgot the playlist, said "All
+   *  songs" over its queue, and fell back to the whole library at the next
+   *  song. */
+  playSource?:     string;
   positionMs?:     number;
   isPlaying?:      boolean;
   crossfadeMs?:    number;

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type React from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -12,6 +12,9 @@ export interface PageSwipeDeps {
   /** Blocks the page swipe entirely (e.g. a playlist detail view is open, where
    *  a horizontal swipe should NOT jump all the way back to the Songs page). */
   swipeDisabled?: boolean;
+  /** The element both pages sit in. A page swipe stops the lists in it from
+   *  scrolling (see the touchmove listener below). */
+  areaRef:     React.RefObject<HTMLDivElement | null>;
 }
 
 export interface PageSwipeReturn {
@@ -38,6 +41,7 @@ export function usePageSwipe({
   selectMode,
   filterOpen,
   swipeDisabled = false,
+  areaRef,
 }: PageSwipeDeps): PageSwipeReturn {
   const [pageDragX,    setPageDragX]    = useState(0);
   const [pageDragging, setPageDragging] = useState(false);
@@ -48,6 +52,41 @@ export function usePageSwipe({
   const pageSwipeLastX    = useRef<number>(0);
   const pageSwipeLastTime = useRef<number>(0);
   const pageSwipeVelocity = useRef<number>(0); // px/ms, signed
+  const pageRef           = useRef(page);
+  useEffect(() => { pageRef.current = page; }, [page]);
+
+  // ── A page swipe is not also a scroll ──────────────────────────────────────
+  // The lists only allow vertical panning (touch-action: pan-y), but a swipe to
+  // the other page is never perfectly level, so the list under the finger
+  // scrolled a little along with it and kept gliding after the finger let go.
+  // The next tap, on the page just arrived at, then only stopped that glide:
+  // Android does not count a tap that stops a fling as a tap, so the first
+  // press on the Playlists tab did nothing and only the second one worked.
+  //
+  // Once a swipe is decided to be sideways, its moves are cancelled here, so
+  // the list never starts to scroll. React's own touch listeners are passive
+  // and cannot cancel anything; this one is not. It runs before React's handler
+  // for the same move, so it makes the sideways-or-not call itself, by the same
+  // rule as onPageTouchMove, which then finds it already made.
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const onMove = (e: TouchEvent) => {
+      const sx = pageSwipeStartX.current, sy = pageSwipeStartY.current;
+      if (sx === null || sy === null || !e.cancelable) return;
+      const dx = e.touches[0].clientX - sx;
+      const dy = e.touches[0].clientY - sy;
+      if (pageSwipeLocked.current === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        pageSwipeLocked.current = Math.abs(dx) > Math.abs(dy) * 1.3 ? "horizontal" : "vertical";
+      }
+      if (pageSwipeLocked.current !== "horizontal") return;
+      const towardOther = pageRef.current === "songs" ? dx < 0 : dx > 0;
+      if (towardOther) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onMove);
+  }, [areaRef]);
 
   const onPageTouchStart = (e: React.TouchEvent) => {
     if (activeMenu || selectMode || filterOpen || swipeDisabled) return;

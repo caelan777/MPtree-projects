@@ -8,6 +8,27 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.5 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`
+(versionCode 112, built 2026-10-28 with `npm run build:play` from the branch `playlists-redesign`; the next bundle or test
+build is 113). Test builds 79 to 81; 1.3.4 never went to Play, so these notes cover both. Nothing new to declare: no new
+permissions, the ad is the same rewarded ad, and the TikTok row in About only opens a link.
+
+```
+<en-GB>
+Playlists have a new look: each one is a card with its photo as a record sleeve, grows open from its row and swipes back. The ⋮ menu and selecting share one card of tiles, with everything for a single song. MPTree starts by flying through its logo. Bigger rows on big phones, with the length under the name. Tap the record in the player to change its photo. TikTok is in About. Next up keeps your playlist after reopening, and the first tap after swiping to Playlists works.
+</en-GB>
+<nl-NL>
+Playlists zien er nieuw uit: elke playlist is een kaart met de foto als platenhoes, groeit open uit zijn rij en swipe je terug. Het ⋮-menu en selecteren delen één kaart met tegels, met alles voor één nummer. MPTree start door het logo heen. Grotere rijen op grote telefoons, met de duur onder de naam. Tik op de plaat in de speler om de foto te wijzigen. TikTok staat bij Over MPTree. Hierna onthoudt je playlist na opnieuw openen.
+</nl-NL>
+<es-ES>
+Las listas tienen un aspecto nuevo: cada una es una tarjeta con su foto como funda de disco, se abre desde su fila y vuelve deslizando. El menú ⋮ y la selección comparten una tarjeta de botones, con todo para una canción. MPTree arranca volando a través de su logo. Filas más grandes en teléfonos grandes, con la duración bajo el nombre. Toca el disco en el reproductor para cambiar su foto. TikTok está en Acerca de. A continuación recuerda tu lista al volver a abrir.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.3 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.3.aab`

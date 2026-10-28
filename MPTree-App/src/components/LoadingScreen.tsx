@@ -10,16 +10,21 @@ import { Logo } from "./Logo";
 // so there is never a flash of an empty/incomplete song list. Once
 // `visible` flips to false it fades out and then unmounts itself.
 //
-// Visual concept: the mark alone on the app's ground, breathing slowly, with
-// three quiet dots standing in for progress. Strictly monochrome, per the
-// brand system in Branding/README.md: black and white carry the identity, and
-// colour is reserved for functional state.
+// Visual concept: the mark alone on the app's ground, breathing slowly, the
+// name under it. Strictly monochrome, per the brand system in
+// Branding/README.md: black and white carry the identity, and colour is
+// reserved for functional state.
+//
+// On the way out you fly through the mark: it draws back for a moment, then
+// grows towards you around the open triangle inside the M, and that opening
+// becomes the screen while the ground fades and the app is there. Scaled,
+// never turned: the brand does not let the mark rotate.
 //
 // The first frame is the MARK ONLY, on black. Android always shows its own
 // splash before the WebView exists (you cannot opt out on Android 12+), and
 // that splash is themed in res/values/styles.xml to be the same mark on the
 // same black. Holding this frame identical for a beat, then fading the wordmark
-// and dots in, makes the handover invisible — instead of the app appearing to
+// in, makes the handover invisible — instead of the app appearing to
 // start up twice.
 
 interface LoadingScreenProps {
@@ -41,7 +46,10 @@ interface LoadingScreenProps {
   onHidden?: () => void;
 }
 
-const FADE_MS = 380;
+const FADE_MS = 640;
+/** Where the mark is flown into: the middle of the triangle inside the M, as
+ *  a fraction of the mark's box (the incircle of that opening). */
+const FLY_ORIGIN = "16.7% 41.6%";
 const MIN_VISIBLE_MS = 1200;
 
 export function LoadingScreen({
@@ -104,49 +112,57 @@ export function LoadingScreen({
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 900,
-        background: TH.bg,
+        position: "fixed", inset: 0, zIndex: 900, overflow: "hidden",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        opacity: faded ? 0 : 1,
-        transition: `opacity ${FADE_MS}ms ease`,
         pointerEvents: faded ? "none" : "auto",
       }}
     >
+      {/* The ground on its own layer, so it can fade while the mark flies. */}
+      <div style={{
+        position: "absolute", inset: 0, background: TH.bg,
+        animation: faded ? `mplGround ${FADE_MS}ms linear both` : "none",
+      }} />
       <style>{`
         @keyframes mplBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
-        @keyframes mplDot     { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
-        @media (prefers-reduced-motion: reduce) { .mpl-anim { animation: none !important; } }
+        @keyframes mplFly {
+          0%   { transform: scale(1); opacity: 1; animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); }
+          22%  { transform: scale(0.9); opacity: 1; animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.4); }
+          94%  { transform: scale(70); opacity: 1; }
+          100% { transform: scale(70); opacity: 0; }
+        }
+        @keyframes mplGround { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes mplWordsOut { to { opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) {
+          .mpl-anim { animation: none !important; }
+          .mpl-fly { animation: mplGround ${FADE_MS}ms linear both !important; }
+        }
       `}</style>
 
-      {/* Mark, breathing very slowly. */}
-      <div className="mpl-anim" style={{ animation: "mplBreathe 3.2s ease-in-out infinite" }}>
-        <Logo size={104} color={TH.text} />
+      {/* Mark, breathing very slowly, and flown through on the way out. */}
+      <div className={faded ? "mpl-fly" : undefined} style={{
+        position: "relative", transformOrigin: FLY_ORIGIN,
+        animation: faded ? `mplFly ${FADE_MS}ms both` : "none",
+      }}>
+        <div className="mpl-anim" style={{ animation: "mplBreathe 3.2s ease-in-out infinite" }}>
+          <Logo size={104} color={TH.text} />
+        </div>
       </div>
 
       {/* Wordmark. Monochrome: the mark carries the identity, not a colour. */}
-      <div style={{
-        marginTop: 22, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: TH.text,
+      <div role="status" aria-label={label} style={{
+        position: "relative", marginTop: 22, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em", color: TH.text,
         opacity: settled ? 1 : 0, transition: "opacity 0.35s ease",
+        animation: faded ? "mplWordsOut 0.15s ease both" : "none",
       }}>
         MPTree
       </div>
 
-      {/* Three quiet dots standing in for progress. */}
-      <div style={{ display: "flex", gap: 7, marginTop: 26, opacity: settled ? 1 : 0, transition: "opacity 0.35s ease" }} aria-label={label}>
-        {[0, 1, 2].map(i => (
-          <div key={i} className="mpl-anim" style={{
-            width: 6, height: 6, borderRadius: "50%", background: TH.text,
-            animation: `mplDot 1.4s ease-in-out ${i * 0.18}s infinite`,
-          }} />
-        ))}
-      </div>
-
       {/* Signature, pinned near the bottom. */}
-      <div style={{ position: "absolute", bottom: 40, textAlign: "center", opacity: settled ? 1 : 0, transition: "opacity 0.35s ease" }}>
+      <div style={{
+        position: "absolute", bottom: 40, textAlign: "center", opacity: settled ? 1 : 0, transition: "opacity 0.35s ease",
+        animation: faded ? "mplWordsOut 0.15s ease both" : "none",
+      }}>
         <div style={{ fontSize: 12, color: TH.muted }}>by Verkuijl</div>
-        <div style={{ fontSize: 11, color: TH.muted, opacity: 0.65, marginTop: 4, letterSpacing: "0.06em" }}>
-          {t("your music · on your device")}
-        </div>
       </div>
     </div>
   );

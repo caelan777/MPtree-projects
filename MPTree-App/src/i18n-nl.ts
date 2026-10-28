@@ -736,4 +736,21 @@ export const NL: Record<string, string> = {
   "A treat to make up for the scare: 24 more hours of Pro.": "Iets lekkers om de schrik goed te maken: 24 uur Pro erbij.",
   "Pro runs until": "Pro loopt tot",
   "Thanks": "Bedankt",
+  // Playlists: making one where Reorder was.
+  "+ New playlist": "+ Nieuwe playlist",
+  "Tap \"+ New playlist\" to make your first one": "Tik op \"+ Nieuwe playlist\" om je eerste te maken",
+  // The About page (SettingsSheet).
+  "About MPTree": "Over MPTree",
+  "Help, questions, feedback and privacy.": "Hulp, vragen, feedback en privacy.",
+  "Version {v}": "Versie {v}",
+  "Privacy": "Privacy",
+  "Website": "Website",
+  // 1.3.5: the menu as tiles, the bin, the photo question, TikTok
+  "Ringtone": "Als beltoon",
+  "Out of playlist": "Uit playlist",
+  "Bin": "Prullenbak",
+  "in {name}": "in {name}",
+  "Follow MPTree": "Volg MPTree",
+  "Remove photo?": "Foto weghalen?",
+  "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" krijgt weer de gewone hoes. De foto zelf blijft gewoon op je telefoon staan.",
 };

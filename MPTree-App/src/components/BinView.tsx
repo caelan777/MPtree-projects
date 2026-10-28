@@ -147,7 +147,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
                     {dispName(song)}
                   </div>
                   <div style={{ fontSize: 13, color: T.muted, opacity: 0.7, marginTop: 2 }}>
-                    {dispArtist(song) || t("Unknown Artist")}
+                    {dispArtist(song)}
                   </div>
                 </div>
               </div>
@@ -225,7 +225,7 @@ function DeletedList({ deleted, onRestore, T }: { deleted: Deleted[]; onRestore:
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.title}</div>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {d.restoring ? t("Coming back…") : d.canRestore ? (d.artist || t("Unknown Artist")) : t("No device has it any more")}
+              {d.restoring ? t("Coming back…") : d.canRestore ? (d.artist) : t("No device has it any more")}
             </div>
           </div>
           {d.canRestore && !d.restoring && (
