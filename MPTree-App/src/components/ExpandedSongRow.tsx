@@ -53,7 +53,7 @@ export function ExpandedSongRow({
             }}>CUT</span>
           )}
           <div style={{ fontSize: 14, color: T.textSub, marginTop: 5, wordBreak: "break-word" }}>
-            {dispArtist || t("Unknown Artist")}
+            {dispArtist}
           </div>
         </div>
       </div>

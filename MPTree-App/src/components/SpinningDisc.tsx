@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { Logo } from "./Logo";
 import { t } from "../i18n";
 import { useLook, useVinyl, saveLook, isFlowerRecord, isLanternRecord, type VinylSkin } from "../look";
@@ -51,6 +51,9 @@ type SpinningDiscProps = {
    *  and back. onNoCover is called instead when there is no cover to use. */
   tappable?: boolean;
   onNoCover?: () => void;
+  /** In the player: a tap opens the song's photo to change it. The picture
+   *  disc then moves to holding the record. */
+  onPhoto?: () => void;
 };
 
 // ─── Record skins (Pro) ──────────────────────────────────────────────────────
@@ -81,7 +84,7 @@ const SHEEN =
   "rgba(255,255,255,0) 180deg, rgba(255,255,255,0.11) 205deg, rgba(255,255,255,0) 235deg, rgba(255,255,255,0) 360deg)";
 
 export const SpinningDisc = memo(function SpinningDisc({
-  size, spinning = false, title = "", customPhoto, skin: forced, tappable = false, onNoCover,
+  size, spinning = false, title = "", customPhoto, skin: forced, tappable = false, onNoCover, onPhoto,
 }: SpinningDiscProps) {
   const look = useLook();
   const vinyl = useVinyl();
@@ -90,9 +93,21 @@ export const SpinningDisc = memo(function SpinningDisc({
   const picture = !forced && look.photoDisc && !!customPhoto;
   const skin: VinylSkin | "picture" = picture ? "picture" : (forced ?? vinyl);
 
-  const onTap = tappable ? () => {
+  const flipPicture = () => {
     if (!customPhoto) { onNoCover?.(); return; }
     saveLook({ photoDisc: !look.photoDisc });
+  };
+  // With onPhoto a tap is the photo and a hold is the picture disc.
+  const held = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopHold = () => { if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; } };
+  const holdProps = tappable && onPhoto ? {
+    onPointerDown: () => { held.current = false; stopHold(); holdTimer.current = setTimeout(() => { held.current = true; flipPicture(); }, 550); },
+    onPointerUp: stopHold, onPointerLeave: stopHold, onPointerCancel: stopHold,
+  } : null;
+  const onTap = tappable ? () => {
+    if (onPhoto) { if (held.current) { held.current = false; return; } onPhoto(); return; }
+    flipPicture();
   } : undefined;
 
   const label = Math.round(size * 0.24);
@@ -119,8 +134,9 @@ export const SpinningDisc = memo(function SpinningDisc({
   return (
     <div
       onClick={onTap}
+      {...holdProps}
       role={tappable ? "button" : undefined}
-      aria-label={tappable ? t("Switch between the record and the cover") : undefined}
+      aria-label={tappable ? (onPhoto ? t("Change photo") : t("Switch between the record and the cover")) : undefined}
       style={{
       width: size, height: size, flexShrink: 0, display: "grid", placeItems: "center",
       position: "relative", borderRadius: "50%", cursor: tappable ? "pointer" : undefined,

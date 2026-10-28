@@ -745,4 +745,12 @@ export const NL: Record<string, string> = {
   "Version {v}": "Versie {v}",
   "Privacy": "Privacy",
   "Website": "Website",
+  // 1.3.5: the menu as tiles, the bin, the photo question, TikTok
+  "Ringtone": "Als beltoon",
+  "Out of playlist": "Uit playlist",
+  "Bin": "Prullenbak",
+  "in {name}": "in {name}",
+  "Follow MPTree": "Volg MPTree",
+  "Remove photo?": "Foto weghalen?",
+  "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" krijgt weer de gewone hoes. De foto zelf blijft gewoon op je telefoon staan.",
 };

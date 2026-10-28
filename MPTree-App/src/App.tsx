@@ -199,6 +199,8 @@ export default function App() {
   // they came from.
   const [multiIds,      setMultiIds]      = useState<string[]>([]);
   const [removeSong,     setRemoveSong]    = useState<Song | null>(null);
+  // Several songs picked in a playlist, about to go to the bin: asks first.
+  const [binManyIds,     setBinManyIds]    = useState<string[] | null>(null);
   const [cutSong,        setCutSong]       = useState<Song | null>(null);
   const [cutDuration,    setCutDuration]   = useState(0);
   const [playerExpanded, setPlayerExpanded]= useState(false);
@@ -418,6 +420,16 @@ export default function App() {
   const runLibraryScanRef = useRef<null | (() => void)>(null);
   // True while a playlist/smart-playlist detail view is open in PlaylistsView.
   const [playlistDetailOpen, setPlaylistDetailOpen] = useState(false);
+  // The playlist open on the Playlists tab, by name, for the tabs: inside one
+  // they read "Playlists › name", and Playlists goes back to the list.
+  const [openPlaylistName, setOpenPlaylistName] = useState<string | null>(null);
+  const [playlistListSignal, setPlaylistListSignal] = useState(0);
+  // Kept while the name folds away, so it does not empty out mid-fold.
+  const [shownPlaylistName, setShownPlaylistName] = useState("");
+  const onOpenPlaylistName = useCallback((name: string | null) => {
+    setOpenPlaylistName(name);
+    if (name) setShownPlaylistName(name);
+  }, []);
   // True when the user denied the media-access permission — shows a recovery
   // screen with Retry / Open Settings instead of a silent empty library.
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -642,6 +654,8 @@ export default function App() {
   const scrollRef    = useRef<HTMLDivElement>(null);
   const songRowRefs  = useRef<Map<string, HTMLDivElement>>(new Map());
   const queueRef     = useRef<Song[]>([]);
+  // The playlists as loaded at start, for putting back what was playing.
+  const storedPlaylistsRef = useRef<Playlist[]>([]);
   // The list the queue was drawn from, in its own order: the library as it is
   // shown, a playlist, a selection. Shuffle from the player shuffles this, and
   // turning shuffle off goes back to it. Both used to take the whole library,
@@ -811,7 +825,7 @@ export default function App() {
   const toNativeTrack = useCallback((t: Song) => ({
     path:   t.uri,
     title:  metaRef.current[t.id]?.customName ?? t.title,
-    artist: metaRef.current[t.id]?.customArtist ?? (!isMissingArtist(t.artist) ? t.artist : "Unknown"),
+    artist: metaRef.current[t.id]?.customArtist ?? (!isMissingArtist(t.artist) ? t.artist : ""),
     isCut:  !!t.isCut,
     ...(t.isCut ? { cutFrom: Math.round(t.cutFrom ?? 0), cutTo: Math.round(t.cutTo ?? 0) } : null),
   }), []);
@@ -824,9 +838,10 @@ export default function App() {
         repeat:       repeatOnRef.current,
         repeatAll:    repeatAllRef.current,
         currentId:    curRef.current?.id,
-        queueIds:     playModeRef.current === "shuffle"
+        queueIds:     playModeRef.current === "shuffle" || playSourceRef.current
                         ? queueRef.current.map(s => s.id)
                         : undefined,
+        playSource:   playSourceRef.current ?? undefined,
         positionMs:   currentTimeRef.current,
         isPlaying:    isPlayingRef.current,
         crossfadeMs:  crossfadeMsRef.current,
@@ -891,6 +906,18 @@ export default function App() {
   // on) the song comes from the service, and the queue it is part of from
   // there: without it the app showed the song alone, with no Up next and a
   // next button that had nowhere to go.
+  /** After a reopen: the playlist the saved queue came from, so Next up says
+   *  its name, the playlist marks the song, and turning shuffle off goes on
+   *  in the playlist's own order. */
+  const restorePlaylistContext = (session: Awaited<ReturnType<typeof loadSession>> | undefined, saved: Song[]) => {
+    const src = session?.playSource;
+    if (!src) return;
+    setPlaySource(src);
+    const pl = src.startsWith("pl:") ? storedPlaylistsRef.current.find(p => `pl:${p.id}` === src) : undefined;
+    const own = pl ? pl.songIds.map(id => saved.find(s => s.id === id)).filter((s): s is Song => !!s) : [];
+    playContextRef.current = own.length ? own : saved;
+  };
+
   const resyncFromNative = async (scanned: Song[], session?: Awaited<ReturnType<typeof loadSession>>) => {
     try {
       const native = await AudioPlayer.getCurrentSong();
@@ -901,9 +928,12 @@ export default function App() {
       setCurrent(match); setCurrentTime(position); currentTimeRef.current = position;
       if (dur > 0) setDuration(dur);
       setPlaying(native.isPlaying); loadedRef.current = true;
-      const saved = session?.playMode === "shuffle" && session.queueIds
+      const saved = session?.queueIds
         ? session.queueIds.map((id: string) => scanned.find(s => s.id === id)).filter((s): s is Song => !!s)
         : [];
+      if (!queueRef.current.some(s => s.id === match.id) && saved.some(s => s.id === match.id)) {
+        restorePlaylistContext(session, saved);
+      }
       setQueue(prev => prev.some(s => s.id === match.id) ? prev
         : saved.some(s => s.id === match.id) ? saved
         : [match]);
@@ -932,9 +962,11 @@ export default function App() {
         if (!resynced && session.currentId) {
           const found = scanned.find(s => s.id === session.currentId);
           if (found) {
-            const restoredQueue = (session.playMode === "shuffle" && session.queueIds)
+            const savedQueue = session.queueIds
               ? session.queueIds.map((id: string) => scanned.find((s: Song) => s.id === id)).filter((s): s is Song => !!s)
-              : [found];
+              : [];
+            const restoredQueue = savedQueue.some(s => s.id === found.id) ? savedQueue : [found];
+            if (restoredQueue === savedQueue) restorePlaylistContext(session, savedQueue);
             setQueue(restoredQueue); setCurrent(found); setCurrentTime(session.positionMs ?? 0);
             currentTimeRef.current = session.positionMs ?? 0; setPlaying(false); loadedRef.current = false;
           }
@@ -957,6 +989,7 @@ export default function App() {
         metaRef.current = storedMeta; setMeta(storedMeta);
 
         const storedPlaylists = await loadPlaylists();
+        storedPlaylistsRef.current = storedPlaylists;
         setPlaylists(storedPlaylists);
 
         const session = await loadSession();
@@ -1041,7 +1074,7 @@ export default function App() {
     if (!sessionReadyRef.current) return;
     flushSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, playMode, repeatOn, repeatAll, currentSong, queue, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
+  }, [filter, playMode, repeatOn, repeatAll, currentSong, queue, playSource, crossfadeMs, playbackSpeed, eqEnabled, eqBandLevels, playNextQueue, theme]);
 
   useEffect(() => { if (!sessionReadyRef.current || meta === statsMetaRef.current) return; saveMeta(meta); }, [meta]);
 
@@ -1307,8 +1340,12 @@ export default function App() {
     let next = exact ?? q.find(s => s.uri === path) ?? null;
     let sourceList = q;
     if (!next) {
-      const list = displayListRef.current;
-      next = list.find(s => s.uri === path) ?? null;
+      // What is being played from first (a playlist stays a playlist), and
+      // only then the Songs list.
+      const ctx = playContextRef.current ?? [];
+      const inCtx = ctx.find(s => s.uri === path) ?? null;
+      const list = inCtx ? ctx : displayListRef.current;
+      next = inCtx ?? list.find(s => s.uri === path) ?? null;
       sourceList = list;
     }
     if (!next) return; // unknown path (e.g. stale) — ignore
@@ -1442,7 +1479,7 @@ export default function App() {
     try {
       setQueue(q); setCurrent(s); setCurrentTime(0); setDuration(0); setPlaying(true); loadedRef.current = true;
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
-      const artist = artistOverride ?? getMeta(s).customArtist ?? (s.artist && s.artist.toLowerCase() !== "<unknown>" ? s.artist : "Unknown");
+      const artist = artistOverride ?? getMeta(s).customArtist ?? (!isMissingArtist(s.artist) ? s.artist : "");
       await AudioPlayer.play({ path: s.uri, title, artist, ...cutBounds(s) });
       if (s.isCut && s.cutFrom && s.cutFrom > 0) { setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom; }
       const idx = q.findIndex(x => x.id === s.id);
@@ -1455,7 +1492,7 @@ export default function App() {
     if (!currentSong) return;
     try {
       if (!loadedRef.current) {
-        await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown", ...cutBounds(currentSong) });
+        await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong), ...cutBounds(currentSong) });
         const seekTarget = currentSong.isCut && currentTime <= (currentSong.cutFrom ?? 0) ? (currentSong.cutFrom ?? 0) : currentTime;
         if (seekTarget > 0) await AudioPlayer.seekTo({ milliseconds: seekTarget });
         loadedRef.current = true; setPlaying(true); return;
@@ -1468,7 +1505,7 @@ export default function App() {
   const seekTo = async (ms: number) => {
     if (!currentSong) return;
     try {
-      if (!loadedRef.current) { await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong) || "Unknown", ...cutBounds(currentSong) }); await AudioPlayer.pause(); loadedRef.current = true; }
+      if (!loadedRef.current) { await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong), ...cutBounds(currentSong) }); await AudioPlayer.pause(); loadedRef.current = true; }
       await AudioPlayer.seekTo({ milliseconds: ms });
     } catch { /* ignore */ }
   };
@@ -1483,7 +1520,8 @@ export default function App() {
     if (!currentSong) return;
     // A queue of just the current song is what is left after the app was
     // reopened over music that kept playing: the list on screen is the queue then.
-    const q = queue.length > 1 ? queue : displayList;
+    const ctx = playContextRef.current;
+    const q = queue.length > 1 ? queue : ctx && ctx.length > 1 && ctx.some(s => s.id === currentSong.id) ? ctx : displayList;
     const idx = q.findIndex(s => s.id === currentSong.id);
     if (idx === -1) return;
     // Repeat all goes round: after the last song the first, and back.
@@ -2284,11 +2322,20 @@ export default function App() {
   });
 
   // ── Select mode tap handler ───────────────────────────────────────────────
+  // When the last long press started picking. The lift of that same finger
+  // can arrive as a tap, and by then the list has moved up under it (the
+  // header made way for the selection bar), so it picked the row below too.
+  const longPressAtRef = useRef(0);
   const handleTap = (song: Song) => {
     if (selectMode) {
+      if (Date.now() - longPressAtRef.current < 700) return;
       setSelected(prev => { const next = new Set(prev); if (next.has(song.id)) next.delete(song.id); else next.add(song.id); return next; });
       return;
     }
+    playTapped(song);
+  };
+  /** A song tapped on the Songs page, played from there. */
+  const playTapped = (song: Song) => {
     // Single tap plays immediately. Liking is done via the heart button only
     // (double-tap-to-like was removed — it forced a 250ms delay on every play
     // and made tapping a song feel laggy).
@@ -2317,6 +2364,7 @@ export default function App() {
     // per-song actions moved to the "⋮" button, so this no longer has to
     // double as a hidden menu trigger.
     pressTimer.current = setTimeout(() => {
+      longPressAtRef.current = Date.now();
       hapticImpact("medium");
       setSelectMode(true);
       setSelected(prev => { const next = new Set(prev); next.add(id); return next; });
@@ -2806,6 +2854,7 @@ export default function App() {
       if (cutSong)             { setCutSong(null); return; }
       if (removeSong)          { setRemoveSong(null); return; }
       if (removeMultiConfirm)  { setRemoveMultiConfirm(false); return; }
+      if (binManyIds)          { setBinManyIds(null); return; }
       if (editSong)            { setEditSong(null); return; }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
       if (updateInfo)          { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); return; }
@@ -3052,6 +3101,9 @@ export default function App() {
   const filterLabel = FILTER_OPTIONS.find((o: { id: FilterId; label: string }) => o.id === filter)?.label ?? "Sort";
   const filterText = t(filterLabel);
   const selectedSongs = displayList.filter(s => selected.has(s.id));
+  // One song picked on the Songs page: its selection card holds everything
+  // its "⋮" menu has.
+  const onePicked = selected.size === 1 ? songs.find(x => selected.has(x.id)) ?? null : null;
   const allSelectedLiked = selectedSongs.length > 0 && selectedSongs.every(s => isLiked(s));
 
   // Default backup name (date-based)
@@ -3185,6 +3237,8 @@ export default function App() {
         @keyframes mpReveal { from { --mpr: 0px; } to { --mpr: 150vmax; } }
         @keyframes mpRowIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes mpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* The floating cards (the "⋮" menu, "are you sure?") coming up. */
+        @keyframes mpCardUp { from { opacity: 0; transform: translateY(36px); } to { opacity: 1; transform: translateY(0); } }
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
@@ -3268,33 +3322,48 @@ export default function App() {
             </button>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 2, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
-            <button
-              onClick={() => setPage("songs")}
-              style={{
-                padding: "6px 14px", borderRadius: 17, border: "none", cursor: "pointer",
-                fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                background: page === "songs" ? CT.accent : "transparent",
-                color: page === "songs" ? CT.playBtnFg : CT.muted,
-                transition: "background 0.2s, color 0.2s",
-              }}
-            >
-              {t("Songs")}
-            </button>
-            <button
-              data-tour="playlists"
-              onClick={() => setPage("playlists")}
-              style={{
-                padding: "6px 14px", borderRadius: 17, border: "none", cursor: "pointer",
-                fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-                background: page === "playlists" ? CT.accent : "transparent",
-                color: page === "playlists" ? CT.playBtnFg : CT.muted,
-                transition: "background 0.2s, color 0.2s",
-              }}
-            >
-              {t("Playlists")}
-            </button>
-          </div>
+          {/* The tabs. Inside a playlist they turn into the way back and where
+              you are: Songs folds away, Playlists lets go of its fill, and the
+              playlist's name comes in filled after a "›". */}
+          {(() => {
+            const inPl = page === "playlists" && !!openPlaylistName;
+            const fold = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+            const seg = (on: boolean): React.CSSProperties => ({
+              paddingTop: 6, paddingBottom: 6, paddingLeft: 14, paddingRight: 14, borderRadius: 17, border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 700, fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", flexShrink: 0,
+              background: on ? CT.accent : "transparent",
+              color: on ? CT.playBtnFg : CT.muted,
+              transition: `background 0.2s, color 0.2s, max-width ${fold}, padding ${fold}, opacity ${fold}`,
+            });
+            return (
+              <div style={{ display: "flex", alignItems: "center", minWidth: 0, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
+                <button
+                  onClick={() => setPage("songs")}
+                  tabIndex={inPl ? -1 : 0}
+                  aria-hidden={inPl}
+                  style={{ ...seg(page === "songs"), maxWidth: inPl ? 0 : 140, opacity: inPl ? 0 : 1, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : null), marginRight: inPl ? 0 : 2 }}
+                >
+                  {t("Songs")}
+                </button>
+                <button
+                  data-tour="playlists"
+                  onClick={() => { if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
+                  style={{ ...seg(page === "playlists" && !inPl), ...(inPl ? { paddingLeft: 12, paddingRight: 2 } : null) }}
+                >
+                  {t("Playlists")}
+                </button>
+                <span aria-hidden="true" style={{ display: "flex", flexShrink: 0, overflow: "hidden", color: CT.muted, maxWidth: inPl ? 18 : 0, opacity: inPl ? 1 : 0, transition: `max-width ${fold}, opacity ${fold}` }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
+                </span>
+                <span
+                  aria-hidden={!inPl}
+                  style={{ ...seg(true), flexShrink: 1, cursor: "default", textOverflow: "ellipsis", minWidth: 0, maxWidth: inPl ? 130 : 0, opacity: inPl ? 1 : 0, ...(inPl ? null : { paddingLeft: 0, paddingRight: 0 }) }}
+                >
+                  {shownPlaylistName}
+                </span>
+              </div>
+            );
+          })()}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <button data-tour="settings" onClick={() => { void openSettings(); }} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
@@ -3666,7 +3735,7 @@ export default function App() {
                                 {/* Track number — hidden for now (kept for future use):
                                 <span style={{ fontSize: 12, fontWeight: "600", color: isActive ? TH.accent : TH.muted, flexShrink: 0 }}>{idx + 1}</span>
                                 */}
-                                <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist || t("Unknown Artist")}</span>
+                                <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
                                 {rowLength(song) > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(rowLength(song))}</span>}
                               </div>
                             </div>
@@ -3719,7 +3788,7 @@ export default function App() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 600, color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.title}</div>
-                        <div style={{ fontSize: 13, color: TH.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.artist || t("Unknown Artist")}</div>
+                        <div style={{ fontSize: 13, color: TH.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.artist}</div>
                       </div>
                     </div>
                   ))}
@@ -3849,11 +3918,14 @@ export default function App() {
               onCutSong={(song) => openCutSheet(song)}
               onShareSong={(song) => shareSong(song)}
               onRemoveSong={(song) => setRemoveSong(song)}
+              onBinMany={ids => setBinManyIds(ids)}
               isLiked={isLiked}
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
               onInsetJump={markInsetJump}
+              onOpenName={onOpenPlaylistName}
+              listSignal={playlistListSignal}
               animateInsets={chromeAnimate}
               onClose={() => setPage("songs")}
               T={TH}
@@ -3919,7 +3991,7 @@ export default function App() {
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
-                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
+                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong)}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
@@ -3947,6 +4019,20 @@ export default function App() {
             onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
             onShare={() => { void shareSongs([...selected]); }}
             onDelete={() => setRemoveMultiConfirm(true)}
+            single={onePicked ? {
+                isLiked: isLiked(onePicked),
+                onPlay: () => { exitSelectMode(); playTapped(onePicked); },
+                onPlayNext: () => { exitSelectMode(); handlePlayNext(onePicked); },
+                onAddToPlaylist: () => { setMultiIds([onePicked.id]); setMultiAddOpen(true); },
+                onToggleLike: () => multiLikeWithMeta(!isLiked(onePicked)),
+                onShare: () => { void shareSong(onePicked); },
+                onEditLyrics: () => { exitSelectMode(); openLyricsSheet(onePicked); },
+                onCut: () => { exitSelectMode(); void openCutSheet(onePicked); },
+                onSetRingtone: () => { exitSelectMode(); void setSongAsRingtone(onePicked); },
+                onChangePhoto: () => { exitSelectMode(); setEditFocusPhoto(true); setEditSong(onePicked); },
+                onEdit: () => { exitSelectMode(); setEditFocusPhoto(false); setEditSong(onePicked); },
+                onBin: () => { exitSelectMode(); setRemoveSong(onePicked); },
+            } : null}
             onBulkEdit={() => { setMultiIds([...selected]); setBulkEditOpen(true); }}
             onAddToPlaylist={() => { setMultiIds([...selected]); setMultiAddOpen(true); }}
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
@@ -4025,7 +4111,8 @@ export default function App() {
             T={TH}
           />
         )}
-        {editSong && <EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} />}
+        {editSong && <div style={{ position: "relative", zIndex: 460 }}><EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} /></div>}
+        {binManyIds && <ConfirmSheet title={t("Remove {n} songs", { n: binManyIds.length })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: binManyIds.length })} confirmLabel={t("Move {n} to bin", { n: binManyIds.length })} onConfirm={() => { removeMany(binManyIds); setBinManyIds(null); }} onCancel={() => setBinManyIds(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
@@ -4238,6 +4325,7 @@ export default function App() {
           return (
             <PlayerExpandSheet
               onNoCover={() => showToast(t("This song has no cover. Add one with Edit."))}
+              onChangePhoto={() => { setEditFocusPhoto(true); setEditSong(currentSong); }}
               song={currentSong}
               dispName={dispName(currentSong)}
               dispArtist={dispArtist(currentSong)}

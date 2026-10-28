@@ -745,4 +745,12 @@ export const ES: Record<string, string> = {
   "Version {v}": "Versión {v}",
   "Privacy": "Privacidad",
   "Website": "Sitio web",
+  // 1.3.5: the menu as tiles, the bin, the photo question, TikTok
+  "Ringtone": "Tono",
+  "Out of playlist": "Quitar de lista",
+  "Bin": "Papelera",
+  "in {name}": "en {name}",
+  "Follow MPTree": "Sigue a MPTree",
+  "Remove photo?": "¿Quitar la foto?",
+  "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" vuelve a tener la portada normal. La foto sigue en tu teléfono.",
 };

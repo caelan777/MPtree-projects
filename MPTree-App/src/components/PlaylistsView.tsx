@@ -6,6 +6,8 @@ import { CropSheet } from "./CropSheet";
 import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
+import { floatCard, roundBtn as cardCloseBtn } from "./cardStyles";
+import { ConfirmSheet } from "./ConfirmSheet";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
 import type { T } from "../themes";
@@ -65,6 +67,8 @@ interface Props {
   onCutSong:          (song: Song) => void;
   onShareSong:        (song: Song) => void;
   onRemoveSong:       (song: Song) => void;
+  /** Several picked songs to the bin. App asks first. */
+  onBinMany:          (ids: string[]) => void;
   /** Whether a song is liked, for the long-press menu label. */
   isLiked:            (song: Song) => boolean;
   /** Optional light haptic on long-press. */
@@ -92,6 +96,12 @@ interface Props {
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
   animateInsets?:     boolean;
+  /** The name of the playlist that is open, or null on the list. App shows
+   *  it in its tabs: "Playlists › name". */
+  onOpenName?:        (name: string | null) => void;
+  /** Bumped when "Playlists" is tapped in App's tabs inside a playlist:
+   *  straight back to the list. */
+  listSignal?:        number;
   /** Called when the user backs out of the root "list" view — App treats this as "go to Songs page" */
   onClose:            () => void;
   T:                  T;
@@ -160,9 +170,12 @@ function RecordSleeve({ photo, icon, size, playing, spinning, onPick, T: t }: {
         transform: playing ? `translateX(${Math.round(size * 0.1)}px)` : "none",
         transition: "transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
       }}>
-        <SpinningDisc size={disc} spinning={spinning} customPhoto={photo} skin={vinyl} />
+        <div data-disc>
+          <SpinningDisc size={disc} spinning={spinning} customPhoto={photo} skin={vinyl} />
+        </div>
       </div>
       <div
+        data-sleeve
         onClick={onPick}
         role={onPick ? "button" : undefined}
         aria-label={onPick ? (photo ? tr("Change photo") : tr("Add photo")) : undefined}
@@ -270,10 +283,10 @@ export const PlaylistsView: React.FC<Props> = ({
   rowH = 68,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, playingFrom = null, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
-  onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
+  onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onClose, T,
+  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -351,9 +364,11 @@ export const PlaylistsView: React.FC<Props> = ({
   const createInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!creating) return;
-    scrollBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     createInputRef.current?.focus({ preventScroll: true });
   }, [creating]);
+  // Only ever over the list: opening anything closes it.
+  useEffect(() => { if (view !== "list") setCreating(false); }, [view]);
+  const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
 
   // ── Multi-select (playlist detail only) ─────────────────────────────────────
   // Long-pressing a row enters select mode; tapping rows toggles them; a bottom
@@ -393,7 +408,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // should not jump back to Songs), and to decide whether Android's Back
   // belongs to us or should leave the tab.
   const canPop = view !== "list" || selectMode || !!menuSong
-    || creating || !!renamingId || !!confirmDeleteId || reordering;
+    || creating || !!renamingId || !!confirmDeleteId || confirmRemovePhoto || reordering;
   useEffect(() => { onDetailChange?.(canPop); }, [canPop, onDetailChange]);
 
   // ── Android Back, delegated from App ──────────────────────────────────────
@@ -406,6 +421,7 @@ export const PlaylistsView: React.FC<Props> = ({
     if (menuSong)         { setMenuSong(null); return; }
     if (reordering)       { setReordering(false); return; }
     if (confirmDeleteId)  { setConfirmDeleteId(null); return; }
+    if (confirmRemovePhoto) { setConfirmRemovePhoto(false); return; }
     if (renamingId)       { setRenamingId(null); return; }
     if (creating)         { setCreating(false); return; }
     if (selectMode)       { exitSelect(); return; }
@@ -542,7 +558,7 @@ export const PlaylistsView: React.FC<Props> = ({
             {/* Track number — hidden for now (kept for future use):
             <span style={{ fontSize: 12, fontWeight: 600, color: isCurrent ? t.accent : t.muted, flexShrink: 0 }}>{idx + 1}</span>
             */}
-            <span style={{ flex: 1, fontSize: 13, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song) || tr("Unknown Artist")}</span>
+            <span style={{ flex: 1, fontSize: 13, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song)}</span>
             {song.duration != null && song.duration > 0 && (
               <span style={{ fontSize: 12, color: t.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>
             )}
@@ -599,6 +615,12 @@ export const PlaylistsView: React.FC<Props> = ({
   // What "Select all" covers: whichever detail list is open. Smart playlists are
   // computed, so songs cannot be pulled out of one, but every other action in
   // the bar still applies to them.
+  // What App's tabs say inside a playlist.
+  const openName = view === "smartDetail" ? activeSmartPlaylist?.name ?? null
+    : view === "detail" || view === "addSongs" ? activePlaylist?.name ?? null
+    : null;
+  useEffect(() => { onOpenName?.(openName); }, [openName, onOpenName]);
+
   const selectableIds = useMemo(
     () => (activePlaylist ? playlistSongs : smartPlaylistSongs).map(s => s.id),
     [activePlaylist, playlistSongs, smartPlaylistSongs],
@@ -657,6 +679,21 @@ export const PlaylistsView: React.FC<Props> = ({
     }
   }, [view, onClose, selectMode, exitSelect]);
 
+  /** Straight to the list of playlists, from however deep: App's
+   *  "Playlists" tab inside a playlist, and a playlist swiped away. */
+  const leaveToList = () => {
+    exitSelect(); setMenuSong(null); setRenamingId(null); setCreating(false);
+    setSelectedAdd(new Set()); setAddSearch("");
+    setActiveId(null); setActiveSmartId(null); setView("list");
+  };
+  const lastListSignal = useRef(listSignal);
+  useEffect(() => {
+    if (listSignal === lastListSignal.current) return;
+    lastListSignal.current = listSignal;
+    leaveToList();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listSignal]);
+
   // ── Playlist CRUD ─────────────────────────────────────────────────────────
   const createPlaylist = useCallback(() => {
     const name = newName.trim();
@@ -670,6 +707,11 @@ export const PlaylistsView: React.FC<Props> = ({
     onPlaylistsChange([...playlists, newPl]);
     setNewName("");
     setCreating(false);
+    // Straight into it: the next thing anyone does with a new playlist is
+    // put songs in it, and "+ Add" is on its card.
+    openFreshRef.current = true;
+    setActiveId(newPl.id);
+    setView("detail");
   }, [newName, playlists, onPlaylistsChange]);
 
   const confirmRename = useCallback(() => {
@@ -822,6 +864,113 @@ export const PlaylistsView: React.FC<Props> = ({
   }, [view, activeId, activeSmartId]);
   const rootTransition  = animateInsets ? `padding-top ${FOLD_MOTION}` : "none";
 
+  // ── Opening a playlist ────────────────────────────────────────────────────
+  // The card grows out of what was tapped (a playlist's row, an auto
+  // playlist's card): drawn where it ends up, clipped to where the row was,
+  // and the clip opens. The row's cover flies to the sleeve, the record
+  // slides out of it, and the songs come up one after another. Measured here
+  // and played with the Web Animations API, so none of it re-renders.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const openFromRef = useRef<{ box: DOMRect; thumb: DOMRect | null } | null>(null);
+  /** A playlist just made: there is no row yet, so its card comes up instead. */
+  const openFreshRef = useRef(false);
+  const openFrom = (row: Element, thumb?: Element | null) => {
+    openFromRef.current = { box: row.getBoundingClientRect(), thumb: thumb?.getBoundingClientRect() ?? null };
+  };
+  useLayoutEffect(() => {
+    const from = openFromRef.current;
+    const fresh = openFreshRef.current;
+    openFromRef.current = null;
+    openFreshRef.current = false;
+    const card = cardRef.current;
+    if ((!from && !fresh) || !card || (view !== "detail" && view !== "smartDetail")) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const ease = "cubic-bezier(0.22, 1, 0.36, 1)";
+    if (!from) {
+      card.animate([{ opacity: 0, transform: "translateY(28px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: ease });
+      const d = card.querySelector<HTMLElement>("[data-disc]");
+      if (d) d.animate([{ transform: `translateX(-${Math.round(d.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 420, delay: 260, easing: ease, fill: "backwards" });
+      return;
+    }
+    const c = card.getBoundingClientRect();
+    const top = Math.min(Math.max(0, from.box.top - c.top), c.height - 48);
+    const bottom = Math.max(0, c.bottom - from.box.bottom);
+    const left = Math.max(0, from.box.left - c.left);
+    const right = Math.max(0, c.right - from.box.right);
+    card.animate(
+      [{ clipPath: `inset(${top}px ${right}px ${bottom}px ${left}px round 14px)` }, { clipPath: "inset(0px 0px 0px 0px round 26px)" }],
+      { duration: 420, easing: ease },
+    );
+    for (const el of Array.from(card.children) as HTMLElement[]) {
+      if (el.querySelector("[data-sleeve]")) continue;
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 140, easing: "ease", fill: "backwards" });
+    }
+    const sleeve = card.querySelector<HTMLElement>("[data-sleeve]");
+    if (sleeve && from.thumb && from.thumb.width > 0) {
+      const sb = sleeve.getBoundingClientRect();
+      const k = from.thumb.width / sb.width;
+      sleeve.animate([
+        { transform: `translate(${from.thumb.left - sb.left}px, ${from.thumb.top - sb.top}px) scale(${k})`, transformOrigin: "0 0" },
+        { transform: "none", transformOrigin: "0 0" },
+      ], { duration: 420, easing: ease });
+    } else if (sleeve) {
+      sleeve.animate([{ opacity: 0, transform: "scale(0.85)" }, { opacity: 1, transform: "none" }], { duration: 360, delay: 80, easing: ease, fill: "backwards" });
+    }
+    const disc = card.querySelector<HTMLElement>("[data-disc]");
+    if (disc) disc.animate(
+      [{ transform: `translateX(-${Math.round(disc.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 420, delay: 300, easing: ease, fill: "backwards" },
+    );
+    let row = card.nextElementSibling as HTMLElement | null;
+    for (let i = 0; row && i < 10; i++, row = row.nextElementSibling as HTMLElement | null) {
+      row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 340, delay: 180 + i * 35, easing: ease, fill: "backwards" });
+    }
+  }, [view, activeId, activeSmartId]);
+
+  // ── Swiping a playlist away ───────────────────────────────────────────────
+  // In a playlist a drag to the right takes it off to the right and the list
+  // of playlists comes back from under it, the way App's page swipe goes
+  // between Songs and Playlists. While it is dragged the list is drawn behind
+  // it, still and untouchable, so there is something under the finger.
+  const [swipeX, setSwipeX] = useState(0);
+  const [swipeAnim, setSwipeAnim] = useState(false);
+  const swipeRef = useRef<{ x: number; y: number; t: number; lock: "h" | "v" | null } | null>(null);
+  const canSwipeBack = (view === "detail" || view === "smartDetail") && !selectMode && !menuSong && !renamingId && !confirmDeleteId;
+  const onSwipeStart = (e: React.TouchEvent) => {
+    if (!canSwipeBack || swipeAnim) return;
+    const p = e.touches[0];
+    swipeRef.current = { x: p.clientX, y: p.clientY, t: Date.now(), lock: null };
+  };
+  const onSwipeMove = (e: React.TouchEvent) => {
+    const g = swipeRef.current;
+    if (!g) return;
+    const p = e.touches[0];
+    const dx = p.clientX - g.x, dy = p.clientY - g.y;
+    if (!g.lock) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      g.lock = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.3 ? "h" : "v";
+      if (g.lock === "h") cancelPress();
+    }
+    if (g.lock === "h") setSwipeX(Math.max(0, dx));
+  };
+  const onSwipeEnd = () => {
+    const g = swipeRef.current;
+    swipeRef.current = null;
+    if (!g || g.lock !== "h") return;
+    const w = window.innerWidth;
+    const fast = swipeX / Math.max(1, Date.now() - g.t) > 0.5;
+    setSwipeAnim(true);
+    if (swipeX > w * 0.3 || (fast && swipeX > 40)) {
+      setSwipeX(w);
+      setTimeout(() => { leaveToList(); setSwipeX(0); setSwipeAnim(false); }, 230);
+    } else {
+      setSwipeX(0);
+      setTimeout(() => setSwipeAnim(false), 230);
+    }
+  };
+  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
+  const swipeMotion = swipeAnim ? "0.23s cubic-bezier(0.22, 1, 0.36, 1)" : "0s";
+
   // ── The playlist's card ───────────────────────────────────────────────────
   // Everything above the songs in one card: the way back, the sleeve with its
   // record, the name, how many songs, Play all and Shuffle, and for a playlist
@@ -847,7 +996,7 @@ export const PlaylistsView: React.FC<Props> = ({
       cursor: empty ? "default" : "pointer", opacity: empty ? 0.4 : 1,
     });
     return (
-      <div style={{
+      <div ref={cardRef} style={{
         margin: "4px 12px 8px", padding: "12px 14px 16px", borderRadius: 26,
         background: t.card, border: `1px solid ${t.border}`,
       }}>
@@ -902,7 +1051,7 @@ export const PlaylistsView: React.FC<Props> = ({
           <div style={{ fontSize: 13, color: t.muted, marginTop: 5, display: "flex", justifyContent: "center", gap: 8 }}>
             <span>{tn(list.length, "{n} song", "{n} songs")}</span>
             {own && photo && (
-              <button onClick={removeCoverPhoto} style={{ background: "none", border: "none", padding: 0, color: t.muted, fontSize: 13, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
+              <button onClick={() => setConfirmRemovePhoto(true)} style={{ background: "none", border: "none", padding: 0, color: t.muted, fontSize: 13, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
                 {tr("Remove photo")}
               </button>
             )}
@@ -928,6 +1077,170 @@ export const PlaylistsView: React.FC<Props> = ({
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
     </svg>
+  );
+
+  // The list of playlists. A function so it can also be drawn, still and
+  // untouchable, behind a playlist being swiped away (`ghost`).
+  const renderList = (ghost: boolean) => (
+    <>
+            {/* Auto playlists: always there, read-only, a 2×2 grid of cards.
+                No heading and no row of buttons above them any more: the
+                cards say what they are, Songs is a tap or a swipe away, and
+                making a playlist sits with My playlists, where it lands. */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "14px 16px 8px" }}>
+              {smartPlaylists.map(sp => {
+                const count = sp.songIds.length;
+                const cardStyle = SMART_CARD_STYLES[sp.id] ?? FALLBACK_SMART_STYLE;
+                const playingHere = playingFrom === `smart:${sp.id}`;
+                return (
+                  <div
+                    key={sp.id}
+                    onClick={e => { openFrom(e.currentTarget); setActiveSmartId(sp.id); setView("smartDetail"); }}
+                    style={{
+                      position: "relative", height: 160, borderRadius: 16, padding: 16,
+                      background: t.card, border: `1px solid ${playingHere ? t.accent : t.border}`,
+                      color: t.text,
+                      display: "flex", flexDirection: "column", justifyContent: "space-between",
+                      cursor: "pointer", overflow: "hidden",
+                    }}
+                  >
+                    {/* The icon is what distinguishes each card now that they
+                        no longer carry a colour. */}
+                    <div style={{ position: "absolute", top: 14, right: 14, opacity: 0.16, lineHeight: 0 }}>
+                      {cardStyle.icon(64)}
+                    </div>
+
+                    <div style={{ position: "relative", fontSize: 16, fontWeight: 700, color: t.text, paddingRight: 46, lineHeight: 1.25 }}>
+                      {sp.name}
+                    </div>
+                    <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: t.muted }}>
+                      {tn(count, "{n} song", "{n} songs")}
+                    </div>
+                    {/* Playing from here: the same bars a playlist cover gets. */}
+                    {playingHere && (
+                      <div aria-label={tr("Playing from this playlist")} style={{
+                        position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
+                        background: t.accent, display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <PlayingBars size={34} color={t.playBtnFg} still={!isPlaying} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* User playlists */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 16px 4px" }}>
+              <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {tr("My playlists ({n})", { n: playlists.length })}
+              </span>
+              {/* Making a playlist, where Reorder used to be. Moving them is
+                  still a hold on a playlist; while that is on, this is Done. */}
+              <button
+                onClick={() => {
+                  if (reordering) { onHaptic?.(); setReordering(false); return; }
+                  setCreating(true); setNewName("");
+                }}
+                style={{
+                  background: t.accent, color: t.playBtnFg, border: "none", borderRadius: 16, padding: "6px 14px",
+                  fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
+                }}
+              >
+                {reordering ? tr("Done") : tr("+ New playlist")}
+              </button>
+            </div>
+            {playlists.length === 0 && !creating ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
+                <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New playlist\" to make your first one")}</div>
+              </div>
+            ) : (
+              <div
+                onTouchMove={plDrag ? plDragMove : undefined}
+                onTouchEnd={plDrag ? plDragEnd : undefined}
+                onTouchCancel={plDrag ? plDragEnd : undefined}
+              >
+              {playlists.map((pl, i) => {
+                const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
+                const isDragging = plDrag?.from === i;
+                const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
+                return (
+                  <div
+                    key={pl.id}
+                    ref={ghost ? undefined : el => { plRowRefs.current[i] = el; }}
+                    onClick={e => {
+                      if (plPress.current.held) { plPress.current.held = false; return; }
+                      if (reordering) return;
+                      openFrom(e.currentTarget, e.currentTarget.querySelector(":scope > div"));
+                      setActiveId(pl.id); setView("detail");
+                    }}
+                    onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchEnd={plPressEnd}
+                    onMouseDown={e => plPressStart(e.clientX, e.clientY)}
+                    onMouseMove={e => plPressMove(e.clientX, e.clientY)}
+                    onMouseUp={plPressEnd}
+                    onMouseLeave={plPressEnd}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: reordering ? "12px 16px 12px 4px" : "12px 16px",
+                      borderBottom: `1px solid ${t.border}60`,
+                      cursor: reordering ? "default" : "pointer",
+                      opacity: isDragging ? 0.4 : 1,
+                      boxShadow: isOver ? `inset 0 ${plDrag!.from < i ? -2 : 2}px 0 ${t.accent}` : "none",
+                      userSelect: "none",
+                    }}
+                  >
+                    {reordering && (
+                      <div
+                        onTouchStart={e => { e.stopPropagation(); plPressEnd(); setPlDrag({ from: i, over: i }); }}
+                        aria-label={tr("Drag to move")}
+                        style={{ color: t.muted, display: "flex", flexShrink: 0, padding: "12px 4px 12px 12px", touchAction: "none", cursor: "grab" }}
+                      >
+                        <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+                          <circle cx="3.5" cy="3" r="1.7"/><circle cx="10.5" cy="3" r="1.7"/>
+                          <circle cx="3.5" cy="9" r="1.7"/><circle cx="10.5" cy="9" r="1.7"/>
+                          <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
+                        </svg>
+                      </div>
+                    )}
+                    <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} playing={playingFrom === `pl:${pl.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pl.name}</div>
+                      <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
+                        {tn(count, "{n} song", "{n} songs")}
+                      </div>
+                    </div>
+
+                    {/* Quick-play button */}
+                    {count > 0 && !reordering && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          const ps = pl.songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => !!s);
+                          onPlayPlaylist(ps, false, `pl:${pl.id}`);
+                        }}
+                        style={{ background: t.accent, border: "none", width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      </button>
+                    )}
+
+                    {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
+                  </div>
+                );
+              })}
+              </div>
+            )}
+            {/* The floating mini-player sits over the bottom of this list. The
+                detail views already reserved room for it; the playlist list did
+                not, so the last couple of playlists were unreachable unless you
+                collapsed the player first. The transition matches the Songs
+                list's padding-bottom so both tabs fold at the same rate. */}
+            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
+    </>
   );
 
   return (
@@ -1061,6 +1374,18 @@ export const PlaylistsView: React.FC<Props> = ({
         </div>
       )}
 
+      {/* The list, behind a playlist being swiped away. */}
+      {swipeX > 0 && (
+        <div aria-hidden="true" style={{
+          position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none",
+          transform: `translateX(${Math.round((swipeX / vw - 1) * 90)}px)`, transition: `transform ${swipeMotion}`,
+        }}>
+          <div style={{ height: topInset }} />
+          {renderList(true)}
+          <div style={{ position: "absolute", inset: 0, background: "#000", opacity: 0.35 * (1 - swipeX / vw), transition: `opacity ${swipeMotion}` }} />
+        </div>
+      )}
+
       {/* ── Scrollable content ──────────────────────────────────────────── */}
       <div
         ref={scrollBodyRef}
@@ -1070,7 +1395,16 @@ export const PlaylistsView: React.FC<Props> = ({
           if ((top > 0) !== bodyScrolled) setBodyScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none" }}
+        onTouchStart={onSwipeStart}
+        onTouchMove={onSwipeMove}
+        onTouchEnd={onSwipeEnd}
+        onTouchCancel={onSwipeEnd}
+        style={{
+          flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none",
+          position: "relative", zIndex: 1,
+          ...(swipeX > 0 ? { background: t.bg, transform: `translateX(${swipeX}px)`, boxShadow: "-14px 0 32px rgba(0,0,0,0.35)" } : null),
+          transition: `transform ${swipeMotion}`,
+        }}
       >
         {/* The header's height as a spacer INSIDE the scroller, so rows scroll up
             under the collapsed logo instead of leaving a dead band. Rendered
@@ -1080,199 +1414,8 @@ export const PlaylistsView: React.FC<Props> = ({
             as a double jump. */}
         <div style={{ height: insetInside, transition: bodyScrolled && !sticky ? "none" : insetTransition }} aria-hidden="true" />
 
-        {/* ── Create playlist input ──────────────────────────────────────────
-            Inside the scroller, directly under the header card. It sat above
-            the scroller before, which in the list view meant y=0: behind the
-            floating card and the status bar, unreachable because it was not in
-            anything that scrolls. */}
-        {creating && (
-          <div style={{
-            display: "flex", gap: 8, alignItems: "center",
-            padding: "10px 16px", borderBottom: `1px solid ${t.border}`,
-            // Keyframed rather than a state-driven transition: a mount cannot be
-            // transitioned from a state the browser never painted, and the
-            // two-render dance around that is not worth a fade. `mpRowIn` is in
-            // App's global style block, next to the other shared keyframes.
-            animation: `mpRowIn ${FOLD_MOTION} both`,
-          }}>
-            <input
-              ref={createInputRef}
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") createPlaylist(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
-              placeholder={tr("Playlist name…")}
-              style={{ flex: 1, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "9px 12px", color: t.text, fontSize: 15, outline: "none" }}
-            />
-            <button onClick={createPlaylist} style={{ background: t.accent, border: "none", borderRadius: 8, color: t.playBtnFg, padding: "9px 16px", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-              {tr("Create")}
-            </button>
-            <button onClick={() => { setCreating(false); setNewName(""); }} style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: 8, fontSize: 18 }}>
-              ✕
-            </button>
-          </div>
-        )}
-
         {/* ════ PLAYLIST LIST ════════════════════════════════════════════ */}
-        {view === "list" && (
-          <>
-            {/* Auto playlists: always there, read-only, a 2×2 grid of cards.
-                No heading and no row of buttons above them any more: the
-                cards say what they are, Songs is a tap or a swipe away, and
-                making a playlist sits with My playlists, where it lands. */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "14px 16px 8px" }}>
-              {smartPlaylists.map(sp => {
-                const count = sp.songIds.length;
-                const cardStyle = SMART_CARD_STYLES[sp.id] ?? FALLBACK_SMART_STYLE;
-                const playingHere = playingFrom === `smart:${sp.id}`;
-                return (
-                  <div
-                    key={sp.id}
-                    onClick={() => { setActiveSmartId(sp.id); setView("smartDetail"); }}
-                    style={{
-                      position: "relative", height: 160, borderRadius: 16, padding: 16,
-                      background: t.card, border: `1px solid ${playingHere ? t.accent : t.border}`,
-                      color: t.text,
-                      display: "flex", flexDirection: "column", justifyContent: "space-between",
-                      cursor: "pointer", overflow: "hidden",
-                    }}
-                  >
-                    {/* The icon is what distinguishes each card now that they
-                        no longer carry a colour. */}
-                    <div style={{ position: "absolute", top: 14, right: 14, opacity: 0.16, lineHeight: 0 }}>
-                      {cardStyle.icon(64)}
-                    </div>
-
-                    <div style={{ position: "relative", fontSize: 16, fontWeight: 700, color: t.text, paddingRight: 46, lineHeight: 1.25 }}>
-                      {sp.name}
-                    </div>
-                    <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: t.muted }}>
-                      {tn(count, "{n} song", "{n} songs")}
-                    </div>
-                    {/* Playing from here: the same bars a playlist cover gets. */}
-                    {playingHere && (
-                      <div aria-label={tr("Playing from this playlist")} style={{
-                        position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
-                        background: t.accent, display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <PlayingBars size={34} color={t.playBtnFg} still={!isPlaying} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* User playlists */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 16px 4px" }}>
-              <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                {tr("My playlists ({n})", { n: playlists.length })}
-              </span>
-              {/* Making a playlist, where Reorder used to be. Moving them is
-                  still a hold on a playlist; while that is on, this is Done. */}
-              <button
-                onClick={() => {
-                  if (reordering) { onHaptic?.(); setReordering(false); return; }
-                  setCreating(true); setNewName("");
-                }}
-                style={{
-                  background: t.accent, color: t.playBtnFg, border: "none", borderRadius: 16, padding: "6px 14px",
-                  fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
-                }}
-              >
-                {reordering ? tr("Done") : tr("+ New playlist")}
-              </button>
-            </div>
-            {playlists.length === 0 && !creating ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
-                <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New playlist\" to make your first one")}</div>
-              </div>
-            ) : (
-              <div
-                onTouchMove={plDrag ? plDragMove : undefined}
-                onTouchEnd={plDrag ? plDragEnd : undefined}
-                onTouchCancel={plDrag ? plDragEnd : undefined}
-              >
-              {playlists.map((pl, i) => {
-                const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
-                const isDragging = plDrag?.from === i;
-                const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
-                return (
-                  <div
-                    key={pl.id}
-                    ref={el => { plRowRefs.current[i] = el; }}
-                    onClick={() => {
-                      if (plPress.current.held) { plPress.current.held = false; return; }
-                      if (reordering) return;
-                      setActiveId(pl.id); setView("detail");
-                    }}
-                    onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
-                    onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
-                    onTouchEnd={plPressEnd}
-                    onMouseDown={e => plPressStart(e.clientX, e.clientY)}
-                    onMouseMove={e => plPressMove(e.clientX, e.clientY)}
-                    onMouseUp={plPressEnd}
-                    onMouseLeave={plPressEnd}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      padding: reordering ? "12px 16px 12px 4px" : "12px 16px",
-                      borderBottom: `1px solid ${t.border}60`,
-                      cursor: reordering ? "default" : "pointer",
-                      opacity: isDragging ? 0.4 : 1,
-                      boxShadow: isOver ? `inset 0 ${plDrag!.from < i ? -2 : 2}px 0 ${t.accent}` : "none",
-                      userSelect: "none",
-                    }}
-                  >
-                    {reordering && (
-                      <div
-                        onTouchStart={e => { e.stopPropagation(); plPressEnd(); setPlDrag({ from: i, over: i }); }}
-                        aria-label={tr("Drag to move")}
-                        style={{ color: t.muted, display: "flex", flexShrink: 0, padding: "12px 4px 12px 12px", touchAction: "none", cursor: "grab" }}
-                      >
-                        <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
-                          <circle cx="3.5" cy="3" r="1.7"/><circle cx="10.5" cy="3" r="1.7"/>
-                          <circle cx="3.5" cy="9" r="1.7"/><circle cx="10.5" cy="9" r="1.7"/>
-                          <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
-                        </svg>
-                      </div>
-                    )}
-                    <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} playing={playingFrom === `pl:${pl.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pl.name}</div>
-                      <div style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
-                        {tn(count, "{n} song", "{n} songs")}
-                      </div>
-                    </div>
-
-                    {/* Quick-play button */}
-                    {count > 0 && !reordering && (
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          const ps = pl.songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => !!s);
-                          onPlayPlaylist(ps, false, `pl:${pl.id}`);
-                        }}
-                        style={{ background: t.accent, border: "none", width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                      </button>
-                    )}
-
-                    {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
-                  </div>
-                );
-              })}
-              </div>
-            )}
-            {/* The floating mini-player sits over the bottom of this list. The
-                detail views already reserved room for it; the playlist list did
-                not, so the last couple of playlists were unreachable unless you
-                collapsed the player first. The transition matches the Songs
-                list's padding-bottom so both tabs fold at the same rate. */}
-            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
-          </>
-        )}
+        {view === "list" && renderList(false)}
 
         {/* ════ PLAYLIST DETAIL (user playlist) ═══════════════════════════ */}
         {view === "detail" && activePlaylist && (
@@ -1369,7 +1512,7 @@ export const PlaylistsView: React.FC<Props> = ({
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: t.text }}>{dispName(song)}</div>
-                  <div style={{ fontSize: 12, color: t.muted, marginTop: 1 }}>{dispArtist(song) || tr("Unknown Artist")}</div>
+                  <div style={{ fontSize: 12, color: t.muted, marginTop: 1 }}>{dispArtist(song)}</div>
                 </div>
 
                 {alreadyIn && <span style={{ fontSize: 11, color: t.muted, flexShrink: 0 }}>{tr("In playlist")}</span>}
@@ -1413,6 +1556,30 @@ export const PlaylistsView: React.FC<Props> = ({
           onRemoveFromPlaylist={activePlaylist
             ? () => { const ids = selectedIds; exitSelect(); removeManyFromPlaylist(ids); }
             : undefined}
+          onDelete={() => { const ids = [...selectedIds]; exitSelect(); onBinMany(ids); }}
+          single={(() => {
+            // One song picked: everything its "⋮" menu has.
+            const s = selectedIds.size === 1 ? songs.find(x => selectedIds.has(x.id)) : undefined;
+            if (!s) return null;
+            const leave = (then: () => void) => () => { exitSelect(); then(); };
+            const list = activePlaylist ? playlistSongs : smartPlaylistSongs;
+            const source = activePlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`;
+            return {
+              isLiked: isLiked(s),
+              onPlay: leave(() => onPlaySong(s, list.length ? list : [s], source)),
+              onPlayNext: leave(() => onPlayNext(s)),
+              onAddToPlaylist: () => onAddManyToPlaylist([s.id]),
+              onToggleLike: () => onToggleLike(s),
+              onShare: () => onShareSong(s),
+              onEditLyrics: leave(() => onEditLyrics(s)),
+              onCut: leave(() => onCutSong(s)),
+              onSetRingtone: leave(() => onSetRingtone(s)),
+              onChangePhoto: leave(() => onChangePhoto(s)),
+              onEdit: leave(() => onEditSong(s)),
+              onRemoveFromPlaylist: activePlaylist ? leave(() => removeFromPlaylist(s.id)) : undefined,
+              onBin: leave(() => onRemoveSong(s)),
+            };
+          })()}
           onSelectAll={() => setSelectedIds(new Set(selectableIds))}
           onClearAll={() => setSelectedIds(new Set())}
           onClose={exitSelect}
@@ -1448,36 +1615,91 @@ export const PlaylistsView: React.FC<Props> = ({
           onRemoveFromPlaylist={menuSong.inPlaylist
             ? () => { removeFromPlaylist(menuSong.song.id); setMenuSong(null); }
             : undefined}
+          inPlaylistName={menuSong.inPlaylist ? activePlaylist?.name : undefined}
           onClose={() => setMenuSong(null)}
           T={t}
         />,
         document.body
       )}
 
-      {/* ── Delete confirm overlay ───────────────────────────────────────── */}
-      {confirmDeleteId && (
-        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 10 }}>
-          <div style={{ background: t.sheetBg, borderRadius: 16, padding: "24px 20px", width: "100%", maxWidth: 320 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{tr("Delete playlist?")}</div>
-            <div style={{ fontSize: 14, color: t.muted, marginBottom: 20, lineHeight: 1.5 }}>
-              {tr("\"{name}\" will be deleted permanently. Your songs won't be affected.", { name: playlists.find(p => p.id === confirmDeleteId)?.name ?? "" })}
+      {/* ── New playlist ──────────────────────────────────────────────────
+          The floating card every other choice comes up in, along the bottom,
+          over the list. The field has a line of its own and the buttons sit
+          under it, so with large text on a wide phone nothing goes off the
+          edge, as Create and the cross did when all three shared a row. */}
+      {creating && createPortal(
+        <div
+          onClick={() => { setCreating(false); setNewName(""); }}
+          style={{ position: "fixed", inset: 0, background: t.overlayBg, zIndex: 400, display: "flex", alignItems: "flex-end", padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 12px)", boxSizing: "border-box" }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ ...floatCard(t), width: "100%", padding: 16, animation: "mpCardUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ minWidth: 0, fontSize: 19, fontWeight: 800, color: t.text, letterSpacing: "-0.01em" }}>{tr("New playlist")}</span>
+              <button onClick={() => { setCreating(false); setNewName(""); }} aria-label={tr("Close")} style={cardCloseBtn(t)}><IC.Close /></button>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <input
+              ref={createInputRef}
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") createPlaylist(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
+              placeholder={tr("Playlist name…")}
+              style={{ display: "block", width: "100%", minWidth: 0, boxSizing: "border-box", marginTop: 14, background: t.inputBg, border: "none", borderRadius: 14, padding: "14px 16px", color: t.text, fontSize: 16, outline: "none", fontFamily: "inherit" }}
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
               <button
-                onClick={() => setConfirmDeleteId(null)}
-                style={{ flex: 1, padding: 11, background: t.border, border: "none", borderRadius: 10, color: t.text, fontWeight: 600, cursor: "pointer", fontSize: 14 }}
+                onClick={() => { setCreating(false); setNewName(""); }}
+                style={{ flex: "1 1 120px", minHeight: 48, padding: "12px 10px", border: "none", borderRadius: 16, background: t.dim, color: t.text, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
                 {tr("Cancel")}
               </button>
               <button
-                onClick={() => deletePlaylist(confirmDeleteId)}
-                style={{ flex: 1, padding: 11, background: "#e8445a", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14 }}
+                onClick={createPlaylist}
+                disabled={!newName.trim()}
+                style={{ flex: "1 1 120px", minHeight: 48, padding: "12px 10px", border: "none", borderRadius: 16, background: t.accent, color: t.playBtnFg, fontSize: 15, fontWeight: 700, cursor: newName.trim() ? "pointer" : "default", opacity: newName.trim() ? 1 : 0.45, fontFamily: "inherit" }}
               >
-                {tr("Delete")}
+                {tr("Create")}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Remove photo: asks first. It went at a tap before. */}
+      {confirmRemovePhoto && activePlaylist?.coverPhoto && createPortal(
+        <ConfirmSheet
+          title={tr("Remove photo?")}
+          body={tr("\"{name}\" gets its plain cover back. The photo itself stays on your phone.", { name: activePlaylist.name })}
+          confirmLabel={tr("Remove photo")}
+          onConfirm={() => { removeCoverPhoto(); setConfirmRemovePhoto(false); }}
+          onCancel={() => setConfirmRemovePhoto(false)}
+          preview={
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <span style={{ width: 48, height: 48, borderRadius: 10, background: `center/cover no-repeat url(${activePlaylist.coverPhoto})` }} />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              <span style={{ width: 48, height: 48, borderRadius: 10, background: t.dim, color: t.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              </span>
+            </span>
+          }
+          T={t}
+        />,
+        document.body
+      )}
+
+      {/* ── Delete playlist: asks first, in the same card as every other
+          "are you sure?". Portalled: the panel is transformed, which would
+          trap a fixed overlay inside it. */}
+      {confirmDeleteId && createPortal(
+        <ConfirmSheet
+          title={tr("Delete playlist?")}
+          body={tr("\"{name}\" will be deleted permanently. Your songs won't be affected.", { name: playlists.find(p => p.id === confirmDeleteId)?.name ?? "" })}
+          confirmLabel={tr("Delete")}
+          onConfirm={() => deletePlaylist(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+          T={t}
+        />,
+        document.body
       )}
     </div>
   );

@@ -10,7 +10,7 @@ own notes in `docs/ios.md` on the `ios` branch.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.3.2, versionCode 105 (the new player, Next up, repeat all, playlists in order) | live by 26 October; Caelan says it works well on his phone. 1.3.1 (99) was skipped |
-| Android test build | 79, versionCode 109 (1.3.4: a playlist is one card with its photo as a record sleeve, auto playlists too; + New playlist where Reorder was; one card of actions while selecting, ticks on the right; About MPTree as a full page, Settings has one row for it; the first tap after swiping to Playlists works; the player's height is measured, so shuffle and scroll-up stay above it on small phones; the Playlists tab tells App when it moves its own list for the fold) | prerelease `v1.2.3-pro-test.79`, mp-tree.net/test, branch `playlists-redesign` |
+| Android test build | 80, versionCode 110 (1.3.5: the "⋮" menu is the selection's card of tiles; one song picked has everything the menu has; Uit playlist and Prullenbak instead of two Verwijderen, Prullenbak in a playlist too; every "are you sure?" is that card, and Remove photo asks; inside a playlist the tabs read Playlists › name; a playlist grows out of its row, swipes away to the list, and a new one opens at once in a card that fits large text; the splash flies through the mark, no dots, no tagline; TikTok @mp_tree3 in About; a tap on the record in the big player changes the photo (hold for the picture disc); no "Unknown artist"; Next up keeps the playlist after a reopen) | prerelease `v1.2.3-pro-test.80`, mp-tree.net/test, branch `playlists-redesign` |
 | iPhone | 1.3.1 build 5 (not on a phone yet) | branch `ios`, built by GitHub Actions, `MPTree-iPhone-5.ipa` in the repo root (not committed) |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
@@ -20,7 +20,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109). Next is 110. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109, test build 80 took 110). Next is 111. Next Windows is 0.1.6.
 
 ## Branches
 
@@ -31,7 +31,7 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
 | `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
 | `select-fixes` | test builds 77 and 78 and the 1.3.3 bundle: Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | merged into main (cf2264d) |
-| `playlists-redesign` | test build 79: the playlist card, About, selecting, small-phone and Playlists-tab fixes (Caelan's list of 28 October) | pushed, not merged |
+| `playlists-redesign` | test builds 79 and 80: the playlist card, About, selecting, the menu as tiles, the fly-through, the queue after a reopen (Caelan's lists of 28 October) | pushed, not merged |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan

@@ -36,6 +36,9 @@ const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h
 const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
 const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 const InfoIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Svg>;
+/** A note with a flick on its stem, for TikTok, without being its logo. */
+const TikTokIcon   = () => <Svg><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.6 2.7 2.6 4.6 5.5 4.8"/></Svg>;
+const OutIcon      = () => <Svg><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></Svg>;
 const LinkIcon     = () => <Svg><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Svg>;
 
 // Every row in this sheet is the same shape: an icon and a label on the left,
@@ -508,12 +511,19 @@ function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, o
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "22px 20px 8px" }}>
             <Logo size={76} color={T.text} />
             <div style={{ fontSize: 28, fontWeight: 900, color: T.text, marginTop: 14, letterSpacing: "-0.02em" }}>MPTree</div>
-            <div style={{ fontSize: 14, color: T.muted, marginTop: 4 }}>{t("your music · on your device")}</div>
             {/* From package.json via Vite, so it always matches the build. */}
             <div style={{ marginTop: 14, fontSize: 12.5, fontWeight: 700, color: T.text, background: T.dim, borderRadius: 12, padding: "5px 12px" }}>
               {t("Version {v}", { v: __APP_VERSION__ })}
             </div>
           </div>
+
+          {/* First, so people who like MPTree find where it is talked about. */}
+          <Section T={T} title={t("Follow MPTree")}>
+            <Row T={T} first onClick={() => { Browser.open({ url: "https://www.tiktok.com/@mp_tree3" }).catch(() => {}); }}
+              icon={<TikTokIcon />} label="TikTok" sub="@mp_tree3" right={<span style={{ color: T.muted, display: "flex" }}><OutIcon /></span>} />
+            <Row T={T} onClick={() => { Browser.open({ url: "https://mp-tree.net" }).catch(() => {}); }}
+              icon={<LinkIcon />} label="mp-tree.net" right={<span style={{ color: T.muted, display: "flex" }}><OutIcon /></span>} />
+          </Section>
 
           <Section T={T} title={t("Help")}>
             <Row T={T} first onClick={onShowTutorial} icon={<PlayIcon />} label={t("Show tutorial")} />
@@ -526,11 +536,6 @@ function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, o
             <Row T={T} first onClick={onPrivacy} icon={<ShieldIcon />} label={t("Privacy policy")} />
             {adPrivacy && <Row T={T} onClick={() => { Ads.showPrivacyOptions().catch(() => {}); }} icon={<ShieldIcon />} label={t("Privacy choices for ads")} />}
             <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
-          </Section>
-
-          <Section T={T} title={t("Website")}>
-            <Row T={T} first onClick={() => { Browser.open({ url: "https://mp-tree.net" }).catch(() => {}); }}
-              icon={<LinkIcon />} label="mp-tree.net" />
           </Section>
 
           <div style={{ textAlign: "center", color: T.muted, fontSize: 12, marginTop: 26 }}>by Verkuijl</div>
