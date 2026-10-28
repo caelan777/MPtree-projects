@@ -20,7 +20,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109, test build 80 took 110, test build 81 took 111). Next is 112. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109, test build 80 took 110, test build 81 took 111, 1.3.5 took 112). Next is 113. Next Windows is 0.1.6.
 
 ## Branches
 
@@ -31,11 +31,15 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
 | `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
 | `select-fixes` | test builds 77 and 78 and the 1.3.3 bundle: Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | merged into main (cf2264d) |
-| `playlists-redesign` | test builds 79 to 81: the playlist card, About, selecting, the menu as tiles, the fly-through, the queue after a reopen, bigger rows on big phones (Caelan's lists of 28 October) | pushed, not merged |
+| `playlists-redesign` | test builds 79 to 81 and the 1.3.5 bundle: the playlist card, About, selecting, the menu as tiles, the fly-through, the queue after a reopen, bigger rows on big phones (Caelan's lists of 28 October) | pushed, not merged |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
 
+1. **Upload 1.3.5 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`,
+   versionCode 112, built 28 October from `playlists-redesign`; release notes in `docs/play-store-listing.md`).
+   Test build 81 plus one change: the mini player names the artist again, or Unknown artist, where the lists now leave it empty.
+   `playlists-redesign` is not merged into main yet.
 1. **Upload 1.3.3 to Play by 28 October** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.3.aab`,
    versionCode 108, built 26 October from `select-fixes`; release notes in `docs/play-store-listing.md`),
    so the Halloween days are live in time. Same code as test build 78.

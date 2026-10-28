@@ -4009,7 +4009,7 @@ export default function App() {
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
-                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong)}</div>
+                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
