@@ -23,6 +23,9 @@ interface Props {
   topInset?:          number;
   /** Row height from the Size setting. Album art is this minus 20. */
   rowH?:              number;
+  /** The font sizes of a song row's name and second line, as on Songs. */
+  rowTitle?:          number;
+  rowSub?:            number;
   playlists:          Playlist[];
   /** Built-in, auto-generated playlists (Favorites, Recently Played, Most Played, Last Added).
    *  Computed live by App from songs+meta — read-only here, never passed through onPlaylistsChange. */
@@ -280,7 +283,7 @@ const FALLBACK_SMART_STYLE: SmartCardStyle = {
 
 export const PlaylistsView: React.FC<Props> = ({
   topInset = 0,
-  rowH = 68,
+  rowH = 68, rowTitle = 15, rowSub = 13,
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, playingFrom = null, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
@@ -551,17 +554,18 @@ export const PlaylistsView: React.FC<Props> = ({
         <AlbumArt title={dispName(song)} size={rowH - 20} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} albumId={song.albumId} T={t} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
+            <span style={{ fontSize: rowTitle, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
             {song.isCut && <span style={{ fontSize: 10, background: t.dim, color: t.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: 700, flexShrink: 0 }}>CUT</span>}
           </div>
           <div style={{ display: "flex", alignItems: "center", marginTop: 2, gap: 6 }}>
             {/* Track number — hidden for now (kept for future use):
             <span style={{ fontSize: 12, fontWeight: 600, color: isCurrent ? t.accent : t.muted, flexShrink: 0 }}>{idx + 1}</span>
             */}
-            <span style={{ flex: 1, fontSize: 13, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song)}</span>
+            {/* The length under the name, the artist where the length was. */}
             {song.duration != null && song.duration > 0 && (
-              <span style={{ fontSize: 12, color: t.muted, flexShrink: 0 }}>{fmt(song.duration)}</span>
+              <span style={{ fontSize: rowSub, color: t.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(song.duration)}</span>
             )}
+            <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: rowSub, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song)}</span>
           </div>
         </div>
         {/* This used to be a hand-drawn heart with a different path from the one

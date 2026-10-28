@@ -158,6 +158,12 @@ const SIZE_TABLE: Record<UiSize, { text: number; row: number }> = {
   medium: { text: 1,    row: 68 },
   large:  { text: 1.22, row: 84 },
 };
+/** From this width (CSS px) a phone counts as big: its song rows are a step
+ *  taller, with bigger covers and names. Most big Android phones are 411 or
+ *  412 wide; the small ones 360. */
+const WIDE_PHONE = 390;
+/** How much taller a row is on a big phone, at every Size. */
+const WIDE_ROW_EXTRA = 10;
 
 export default function App() {
   const [songs,          setSongs]         = useState<Song[]>([]);
@@ -215,6 +221,7 @@ export default function App() {
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
+  const [widePhone,      setWidePhone]     = useState(() => window.innerWidth >= WIDE_PHONE);
   // The height of a song row (it follows the Size setting), for the effect
   // that scrolls to the playing song by counting rows.
   const rowHRef = useRef(64);
@@ -1235,7 +1242,10 @@ export default function App() {
   // Measure the scroll viewport height for list virtualization. Re-measures on
   // resize (orientation change, keyboard) so the visible-row window stays right.
   useEffect(() => {
-    const measure = () => { if (scrollRef.current) setListViewportH(scrollRef.current.clientHeight); };
+    const measure = () => {
+      if (scrollRef.current) setListViewportH(scrollRef.current.clientHeight);
+      setWidePhone(window.innerWidth >= WIDE_PHONE);
+    };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -2326,9 +2336,10 @@ export default function App() {
   // can arrive as a tap, and by then the list has moved up under it (the
   // header made way for the selection bar), so it picked the row below too.
   const longPressAtRef = useRef(0);
-  const handleTap = (song: Song) => {
+  // `at` is the tap's event time, on the same clock as performance.now().
+  const handleTap = (song: Song, at?: number) => {
     if (selectMode) {
-      if (Date.now() - longPressAtRef.current < 700) return;
+      if (at != null && at - longPressAtRef.current < 700) return;
       setSelected(prev => { const next = new Set(prev); if (next.has(song.id)) next.delete(song.id); else next.add(song.id); return next; });
       return;
     }
@@ -2364,7 +2375,7 @@ export default function App() {
     // per-song actions moved to the "⋮" button, so this no longer has to
     // double as a hidden menu trigger.
     pressTimer.current = setTimeout(() => {
-      longPressAtRef.current = Date.now();
+      longPressAtRef.current = performance.now();
       hapticImpact("medium");
       setSelectMode(true);
       setSelected(prev => { const next = new Set(prev); next.add(id); return next; });
@@ -3145,9 +3156,13 @@ export default function App() {
   // it IS the row. It used to be a comment's arithmetic ("8 + 48 + 8") while the
   // row actually had 10px padding and came out at 68px, so every row the
   // virtual window skipped was 4px short and the list shuffled as it scrolled.
-  const ROW_H = SIZE_TABLE[uiSize].row;
+  const ROW_H = SIZE_TABLE[uiSize].row + (widePhone ? WIDE_ROW_EXTRA : 0);
   rowHRef.current = ROW_H;
   const ART   = ROW_H - 20;       // 10px above and below
+  // The two lines of a row: the name, and under it the length on the left
+  // and the artist on the right. A step bigger on a big phone, like the row.
+  const ROW_TITLE = widePhone ? 16.5 : 15;
+  const ROW_SUB   = widePhone ? 13.5 : 13;
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
   // A line above the songs while one is on its way from or to another device.
@@ -3713,7 +3728,7 @@ export default function App() {
                             onMouseDown={e => onPressStart(song.id, e.clientX, e.clientY)}
                             onMouseMove={e => onPressMove(e.clientX, e.clientY)}
                             onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
-                            onClick={() => handleTap(song)}
+                            onClick={e => handleTap(song, e.timeStamp)}
                             style={{
                               display: "flex", alignItems: "center", padding: "0 8px", margin: "0 8px", gap: 10, cursor: "pointer",
                               height: ROW_H, boxSizing: "border-box",
@@ -3728,15 +3743,16 @@ export default function App() {
                             <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <div style={{ fontSize: 15, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                                <div style={{ fontSize: ROW_TITLE, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                                 {song.isCut && <span style={{ fontSize: 10, background: TH.dim, color: TH.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: "700", flexShrink: 0 }}>CUT</span>}
                               </div>
                               <div style={{ display: "flex", alignItems: "center", marginTop: 2, gap: 6 }}>
                                 {/* Track number — hidden for now (kept for future use):
                                 <span style={{ fontSize: 12, fontWeight: "600", color: isActive ? TH.accent : TH.muted, flexShrink: 0 }}>{idx + 1}</span>
                                 */}
-                                <span style={{ flex: 1, fontSize: 13, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
-                                {rowLength(song) > 0 && <span style={{ fontSize: 12, color: TH.muted, flexShrink: 0 }}>{fmt(rowLength(song))}</span>}
+                                {/* The length under the name, the artist where the length was. */}
+                                {rowLength(song) > 0 && <span style={{ fontSize: ROW_SUB, color: TH.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(rowLength(song))}</span>}
+                                <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: ROW_SUB, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
                               </div>
                             </div>
                             {!selectMode && liked && (
@@ -3889,6 +3905,8 @@ export default function App() {
             <PlaylistsView
               topInset={playlistsInset}
               rowH={ROW_H}
+              rowTitle={ROW_TITLE}
+              rowSub={ROW_SUB}
               bottomInset={bottomH + 12}
               resetToListSignal={page === "songs"}
               backSignal={playlistBackSignal}
