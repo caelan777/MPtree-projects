@@ -736,4 +736,13 @@ export const NL: Record<string, string> = {
   "A treat to make up for the scare: 24 more hours of Pro.": "Iets lekkers om de schrik goed te maken: 24 uur Pro erbij.",
   "Pro runs until": "Pro loopt tot",
   "Thanks": "Bedankt",
+  // Playlists: making one where Reorder was.
+  "+ New playlist": "+ Nieuwe playlist",
+  "Tap \"+ New playlist\" to make your first one": "Tik op \"+ Nieuwe playlist\" om je eerste te maken",
+  // The About page (SettingsSheet).
+  "About MPTree": "Over MPTree",
+  "Help, questions, feedback and privacy.": "Hulp, vragen, feedback en privacy.",
+  "Version {v}": "Versie {v}",
+  "Privacy": "Privacy",
+  "Website": "Website",
 };

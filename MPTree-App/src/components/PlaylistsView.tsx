@@ -5,9 +5,11 @@ import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX } from "../utils";
 import { CropSheet } from "./CropSheet";
 import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
-import { MultiSelectBar } from "./MultiSelectBar";
+import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
+import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
 import type { T } from "../themes";
+import { useVinyl } from "../look";
 import { t as tr, tn } from "../i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -82,6 +84,10 @@ interface Props {
   /** Reports this view's scroll offset so App can fold the floating header away
    *  on the Playlists tab exactly as it does on the Songs list. */
   onBodyScroll?:      (top: number) => void;
+  /** Called just before this view moves its own scroll position to make up
+   *  for the header folding or unfolding, so App does not read that scroll as
+   *  the finger's and fold the header straight back (the flicker). */
+  onInsetJump?:       () => void;
   /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
@@ -124,6 +130,63 @@ function PlaylistArt({ photo, size, iconSize, onClick, playing, T: t }: {
           <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
         </svg>
       )}
+    </div>
+  );
+}
+
+// ─── Record sleeve ────────────────────────────────────────────────────────────
+// The top of a playlist: its photo as a record sleeve, with the record half
+// out of it. The record is the one picked under Personalise, with the photo on
+// its label, and it turns while the music plays from this playlist. Playing,
+// it also slides a little further out of the sleeve.
+//
+// Without a photo the sleeve shows `icon` (the note, or an auto playlist's own
+// icon). `onPick` makes the sleeve a button for choosing the photo, with a
+// camera badge on it; auto playlists have no photo to choose.
+function RecordSleeve({ photo, icon, size, playing, spinning, onPick, T: t }: {
+  photo?: string; icon: React.ReactNode; size: number;
+  /** The music is playing from this playlist (paused or not). */
+  playing: boolean;
+  spinning: boolean;
+  onPick?: () => void;
+  T: T;
+}) {
+  const vinyl = useVinyl();
+  const disc = Math.round(size * 0.94);
+  return (
+    <div style={{ position: "relative", width: size + disc / 2, height: size, margin: "0 auto" }}>
+      <div style={{
+        position: "absolute", top: (size - disc) / 2, left: size - disc / 2,
+        transform: playing ? `translateX(${Math.round(size * 0.1)}px)` : "none",
+        transition: "transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
+      }}>
+        <SpinningDisc size={disc} spinning={spinning} customPhoto={photo} skin={vinyl} />
+      </div>
+      <div
+        onClick={onPick}
+        role={onPick ? "button" : undefined}
+        aria-label={onPick ? (photo ? tr("Change photo") : tr("Add photo")) : undefined}
+        style={{
+          position: "absolute", left: 0, top: 0, width: size, height: size, borderRadius: 14,
+          background: photo ? `center/cover no-repeat url(${photo})` : t.dim,
+          boxShadow: "0 12px 30px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.06)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: t.muted, cursor: onPick ? "pointer" : "default",
+        }}
+      >
+        {!photo && icon}
+        {onPick && (
+          <span style={{
+            position: "absolute", left: 10, bottom: 10, width: 30, height: 30, borderRadius: "50%",
+            background: t.accent, color: t.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+            </svg>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -210,7 +273,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, animateInsets = true, onClose, T,
+  onBodyScroll, onInsetJump, animateInsets = true, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -465,20 +528,10 @@ export const PlaylistsView: React.FC<Props> = ({
           // The playing row is a rounded tile, as on the Songs page.
           borderRadius: 14,
           background: isSelected ? t.violet + "18" : isCurrent ? t.card : "transparent",
-          boxShadow: isCurrent && !isSelected ? `inset 0 0 0 1px ${t.border}` : "none",
-          transition: "background 0.15s",
+          boxShadow: isSelected ? `inset 0 0 0 1.5px ${t.violet}55` : isCurrent ? `inset 0 0 0 1px ${t.border}` : "none",
+          transition: "background 0.15s, box-shadow 0.15s",
         }}
       >
-        {selectMode && inPlaylist && (
-          <div style={{
-            width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-            border: `2px solid ${isSelected ? t.violet : t.muted}`,
-            background: isSelected ? t.violet : "transparent",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            {isSelected && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-          </div>
-        )}
         <AlbumArt title={dispName(song)} size={rowH - 20} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} albumId={song.albumId} T={t} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -514,6 +567,7 @@ export const PlaylistsView: React.FC<Props> = ({
             <IC.Dots />
           </button>
         )}
+        {selectMode && inPlaylist && <span style={{ display: "flex", padding: "0 4px 0 6px" }}><SelectCheck on={isSelected} T={t} /></span>}
       </div>
     );
   };
@@ -726,17 +780,18 @@ export const PlaylistsView: React.FC<Props> = ({
 
 
   // The floating header's height, applied as a spacer INSIDE the scroller on
-  // the root list and as padding OUTSIDE it everywhere else.
+  // the list and in a playlist, and as padding OUTSIDE it in the add-songs
+  // picker.
   //
   // It used to always be padding on this root element, which meant it could
   // never scroll away: folding the header on the Playlists tab left a band of
   // dead black across the top of the screen, where the Songs tab simply lets
-  // its rows slide up under the collapsed logo. Views with their own sticky
-  // header row (a playlist, an auto playlist, the add-songs picker) keep the
-  // outer padding, because that header has to stay put below the floating card
-  // rather than scroll under it.
-  const insetOutside = view === "list" ? 0 : topInset;
-  const insetInside  = view === "list" ? topInset : 0;
+  // its rows slide up under the collapsed logo. A playlist's card scrolls with
+  // its songs, so it goes inside too. Only the add-songs picker keeps a sticky
+  // header row (its search), which has to stay put below the floating card.
+  const sticky       = view === "addSongs";
+  const insetOutside = sticky ? topInset : 0;
+  const insetInside  = sticky ? 0 : topInset;
   // One motion for everything the fold moves, matching CHROME_MOTION in App.
   // The root padding used to have no transition at all, so in a playlist the
   // whole view snapped to its new offset while the logo was still folding: that
@@ -744,18 +799,136 @@ export const PlaylistsView: React.FC<Props> = ({
   // both on the same curve as the header itself.
   const FOLD_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
   const insetTransition = animateInsets ? `height ${FOLD_MOTION}` : "none";
-  // Scrolled down the list of playlists, the fold does not move the rows: the
-  // spacer changes at once and the scroll position makes up for it.
+  // Scrolled down, the fold does not move the rows: the spacer changes at once
+  // and the scroll position makes up for it. App is told first. That scroll is
+  // the app's own, and read as the finger's it was a drag of the full fold:
+  // unfolding folded the header again, which unfolded it again, and the screen
+  // flickered between the two.
   const [bodyScrolled, setBodyScrolled] = useState(false);
   const prevInside = useRef(insetInside);
   useLayoutEffect(() => {
     const el = scrollBodyRef.current;
     const delta = insetInside - prevInside.current;
     prevInside.current = insetInside;
-    if (!el || !delta || view !== "list" || el.scrollTop <= 0) return;
+    if (!el || !delta || sticky || el.scrollTop <= 0) return;
+    onInsetJump?.();
     el.scrollTop += delta;
-  }, [insetInside, view]);
+  }, [insetInside, sticky, onInsetJump]);
+  // Each view starts at its top. They share one scroller, so a playlist
+  // opened from far down the list used to open scrolled down as far.
+  useLayoutEffect(() => {
+    const el = scrollBodyRef.current;
+    if (el && el.scrollTop > 0) el.scrollTop = 0;
+  }, [view, activeId, activeSmartId]);
   const rootTransition  = animateInsets ? `padding-top ${FOLD_MOTION}` : "none";
+
+  // ── The playlist's card ───────────────────────────────────────────────────
+  // Everything above the songs in one card: the way back, the sleeve with its
+  // record, the name, how many songs, Play all and Shuffle, and for a playlist
+  // of your own, adding songs and deleting it. App's header (logo, tabs,
+  // settings) floats above it on its own. The card scrolls away with the
+  // songs. A render function rather than a component, like renderSongRow.
+  const roundBtn: React.CSSProperties = {
+    width: 38, height: 38, borderRadius: "50%", border: "none", background: t.dim, color: t.text,
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0,
+  };
+  const renderCard = ({ source, name, photo, icon, list, own }: {
+    source: string; name: string; photo?: string; icon: React.ReactNode; list: Song[];
+    /** A playlist of your own: a photo to pick, a name to change, songs to add, and delete. */
+    own: boolean;
+  }) => {
+    const here = playingFrom === source;
+    const empty = list.length === 0;
+    const bigBtn = (primary: boolean): React.CSSProperties => ({
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+      height: 48, borderRadius: 16, fontSize: 15, fontWeight: 700, fontFamily: "inherit",
+      background: primary ? t.accent : "transparent", color: primary ? t.playBtnFg : t.text,
+      border: primary ? "none" : `1.5px solid ${t.border}`,
+      cursor: empty ? "default" : "pointer", opacity: empty ? 0.4 : 1,
+    });
+    return (
+      <div style={{
+        margin: "4px 12px 8px", padding: "12px 14px 16px", borderRadius: 26,
+        background: t.card, border: `1px solid ${t.border}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={goBack} aria-label={tr("Back")} style={roundBtn}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span style={{ flex: 1 }} />
+          {own && (
+            <>
+              <button
+                onClick={() => { setSelectedAdd(new Set()); setAddSearch(""); setView("addSongs"); }}
+                style={{ ...roundBtn, width: "auto", borderRadius: 19, padding: "0 14px", fontSize: 13.5, fontWeight: 700, fontFamily: "inherit" }}
+              >
+                {tr("+ Add")}
+              </button>
+              <button onClick={() => setConfirmDeleteId(activeId)} aria-label={tr("Delete")} style={{ ...roundBtn, color: "#e8445a" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          <RecordSleeve
+            photo={photo} icon={icon} size={148} T={t}
+            playing={here} spinning={here && isPlaying}
+            onPick={own ? pickCoverPhoto : undefined}
+          />
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 18, padding: "0 6px" }}>
+          {own && renamingId === activeId ? (
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={e => setRenameDraft(e.target.value)}
+              onBlur={confirmRename}
+              onKeyDown={e => { if (e.key === "Enter") confirmRename(); if (e.key === "Escape") setRenamingId(null); }}
+              style={{ width: "100%", boxSizing: "border-box", textAlign: "center", background: "transparent", border: "none", borderBottom: `1.5px solid ${t.accent}`, color: t.text, fontSize: 22, fontWeight: 800, outline: "none", padding: "2px 0", fontFamily: "inherit" }}
+            />
+          ) : (
+            <div
+              onClick={own ? () => { setRenamingId(activeId); setRenameDraft(name); } : undefined}
+              style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.01em", color: t.text, overflowWrap: "anywhere", cursor: own ? "text" : "default" }}
+            >
+              {name}
+            </div>
+          )}
+          <div style={{ fontSize: 13, color: t.muted, marginTop: 5, display: "flex", justifyContent: "center", gap: 8 }}>
+            <span>{tn(list.length, "{n} song", "{n} songs")}</span>
+            {own && photo && (
+              <button onClick={removeCoverPhoto} style={{ background: "none", border: "none", padding: 0, color: t.muted, fontSize: 13, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
+                {tr("Remove photo")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <button onClick={() => { if (!empty) onPlayPlaylist(list, false, source); }} disabled={empty} style={bigBtn(true)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            {tr("Play All")}
+          </button>
+          <button onClick={() => { if (!empty) onPlayPlaylist(list, true, source); }} disabled={empty} style={bigBtn(false)}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+            </svg>
+            {tr("Shuffle")}
+          </button>
+        </div>
+      </div>
+    );
+  };
+  const noteIcon = (
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+    </svg>
+  );
 
   return (
     <div style={{
@@ -784,12 +957,10 @@ export const PlaylistsView: React.FC<Props> = ({
       )}
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      {/* Only rendered for detail/smartDetail/addSongs — the "list" view's
-          back arrow + "+ New" now live inline in the "Auto playlists" row
-          below instead of their own dedicated header row. Picking songs, the
-          selection bar takes its place: two back arrows and two titles on top
-          of each other looked broken. */}
-      {view !== "list" && !selectMode && (
+      {/* The add-songs picker only. A playlist carries its back arrow, name
+          and buttons in its own card, which scrolls with the songs, and the
+          list of playlists needs none. */}
+      {view === "addSongs" && !selectMode && (
         <div style={{
           display: "flex", alignItems: "center",
           padding: "14px 16px",
@@ -806,46 +977,8 @@ export const PlaylistsView: React.FC<Props> = ({
             </svg>
           </button>
 
-          {/* Title — tappable to rename in detail view */}
-          {view === "detail" && renamingId === activeId ? (
-            <input
-              autoFocus
-              value={renameDraft}
-              onChange={e => setRenameDraft(e.target.value)}
-              onBlur={confirmRename}
-              onKeyDown={e => { if (e.key === "Enter") confirmRename(); if (e.key === "Escape") setRenamingId(null); }}
-              style={{ flex: 1, background: "transparent", border: `none`, borderBottom: `1px solid ${t.accent}`, color: t.text, fontSize: 18, fontWeight: 700, outline: "none", padding: "2px 0" }}
-            />
-          ) : (
-            <span
-              style={{ flex: 1, fontSize: 18, fontWeight: 700 }}
-              onClick={view === "detail" && activePlaylist ? () => { setRenamingId(activeId); setRenameDraft(activePlaylist.name); } : undefined}
-            >
-              {view === "addSongs"  ? tr("Add songs")
-               : view === "smartDetail" ? activeSmartPlaylist?.name ?? tr("Playlist")
-               : activePlaylist?.name ?? tr("Playlist")}
-            </span>
-          )}
+          <span style={{ flex: 1, fontSize: 18, fontWeight: 700 }}>{tr("Add songs")}</span>
 
-          {/* Right actions */}
-          {view === "detail" && (
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <button
-                onClick={() => { setSelectedAdd(new Set()); setAddSearch(""); setView("addSongs"); }}
-                style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: "4px 8px", fontSize: 13, fontWeight: 600 }}
-              >
-                {tr("+ Add")}
-              </button>
-              <button
-                onClick={() => setConfirmDeleteId(activeId)}
-                style={{ background: "none", border: "none", color: "#e8445a", cursor: "pointer", padding: 6, display: "flex" }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                </svg>
-              </button>
-            </div>
-          )}
           {view === "addSongs" && (
             <button
               onClick={addSelectedSongs}
@@ -861,11 +994,6 @@ export const PlaylistsView: React.FC<Props> = ({
             >
               {selectedAdd.size > 0 ? tr("Add {n}", { n: selectedAdd.size }) : tr("Add")}
             </button>
-          )}
-          {view === "smartDetail" && (
-            <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
-              {tr("Auto")}
-            </span>
           )}
         </div>
       )}
@@ -950,7 +1078,7 @@ export const PlaylistsView: React.FC<Props> = ({
             node that is being removed, so unmounting it on a view change snapped
             this to zero while the root's padding was still easing in, which read
             as a double jump. */}
-        <div style={{ height: insetInside, transition: bodyScrolled && view === "list" ? "none" : insetTransition }} aria-hidden="true" />
+        <div style={{ height: insetInside, transition: bodyScrolled && !sticky ? "none" : insetTransition }} aria-hidden="true" />
 
         {/* ── Create playlist input ──────────────────────────────────────────
             Inside the scroller, directly under the header card. It sat above
@@ -987,34 +1115,11 @@ export const PlaylistsView: React.FC<Props> = ({
         {/* ════ PLAYLIST LIST ════════════════════════════════════════════ */}
         {view === "list" && (
           <>
-            {/* Smart playlists — always present, read-only — rendered as a
-                2×2 grid of colorful gradient cards (fixed brand colors,
-                independent of theme). Tapping a card keeps the original
-                behavior: setActiveSmartId + setView("smartDetail").
-                Back arrow + "+ New" now live in this same row instead of
-                a separate header above it. */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 4px", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  onClick={goBack}
-                  style={{ background: "none", border: "none", color: t.muted, cursor: "pointer", padding: "4px 6px 4px 0", display: "flex", alignItems: "center" }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6"/>
-                  </svg>
-                </button>
-                <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                  {tr("Auto playlists")}
-                </span>
-              </div>
-              <button
-                onClick={() => { setCreating(true); setNewName(""); }}
-                style={{ background: t.accent, border: "none", borderRadius: 20, color: t.playBtnFg, padding: "6px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
-              >
-                {tr("+ New")}
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "4px 16px 8px" }}>
+            {/* Auto playlists: always there, read-only, a 2×2 grid of cards.
+                No heading and no row of buttons above them any more: the
+                cards say what they are, Songs is a tap or a swipe away, and
+                making a playlist sits with My playlists, where it lands. */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "14px 16px 8px" }}>
               {smartPlaylists.map(sp => {
                 const count = sp.songIds.length;
                 const cardStyle = SMART_CARD_STYLES[sp.id] ?? FALLBACK_SMART_STYLE;
@@ -1062,23 +1167,25 @@ export const PlaylistsView: React.FC<Props> = ({
               <span style={{ fontSize: 11, color: t.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                 {tr("My playlists ({n})", { n: playlists.length })}
               </span>
-              {(playlists.length > 1 || reordering) && (
-                <button
-                  onClick={() => { onHaptic?.(); setReordering(!reordering); }}
-                  style={{
-                    background: reordering ? t.accent : "transparent", color: reordering ? t.playBtnFg : t.muted,
-                    border: reordering ? "none" : `1px solid ${t.border}`, borderRadius: 14, padding: "4px 12px",
-                    fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
-                  }}
-                >
-                  {reordering ? tr("Done") : tr("Reorder")}
-                </button>
-              )}
+              {/* Making a playlist, where Reorder used to be. Moving them is
+                  still a hold on a playlist; while that is on, this is Done. */}
+              <button
+                onClick={() => {
+                  if (reordering) { onHaptic?.(); setReordering(false); return; }
+                  setCreating(true); setNewName("");
+                }}
+                style={{
+                  background: t.accent, color: t.playBtnFg, border: "none", borderRadius: 16, padding: "6px 14px",
+                  fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
+                }}
+              >
+                {reordering ? tr("Done") : tr("+ New playlist")}
+              </button>
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
-                <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New\" to create your first one")}</div>
+                <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New playlist\" to make your first one")}</div>
               </div>
             ) : (
               <div
@@ -1170,85 +1277,12 @@ export const PlaylistsView: React.FC<Props> = ({
         {/* ════ PLAYLIST DETAIL (user playlist) ═══════════════════════════ */}
         {view === "detail" && activePlaylist && (
           <>
-            {/* Cover photo + play/shuffle. Away while picking songs, so the
-                page is the bar, the rows and the actions, as on Songs. */}
-            {!selectMode && <>
-            <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
-              <div style={{ position: "relative" }}>
-                <PlaylistArt photo={activePlaylist.coverPhoto} size={84} iconSize={32} onClick={pickCoverPhoto} playing={playingFrom === `pl:${activePlaylist.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
-                <div
-                  onClick={pickCoverPhoto}
-                  style={{
-                    position: "absolute", bottom: -4, right: -4,
-                    width: 28, height: 28, borderRadius: "50%",
-                    background: t.accent, border: `2px solid ${t.bg}`,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={t.playBtnFg} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-                  </svg>
-                </div>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: t.muted, marginBottom: 6 }}>
-                  {tn(playlistSongs.length, "{n} song", "{n} songs")}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={pickCoverPhoto}
-                    style={{ fontSize: 12, color: t.text, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}
-                  >
-                    {activePlaylist.coverPhoto ? tr("Change photo") : tr("Add photo")}
-                  </button>
-                  {activePlaylist.coverPhoto && (
-                    <button
-                      onClick={removeCoverPhoto}
-                      style={{ fontSize: 12, color: t.muted, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600 }}
-                    >
-                      {tr("Remove")}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Play / Shuffle */}
-            <div style={{ display: "flex", gap: 10, padding: "0 16px 12px", borderBottom: `1px solid ${t.border}` }}>
-              <button
-                onClick={() => { onPlayPlaylist(playlistSongs, false, `pl:${activePlaylist.id}`); }}
-                disabled={playlistSongs.length === 0}
-                style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: t.accent, border: "none", borderRadius: 10, padding: 11,
-                  color: t.playBtnFg, fontSize: 14, fontWeight: 700,
-                  cursor: playlistSongs.length ? "pointer" : "default",
-                  opacity: playlistSongs.length ? 1 : 0.4,
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                {tr("Play All")}
-              </button>
-              <button
-                onClick={() => { onPlayPlaylist(playlistSongs, true, `pl:${activePlaylist.id}`); }}
-                disabled={playlistSongs.length === 0}
-                style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: t.surface, border: `1px solid ${t.border}`,
-                  borderRadius: 10, padding: 11,
-                  color: t.text, fontSize: 14, fontWeight: 700,
-                  cursor: playlistSongs.length ? "pointer" : "default",
-                  opacity: playlistSongs.length ? 1 : 0.4,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-                </svg>
-                {tr("Shuffle")}
-              </button>
-            </div>
-            </>}
+            {/* The card. Away while picking songs, so the page is the bar,
+                the rows and the actions, as on Songs. */}
+            {!selectMode && renderCard({
+              source: `pl:${activePlaylist.id}`, name: activePlaylist.name, photo: activePlaylist.coverPhoto,
+              icon: noteIcon, list: playlistSongs, own: true,
+            })}
 
             {playlistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
@@ -1267,51 +1301,11 @@ export const PlaylistsView: React.FC<Props> = ({
         {/* ════ SMART PLAYLIST DETAIL (read-only) ══════════════════════════ */}
         {view === "smartDetail" && activeSmartPlaylist && (
           <>
-            <div style={{ display: "flex", gap: 14, padding: "16px 16px 12px", alignItems: "center" }}>
-              <PlaylistArt size={84} iconSize={32} playing={playingFrom === `smart:${activeSmartPlaylist.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: t.muted }}>
-                  {tn(smartPlaylistSongs.length, "{n} song", "{n} songs")}
-                </div>
-                <div style={{ fontSize: 12, color: t.muted, opacity: 0.7, marginTop: 4 }}>
-                  {tr("Updates by itself, so it can't be edited or deleted")}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, padding: "0 16px 12px", borderBottom: `1px solid ${t.border}` }}>
-              <button
-                onClick={() => { onPlayPlaylist(smartPlaylistSongs, false, `smart:${activeSmartPlaylist.id}`); }}
-                disabled={smartPlaylistSongs.length === 0}
-                style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: t.accent, border: "none", borderRadius: 10, padding: 11,
-                  color: t.playBtnFg, fontSize: 14, fontWeight: 700,
-                  cursor: smartPlaylistSongs.length ? "pointer" : "default",
-                  opacity: smartPlaylistSongs.length ? 1 : 0.4,
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                {tr("Play All")}
-              </button>
-              <button
-                onClick={() => { onPlayPlaylist(smartPlaylistSongs, true, `smart:${activeSmartPlaylist.id}`); }}
-                disabled={smartPlaylistSongs.length === 0}
-                style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: t.surface, border: `1px solid ${t.border}`,
-                  borderRadius: 10, padding: 11,
-                  color: t.text, fontSize: 14, fontWeight: 700,
-                  cursor: smartPlaylistSongs.length ? "pointer" : "default",
-                  opacity: smartPlaylistSongs.length ? 1 : 0.4,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-                </svg>
-                {tr("Shuffle")}
-              </button>
-            </div>
+            {!selectMode && renderCard({
+              source: `smart:${activeSmartPlaylist.id}`, name: activeSmartPlaylist.name,
+              icon: (SMART_CARD_STYLES[activeSmartPlaylist.id] ?? FALLBACK_SMART_STYLE).icon(52),
+              list: smartPlaylistSongs, own: false,
+            })}
 
             {smartPlaylistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
-import { makeSH, type T } from "../themes";
+import { Browser } from "@capacitor/browser";
+import { makeSH, pageGround, type T } from "../themes";
 import { IC } from "./Icons";
+import { Logo } from "./Logo";
 import { Switch } from "./Switch";
 import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
@@ -33,6 +35,8 @@ const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8
 const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
 const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
 const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
+const InfoIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Svg>;
+const LinkIcon     = () => <Svg><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></Svg>;
 
 // Every row in this sheet is the same shape: an icon and a label on the left,
 // something on the right, the whole row one button. Declared out here, not
@@ -167,7 +171,7 @@ export function SettingsSheet({
   }, []);
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
-  const [sub, setSub] = useState<null | "faq" | "licences" | "language">(null);
+  const [sub, setSub] = useState<null | "language" | "about">(null);
 
   // Live remaining-time label for an active fixed-clock timer.
   const [now, setNow] = useState(() => Date.now());
@@ -447,19 +451,12 @@ export function SettingsSheet({
           <Row T={T} first onClick={onBackup} icon={<DownloadIcon />} label={t("Backup & restore")} sub={t("Make a backup, or put one back.")} />
         </Section>
 
+        {/* Help, privacy, licences and the version were seven rows here. They
+            live on a page of their own now, behind this one row. */}
         <Section T={T} title={t("Help")}>
-          <Row T={T} first onClick={onShowTutorial} icon={<PlayIcon />} label={t("Show tutorial")} />
-          <Row T={T} onClick={() => setSub("faq")} icon={<HelpIcon />} label={t("Questions")} />
-          <Row T={T} onClick={onFeedback} icon={<MailIcon />} label={t("Send feedback")} />
-          {onRate && <Row T={T} onClick={onRate} icon={<StarIcon />} label={t("Rate MPTree")} />}
-          <Row T={T} onClick={onPrivacy} icon={<ShieldIcon />} label={t("Privacy policy")} />
-          {adPrivacy && <Row T={T} onClick={() => { Ads.showPrivacyOptions().catch(() => {}); }} icon={<ShieldIcon />} label={t("Privacy choices for ads")} />}
-          <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
+          <Row T={T} first onClick={() => setSub("about")} icon={<InfoIcon />} label={t("About MPTree")}
+            sub={t("Help, questions, feedback and privacy.")} />
         </Section>
-
-        {/* Version comes from package.json via Vite, so it always matches the
-            build rather than whatever was last typed here. */}
-        <div style={{ padding: "14px 20px 0", color: T.muted, fontSize: 12 }}>MPTree {__APP_VERSION__}</div>
 
         </div>
       </div>
@@ -467,12 +464,81 @@ export function SettingsSheet({
       {/* Outside the sheet's own box so they are not moved by its drag, and
           stopped here so a tap on their backdrop closes only them. */}
       <div onClick={e => e.stopPropagation()}>
-        {sub === "faq"      && <FaqSheet onClose={() => setSub(null)} T={T} />}
-        {sub === "licences" && <LicencesSheet onClose={() => setSub(null)} T={T} />}
         {sub === "language" && (
           <LanguageSheet value={lang} onPick={v => { onSetLang(v); setSub(null); }} onClose={() => setSub(null)} T={T} />
         )}
+        {sub === "about" && (
+          <AboutPage
+            onShowTutorial={onShowTutorial} onFeedback={onFeedback} onRate={onRate} onPrivacy={onPrivacy}
+            adPrivacy={adPrivacy} onClose={() => setSub(null)} T={T}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── ABOUT ───────────────────────────────────────────────────────────────────
+// A page of its own, the whole screen, like Account & sync: what MPTree is and
+// which version, and everything that is help or small print. Settings keeps
+// one row for it. The questions and the licences open on top of this page,
+// inside it, so closing them comes back here.
+
+function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, onClose, T }: {
+  onShowTutorial: () => void;
+  onFeedback: () => void;
+  onRate?: () => void;
+  onPrivacy: () => void;
+  adPrivacy: boolean;
+  onClose: () => void;
+  T: T;
+}) {
+  const sh = makeSH(T);
+  const [sub, setSub] = useState<null | "faq" | "licences">(null);
+  const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 4px", flexShrink: 0 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("About MPTree")}</span>
+        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ ...column, paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 28px)" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "22px 20px 8px" }}>
+            <Logo size={76} color={T.text} />
+            <div style={{ fontSize: 28, fontWeight: 900, color: T.text, marginTop: 14, letterSpacing: "-0.02em" }}>MPTree</div>
+            <div style={{ fontSize: 14, color: T.muted, marginTop: 4 }}>{t("your music · on your device")}</div>
+            {/* From package.json via Vite, so it always matches the build. */}
+            <div style={{ marginTop: 14, fontSize: 12.5, fontWeight: 700, color: T.text, background: T.dim, borderRadius: 12, padding: "5px 12px" }}>
+              {t("Version {v}", { v: __APP_VERSION__ })}
+            </div>
+          </div>
+
+          <Section T={T} title={t("Help")}>
+            <Row T={T} first onClick={onShowTutorial} icon={<PlayIcon />} label={t("Show tutorial")} />
+            <Row T={T} onClick={() => setSub("faq")} icon={<HelpIcon />} label={t("Questions")} />
+            <Row T={T} onClick={onFeedback} icon={<MailIcon />} label={t("Send feedback")} />
+            {onRate && <Row T={T} onClick={onRate} icon={<StarIcon />} label={t("Rate MPTree")} />}
+          </Section>
+
+          <Section T={T} title={t("Privacy")}>
+            <Row T={T} first onClick={onPrivacy} icon={<ShieldIcon />} label={t("Privacy policy")} />
+            {adPrivacy && <Row T={T} onClick={() => { Ads.showPrivacyOptions().catch(() => {}); }} icon={<ShieldIcon />} label={t("Privacy choices for ads")} />}
+            <Row T={T} onClick={() => setSub("licences")} icon={<FileIcon />} label={t("Open source licences")} />
+          </Section>
+
+          <Section T={T} title={t("Website")}>
+            <Row T={T} first onClick={() => { Browser.open({ url: "https://mp-tree.net" }).catch(() => {}); }}
+              icon={<LinkIcon />} label="mp-tree.net" />
+          </Section>
+
+          <div style={{ textAlign: "center", color: T.muted, fontSize: 12, marginTop: 26 }}>by Verkuijl</div>
+        </div>
+      </div>
+
+      {sub === "faq"      && <FaqSheet onClose={() => setSub(null)} T={T} />}
+      {sub === "licences" && <LicencesSheet onClose={() => setSub(null)} T={T} />}
     </div>
   );
 }

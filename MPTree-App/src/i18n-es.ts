@@ -736,4 +736,13 @@ export const ES: Record<string, string> = {
   "A treat to make up for the scare: 24 more hours of Pro.": "Un premio para compensar el susto: 24 horas más de Pro.",
   "Pro runs until": "Pro dura hasta",
   "Thanks": "Gracias",
+  // Playlists: making one where Reorder was.
+  "+ New playlist": "+ Nueva lista",
+  "Tap \"+ New playlist\" to make your first one": "Toca \"+ Nueva lista\" para crear la primera",
+  // The About page (SettingsSheet).
+  "About MPTree": "Acerca de MPTree",
+  "Help, questions, feedback and privacy.": "Ayuda, preguntas, comentarios y privacidad.",
+  "Version {v}": "Versión {v}",
+  "Privacy": "Privacidad",
+  "Website": "Sitio web",
 };

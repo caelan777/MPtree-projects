@@ -28,7 +28,7 @@ import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
 import { applyLang, isLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
-import { MultiSelectBar, SELECT_TOP_H } from "./components/MultiSelectBar";
+import { MultiSelectBar, SelectCheck, SELECT_TOP_H, SELECT_BOTTOM_H } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet } from "./components/ProSheet";
@@ -299,6 +299,8 @@ export default function App() {
   // events come in, so it swallowed a drag that began right after a tap on
   // the logo, which looked like folding had stopped working.)
   const insetJumpRef = useRef(false);
+  // The Playlists tab moves its own list the same way, and says so through this.
+  const markInsetJump = useCallback(() => { insetJumpRef.current = true; }, []);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
@@ -2245,6 +2247,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, multiLike]);
 
+  const pageAreaRef = useRef<HTMLDivElement>(null);
   const {
     pageDragging,
     panelTransform,
@@ -2262,6 +2265,7 @@ export default function App() {
     // Inside a playlist detail, a horizontal swipe must not teleport back to
     // the Songs page — the user is one level deeper and expects the back arrow.
     swipeDisabled: playlistDetailOpen,
+    areaRef: pageAreaRef,
   });
 
   const {
@@ -3018,14 +3022,28 @@ export default function App() {
   const hintLeft = 74;
   const hintTop  = dims.cardTop + 14;
 
-  // 18px bottom offset + the card's own measured height (95px). The card lost
-  // 45px when the timeline moved out of it, so this came down from 158; the
-  // shuffle FAB, the scroll-to-top button and the list's bottom padding all
-  // offset from here, and a stale number leaves a visible gap under the player.
+  // 18px bottom offset + the card's own height. The shuffle FAB, the
+  // scroll-to-top button and the list's bottom padding all offset from here.
+  // The height is measured, not written down: it used to be a fixed 95, and on
+  // a small phone with the phone's text size turned up the card grows (a
+  // longer name, Dutch's "Onbekende artiest" wrapping), so the shuffle and
+  // scroll-to-top buttons ended up behind the player.
   // Picking songs in a playlist hides it as well: the selection bar takes its
   // place, and the player used to show half above that bar.
-  const playerH    = currentSong && !selecting && !playerHidden ? 113 : 0;
-  const selectBarH = selectMode ? 100 : 0;
+  const [playerCardH, setPlayerCardH] = useState(95);
+  const playerObserver = useRef<ResizeObserver | null>(null);
+  const playerCardRef = useCallback((el: HTMLDivElement | null) => {
+    playerObserver.current?.disconnect();
+    playerObserver.current = null;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPlayerCardH(Math.round(el.offsetHeight)));
+    ro.observe(el, { box: "border-box" });
+    playerObserver.current = ro;
+  }, []);
+  const playerH    = currentSong && !selecting && !playerHidden ? 18 + playerCardH : 0;
+  // The selection bar, on either tab: the Playlists tab pads its songs by this
+  // too, or the last ones sat under the bar.
+  const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
   const bottomH    = playerH + selectBarH;
   // Repeat first: with both on, the button shows repeat, and a tap ends it.
   const anyRepeat  = repeatOn || repeatAll;
@@ -3543,7 +3561,7 @@ export default function App() {
         )}
 
         {/* ═══ SWIPEABLE PAGE AREA ═════════════════════════════════════════ */}
-        <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
+        <div ref={pageAreaRef} style={{ position: "relative", flex: 1, overflow: "hidden" }}>
 
           {/* ── SONGS PAGE ──────────────────────────────────────────────── */}
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", pointerEvents: page === "playlists" && !pageDragging ? "none" : "auto" }}>
@@ -3565,7 +3583,7 @@ export default function App() {
                 overflowAnchor: "none",
               }}
               data-tour="songs"
-              onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}
+              onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE} onTouchCancel={onTE}
               onScroll={() => {
                 const top = scrollRef.current?.scrollTop ?? 0;
                 if ((top > 0) !== listScrolled) setListScrolled(top > 0);
@@ -3635,14 +3653,9 @@ export default function App() {
                               // its left edge is gone: the tile says it alone.
                               borderRadius: 14,
                               background: isSelected ? TH.violet + "18" : isActive ? TH.card : "transparent",
-                              boxShadow: isActive && !isSelected ? `inset 0 0 0 1px ${TH.border}` : "none",
-                              transition: "background 0.15s",
+                              boxShadow: isSelected ? `inset 0 0 0 1.5px ${TH.violet}55` : isActive ? `inset 0 0 0 1px ${TH.border}` : "none",
+                              transition: "background 0.15s, box-shadow 0.15s",
                             }}>
-                            {selectMode && (
-                              <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, border: `2px solid ${isSelected ? TH.violet : TH.border}`, background: isSelected ? TH.violet : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                                {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                              </div>
-                            )}
                             <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
                             <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -3673,6 +3686,9 @@ export default function App() {
                                 <IC.Dots />
                               </button>
                             )}
+                            {/* The tick sits where ⋮ was, so entering select
+                                mode does not shove every row's art sideways. */}
+                            {selectMode && <span style={{ display: "flex", padding: "0 4px 0 6px" }}><SelectCheck on={isSelected} T={TH} /></span>}
                           </div>
                         )}
                       </div>
@@ -3799,6 +3815,7 @@ export default function App() {
             onTouchStart={onPageTouchStart}
             onTouchMove={onPageTouchMove}
             onTouchEnd={onPageTouchEnd}
+            onTouchCancel={onPageTouchEnd}
           >
             <PlaylistsView
               topInset={playlistsInset}
@@ -3836,6 +3853,7 @@ export default function App() {
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
+              onInsetJump={markInsetJump}
               animateInsets={chromeAnimate}
               onClose={() => setPage("songs")}
               T={TH}
@@ -3851,6 +3869,7 @@ export default function App() {
             : TH.playerBg;
           return (
             <div
+              ref={playerCardRef}
               style={{
                 position: "fixed", bottom: 18, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
@@ -3900,7 +3919,7 @@ export default function App() {
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
-                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
+                    <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
