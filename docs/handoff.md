@@ -31,15 +31,14 @@ Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 too
 | `ios` | the iPhone version | pushed (`4a71866`), has everything of 1.3.1 |
 | `full-player` | test builds 72 to 76 and the 1.3.2 bundle: the full-screen player, Next up, playing inside a playlist, repeat all, reordering playlists | merged into main (ae5afc5) |
 | `select-fixes` | test builds 77 and 78 and the 1.3.3 bundle: Caelan's six selecting and Next up bugs of 26 October, the question when a day of Pro ends, Halloween | merged into main (cf2264d) |
-| `playlists-redesign` | test builds 79 to 81 and the 1.3.5 bundle: the playlist card, About, selecting, the menu as tiles, the fly-through, the queue after a reopen, bigger rows on big phones (Caelan's lists of 28 October) | pushed, not merged |
+| `playlists-redesign` | test builds 79 to 81 and the 1.3.5 bundle: the playlist card, About, selecting, the menu as tiles, the fly-through, the queue after a reopen, bigger rows on big phones (Caelan's lists of 28 October) | merged into main (4ad530e) |
 | `get-music` | the + in the header with "Get music" (test builds 66 to 69) | shelved, not merged |
 
 ## Waiting on Caelan
 
 1. **Upload 1.3.5 to Play** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`,
-   versionCode 112, built 28 October from `playlists-redesign`; release notes in `docs/play-store-listing.md`).
+   versionCode 112, built 28 October from `playlists-redesign`, now merged into main; release notes in `docs/play-store-listing.md`).
    Test build 81 plus one change: the mini player names the artist again, or Unknown artist, where the lists now leave it empty.
-   `playlists-redesign` is not merged into main yet.
 1. **Upload 1.3.3 to Play by 28 October** (`MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.3.aab`,
    versionCode 108, built 26 October from `select-fixes`; release notes in `docs/play-store-listing.md`),
    so the Halloween days are live in time. Same code as test build 78.
