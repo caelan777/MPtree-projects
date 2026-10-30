@@ -1,0 +1,492 @@
+<title>MPTree Discover Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: five artboards on one horizontal strip, one per direction. Each artboard holds
+   two phones (browse with a download running at 412, the "in your Songs" moment at 360)
+   and a short note. Phones use the app's own DARK/LIGHT tokens from themes.ts. */
+:root{
+  --bg:#f2f2f2; --fg:#111; --sub:#666; --line:#d6d6d6; --panel:#fafafa;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono: ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#101010;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#101010;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 48px}
+.intro{max-width:68ch;display:grid;gap:10px;margin-bottom:28px}
+.intro h1{font-size:30px;letter-spacing:-0.04em;margin:0;line-height:1.1;text-wrap:balance}
+.intro p{margin:0;color:var(--sub);line-height:1.55}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--sub)}
+.strip{overflow-x:auto;padding-bottom:12px}
+.boards{display:flex;gap:28px;align-items:flex-start;width:max-content;padding-right:16px}
+.board{border:1px solid var(--line);background:var(--panel);border-radius:22px;padding:22px 22px 24px;display:grid;gap:16px}
+.bhead{display:grid;gap:4px}
+.bhead .letter{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--sub)}
+.bhead h2{font-size:26px;letter-spacing:-0.035em;margin:0;line-height:1.1}
+.bhead p{margin:0;color:var(--sub);font-size:14px}
+.pair{display:flex;gap:20px;align-items:flex-start}
+.shotcap{font-family:var(--mono);font-size:11px;color:var(--sub);margin-bottom:8px}
+.note{font-size:13px;line-height:1.55;color:var(--sub);margin:0;max-width:792px;display:grid;gap:6px}
+.note b{color:var(--fg);font-weight:600}
+
+/* ── phone with app tokens ── */
+.phone{--accent:#fff;--surface:#111;--card:#141414;--ground:#000;--muted:#777;--dim:#252525;--border:#2a2a2a;--text:#fff;--textSub:#9a9a9a;--sheet:#141414;--player:#0c0c0c;--btnFg:#000;--chip:#141414;--chipC:#ccc;
+  position:relative;height:780px;border-radius:30px;overflow:hidden;background:var(--ground);color:var(--text);border:1px solid var(--line);font-family:var(--sans)}
+.phone.light{--accent:#000;--surface:#f5f5f5;--card:#efefef;--ground:#fff;--muted:#888;--dim:#e0e0e0;--border:#d8d8d8;--text:#111;--textSub:#666;--sheet:#fff;--player:#f9f9f9;--btnFg:#fff;--chip:#eee;--chipC:#333}
+.w412{width:412px}.w360{width:360px}
+.status{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 20px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.scroll{position:absolute;inset:26px 0 0;overflow:hidden}
+
+.hcard{margin:2px 12px 0;background:var(--card);border:1px solid var(--border);border-radius:22px;padding:8px 14px 12px}
+.hcard.slim{padding-bottom:8px}
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.logo{width:48px;height:48px;display:flex;color:var(--text);flex-shrink:0}
+.w360 .logo{width:42px;height:42px}
+.tabs{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px;gap:2px;min-width:0}
+.seg{padding:6px 14px;border-radius:17px;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:5px;position:relative}
+.w360 .seg{padding:6px 11px}
+.seg.on{background:var(--accent);color:var(--btnFg)}
+.seg.icon{padding:6px 10px}
+.seg .badge{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--accent);color:var(--btnFg);border-radius:8px;padding:0 5px;line-height:15px}
+.gear{color:var(--muted);padding:8px;display:flex;flex-shrink:0}
+.search{margin-top:8px;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:15px}
+.q{color:var(--text)}
+.lbl{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin:18px 16px 8px;display:flex;justify-content:space-between}
+.lbl .more{letter-spacing:0;text-transform:none;font-size:12px;color:var(--textSub)}
+.chips{display:flex;gap:6px;padding:0 12px;overflow:hidden}
+.chip{flex-shrink:0;padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--chip);color:var(--chipC)}
+.chip.on{background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.lic{font-family:var(--mono);font-size:10px;letter-spacing:.03em;border:1px solid var(--border);border-radius:5px;padding:1px 4px;color:var(--muted);flex-shrink:0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* buttons, progress, toast, mini player */
+.dl{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text);flex-shrink:0;position:relative;background:var(--ground)}
+.dl.sm{width:32px;height:32px}
+.dl.done{background:var(--accent);border-color:var(--accent);color:var(--btnFg)}
+.dl.busy{border-color:transparent}
+.dl .ring{position:absolute;inset:-1.5px;width:calc(100% + 3px);height:calc(100% + 3px)}
+.btn{border-radius:12px;padding:9px 14px;font-size:14px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;justify-content:center}
+.btn.pri{background:var(--accent);color:var(--btnFg)}
+.btn.sec{background:var(--dim);color:var(--text)}
+.toast{position:absolute;left:12px;right:12px;bottom:88px;background:var(--sheet);border:1px solid var(--border);border-radius:24px;box-shadow:0 10px 36px rgba(0,0,0,.35);padding:12px 12px 12px 14px;display:flex;align-items:center;gap:12px;z-index:5}
+.toast .t1{font-size:14px;font-weight:700;line-height:1.25}
+.toast .t2{font-size:11.5px;color:var(--textSub);margin-top:3px;font-family:var(--mono)}
+.mini{position:absolute;left:12px;right:12px;bottom:14px;height:62px;border-radius:22px;background:var(--player);border:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 10px;z-index:4}
+.mini .play{width:40px;height:40px;border-radius:50%;background:var(--accent);color:var(--btnFg);display:flex;align-items:center;justify-content:center}
+.cov{position:relative;border-radius:10px;flex-shrink:0;overflow:hidden}
+.c42{width:42px;height:42px}.c48{width:48px;height:48px}
+.txt{flex:1;min-width:0}
+.tt{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts{font-size:12.5px;color:var(--textSub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:6px;align-items:center}
+
+/* A. shelves */
+.shelf{display:flex;gap:12px;padding:0 12px;overflow:hidden}
+.tile{flex-shrink:0;width:150px;position:relative}
+.w360 .tile{width:132px}
+.tile .art{width:100%;aspect-ratio:1;border-radius:14px;position:relative}
+.tile .dl{position:absolute;right:8px;bottom:8px}
+.tile .t{font-size:13.5px;font-weight:700;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .s{font-size:12px;color:var(--textSub);margin-top:2px;display:flex;gap:6px;align-items:center}
+
+/* B. list */
+.row{position:relative;display:flex;align-items:center;gap:12px;height:78px;padding:0 10px 0 16px}
+.w360 .row{height:68px;padding-left:14px}
+.dur{font-family:var(--mono);font-size:12px;color:var(--muted);flex-shrink:0}
+
+/* C. record shop */
+.dividers{display:flex;gap:4px;padding:16px 12px 0;align-items:flex-end}
+.divd{white-space:nowrap;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:9px 8px 8px;border:1px solid var(--border);border-bottom:none;border-radius:9px 9px 0 0;color:var(--muted);background:var(--surface)}
+.divd.on{background:var(--accent);color:var(--btnFg);border-color:var(--accent);padding-top:13px}
+.crate{margin:0 12px;border-top:1px solid var(--border);position:relative;height:430px}
+.w360 .crate{height:390px}
+.back{position:absolute;left:50%;transform:translateX(-50%);border-radius:6px;border:1px solid #000}
+.front{position:absolute;left:22px;top:66px;width:300px;height:300px;z-index:3}
+.w360 .front{left:16px;width:262px;height:262px}
+.sleeve{position:absolute;inset:0;border-radius:6px;box-shadow:0 14px 30px rgba(0,0,0,.55);z-index:2}
+.vinyl{position:absolute;top:4%;width:92%;height:92%;border-radius:50%;left:4%;z-index:1;background:repeating-radial-gradient(circle,#0b0b0b 0 2px,#1c1c1c 2px 3px);border:1px solid #333}
+.vinyl::after{content:"";position:absolute;inset:36%;border-radius:50%;background:#e9e9e9;box-shadow:inset 0 0 0 9px #e9e9e9,inset 0 0 0 10px #999}
+.light .vinyl{border-color:#111}
+.crateFront{position:absolute;left:0;right:0;bottom:0;height:72px;background:var(--surface);border:1px solid var(--border);border-radius:0 0 14px 14px;z-index:4;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.crateFront .mono{font-size:11px;letter-spacing:.12em;color:var(--muted)}
+.recInfo{padding:14px 16px 0;display:flex;gap:10px;align-items:center}
+.recInfo h3{margin:0;font-size:20px;letter-spacing:-0.03em}
+.flip{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.sticker{position:absolute;z-index:6;width:88px;height:88px;border-radius:50%;background:var(--accent);color:var(--btnFg);display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-12deg);font-family:var(--mono);font-size:10px;letter-spacing:.08em;line-height:1.35;text-align:center;font-weight:700;box-shadow:0 4px 10px rgba(0,0,0,.4)}
+.sticker svg{margin-bottom:2px}
+
+/* D. radio */
+.collapsed{position:absolute;top:2px;left:12px;width:54px;height:54px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;z-index:5}
+.collapsed .logo{width:32px;height:32px}
+.station{position:absolute;top:12px;left:78px;right:12px;display:flex;justify-content:space-between;align-items:center}
+.station .name{font-size:13px;font-weight:700;display:flex;gap:8px;align-items:center}
+.onair{width:7px;height:7px;border-radius:50%;background:var(--text)}
+.rcard{position:absolute;left:16px;right:16px;top:76px;z-index:2}
+.rcard .big{width:100%;aspect-ratio:1;border-radius:22px}
+.rcard h3{font-size:26px;letter-spacing:-0.04em;margin:18px 0 4px;line-height:1.1}
+.rcard .by{font-size:15px;color:var(--textSub);display:flex;gap:8px;align-items:center}
+.scrub{margin-top:16px;height:3px;background:var(--dim);border-radius:2px;position:relative}
+.scrub i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:2px}
+.scrubT{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px}
+.ctrl{display:flex;gap:10px;margin-top:16px;align-items:center}
+.pill{position:relative;flex:1;height:54px;border-radius:27px;overflow:hidden;background:var(--dim);font-size:15px;font-weight:700}
+.pill .lay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.pill .fillw{position:absolute;inset:0 auto 0 0;overflow:hidden;background:var(--accent)}
+.pill .fillw .lay{color:var(--btnFg)}
+.pill.full{background:var(--accent);color:var(--btnFg)}
+.pill.ok{background:transparent;border:1.5px solid var(--border)}
+.round{width:54px;height:54px;border-radius:50%;background:var(--dim);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)}
+.nextpeek{position:absolute;left:28px;right:28px;bottom:-34px;height:84px;border-radius:22px 22px 0 0;background:var(--card);border:1px solid var(--border);z-index:1;display:flex;gap:12px;padding:14px 16px;align-items:flex-start}
+.hint{position:absolute;left:0;right:0;bottom:66px;text-align:center;font-size:12px;color:var(--muted);z-index:2}
+.landed{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;background:var(--accent);color:var(--btnFg);padding:6px 12px 6px 8px;border-radius:16px}
+
+/* E. search-first */
+.findHead{padding:22px 20px 0}
+.findHead h3{font-size:30px;letter-spacing:-0.045em;margin:0;line-height:1.05}
+.findHead p{margin:8px 0 0;color:var(--textSub);font-size:14px;line-height:1.45}
+.bigSearch{margin:18px 16px 0;height:56px;border-radius:16px;border:1.5px solid var(--text);display:flex;align-items:center;gap:10px;padding:0 16px;font-size:17px;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px}
+.gt{height:86px;border-radius:16px;padding:12px;display:flex;align-items:flex-end;font-size:17px;font-weight:800;letter-spacing:-0.02em;position:relative;overflow:hidden;border:1px solid var(--border)}
+.gt span{position:relative;z-index:1}
+.gt.inv{background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.recent{display:flex;gap:6px;padding:0 16px;flex-wrap:wrap}
+.recent span{font-size:13px;color:var(--textSub);border-bottom:1px solid var(--border);padding:2px 0;margin-right:10px}
+.topToast{position:absolute;left:12px;right:12px;top:10px;z-index:6;background:var(--sheet);border:1px solid var(--border);border-radius:24px;box-shadow:0 10px 36px rgba(0,0,0,.35);padding:10px 12px 10px 14px;display:flex;gap:12px;align-items:center}
+.bar{position:absolute;left:14px;right:10px;bottom:4px;height:2px;background:var(--dim);border-radius:2px}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:2px}
+
+/* stand-in covers, greyscale: real covers are the artists' own artwork */
+.a1{background:radial-gradient(circle at 30% 30%,#d9d9d9 0 18%,#5a5a5a 19% 34%,#1d1d1d 35%)}
+.a2{background:repeating-linear-gradient(135deg,#2b2b2b 0 7px,#9a9a9a 7px 9px)}
+.a3{background:conic-gradient(from 40deg,#eaeaea,#3a3a3a,#bdbdbd,#141414,#eaeaea)}
+.a4{background:linear-gradient(180deg,#bfbfbf 0 48%,#121212 48% 52%,#6d6d6d 52%)}
+.a5{background:radial-gradient(circle at 70% 75%,#fff 0 9%,#444 10% 100%)}
+.a6{background:repeating-radial-gradient(circle at 50% 50%,#1a1a1a 0 4px,#7a7a7a 4px 5px)}
+.a7{background:linear-gradient(90deg,#e6e6e6 0 33%,#8c8c8c 33% 66%,#2a2a2a 66%)}
+.a8{background:linear-gradient(160deg,#f0f0f0 0 30%,#262626 30% 60%,#b0b0b0 60%)}
+.a9{background:radial-gradient(ellipse at 50% 120%,#efefef 0 30%,#3c3c3c 31% 55%,#0e0e0e 56%)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 5.5v13l9-6.5zM16.5 5.5h2.5v13h-2.5z" fill="currentColor"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-logo" viewBox="-250 -250 1500 1500"><path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/></symbol>
+  </defs>
+</svg>
+
+<header class="intro">
+  <span class="eyebrow">MPTree for Android · Discover · 5 directions · 30 Oct 2026</span>
+  <h1>Five ways to find free music</h1>
+  <p>Vijf richtingen voor de Ontdekken-pagina, elk op een eigen artboard. Per richting twee schermen: links bladeren terwijl er een download loopt (412 px), rechts het moment dat het nummer in je Songs staat (360 px). Alles in de kleuren van de app: zwart en wit, het accent keert om met de ondergrond, geen violet. De teksten in de app zijn Engels, zoals de basisteksten van MPTree.</p>
+</header>
+
+<div class="strip">
+<div class="boards">
+
+<!-- ══════════ A. SHELVES ══════════ -->
+<section class="board">
+  <div class="bhead"><span class="letter">RICHTING A</span><h2>Spotify-achtig: rijen met hoezen</h2><p>Per genre een horizontale rij grote hoezen. Bladeren met je duim, zoals je het kent.</p></div>
+  <div class="pair">
+    <div>
+      <div class="shotcap">1 · bladeren, download loopt · 412 · dark</div>
+      <div class="phone w412">
+        <div class="status"><span>14:32</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="hcard">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+            <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+          </div>
+          <div class="lbl">Lo-fi <span class="more">See all</span></div>
+          <div class="shelf">
+            <div class="tile"><div class="art a2"><span class="dl sm busy"><svg class="ring" viewBox="0 0 35 35"><circle cx="17.5" cy="17.5" r="16" fill="none" stroke="var(--dim)" stroke-width="2.5"/><circle cx="17.5" cy="17.5" r="16" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="38" transform="rotate(-90 17.5 17.5)"/></svg><svg width="12" height="12"><use href="#i-x"/></svg></span></div><div class="t">Paper Lanterns</div><div class="s"><span class="mono">3.1 / 5.0 MB</span></div></div>
+            <div class="tile"><div class="art a6"><span class="dl sm"><svg width="16" height="16"><use href="#i-dl"/></svg></span></div><div class="t">Tape Hiss Sunday</div><div class="s">June Albers <span class="lic">CC BY</span></div></div>
+            <div class="tile"><div class="art a4"></div><div class="t">Coffee Ring</div><div class="s">Hal Brenner</div></div>
+          </div>
+          <div class="lbl">Electronic <span class="more">See all</span></div>
+          <div class="shelf">
+            <div class="tile"><div class="art a3"><span class="dl sm"><svg width="16" height="16"><use href="#i-dl"/></svg></span></div><div class="t">Window Seat</div><div class="s">Lowtide Collective <span class="lic">OML</span></div></div>
+            <div class="tile"><div class="art a9"><span class="dl sm"><svg width="16" height="16"><use href="#i-dl"/></svg></span></div><div class="t">Low Sun Over Ring Road</div><div class="s">Pelle Okafor</div></div>
+            <div class="tile"><div class="art a7"></div><div class="t">Grid</div><div class="s">Ana Szabo</div></div>
+          </div>
+          <div class="lbl">Acoustic</div>
+          <div class="shelf">
+            <div class="tile"><div class="art a5"></div></div><div class="tile"><div class="art a8"></div></div><div class="tile"><div class="art a1"></div></div>
+          </div>
+          <div class="mini"><div class="cov c42 a6"></div><div class="txt"><div class="tt" style="font-size:14px">Tape Hiss Sunday</div><div class="ts">Preview · 0:18 / 0:30</div></div><span class="play"><svg width="18" height="18"><use href="#i-pause"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="shotcap">2 · staat nu in je Songs · 360 · dark</div>
+      <div class="phone w360">
+        <div class="status"><span>14:33</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="hcard">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on icon"><svg width="16" height="16"><use href="#i-compass"/></svg></span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+            <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+          </div>
+          <div class="lbl">Lo-fi <span class="more">See all</span></div>
+          <div class="shelf">
+            <div class="tile"><div class="art a2"><span class="dl sm done"><svg width="16" height="16"><use href="#i-ok"/></svg></span></div><div class="t">Paper Lanterns</div><div class="s">In your Songs</div></div>
+            <div class="tile"><div class="art a6"><span class="dl sm"><svg width="16" height="16"><use href="#i-dl"/></svg></span></div><div class="t">Tape Hiss Sunday</div><div class="s">June Albers</div></div>
+            <div class="tile"><div class="art a4"></div><div class="t">Coffee Ring</div></div>
+          </div>
+          <div class="lbl">Electronic</div>
+          <div class="shelf">
+            <div class="tile"><div class="art a3"></div><div class="t">Window Seat</div></div>
+            <div class="tile"><div class="art a9"></div><div class="t">Low Sun Over Ring Road</div></div>
+            <div class="tile"><div class="art a7"></div></div>
+          </div>
+          <div class="toast"><div class="cov c42 a2"></div><div class="txt"><div class="t1">Paper Lanterns is in your Songs</div><div class="t2">Music/MPTree</div></div><span class="btn pri">Play</span></div>
+          <div class="mini"><div class="cov c42 a1"></div><div class="txt"><div class="tt" style="font-size:14px">Night Bus Home</div><div class="ts">Maren Oduya</div></div><span class="play"><svg width="18" height="18"><use href="#i-play"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><span><b>Sterk:</b> voelt meteen vertrouwd, laat veel muziek tegelijk zien, de hoezen doen het werk.</span><span><b>Zwak:</b> de meeste kleur en drukte van de vijf, en het lijkt op Spotify, wat verwachtingen wekt die de catalogus niet waarmaakt. De downloadknop op de hoes is klein. Licentie past alleen bij een paar tegels.</span></div>
+</section>
+
+<!-- ══════════ B. LIST FIRST ══════════ -->
+<section class="board">
+  <div class="bhead"><span class="letter">RICHTING B</span><h2>Lijst eerst: gewone songrijen</h2><p>Dezelfde rijen als in Songs, met een downloadknop rechts. Een genre is een chip.</p></div>
+  <div class="pair">
+    <div>
+      <div class="shotcap">1 · bladeren, download loopt · 412 · dark</div>
+      <div class="phone w412">
+        <div class="status"><span>14:32</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="hcard">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+            <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+            <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;color:var(--muted)"><span>Free to download and keep</span><span class="mono" style="font-size:10.5px">AUDIUS · ARCHIVE</span></div>
+          </div>
+          <div style="height:12px"></div>
+          <div class="chips"><span class="chip">All</span><span class="chip on">Lo-fi</span><span class="chip">Electronic</span><span class="chip">Hip hop</span><span class="chip">Acoustic</span></div>
+          <div style="margin-top:6px">
+            <div class="row"><div class="cov c48 a2"></div><div class="txt"><div class="tt">Paper Lanterns</div><div class="ts"><span class="mono">3.1 of 5.0 MB</span></div></div>
+              <span class="dl busy"><svg class="ring" viewBox="0 0 43 43"><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--dim)" stroke-width="2.5"/><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="47.8" transform="rotate(-90 21.5 21.5)"/></svg><svg width="14" height="14"><use href="#i-x"/></svg></span></div>
+            <div class="row"><div class="cov c48 a4"></div><div class="txt"><div class="tt">Coffee Ring</div><div class="ts">Waiting</div></div><span class="dl busy"><svg class="ring" viewBox="0 0 43 43"><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--dim)" stroke-width="2.5"/></svg><svg width="14" height="14"><use href="#i-x"/></svg></span></div>
+            <div class="row"><div class="cov c48 a6"></div><div class="txt"><div class="tt">Tape Hiss Sunday</div><div class="ts">June Albers <span class="lic">CC BY</span></div></div><span class="dur">2:36</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+            <div class="row"><div class="cov c48 a3"></div><div class="txt"><div class="tt">Window Seat</div><div class="ts">Lowtide Collective <span class="lic">OML</span></div></div><span class="dur">3:12</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+            <div class="row"><div class="cov c48 a8"></div><div class="txt"><div class="tt">Sunday Radiator</div><div class="ts">Odile Marsh <span class="lic">CC BY-SA</span></div></div><span class="dur">2:49</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+            <div class="row"><div class="cov c48 a9"></div><div class="txt"><div class="tt">Lamp Light</div><div class="ts">Teo Grand <span class="lic">CC0</span></div></div><span class="dur">3:30</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          </div>
+          <div class="mini"><div class="cov c42 a1"></div><div class="txt"><div class="tt" style="font-size:14px">Night Bus Home</div><div class="ts">Maren Oduya</div></div><span class="play"><svg width="18" height="18"><use href="#i-pause"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="shotcap">2 · staat nu in je Songs · 360 · dark</div>
+      <div class="phone w360">
+        <div class="status"><span>14:34</span><span>86%</span></div>
+        <div class="scroll">
+          <div class="hcard">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs <span class="badge">+1</span></span><span class="seg">Playlists</span><span class="seg on icon"><svg width="16" height="16"><use href="#i-compass"/></svg></span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+            <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+          </div>
+          <div style="height:12px"></div>
+          <div class="chips"><span class="chip">All</span><span class="chip on">Lo-fi</span><span class="chip">Electronic</span><span class="chip">Hip hop</span></div>
+          <div style="margin-top:6px">
+            <div class="row"><div class="cov c42 a2"></div><div class="txt"><div class="tt">Paper Lanterns</div><div class="ts">In your Songs</div></div><span class="dur">2:58</span><span class="dl done"><svg width="20" height="20"><use href="#i-ok"/></svg></span></div>
+            <div class="row"><div class="cov c42 a4"></div><div class="txt"><div class="tt">Coffee Ring</div><div class="ts"><span class="mono">0.4 of 4.2 MB</span></div></div><span class="dl busy"><svg class="ring" viewBox="0 0 43 43"><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--dim)" stroke-width="2.5"/><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="113" transform="rotate(-90 21.5 21.5)"/></svg><svg width="14" height="14"><use href="#i-x"/></svg></span></div>
+            <div class="row"><div class="cov c42 a6"></div><div class="txt"><div class="tt">Tape Hiss Sunday</div><div class="ts">June Albers <span class="lic">CC BY</span></div></div><span class="dur">2:36</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+            <div class="row"><div class="cov c42 a3"></div><div class="txt"><div class="tt">Window Seat</div><div class="ts">Lowtide Collective <span class="lic">OML</span></div></div><span class="dur">3:12</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          </div>
+          <div class="toast"><div class="cov c42 a2"></div><div class="txt"><div class="t1">Paper Lanterns is in your Songs</div><div class="t2">Music/MPTree</div></div><span class="btn pri">Play</span></div>
+          <div class="mini"><div class="cov c42 a1"></div><div class="txt"><div class="tt" style="font-size:14px">Night Bus Home</div><div class="ts">Maren Oduya</div></div><span class="play"><svg width="18" height="18"><use href="#i-pause"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><span><b>Sterk:</b> past het best bij de rest van MPTree, licentie op elke rij, het snelst om veel nummers te downloaden. De Songs-tab krijgt een tellertje (+1) tot je hem opent. Dit is de uitgewerkte versie uit het eerste ontwerp.</span><span><b>Zwak:</b> rustig tot saai. Weinig gevoel van ontdekken; het is een lijst.</span></div>
+</section>
+
+<!-- ══════════ C. RECORD SHOP ══════════ -->
+<section class="board">
+  <div class="bhead"><span class="letter">RICHTING C</span><h2>Platenzaak: bladeren door de bak</h2><p>Genres zijn tabbladen van tussenkaarten. De platen staan in een bak; veeg om de volgende naar voren te halen.</p></div>
+  <div class="pair">
+    <div>
+      <div class="shotcap">1 · bladeren, download loopt · 412 · dark</div>
+      <div class="phone w412">
+        <div class="status"><span>14:32</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="hcard slim">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+          </div>
+          <div class="dividers"><span class="divd">All</span><span class="divd on">Lo-fi</span><span class="divd">Electro</span><span class="divd">Hip hop</span><span class="divd">Folk</span></div>
+          <div class="crate">
+            <div class="back a7" style="top:14px;width:276px;height:60px;opacity:.55"></div>
+            <div class="back a3" style="top:30px;width:292px;height:60px;opacity:.75"></div>
+            <div class="back a6" style="top:46px;width:306px;height:60px"></div>
+            <div class="front"><div class="vinyl" style="left:34%"></div><div class="sleeve a2"></div></div>
+            <div class="crateFront"><span class="mono">LO-FI · 412 IN THE BAK</span><span class="flip"><svg width="14" height="14"><use href="#i-up"/></svg>Swipe to flip</span></div>
+          </div>
+          <div class="recInfo"><div class="txt"><h3>Paper Lanterns</h3><div class="ts" style="font-size:14px">Lowtide Collective <span class="lic">OML</span></div></div></div>
+          <div style="display:flex;gap:8px;padding:14px 16px 0;align-items:center">
+            <span class="btn sec" style="padding:12px 16px"><svg width="16" height="16"><use href="#i-play"/></svg>Preview</span>
+            <span class="btn sec" style="flex:1;padding:12px 14px;justify-content:flex-start"><span class="mono" style="font-size:12px;font-weight:600">Downloading · 3.1 of 5.0 MB</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="shotcap">2 · staat nu in je Songs · 360 · dark</div>
+      <div class="phone w360">
+        <div class="status"><span>14:33</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="hcard slim">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on icon"><svg width="16" height="16"><use href="#i-compass"/></svg></span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+          </div>
+          <div class="dividers"><span class="divd">All</span><span class="divd on">Lo-fi</span><span class="divd">Electro</span><span class="divd">Hip hop</span></div>
+          <div class="crate">
+            <div class="back a7" style="top:14px;width:240px;height:60px;opacity:.55"></div>
+            <div class="back a3" style="top:30px;width:254px;height:60px;opacity:.75"></div>
+            <div class="back a6" style="top:46px;width:266px;height:60px"></div>
+            <div class="front"><div class="sleeve a2"></div></div>
+            <div class="sticker" style="right:28px;top:52px"><svg width="18" height="18"><use href="#i-ok"/></svg>IN YOUR<br>SONGS</div>
+            <div class="crateFront"><span class="mono">LO-FI · 412</span><span class="flip"><svg width="14" height="14"><use href="#i-up"/></svg>Next record</span></div>
+          </div>
+          <div class="recInfo"><div class="txt"><h3>Paper Lanterns</h3><div class="ts" style="font-size:14px">Lowtide Collective <span class="lic">OML</span></div></div></div>
+          <div style="display:flex;gap:8px;padding:14px 16px 0">
+            <span class="btn pri" style="flex:1;padding:12px"><svg width="16" height="16"><use href="#i-play"/></svg>Play in Songs</span>
+            <span class="btn sec" style="padding:12px 14px">Next</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><span><b>Sterk:</b> het meest eigen van de vijf, past bij een speler die over bestanden en bezit gaat. Tijdens het downloaden schuift de plaat uit de hoes (hoe verder, hoe meer binnen). Klaar is een prijsstickertje "In your Songs" op de hoes.</span><span><b>Zwak:</b> een plaat tegelijk is langzaam als je veel wilt hebben, en er is het meeste bouwwerk voor nodig (de bak, het vegen, de animatie).</span></div>
+</section>
+
+<!-- ══════════ D. RADIO ══════════ -->
+<section class="board">
+  <div class="bhead"><span class="letter">RICHTING D</span><h2>Radio: een nummer tegelijk</h2><p>Kies een zender, het speelt meteen. Omhoog vegen is het volgende nummer, een tik is downloaden.</p></div>
+  <div class="pair">
+    <div>
+      <div class="shotcap">1 · luisteren, download loopt · 412 · dark</div>
+      <div class="phone w412">
+        <div class="status"><span>14:32</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="collapsed"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span></div>
+          <div class="station"><span class="name"><span class="onair"></span>Lo-fi radio</span><span class="chip">Change</span></div>
+          <div class="rcard">
+            <div class="big a9"></div>
+            <h3>Low Sun Over Ring Road</h3>
+            <div class="by">Pelle Okafor <span class="lic">CC BY</span></div>
+            <div class="scrub"><i style="width:22%"></i></div>
+            <div class="scrubT"><span>0:41</span><span>3:07</span></div>
+            <div class="ctrl">
+              <span class="round"><svg width="22" height="22"><use href="#i-pause"/></svg></span>
+              <div class="pill"><div class="lay"><span class="mono" style="font-size:13px">Downloading · 3.1 of 5.0 MB</span></div><div class="fillw" style="width:62%"><div class="lay" style="width:310px"><span class="mono" style="font-size:13px">Downloading · 3.1 of 5.0 MB</span></div></div></div>
+            </div>
+          </div>
+          <div class="hint">Swipe up for the next song</div>
+          <div class="nextpeek"><div class="cov c42 a8"></div><div class="txt"><div class="tt" style="font-size:14px">Sunday Radiator</div><div class="ts">Next · Odile Marsh</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="shotcap">2 · staat nu in je Songs · 360 · dark</div>
+      <div class="phone w360">
+        <div class="status"><span>14:35</span><span>86%</span></div>
+        <div class="scroll">
+          <div class="collapsed"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span></div>
+          <div class="station"><span class="name"><span class="onair"></span>Lo-fi radio</span><span class="landed"><svg width="14" height="14"><use href="#i-ok"/></svg>2 new in Songs</span></div>
+          <div class="rcard">
+            <div class="big a9"></div>
+            <h3>Low Sun Over Ring Road</h3>
+            <div class="by">Pelle Okafor <span class="lic">CC BY</span></div>
+            <div class="scrub"><i style="width:48%"></i></div>
+            <div class="scrubT"><span>1:30</span><span>3:07</span></div>
+            <div class="ctrl">
+              <span class="round"><svg width="22" height="22"><use href="#i-pause"/></svg></span>
+              <div class="pill ok"><div class="lay"><svg width="18" height="18"><use href="#i-ok"/></svg>In your Songs</div></div>
+            </div>
+          </div>
+          <div class="hint">Swipe up for the next song</div>
+          <div class="nextpeek"><div class="cov c42 a8"></div><div class="txt"><div class="tt" style="font-size:14px">Sunday Radiator</div><div class="ts">Next · Odile Marsh</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><span><b>Sterk:</b> voelt het meest als ontdekken, nul keuzestress, en luisteren is het hele nummer en niet alleen 30 seconden. De downloadknop vult zichzelf als voortgangsbalk; klaar wordt een omlijnde knop met vinkje, en bovenin telt "2 new in Songs" mee.</span><span><b>Zwak:</b> geen overzicht en lastig om iets specifieks te zoeken (zoeken zou een aparte knop worden). Het header-kaartje is ingeklapt tot het ronde logo om ruimte te maken.</span></div>
+</section>
+
+<!-- ══════════ E. SEARCH FIRST ══════════ -->
+<section class="board">
+  <div class="bhead"><span class="letter">RICHTING E</span><h2>Zoeken eerst: grote zoekbalk, genretegels</h2><p>De pagina begint met een vraag. Weet je het niet, dan kies je een tegel.</p></div>
+  <div class="pair">
+    <div>
+      <div class="shotcap">1 · beginscherm · 412 · light</div>
+      <div class="phone w412 light">
+        <div class="status"><span>14:32</span><span>87%</span></div>
+        <div class="scroll">
+          <div class="hcard slim">
+            <div class="hrow"><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+              <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+              <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span></div>
+          </div>
+          <div class="findHead"><h3>Find free music<br>to keep.</h3><p>Independent artists who chose to share their songs. Not the charts, all yours once downloaded.</p></div>
+          <div class="bigSearch"><svg width="22" height="22"><use href="#i-search"/></svg>Artist, song or mood</div>
+          <div class="lbl" style="margin-top:22px">Or start with a genre</div>
+          <div class="tiles">
+            <div class="gt inv"><span>Lo-fi</span></div>
+            <div class="gt a6" style="color:#fff"><span>Electronic</span></div>
+            <div class="gt" style="background:var(--surface)"><span>Hip hop</span></div>
+            <div class="gt" style="background:var(--card)"><span>Acoustic</span></div>
+            <div class="gt" style="background:var(--surface)"><span>Ambient</span></div>
+            <div class="gt a4" style="color:#fff"><span>Classical</span></div>
+          </div>
+          <div class="lbl" style="margin-top:20px">Recent</div>
+          <div class="recent"><span>rain piano</span><span>study</span><span>Lowtide Collective</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="shotcap">2 · resultaten, download en klaar · 360 · light</div>
+      <div class="phone w360 light">
+        <div class="status"><span>14:34</span><span>86%</span></div>
+        <div class="scroll">
+          <div class="topToast"><svg width="22" height="22" style="flex-shrink:0"><use href="#i-ok"/></svg><div class="txt"><div class="tt" style="font-size:14px;font-weight:700">Wet Streets is in your Songs</div><div class="ts mono" style="font-size:11px">Music/MPTree</div></div><span class="btn pri" style="padding:8px 12px">Play</span></div>
+          <div style="height:78px"></div>
+          <div class="bigSearch" style="margin-top:0;height:50px;font-size:16px"><svg width="20" height="20"><use href="#i-search"/></svg><span class="q">rain piano</span><span style="margin-left:auto;display:flex"><svg width="18" height="18"><use href="#i-x"/></svg></span></div>
+          <div class="lbl" style="margin-top:16px">24 free songs</div>
+          <div class="row"><div class="cov c42 a3"></div><div class="txt"><div class="tt">Rain on the Piano Lid</div><div class="ts"><span class="mono">2.0 of 5.6 MB</span></div></div><span class="dl busy"><svg class="ring" viewBox="0 0 43 43"><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--dim)" stroke-width="2.5"/></svg><svg width="14" height="14"><use href="#i-x"/></svg></span><div class="bar"><i style="width:36%"></i></div></div>
+          <div class="row"><div class="cov c42 a6"></div><div class="txt"><div class="tt">Wet Streets</div><div class="ts">In your Songs</div></div><span class="dur">3:05</span><span class="dl done"><svg width="20" height="20"><use href="#i-ok"/></svg></span></div>
+          <div class="row"><div class="cov c42 a4"></div><div class="txt"><div class="tt">Piano in the Rain, Take 2</div><div class="ts">Ilse Varga <span class="lic">CC BY</span></div></div><span class="dur">4:12</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov c42 a1"></div><div class="txt"><div class="tt">Gymnopédie No. 1</div><div class="ts">Erik Satie, Musopen <span class="lic">PD</span></div></div><span class="dur">3:20</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov c42 a2"></div><div class="txt"><div class="tt">Slow Rain Sketch</div><div class="ts">Nadia Holm <span class="lic">CC BY-SA</span></div></div><span class="dur">1:54</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="mini"><div class="cov c42 a1"></div><div class="txt"><div class="tt" style="font-size:14px">Night Bus Home</div><div class="ts">Maren Oduya</div></div><span class="play"><svg width="18" height="18"><use href="#i-play"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><span><b>Sterk:</b> het eerlijkste beginscherm: de kop zegt meteen wat dit is. Snel voor wie al weet wat hij zoekt. Hier loopt de voortgang als een dunne lijn onder de hele rij, en de melding komt bovenaan, uit de buurt van de speler.</span><span><b>Zwak:</b> een leeg zoekveld vraagt iets van mensen die net binnenkomen en nog niets weten. De resultaten zijn weer de lijst van richting B.</span></div>
+</section>
+
+</div>
+</div>
+
+<section class="intro" style="margin-top:28px">
+  <span class="eyebrow">Mijn voorkeur</span>
+  <p><b style="color:var(--fg)">B als basis, met de zender uit D als extra.</b> De lijst past bij MPTree en is de snelste weg naar een gevulde bibliotheek. Een knop "Play radio" bovenaan elk genre geeft het ontdekgevoel van D zonder het overzicht kwijt te raken. C is de mooiste en de meest eigen, maar ook het meeste werk; die zou ik bewaren voor later.</p>
+</section>
