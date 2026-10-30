@@ -1,0 +1,365 @@
+<title>MPTree Discover</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a working board. Six phones side by side on one strip, each with a short
+   note under it. The phones carry the app's own palette (themes.ts), the board is neutral. */
+:root{
+  --bg:#f2f2f2; --fg:#111; --sub:#666; --line:#d8d8d8; --panel:#fff;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono: ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#121212;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#121212;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 48px}
+.intro{max-width:66ch;display:grid;gap:10px}
+.intro h1{font-size:30px;letter-spacing:-0.04em;margin:0;line-height:1.1;text-wrap:balance}
+.intro p{margin:0;color:var(--sub);line-height:1.55}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--sub)}
+.decisions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:24px 0 28px;max-width:1100px}
+.decisions div{border:1px solid var(--line);background:var(--panel);border-radius:16px;padding:14px 16px;line-height:1.45;font-size:13.5px;min-width:0}
+.decisions b{display:block;margin-bottom:4px;font-size:14px}
+.strip{overflow-x:auto;padding-bottom:12px}
+.boards{display:flex;gap:36px;align-items:flex-start;width:max-content;padding-right:16px}
+.board{display:grid;gap:12px;align-content:start}
+.board .cap{display:flex;gap:10px;align-items:baseline}
+.board .cap .w{font-family:var(--mono);font-size:11px;color:var(--sub)}
+.board .cap h2{font-size:15px;margin:0}
+.note{font-size:13px;line-height:1.5;color:var(--sub);margin:0}
+.note b{color:var(--fg);font-weight:600}
+
+/* ── The phone. App tokens from themes.ts, DARK and LIGHT. ── */
+.phone{--accent:#fff;--surface:#111;--card:#141414;--ground:#000;--muted:#777;--dim:#252525;--border:#2a2a2a;--text:#fff;--textSub:#9a9a9a;--sheet:#141414;--player:#0c0c0c;--btnFg:#000;--chip:#141414;--chipC:#ccc;--overlay:rgba(0,0,0,.78);
+  position:relative;height:800px;border-radius:30px;overflow:hidden;background:var(--ground);color:var(--text);border:1px solid var(--line);font-family:var(--sans);box-shadow:0 1px 0 var(--line)}
+.phone.light{--accent:#000;--surface:#f5f5f5;--card:#efefef;--ground:#fff;--muted:#888;--dim:#e0e0e0;--border:#d8d8d8;--text:#111;--textSub:#666;--sheet:#fff;--player:#f9f9f9;--btnFg:#fff;--chip:#eee;--chipC:#333;--overlay:rgba(0,0,0,.5)}
+.w412{width:412px}.w360{width:360px}
+.status{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 20px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.scroll{position:absolute;inset:26px 0 0;overflow:hidden}
+
+/* header card, as in App.tsx */
+.hcard{margin:2px 12px 0;background:var(--card);border:1px solid var(--border);border-radius:22px;padding:8px 14px 12px}
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.logo{width:48px;height:48px;display:flex;color:var(--text);flex-shrink:0}
+.w360 .logo{width:42px;height:42px}
+.tabs{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px;gap:2px;min-width:0}
+.seg{padding:6px 14px;border-radius:17px;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.w360 .seg{padding:6px 11px}
+.seg.on{background:var(--accent);color:var(--btnFg)}
+.seg.icon{padding:6px 10px}
+.gear{color:var(--muted);padding:8px;display:flex;flex-shrink:0}
+.search{margin-top:8px;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:15px}
+.search .q{color:var(--text)}
+.search .caret{display:inline-block;width:1.5px;height:17px;background:var(--text);vertical-align:-3px;margin-left:1px}
+.metaRow{display:flex;justify-content:space-between;align-items:center;padding-top:8px;font-size:12px;color:var(--muted)}
+.src{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em}
+
+/* content */
+.pad{padding:0 12px}
+.hello{margin:14px 12px 0;padding:12px 14px;border:1px solid var(--border);border-radius:16px;display:flex;gap:12px;align-items:flex-start;font-size:13px;line-height:1.45;color:var(--textSub)}
+.hello b{color:var(--text);display:block;font-size:14px;margin-bottom:2px}
+.hello .x{color:var(--muted);flex-shrink:0;margin-top:1px}
+.lbl{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin:18px 16px 8px}
+.chips{display:flex;gap:6px;padding:0 12px;overflow:hidden}
+.chip{flex-shrink:0;padding:6px 12px;border-radius:16px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--chip);color:var(--chipC)}
+.chip.on{background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.shelf{display:flex;gap:10px;padding:0 12px;overflow:hidden}
+.tile{flex-shrink:0;width:132px}
+.w360 .tile{width:118px}
+.tile .art{width:100%;aspect-ratio:1;border-radius:14px;border:1px solid var(--border)}
+.tile .t{font-size:13px;font-weight:700;margin-top:7px;line-height:1.25}
+.tile .s{font-size:11.5px;color:var(--textSub);margin-top:2px}
+
+/* track row: same height table as SIZE_TABLE medium (68, +10 on a wide phone) */
+.list{margin-top:4px}
+.row{position:relative;display:flex;align-items:center;gap:12px;height:78px;padding:0 10px 0 16px}
+.w360 .row{height:68px;padding-left:14px}
+.cov{position:relative;width:50px;height:50px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.w360 .cov{width:44px;height:44px}
+.cov .pp{width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff}
+.txt{flex:1;min-width:0}
+.tt{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts{font-size:12.5px;color:var(--textSub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:6px;align-items:center}
+.lic{font-family:var(--mono);font-size:10px;letter-spacing:.03em;border:1px solid var(--border);border-radius:5px;padding:1px 4px;color:var(--muted);flex-shrink:0}
+.dur{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
+.dl{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text);flex-shrink:0;position:relative}
+.dl.done{background:var(--accent);border-color:var(--accent);color:var(--btnFg)}
+.dl.busy{border-color:transparent}
+.dl.busy svg.ring{position:absolute;inset:-1.5px}
+.dl.off{color:var(--muted);border-style:dashed}
+.prev{position:absolute;left:16px;right:10px;bottom:6px;height:2px;background:var(--dim);border-radius:2px}
+.prev i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:2px}
+.prevt{font-family:var(--mono);font-size:11px;color:var(--text)}
+.row.playing .tt{font-weight:700}
+.bars{display:flex;gap:2px;align-items:flex-end;height:14px}
+.bars i{width:3px;background:#fff;border-radius:1px}
+
+/* bottom: mini player, toast */
+.mini{position:absolute;left:12px;right:12px;bottom:14px;height:62px;border-radius:22px;background:var(--player);border:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 10px}
+.mini .cov{width:42px;height:42px}
+.mini .play{width:40px;height:40px;border-radius:50%;background:var(--accent);color:var(--btnFg);display:flex;align-items:center;justify-content:center}
+.toast{position:absolute;left:12px;right:12px;bottom:88px;background:var(--sheet);border:1px solid var(--border);border-radius:24px;box-shadow:0 10px 36px rgba(0,0,0,.35);padding:12px 12px 12px 14px;display:flex;align-items:center;gap:12px}
+.toast .t1{font-size:14px;font-weight:700}
+.toast .t2{font-size:12px;color:var(--textSub);margin-top:2px;font-family:var(--mono)}
+.btn{border-radius:12px;padding:9px 14px;font-size:14px;font-weight:700;white-space:nowrap}
+.btn.pri{background:var(--accent);color:var(--btnFg)}
+.btn.sec{background:var(--dim);color:var(--text)}
+.foot{font-size:11.5px;color:var(--muted);text-align:center;padding:14px 24px;line-height:1.45}
+
+/* sheet */
+.shade{position:absolute;inset:0;background:var(--overlay)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--sheet);border-radius:20px 20px 0 0;padding:0 20px 28px}
+.handle{width:36px;height:4px;background:var(--dim);border-radius:2px;margin:12px auto 0}
+.shHead{display:flex;gap:14px;align-items:center;padding:18px 0 6px}
+.shHead .cov{width:64px;height:64px;border-radius:12px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:10px 12px;font-size:14px;padding:14px 0;border-top:1px solid var(--border);margin-top:12px}
+.kv dt{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding-top:2px}
+.kv dd{margin:0;line-height:1.45}
+.kv .m{font-family:var(--mono);font-size:13px}
+.shBtns{display:grid;gap:8px;margin-top:6px}
+.shBtns .btn{text-align:center;padding:14px}
+
+/* empty songs */
+.empty{padding:70px 28px 0;text-align:left}
+.empty h3{font-size:22px;letter-spacing:-0.03em;margin:0 0 10px;line-height:1.2}
+.empty p{margin:0 0 10px;color:var(--textSub);font-size:14.5px;line-height:1.55}
+.empty .btns{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+
+/* greyscale stand-in covers: real artwork would be the artists' own */
+.a1{background:radial-gradient(circle at 30% 30%,#d9d9d9 0 18%,#5a5a5a 19% 34%,#1d1d1d 35%)}
+.a2{background:repeating-linear-gradient(135deg,#2b2b2b 0 7px,#9a9a9a 7px 9px)}
+.a3{background:conic-gradient(from 40deg,#eaeaea,#3a3a3a,#bdbdbd,#141414,#eaeaea)}
+.a4{background:linear-gradient(180deg,#bfbfbf 0 48%,#121212 48% 52%,#6d6d6d 52%)}
+.a5{background:radial-gradient(circle at 70% 75%,#fff 0 9%,#444 10% 100%)}
+.a6{background:repeating-radial-gradient(circle at 50% 50%,#1a1a1a 0 4px,#7a7a7a 4px 5px)}
+.a7{background:linear-gradient(90deg,#e6e6e6 0 33%,#8c8c8c 33% 66%,#2a2a2a 66%)}
+.light .a2{background:repeating-linear-gradient(135deg,#d6d6d6 0 7px,#7a7a7a 7px 9px)}
+@media (prefers-reduced-motion: no-preference){.bars i{animation:b 1s ease-in-out infinite}.bars i:nth-child(2){animation-delay:-.3s}.bars i:nth-child(3){animation-delay:-.6s}}
+@keyframes b{0%,100%{height:4px}50%{height:14px}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-cc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 10a2.5 2.5 0 1 0 0 4M16 10a2.5 2.5 0 1 0 0 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-logo" viewBox="-250 -250 1500 1500"><path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/></symbol>
+  </defs>
+</svg>
+
+<header class="intro">
+  <span class="eyebrow">MPTree for Android · design proposal · 30 Oct 2026</span>
+  <h1>Discover: free music you can keep</h1>
+  <p>A third tab next to Songs and Playlists. You browse and search free music by independent artists, play a 30 second preview, tap the download button, and the mp3 is saved to Music/MPTree, where it shows up in Songs like any other file. Sources: Audius first, the Internet Archive second (see discover-sources.md).</p>
+</header>
+
+<section class="decisions" aria-label="Key decisions">
+  <div><b>Where it lives</b>A third tab in the header card: Songs, Playlists, Discover. On a 412 phone it has its label; on a 360 phone only the compass, because three labels do not fit next to the logo and the settings button.</div>
+  <div><b>Who it is for</b>The people who install MPTree and have no music files. An empty Songs list now sends them to Discover instead of leaving them stuck.</div>
+  <div><b>Being honest</b>First visit shows one dismissible card: these are independent artists who chose to share, not the charts. The licence is on every row, the source under the list.</div>
+  <div><b>Colour</b>Only black and white. The selected genre, the preview bar and the finished download all use the accent. No violet, it stays for shuffle and selection.</div>
+</section>
+
+<div class="strip">
+<div class="boards">
+
+  <!-- 1. Discover home, 412 -->
+  <section class="board">
+    <div class="cap"><h2>1. Discover</h2><span class="w">412 × 800 · dark</span></div>
+    <div class="phone w412">
+      <div class="status"><span>14:32</span><span>87%</span></div>
+      <div class="scroll">
+        <div class="hcard">
+          <div class="hrow">
+            <span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+            <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+            <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+        </div>
+        <div class="hello">
+          <div><b>Free music from independent artists</b>Everything here is free to download and keep, shared by the artists themselves. You won't find chart hits, but you might find your next favourite.</div>
+          <span class="x"><svg width="18" height="18"><use href="#i-x"/></svg></span>
+        </div>
+        <div class="lbl">Genres</div>
+        <div class="chips"><span class="chip on">All</span><span class="chip">Lo-fi</span><span class="chip">Electronic</span><span class="chip">Hip hop</span><span class="chip">Acoustic</span><span class="chip">Ambient</span></div>
+        <div class="lbl">This week</div>
+        <div class="shelf">
+          <div class="tile"><div class="art a3"></div><div class="t">New and downloadable</div><div class="s">40 songs</div></div>
+          <div class="tile"><div class="art a6"></div><div class="t">Lo-fi to work to</div><div class="s">32 songs</div></div>
+          <div class="tile"><div class="art a7"></div><div class="t">Classical, public domain</div><div class="s">Internet Archive</div></div>
+        </div>
+        <div class="lbl">Popular downloads</div>
+        <div class="list">
+          <div class="row"><div class="cov a1"></div><div class="txt"><div class="tt">Night Bus Home</div><div class="ts"><span>Maren Oduya</span><span class="lic">CC BY</span></div></div><span class="dur">3:41</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a2"></div><div class="txt"><div class="tt">Paper Lanterns</div><div class="ts"><span>Lowtide Collective</span><span class="lic">OML</span></div></div><span class="dur">2:58</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+        </div>
+        <div class="mini"><div class="cov a5"></div><div class="txt"><div class="tt" style="font-size:14px">Nothing playing</div><div class="ts">Tap a cover to preview</div></div><span class="play"><svg width="18" height="18"><use href="#i-play"/></svg></span></div>
+      </div>
+    </div>
+    <p class="note" style="max-width:412px"><b>The page is a list with two shelves on top.</b> The header card is the same card as on Songs, with its search field. A genre chip filters the list below it. Rows look like Songs rows, so a downloaded song does not change shape when it arrives in Songs. The small tag is the licence: CC BY, CC BY-SA, CC0, PD, or OML for Audius.</p>
+  </section>
+
+  <!-- 2. Search + preview, 360 -->
+  <section class="board">
+    <div class="cap"><h2>2. Search and preview</h2><span class="w">360 × 800 · dark</span></div>
+    <div class="phone w360">
+      <div class="status"><span>14:33</span><span>87%</span></div>
+      <div class="scroll">
+        <div class="hcard">
+          <div class="hrow">
+            <span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+            <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on icon" aria-label="Discover"><svg width="16" height="16"><use href="#i-compass"/></svg></span></div>
+            <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg><span class="q">rain piano<span class="caret"></span></span></div>
+          <div class="metaRow"><span>24 free songs</span><span class="src">AUDIUS · ARCHIVE</span></div>
+        </div>
+        <div class="list" style="margin-top:10px">
+          <div class="row playing"><div class="cov a3"><span class="pp"><span class="bars"><i></i><i></i><i></i></span></span></div><div class="txt"><div class="tt">Rain on the Piano Lid</div><div class="ts"><span class="prevt">0:12 / 0:30</span><span>Preview</span></div></div><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span><div class="prev"><i style="width:40%"></i></div></div>
+          <div class="row"><div class="cov a4"></div><div class="txt"><div class="tt">Piano in the Rain, Take 2</div><div class="ts"><span>Ilse Varga</span><span class="lic">CC BY</span></div></div><span class="dur">4:12</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a6"></div><div class="txt"><div class="tt">Wet Streets</div><div class="ts"><span>Kofi Ramires</span><span class="lic">OML</span></div></div><span class="dur">3:05</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a1"></div><div class="txt"><div class="tt">Gymnopédie No. 1</div><div class="ts"><span>Erik Satie, Musopen</span><span class="lic">PD</span></div></div><span class="dur">3:20</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a7"></div><div class="txt"><div class="tt">Drizzle Loop</div><div class="ts"><span>Preview only</span></div></div><span class="dur">2:11</span><span class="dl off" aria-label="Download not offered"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a2"></div><div class="txt"><div class="tt">Slow Rain Sketch</div><div class="ts"><span>Nadia Holm</span><span class="lic">CC BY-SA</span></div></div><span class="dur">1:54</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+        </div>
+        <div class="mini"><div class="cov a5"></div><div class="txt"><div class="tt" style="font-size:14px">Rain on the Piano Lid</div><div class="ts">Preview, Tomas Ek</div></div><span class="play"><svg width="18" height="18"><use href="#i-pause"/></svg></span></div>
+      </div>
+    </div>
+    <p class="note" style="max-width:360px"><b>Tap the cover to preview, tap the row for details.</b> A preview is 30 seconds, streamed, never saved. The row shows the time and a thin bar in the accent. If you were listening to your own music it pauses, and picks up again when the preview ends. A track whose artist did not allow downloads is marked "Preview only" with a dashed button; by default the list hides those.</p>
+  </section>
+
+  <!-- 3. Downloading, 412 -->
+  <section class="board">
+    <div class="cap"><h2>3. Downloading</h2><span class="w">412 × 800 · dark</span></div>
+    <div class="phone w412">
+      <div class="status"><span>14:34</span><span>86%</span></div>
+      <div class="scroll">
+        <div class="hcard">
+          <div class="hrow">
+            <span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+            <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+            <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+        </div>
+        <div class="lbl">Lo-fi</div>
+        <div class="chips"><span class="chip">All</span><span class="chip on">Lo-fi</span><span class="chip">Electronic</span><span class="chip">Hip hop</span><span class="chip">Acoustic</span></div>
+        <div class="list" style="margin-top:8px">
+          <div class="row"><div class="cov a2"></div><div class="txt"><div class="tt">Paper Lanterns</div><div class="ts"><span class="prevt" style="color:var(--textSub)">3.1 of 5.0 MB</span><span>Downloading</span></div></div>
+            <span class="dl busy"><svg class="ring" width="43" height="43" viewBox="0 0 43 43"><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--dim)" stroke-width="2.5"/><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="125.7" stroke-dashoffset="47.8" transform="rotate(-90 21.5 21.5)"/></svg><svg width="14" height="14"><use href="#i-x"/></svg></span></div>
+          <div class="row"><div class="cov a4"></div><div class="txt"><div class="tt">Coffee Ring</div><div class="ts"><span>Waiting</span></div></div>
+            <span class="dl busy"><svg class="ring" width="43" height="43" viewBox="0 0 43 43"><circle cx="21.5" cy="21.5" r="20" fill="none" stroke="var(--dim)" stroke-width="2.5"/></svg><svg width="14" height="14"><use href="#i-x"/></svg></span></div>
+          <div class="row"><div class="cov a1"></div><div class="txt"><div class="tt">Night Bus Home</div><div class="ts"><span>In your Songs</span></div></div><span class="dur">3:41</span><span class="dl done"><svg width="20" height="20"><use href="#i-ok"/></svg></span></div>
+          <div class="row"><div class="cov a6"></div><div class="txt"><div class="tt">Tape Hiss Sunday</div><div class="ts"><span>June Albers</span><span class="lic">CC BY</span></div></div><span class="dur">2:36</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a3"></div><div class="txt"><div class="tt">Window Seat</div><div class="ts"><span>Lowtide Collective</span><span class="lic">OML</span></div></div><span class="dur">3:12</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+        </div>
+        <div class="mini"><div class="cov a1"></div><div class="txt"><div class="tt" style="font-size:14px">Night Bus Home</div><div class="ts">Maren Oduya</div></div><span class="play"><svg width="18" height="18"><use href="#i-pause"/></svg></span></div>
+      </div>
+    </div>
+    <p class="note" style="max-width:412px"><b>The button turns into its own progress ring.</b> No percentage, the ring and the megabytes say enough. Tapping the ring cancels. A second tap elsewhere queues the next one, one download at a time. When it finishes the button fills with the accent and shows a check, and the line under the title says "In your Songs". Downloads keep going when you leave the tab or lock the phone (a native job, like playback).</p>
+  </section>
+
+  <!-- 4. The moment, 360 -->
+  <section class="board">
+    <div class="cap"><h2>4. Now in your Songs</h2><span class="w">360 × 800 · dark</span></div>
+    <div class="phone w360">
+      <div class="status"><span>14:35</span><span>86%</span></div>
+      <div class="scroll">
+        <div class="hcard">
+          <div class="hrow">
+            <span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+            <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on icon" aria-label="Discover"><svg width="16" height="16"><use href="#i-compass"/></svg></span></div>
+            <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+        </div>
+        <div class="lbl">Popular downloads</div>
+        <div class="list">
+          <div class="row"><div class="cov a2"></div><div class="txt"><div class="tt">Paper Lanterns</div><div class="ts"><span>In your Songs</span></div></div><span class="dur">2:58</span><span class="dl done"><svg width="20" height="20"><use href="#i-ok"/></svg></span></div>
+          <div class="row"><div class="cov a1"></div><div class="txt"><div class="tt">Night Bus Home</div><div class="ts"><span>In your Songs</span></div></div><span class="dur">3:41</span><span class="dl done"><svg width="20" height="20"><use href="#i-ok"/></svg></span></div>
+          <div class="row"><div class="cov a6"></div><div class="txt"><div class="tt">Tape Hiss Sunday</div><div class="ts"><span>June Albers</span><span class="lic">CC BY</span></div></div><span class="dur">2:36</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a3"></div><div class="txt"><div class="tt">Window Seat</div><div class="ts"><span>Lowtide Collective</span><span class="lic">OML</span></div></div><span class="dur">3:12</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+        </div>
+        <div class="toast"><div class="cov a2" style="width:42px;height:42px"></div><div class="txt"><div class="t1">Paper Lanterns is in your Songs</div><div class="t2">Music/MPTree</div></div><span class="btn pri">Play</span></div>
+        <div class="mini"><div class="cov a1"></div><div class="txt"><div class="tt" style="font-size:14px">Night Bus Home</div><div class="ts">Maren Oduya</div></div><span class="play"><svg width="18" height="18"><use href="#i-pause"/></svg></span></div>
+      </div>
+    </div>
+    <p class="note" style="max-width:360px"><b>The arrival is a card, not a fanfare.</b> The floating card the app already uses (cardStyles.floatCard) says where the song went and offers Play. Play starts it right away, with Songs as the queue. The card goes away after four seconds. The first time ever, the Songs tab gets a small dot until it is opened, so people learn where their music is.</p>
+  </section>
+
+  <!-- 5. Details and licence, 412 light -->
+  <section class="board">
+    <div class="cap"><h2>5. Details and credit</h2><span class="w">412 × 800 · light</span></div>
+    <div class="phone w412 light">
+      <div class="status"><span>14:36</span><span>85%</span></div>
+      <div class="scroll">
+        <div class="hcard">
+          <div class="hrow">
+            <span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+            <div class="tabs"><span class="seg">Songs</span><span class="seg">Playlists</span><span class="seg on"><svg width="14" height="14"><use href="#i-compass"/></svg>Discover</span></div>
+            <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search free music</div>
+        </div>
+        <div class="list" style="margin-top:12px">
+          <div class="row"><div class="cov a6"></div><div class="txt"><div class="tt">Tape Hiss Sunday</div><div class="ts"><span>June Albers</span><span class="lic">CC BY</span></div></div><span class="dur">2:36</span><span class="dl"><svg width="20" height="20"><use href="#i-dl"/></svg></span></div>
+          <div class="row"><div class="cov a2"></div><div class="txt"><div class="tt">Paper Lanterns</div><div class="ts"><span>In your Songs</span></div></div><span class="dur">2:58</span><span class="dl done"><svg width="20" height="20"><use href="#i-ok"/></svg></span></div>
+        </div>
+        <div class="shade"></div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <div class="shHead"><div class="cov a6"></div><div class="txt"><div class="tt" style="font-size:18px">Tape Hiss Sunday</div><div class="ts" style="font-size:14px">June Albers</div></div></div>
+          <dl class="kv">
+            <dt>Licence</dt><dd><span class="m">CC BY 4.0</span><br><span style="color:var(--textSub)">Free to keep, share and use. Credit the artist when you share it.</span></dd>
+            <dt>From</dt><dd>Audius, uploaded by the artist</dd>
+            <dt>File</dt><dd class="m">MP3 · 320 kbps · 6.1 MB</dd>
+            <dt>Saved to</dt><dd class="m">Music/MPTree</dd>
+          </dl>
+          <div class="shBtns"><span class="btn pri">Download</span><span class="btn sec">Open artist page</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="max-width:412px"><b>Credit lives with the song.</b> The sheet names the artist, the licence in plain words, and where it came from. The same facts go into the file's tags (artist, title, comment with licence and link), so the credit survives a backup, and a song's details in Songs show it too. On a light ground the accent turns black, as everywhere in the app.</p>
+  </section>
+
+  <!-- 6. Empty Songs, 360 light -->
+  <section class="board">
+    <div class="cap"><h2>6. No songs yet</h2><span class="w">360 × 800 · light</span></div>
+    <div class="phone w360 light">
+      <div class="status"><span>09:02</span><span>100%</span></div>
+      <div class="scroll">
+        <div class="hcard">
+          <div class="hrow">
+            <span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>
+            <div class="tabs"><span class="seg on">Songs</span><span class="seg">Playlists</span><span class="seg icon" aria-label="Discover"><svg width="16" height="16"><use href="#i-compass"/></svg></span></div>
+            <span class="gear"><svg width="22" height="22"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="search"><svg width="18" height="18"><use href="#i-search"/></svg>Search songs or artists…</div>
+          <div class="metaRow"><span>0 songs</span></div>
+        </div>
+        <div class="empty">
+          <h3>No music on this phone yet</h3>
+          <p>MPTree plays the music files stored on your phone. It found none.</p>
+          <p>No files of your own? Discover has free music from independent artists that you can download and keep.</p>
+          <div class="btns"><span class="btn pri">Open Discover</span><span class="btn sec">Scan again</span></div>
+        </div>
+        <div class="foot" style="position:absolute;bottom:20px;left:0;right:0">Got files on a computer? Copy them into the Music folder and tap Scan again.</div>
+      </div>
+    </div>
+    <p class="note" style="max-width:360px"><b>The fix for "I can't find any songs!"</b> Today an empty library is a dead end. This screen says why it is empty, and gives two ways out: Discover for people without files, a rescan for people who have them on a computer.</p>
+  </section>
+
+</div>
+</div>
+
+<section class="intro" style="margin-top:28px">
+  <span class="eyebrow">Open questions for Caelan</span>
+  <p><b style="color:var(--fg)">Free or Pro?</b> Proposal: Discover is free for everyone. It is how new people get their first songs, so locking it would undo the point.</p>
+  <p><b style="color:var(--fg)">Mobile data.</b> Proposal: downloads over mobile data ask once ("Download on mobile data? 6.1 MB"), with a "Wi-Fi only" switch in Settings.</p>
+  <p><b style="color:var(--fg)">Hide the tab.</b> A switch in Settings to hide Discover for people who only want their own files, so the app stays as quiet as it is today.</p>
+</section>
