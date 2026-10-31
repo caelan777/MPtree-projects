@@ -8,8 +8,11 @@ import { useEffect } from "react";
 //   data-hold  Holding left or right fires a "tvhold" event instead of moving
 //              (the heating tile changes its temperature this way). A short
 //              press still moves focus.
-//   data-long  Holding OK fires "tvlong" (the Apps page pins an app this way).
+//   data-long  Holding OK for half a second fires "tvlong" (the Apps page pins an app this way).
 //              A short press still clicks.
+
+/** How long OK has to be held to count as holding. */
+const LONG_MS = 550;
 
 export type Dir = "left" | "right" | "up" | "down";
 
@@ -77,8 +80,8 @@ export function useRemote(onKey?: (e: KeyboardEvent) => boolean): void {
     let pendingDir: Dir | null = null;
     let held = false;
     let okDown = false;
-    let okRepeats = 0;
     let longFired = false;
+    let longTimer: number | undefined;
 
     const down = (e: KeyboardEvent) => {
       if (onKey?.(e)) { e.preventDefault(); return; }
@@ -101,11 +104,16 @@ export function useRemote(onKey?: (e: KeyboardEvent) => boolean): void {
 
       if (isOk(e) && cur?.hasAttribute("data-long")) {
         e.preventDefault();
-        if (!e.repeat) { okDown = true; okRepeats = 0; longFired = false; return; }
-        if (++okRepeats >= 3 && !longFired) {
+        // Timed, not counted: not every TV sends repeats while OK is held.
+        if (e.repeat || okDown) return;
+        okDown = true;
+        longFired = false;
+        window.clearTimeout(longTimer);
+        longTimer = window.setTimeout(() => {
+          if (!okDown) return;
           longFired = true;
           cur.dispatchEvent(new CustomEvent("tvlong"));
-        }
+        }, LONG_MS);
       }
     };
 
@@ -118,6 +126,7 @@ export function useRemote(onKey?: (e: KeyboardEvent) => boolean): void {
       }
       if (okDown && isOk(e)) {
         okDown = false;
+        window.clearTimeout(longTimer);
         if (!longFired) cur?.click();
       }
     };
@@ -127,6 +136,7 @@ export function useRemote(onKey?: (e: KeyboardEvent) => boolean): void {
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.clearTimeout(longTimer);
     };
   }, [onKey]);
 }
