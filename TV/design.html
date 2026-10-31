@@ -1,0 +1,269 @@
+<title>MPTree TV Home</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: four TV screens, each drawn at its real 1920×1080 and shown at half size,
+   two per row. Inside the screens: MPTree's light palette (themes.ts LIGHT). */
+:root{
+  --bg:#ececec; --fg:#111; --sub:#666; --line:#d4d4d4; --panel:#fafafa;
+  --sans: Inter, system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono: "JetBrains Mono", ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#111;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#111;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 48px}
+.intro{max-width:70ch;display:grid;gap:10px;margin-bottom:28px}
+.intro h1{font-size:30px;letter-spacing:-0.04em;margin:0;line-height:1.1}
+.intro p{margin:0;color:var(--sub);line-height:1.55}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}
+.strip{overflow-x:auto;padding-bottom:10px}
+.boards{display:grid;grid-template-columns:repeat(2,960px);gap:36px 28px;width:max-content}
+.board{display:grid;gap:10px;align-content:start}
+.cap{display:flex;gap:10px;align-items:baseline}
+.cap h2{margin:0;font-size:16px}
+.cap span{font-family:var(--mono);font-size:11px;color:var(--sub)}
+.note{margin:0;font-size:13px;line-height:1.55;color:var(--sub);max-width:960px}
+.note b{color:var(--fg);font-weight:600}
+.frame{width:960px;height:540px;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:#000;box-shadow:0 1px 0 var(--line)}
+
+/* ── the TV, MPTree LIGHT ── */
+.tv{--accent:#000;--surface:#f5f5f5;--card:#efefef;--ground:#fff;--muted:#888;--dim:#e0e0e0;--border:#d8d8d8;--text:#111;--textSub:#666;--btnFg:#fff;
+  width:1920px;height:1080px;transform:scale(.5);transform-origin:0 0;background:var(--ground);color:var(--text);position:relative;font-family:var(--sans);overflow:hidden}
+/* overscan-safe area: 96px sides, 54px top and bottom */
+.top{position:absolute;left:96px;right:96px;top:54px;height:84px;display:flex;align-items:center;justify-content:space-between}
+.grp{display:flex;align-items:center;gap:14px}
+.acc{display:flex;align-items:center;gap:14px;height:72px;padding:0 26px 0 12px;border-radius:36px;border:2px solid var(--border);background:var(--surface);font-size:26px;font-weight:600}
+.av{width:50px;height:50px;border-radius:50%;background:var(--text);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700}
+.navpill{height:72px;padding:0 34px;border-radius:36px;font-size:27px;font-weight:700;display:flex;align-items:center;color:var(--muted);border:2px solid transparent}
+.navpill.on{background:var(--accent);color:var(--btnFg)}
+.ib{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text);background:var(--surface);border:2px solid var(--border)}
+.logo{width:64px;height:64px;color:var(--text);display:flex}
+
+/* focus: the one highlight. Black fill, white type, a little bigger. */
+.focus{background:var(--accent)!important;color:var(--btnFg)!important;border-color:var(--accent)!important;transform:scale(1.06);box-shadow:0 18px 40px rgba(0,0,0,.22);z-index:3;position:relative}
+.focus .muted,.focus .sub{color:rgba(255,255,255,.7)!important}
+
+.mid{position:absolute;left:96px;right:96px;top:176px;height:540px;display:grid;grid-template-columns:600px 1fr;gap:40px}
+.clock{display:grid;align-content:start;gap:8px;padding-top:6px}
+.time{font-size:210px;font-weight:800;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums}
+.date{font-size:32px;color:var(--textSub);font-weight:500}
+.card{background:var(--card);border:2px solid var(--border);border-radius:32px;padding:28px 32px}
+.mpt{margin-top:34px;display:grid;gap:18px}
+.mpt .h{display:flex;align-items:center;justify-content:space-between}
+.mpt .h b{display:flex;align-items:center;gap:12px;font-size:26px}
+.mpt .h .logo{width:44px;height:44px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.upd{font-size:18px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat .v{font-size:40px;font-weight:800;letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
+.stat .k{font-size:17px;color:var(--textSub);margin-top:2px}
+.stat .d{font-family:var(--mono);font-size:15px;color:var(--muted);margin-top:4px}
+
+.ha{display:grid;grid-template-rows:auto 1fr;gap:16px}
+.ha .h{display:flex;justify-content:space-between;align-items:baseline;font-size:20px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:0 6px}
+.ha .h span:last-child{letter-spacing:0;text-transform:none;font-size:18px}
+.hag{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:16px}
+.ent{background:var(--card);border:2px solid var(--border);border-radius:28px;padding:24px 26px;display:flex;flex-direction:column;justify-content:space-between}
+.ent .ico{width:54px;height:54px;border-radius:50%;background:var(--ground);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text)}
+.ent.on .ico{background:var(--text);color:var(--ground);border-color:var(--text)}
+.focus .ico{background:var(--ground)!important;color:var(--text)!important;border-color:var(--ground)!important}
+.ent .nm{font-size:24px;font-weight:600;margin-top:14px}
+.ent .st{font-size:34px;font-weight:800;letter-spacing:-0.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.ent .sub{font-size:18px;color:var(--textSub);margin-top:2px}
+
+.dock{position:absolute;left:96px;right:96px;bottom:54px;height:250px;display:grid;grid-template-columns:repeat(5,1fr);gap:22px;align-items:end}
+.app{height:200px;border-radius:28px;background:var(--surface);border:2px solid var(--border);display:flex;flex-direction:column;justify-content:space-between;padding:22px 26px}
+.app .mk{width:58px;height:58px;border-radius:16px;background:var(--text);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;letter-spacing:-0.04em}
+.app .nm{font-size:30px;font-weight:700;letter-spacing:-0.02em}
+.app.focus .mk{background:var(--ground);color:var(--text)}
+.app.add{border-style:dashed;background:transparent;color:var(--textSub)}
+.app.add .mk{background:transparent;border:2px dashed var(--border);color:var(--textSub)}
+.hintbar{position:absolute;right:96px;bottom:14px;display:flex;gap:26px;font-size:17px;color:var(--muted)}
+.key{display:inline-flex;min-width:34px;height:28px;border-radius:8px;border:2px solid var(--border);align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:700;padding:0 7px;margin-right:8px;color:var(--textSub)}
+
+/* apps page */
+.agrid{position:absolute;left:96px;right:96px;top:200px;display:grid;grid-template-columns:repeat(6,1fr);gap:22px}
+.agrid .app{height:170px}
+.aghead{position:absolute;left:100px;top:168px;font-size:20px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+
+/* screensaver */
+.saver{position:absolute;inset:0;padding:120px 150px;display:grid;grid-template-columns:1fr 560px;gap:80px;align-items:center}
+.saver .time{font-size:300px}
+.list{display:grid;gap:0}
+.li{display:flex;justify-content:space-between;align-items:baseline;padding:20px 0;border-bottom:2px solid var(--dim);font-size:28px}
+.li span:last-child{font-weight:700;font-variant-numeric:tabular-nums}
+.lh{font-size:19px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin:34px 0 4px}
+.lh:first-child{margin-top:0}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-logo" viewBox="-250 -250 1500 1500"><path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-temp" viewBox="0 0 24 24"><path d="M10 4a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="17" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-wash" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="13" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 6.5h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+</defs></svg>
+
+<header class="intro">
+  <span class="eyebrow">MPTree TV · home screen · design 1 · 31 Oct 2026</span>
+  <h1>A home screen for the TV, in MPTree white</h1>
+  <p>Four screens at real TV size (1920×1080), shown at half. Everything moves with the remote: the item in focus turns black with white type and grows a little, the way the accent inverts in the app. Top: account and Home on the left, Apps, Settings and Screensaver on the right. Middle: the clock, MPTree numbers and your Home Assistant things. Bottom: only your four apps and "Add app". All numbers and Home Assistant names here are examples.</p>
+</header>
+
+<div class="strip"><div class="boards">
+
+<!-- 1. HOME -->
+<section class="board">
+  <div class="cap"><h2>1. Home</h2><span>focus on YouTube</span></div>
+  <div class="frame"><div class="tv">
+    <div class="top">
+      <div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="navpill on">Home</span></div>
+      <div class="grp"><span class="navpill">Apps</span><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div>
+    </div>
+    <div class="mid">
+      <div class="clock">
+        <div class="time">21:14</div>
+        <div class="date">Saturday 31 October</div>
+        <div class="card mpt">
+          <div class="h"><b><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>MPTree</b><span class="upd mono">updated 2 h ago</span></div>
+          <div class="stats">
+            <div class="stat"><div class="v">1,284</div><div class="k">Play installs</div><div class="d">+23 today</div></div>
+            <div class="stat"><div class="v">4.6</div><div class="k">Rating</div><div class="d">58 reviews</div></div>
+            <div class="stat"><div class="v">212</div><div class="k">Windows</div><div class="d">+4 today</div></div>
+            <div class="stat"><div class="v">3.4k</div><div class="k">Site, 7 days</div><div class="d">up</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="ha">
+        <div class="h"><span>Home</span><span>Home Assistant</span></div>
+        <div class="hag">
+          <div class="ent on"><span class="ico"><svg width="30" height="30"><use href="#i-bulb"/></svg></span><div><div class="nm">Living room</div><div class="st">On</div><div class="sub">80%</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-bulb"/></svg></span><div><div class="nm">Kitchen</div><div class="st">Off</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-temp"/></svg></span><div><div class="nm">Thermostat</div><div class="st">20.5°</div><div class="sub">set to 21°</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-lock"/></svg></span><div><div class="nm">Front door</div><div class="st">Locked</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-bolt"/></svg></span><div><div class="nm">Power now</div><div class="st">412 W</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-wash"/></svg></span><div><div class="nm">Washing machine</div><div class="st">Done</div><div class="sub">12 min ago</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="app focus"><span class="mk">Yt</span><span class="nm">YouTube</span></div>
+      <div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div>
+      <div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div>
+      <div class="app"><span class="mk">B</span><span class="nm">Browser</span></div>
+      <div class="app add"><span class="mk"><svg width="30" height="30"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>The screen you land on.</b> Focus starts on the first app, so Home then OK opens YouTube. The dock only holds what you pick; "Add app" opens a list of everything installed. The app tiles will show each app's own banner from the TV; here they are plain stand-ins.</p>
+</section>
+
+<!-- 2. HOME, focus on Home Assistant -->
+<section class="board">
+  <div class="cap"><h2>2. Home, controlling a light</h2><span>focus moved up onto Home Assistant</span></div>
+  <div class="frame"><div class="tv">
+    <div class="top">
+      <div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="navpill on">Home</span></div>
+      <div class="grp"><span class="navpill">Apps</span><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div>
+    </div>
+    <div class="mid">
+      <div class="clock">
+        <div class="time">21:15</div>
+        <div class="date">Saturday 31 October</div>
+        <div class="card mpt">
+          <div class="h"><b><span class="logo"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>MPTree</b><span class="upd mono">updated 2 h ago</span></div>
+          <div class="stats">
+            <div class="stat"><div class="v">1,284</div><div class="k">Play installs</div><div class="d">+23 today</div></div>
+            <div class="stat"><div class="v">4.6</div><div class="k">Rating</div><div class="d">58 reviews</div></div>
+            <div class="stat"><div class="v">212</div><div class="k">Windows</div><div class="d">+4 today</div></div>
+            <div class="stat"><div class="v">3.4k</div><div class="k">Site, 7 days</div><div class="d">up</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="ha">
+        <div class="h"><span>Home</span><span>Home Assistant</span></div>
+        <div class="hag">
+          <div class="ent on"><span class="ico"><svg width="30" height="30"><use href="#i-bulb"/></svg></span><div><div class="nm">Living room</div><div class="st">On</div><div class="sub">80%</div></div></div>
+          <div class="ent focus on"><span class="ico"><svg width="30" height="30"><use href="#i-bulb"/></svg></span><div><div class="nm">Kitchen</div><div class="st">On</div><div class="sub">just now</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-temp"/></svg></span><div><div class="nm">Thermostat</div><div class="st">20.5°</div><div class="sub">set to 21°</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-lock"/></svg></span><div><div class="nm">Front door</div><div class="st">Locked</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-bolt"/></svg></span><div><div class="nm">Power now</div><div class="st">468 W</div></div></div>
+          <div class="ent"><span class="ico"><svg width="30" height="30"><use href="#i-wash"/></svg></span><div><div class="nm">Washing machine</div><div class="st">Done</div><div class="sub">13 min ago</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div>
+      <div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div>
+      <div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div>
+      <div class="app"><span class="mk">B</span><span class="nm">Browser</span></div>
+      <div class="app add"><span class="mk"><svg width="30" height="30"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+    </div>
+    <div class="hintbar"><span><span class="key">OK</span>On or off</span><span><span class="key">◀ ▶</span>Brightness, hold</span></div>
+  </div></div>
+  <p class="note"><b>Tiles you can press.</b> Lights and switches turn on or off with OK. Holding left or right changes brightness or the thermostat. Sensors (power, washing machine) are just shown and the focus skips them. A small hint bar shows what the remote does, only while a tile is in focus.</p>
+</section>
+
+<!-- 3. APPS -->
+<section class="board">
+  <div class="cap"><h2>3. Apps</h2><span>everything installed</span></div>
+  <div class="frame"><div class="tv">
+    <div class="top">
+      <div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="navpill">Home</span></div>
+      <div class="grp"><span class="navpill on">Apps</span><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div>
+    </div>
+    <div class="aghead">18 apps</div>
+    <div class="agrid">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div>
+      <div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div>
+      <div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div>
+      <div class="app"><span class="mk">B</span><span class="nm">Browser</span></div>
+      <div class="app focus"><span class="mk">Sp</span><span class="nm">Spotify</span></div>
+      <div class="app"><span class="mk">Nf</span><span class="nm">Netflix</span></div>
+      <div class="app"><span class="mk">Ha</span><span class="nm">Home Assistant</span></div>
+      <div class="app"><span class="mk">Pl</span><span class="nm">Play Store</span></div>
+      <div class="app"><span class="mk">Vl</span><span class="nm">VLC</span></div>
+      <div class="app"><span class="mk">Ps</span><span class="nm">Plex</span></div>
+      <div class="app"><span class="mk">Dp</span><span class="nm">Disney+</span></div>
+      <div class="app"><span class="mk">Tv</span><span class="nm">Live TV</span></div>
+      <div class="app"><span class="mk">Fl</span><span class="nm">Files</span></div>
+      <div class="app"><span class="mk">Vd</span><span class="nm">Videoland</span></div>
+      <div class="app"><span class="mk">K</span><span class="nm">Kodi</span></div>
+      <div class="app"><span class="mk">Cc</span><span class="nm">Chromecast</span></div>
+      <div class="app"><span class="mk">Mt</span><span class="nm">MPTree</span></div>
+      <div class="app add"><span class="mk"><svg width="30" height="30"><use href="#i-plus"/></svg></span><span class="nm">Get apps</span></div>
+    </div>
+    <div class="hintbar"><span><span class="key">OK</span>Open</span><span><span class="key">Hold OK</span>Add to Home</span></div>
+  </div></div>
+  <p class="note"><b>All apps, alphabetical or in your own order.</b> Hold OK on one to put it in the dock on Home, or take it out. "Get apps" opens the Play Store. The top bar stays the same on every page, so Home is always one press up and left.</p>
+</section>
+
+<!-- 4. SCREENSAVER -->
+<section class="board">
+  <div class="cap"><h2>4. Screensaver</h2><span>after 10 minutes, or the moon button</span></div>
+  <div class="frame"><div class="tv">
+    <div class="saver">
+      <div>
+        <div class="time">23:40</div>
+        <div class="date" style="font-size:40px;margin-top:18px">Saturday 31 October</div>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:70px;color:var(--muted);font-size:24px"><span class="logo" style="width:46px;height:46px;color:var(--muted)"><svg width="100%" height="100%"><use href="#i-logo"/></svg></span>Press any button</div>
+      </div>
+      <div class="list">
+        <div class="lh">Home</div>
+        <div class="li"><span>Living room</span><span>On, 40%</span></div>
+        <div class="li"><span>Thermostat</span><span>19.0°</span></div>
+        <div class="li"><span>Front door</span><span>Locked</span></div>
+        <div class="li"><span>Power now</span><span>188 W</span></div>
+        <div class="lh">MPTree today</div>
+        <div class="li"><span>Play installs</span><span>+31</span></div>
+        <div class="li"><span>Windows downloads</span><span>+6</span></div>
+        <div class="li"><span>Rating</span><span>4.6</span></div>
+      </div>
+    </div>
+  </div></div>
+  <p class="note"><b>Quiet, readable from the couch, nothing to press.</b> A big clock, the Home Assistant things you pick for it, and today's MPTree numbers. Everything drifts a few pixels every minute so nothing burns into the screen. White as asked; after a set time (say 23:00) it can switch to MPTree's black version so it doesn't light up the room.</p>
+</section>
+
+</div></div>
