@@ -1,0 +1,165 @@
+<title>MPTree TV Layouts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+/* Layout: two TV screens at real 1920×1080, shown at half size: the layout picker,
+   and Home with the Sunset switch on. MPTree LIGHT tokens inside the screens. */
+:root{
+  --bg:#ececec; --fg:#111; --sub:#666; --line:#d4d4d4;
+  --sans: Inter, system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono: "JetBrains Mono", ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 48px}
+.intro{max-width:72ch;display:grid;gap:10px;margin-bottom:28px}
+.intro h1{font-size:30px;letter-spacing:-0.04em;margin:0;line-height:1.1}
+.intro p{margin:0;color:var(--sub);line-height:1.55}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}
+.strip{overflow-x:auto;padding-bottom:10px}
+.boards{display:grid;grid-template-columns:repeat(2,960px);gap:40px 28px;width:max-content}
+.board{display:grid;gap:10px;align-content:start}
+.cap h2{margin:0;font-size:20px;letter-spacing:-0.03em}
+.note{margin:0;font-size:13px;line-height:1.55;color:var(--sub);max-width:960px}
+.note b{color:var(--fg);font-weight:600}
+.frame{width:960px;height:540px;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:#fff}
+
+.tv{--accent:#000;--surface:#f5f5f5;--card:#efefef;--ground:#fff;--muted:#888;--dim:#e0e0e0;--border:#d8d8d8;--text:#111;--textSub:#666;--btnFg:#fff;
+  width:1920px;height:1080px;transform:scale(.5);transform-origin:0 0;background:var(--ground);color:var(--text);position:relative;font-family:var(--sans);overflow:hidden}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.top{position:absolute;left:96px;right:96px;top:54px;height:80px;display:flex;align-items:center;justify-content:space-between;z-index:1}
+.grp{display:flex;align-items:center;gap:14px}
+.acc{display:flex;align-items:center;gap:14px;height:72px;padding:0 26px 0 12px;border-radius:36px;border:2px solid var(--border);background:var(--surface);font-size:26px;font-weight:600}
+.av{width:50px;height:50px;border-radius:50%;background:var(--text);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700}
+.seg{display:flex;background:var(--surface);border:2px solid var(--border);border-radius:38px;padding:5px;gap:4px}
+.seg span{height:58px;padding:0 32px;border-radius:30px;font-size:26px;font-weight:700;display:flex;align-items:center;color:var(--muted)}
+.seg span.on{background:var(--accent);color:var(--btnFg)}
+.ib{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text);background:var(--surface);border:2px solid var(--border)}
+.ib.on{background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.focus{background:var(--accent)!important;color:var(--btnFg)!important;border-color:var(--accent)!important;transform:scale(1.05);box-shadow:0 18px 40px rgba(0,0,0,.22);position:relative;z-index:4}
+
+/* settings panel over a dimmed home */
+.dimmed{position:absolute;inset:0;background:rgba(255,255,255,.72);z-index:2}
+.panel{position:absolute;right:54px;top:54px;bottom:54px;width:1180px;background:var(--ground);border:2px solid var(--border);border-radius:44px;box-shadow:0 30px 80px rgba(0,0,0,.18);z-index:3;padding:40px 56px;display:flex;flex-direction:column;gap:20px}
+.panel h3{margin:0;font-size:52px;letter-spacing:-0.04em}
+.panel .lab{font-size:20px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.th{border-radius:26px;border:2px solid var(--border);background:var(--surface);padding:16px;display:grid;gap:14px}
+.th .nm{font-size:26px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.th .nm .cur{font-size:17px;font-weight:600;color:var(--muted)}
+.th.focus .cur{color:rgba(255,255,255,.7)}
+.mini{height:150px;border-radius:14px;background:#fff;border:2px solid var(--border);position:relative;overflow:hidden}
+.mini i{position:absolute;background:#d6d6d6;border-radius:5px}
+.mini i.k{background:#111}
+.mini.dk{background:#000;border-color:#333}.mini.dk i{background:#2c2c2c}.mini.dk i.k{background:#fff}
+.mini.sky{background:linear-gradient(180deg,#d9dde2,#f3efea)}
+.mini.sky i{background:rgba(255,255,255,.8)}
+.th.focus .mini{border-color:#fff}
+.opts{display:grid;gap:14px;margin-top:auto}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:16px 26px;border-radius:22px;background:var(--surface);border:2px solid var(--border);font-size:26px;font-weight:600}
+.opt .s{font-size:19px;color:var(--textSub);font-weight:500;margin-top:3px}
+.opt .val{font-size:22px;color:var(--textSub)}
+.sw{width:76px;height:42px;border-radius:21px;background:var(--accent);position:relative}
+.sw::after{content:"";position:absolute;right:5px;top:5px;width:32px;height:32px;border-radius:50%;background:#fff}
+.hint{position:absolute;left:96px;bottom:30px;z-index:3;font-size:18px;color:var(--muted);display:flex;gap:28px}
+.key{display:inline-flex;min-width:34px;height:28px;border-radius:8px;border:2px solid var(--border);align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:700;padding:0 7px;margin-right:8px;color:var(--textSub)}
+
+/* home, classic, with the switch on */
+.mid{position:absolute;left:96px;right:96px;top:172px;height:560px;display:grid;grid-template-columns:640px 1fr;gap:44px}
+.time{font-size:220px;font-weight:800;letter-spacing:-0.06em;line-height:.88}
+.date{font-size:32px;color:var(--textSub);margin-top:12px}
+.wx{margin-top:22px;font-size:28px;display:flex;gap:26px}
+.mpt{margin-top:30px;background:var(--card);border:2px solid var(--border);border-radius:30px;padding:24px 30px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.mpt .h{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;font-size:24px;font-weight:700}
+.v{font-size:40px;font-weight:800;letter-spacing:-0.03em}
+.k{font-size:17px;color:var(--textSub);margin-top:2px}
+.ctl{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:18px}
+.c{background:var(--card);border:2px solid var(--border);border-radius:30px;padding:28px 30px;display:flex;flex-direction:column;justify-content:space-between}
+.c .t{font-size:28px;font-weight:700}.c .s{font-size:20px;color:var(--textSub);margin-top:4px}
+.c .big{font-size:76px;font-weight:800;letter-spacing:-0.04em;line-height:1}
+.c .row{display:flex;justify-content:space-between;align-items:flex-start}
+.state{font-family:var(--mono);font-size:18px;font-weight:700;padding:6px 14px;border-radius:14px;border:2px solid currentColor}
+.focus .s{color:rgba(255,255,255,.7)}
+.dock{position:absolute;left:96px;right:96px;bottom:54px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px}
+.app{height:180px;border-radius:28px;background:var(--surface);border:2px solid var(--border);display:flex;flex-direction:column;justify-content:space-between;padding:22px 24px}
+.app .nm{font-size:28px;font-weight:700;letter-spacing:-0.02em}
+.mk{width:58px;height:58px;border-radius:16px;background:var(--text);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800}
+.mk.add{background:transparent;border:2px dashed var(--border);color:var(--textSub)}
+.app.add{border-style:dashed;background:transparent;color:var(--textSub)}
+.toast{position:absolute;left:50%;top:58px;transform:translateX(-50%);background:var(--ground);border:2px solid var(--border);border-radius:40px;box-shadow:0 14px 40px rgba(0,0,0,.14);padding:18px 34px;font-size:26px;font-weight:700;display:flex;gap:16px;align-items:center;z-index:5}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-logo" viewBox="-250 -250 1500 1500"><path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sunset" viewBox="0 0 24 24"><path d="M7 15a5 5 0 0 1 10 0M3 15h2M19 15h2M12 4v4M9.5 6.5L12 9l2.5-2.5M5.6 9.6l1.4 1.4M18.4 9.6L17 11M3 19h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-off" viewBox="0 0 24 24"><path d="M12 3v8M7 6.3a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+</defs></svg>
+
+<header class="intro">
+  <span class="eyebrow">MPTree TV · layouts and the Sunset switch · 31 Oct 2026</span>
+  <h1>Pick a layout, switch the sunset lights</h1>
+  <p>Your five picks (1, 3, 4, 8 and 9) become layouts you can swap between in Settings, like the Look sheet in MPTree. And Sunset is now a switch: OK turns the sunset lights on, OK again turns them off.</p>
+</header>
+
+<div class="strip"><div class="boards">
+
+<section class="board">
+  <div class="cap"><h2>Settings, Layout</h2></div>
+  <div class="frame"><div class="tv">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span class="ib on"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div style="position:absolute;left:96px;top:172px;font-size:220px;font-weight:800;letter-spacing:-0.06em;line-height:.88">14:55</div>
+    <div class="dimmed"></div>
+    <div class="panel">
+      <h3>Layout</h3>
+      <div class="lab">Five looks, same buttons</div>
+      <div class="thumbs">
+        <div class="th"><div class="mini"><i class="k" style="left:14px;top:22px;width:110px;height:42px"></i><i style="left:14px;top:84px;width:110px;height:32px"></i><i class="k" style="left:140px;top:22px;width:72px;height:44px"></i><i style="left:220px;top:22px;width:72px;height:44px"></i><i style="left:140px;top:72px;width:72px;height:44px"></i><i style="left:220px;top:72px;width:72px;height:44px"></i><i style="left:14px;top:132px;width:44px;height:32px"></i><i style="left:64px;top:132px;width:44px;height:32px"></i><i style="left:114px;top:132px;width:44px;height:32px"></i><i style="left:164px;top:132px;width:44px;height:32px"></i><i class="k" style="left:214px;top:132px;width:44px;height:32px"></i><i style="left:264px;top:132px;width:30px;height:32px"></i></div><div class="nm">Classic <span class="cur">now</span></div></div>
+        <div class="th focus"><div class="mini"><i style="left:16px;top:22px;width:250px;height:12px"></i><i class="k" style="left:16px;top:42px;width:150px;height:12px"></i><i style="left:16px;top:62px;width:230px;height:12px"></i><i class="k" style="left:16px;top:82px;width:90px;height:12px"></i><i class="k" style="left:16px;top:108px;width:60px;height:14px"></i><i style="left:86px;top:108px;width:60px;height:14px"></i><i class="k" style="left:16px;top:140px;width:278px;height:3px"></i><i class="k" style="left:16px;top:152px;width:40px;height:12px"></i><i class="k" style="left:66px;top:152px;width:40px;height:12px"></i><i class="k" style="left:116px;top:152px;width:40px;height:12px"></i><i class="k" style="left:166px;top:152px;width:40px;height:12px"></i><i class="k" style="left:216px;top:152px;width:40px;height:12px"></i></div><div class="nm">Editorial <span class="cur">OK to use</span></div></div>
+        <div class="th"><div class="mini dk"><i style="left:14px;top:14px;width:280px;height:12px"></i><i style="left:14px;top:40px;width:40px;height:90px"></i><i class="k" style="left:62px;top:34px;width:42px;height:102px"></i><i style="left:112px;top:40px;width:40px;height:90px"></i><i style="left:160px;top:40px;width:40px;height:90px"></i><i style="left:208px;top:40px;width:40px;height:90px"></i><i style="left:256px;top:40px;width:38px;height:90px"></i><i style="left:14px;top:148px;width:60px;height:16px"></i><i style="left:80px;top:148px;width:60px;height:16px"></i></div><div class="nm">Cinema</div></div>
+        <div class="th"><div class="mini sky"><i style="left:14px;top:30px;width:130px;height:60px;border-radius:9px"></i><i style="left:196px;top:30px;width:98px;height:24px;border-radius:9px;background:#111"></i><i style="left:196px;top:60px;width:98px;height:24px;border-radius:9px"></i><i style="left:40px;top:128px;width:230px;height:36px;border-radius:9px"></i></div><div class="nm">Sky</div></div>
+        <div class="th"><div class="mini"><i class="k" style="left:14px;top:18px;width:90px;height:34px"></i><i style="left:14px;top:96px;width:280px;height:3px"></i><svg style="position:absolute;left:14px;top:50px" width="280" height="50" viewBox="0 0 280 50"><path d="M20 46 C 80 -8, 150 -8, 180 46" fill="none" stroke="#111" stroke-width="3"/><circle cx="130" cy="14" r="5" fill="#111"/></svg><i class="k" style="left:180px;top:104px;width:70px;height:16px"></i><i style="left:14px;top:132px;width:44px;height:32px"></i><i style="left:64px;top:132px;width:44px;height:32px"></i><i style="left:114px;top:132px;width:44px;height:32px"></i><i style="left:164px;top:132px;width:44px;height:32px"></i><i style="left:214px;top:132px;width:44px;height:32px"></i><i style="left:264px;top:132px;width:30px;height:32px"></i></div><div class="nm">Day line</div></div>
+        <div class="th" style="border-style:dashed;background:transparent;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:26px"><div style="font-size:26px;font-weight:700">Shuffle</div><div style="font-size:19px;color:var(--textSub);line-height:1.4">A different one each morning</div></div>
+      </div>
+      <div class="opts">
+        <div class="opt"><div>Cinema after dark<div class="s">From sunset (17:12 today) until you go to bed</div></div><span class="sw"></span></div>
+        <div class="opt"><div>Remote shortcut<div class="s">Hold the Home button to flip to the next layout</div></div><span class="val">On</span></div>
+      </div>
+    </div>
+    <div class="hint"><span><span class="key">◀ ▶</span>Look</span><span><span class="key">OK</span>Use this layout</span><span><span class="key">Back</span>Close</span></div>
+  </div></div>
+  <p class="note"><b>Choosing is seeing.</b> Each layout shows as a small picture of itself, like the shades in MPTree's Look sheet. Moving over one previews it behind the panel; OK keeps it. Optional: switch to Cinema automatically from sunset, or hold Home to flip through them.</p>
+</section>
+
+<section class="board">
+  <div class="cap"><h2>Sunset as a switch, on</h2></div>
+  <div class="frame"><div class="tv">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="toast"><svg width="34" height="34"><use href="#i-sunset"/></svg>Sunset lights on</div>
+    <div class="mid">
+      <div>
+        <div class="time">17:20</div><div class="date">Saturday 31 October</div>
+        <div class="wx"><span><b>8°</b> De Bilt, cloudy</span><span><b>20.4°</b> inside</span></div>
+        <div class="mpt"><div class="h"><span style="display:flex;gap:12px;align-items:center"><svg width="40" height="40"><use href="#i-logo"/></svg>MPTree</span><span class="mono" style="font-size:17px;color:var(--muted);font-weight:400">2 h ago</span></div>
+          <div><div class="v">1,291</div><div class="k">Play installs</div></div><div><div class="v">4.6</div><div class="k">Rating</div></div><div><div class="v">212</div><div class="k">Windows</div></div><div><div class="v">3.4k</div><div class="k">Site, 7 days</div></div></div>
+      </div>
+      <div class="ctl">
+        <div class="c focus"><div class="row"><svg width="54" height="54"><use href="#i-sunset"/></svg><span class="state">ON</span></div><div><div class="t">Sunset</div><div class="s">On since 17:12. OK turns it off.</div></div></div>
+        <div class="c"><div class="row"><svg width="54" height="54"><use href="#i-off"/></svg></div><div><div class="t">All lights off</div><div class="s">3 lights are on</div></div></div>
+        <div class="c"><div class="s">Inside, living room</div><div><div class="big">20.4°</div><div class="s">Humidity 62%</div></div></div>
+        <div class="c"><div class="s" style="display:flex;justify-content:space-between">Outside, De Bilt <svg width="40" height="40"><use href="#i-cloud"/></svg></div><div><div class="big">8°</div><div class="s">Cloudy, rain at 20:00</div></div></div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>One button, two states.</b> The tile says ON or nothing, and the line under it says what OK will do next. It turns on by itself at sunset (your automation), and you can always turn it off or on again from the couch. A short message at the top confirms the press.</p>
+</section>
+
+</div></div>
