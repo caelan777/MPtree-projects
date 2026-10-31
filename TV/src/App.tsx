@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Launcher, type TvApp } from "./launcher";
-import { DEFAULTS, defaultDock, loadSettings, saveSettings, type Settings } from "./settings";
+import { DEFAULTS, LAYOUTS, defaultDock, loadSettings, saveSettings, type LayoutId, type Settings } from "./settings";
 import { useHomeAssistant } from "./ha";
 import { useMptreeStats } from "./stats";
 import { focusEl, focusFirst, useRemote } from "./nav";
@@ -147,18 +147,26 @@ export default function App() {
   useRemote(onKey);
   useEffect(() => {
     // The TV's own screensaver (Google's photos) needs nothing from us: Android starts it.
-    if (!s.saverMinutes || s.saverKind !== "mptree") return;
+    if (!s.saverMinutes || s.saverStyle === "tv") return;
     const t = window.setInterval(() => {
       if (!document.hidden && Date.now() - lastKey.current > s.saverMinutes * 60_000) setSaver(true);
     }, 15_000);
     return () => window.clearInterval(t);
-  }, [s.saverMinutes, s.saverKind]);
+  }, [s.saverMinutes, s.saverStyle]);
 
   const goPage = useCallback((p: Page) => setPage(p), []);
 
   // ── dark mode: automatic with the sun, or fixed in Settings ──
   const override = s.themeOverride && s.themeOverride.until > now.getTime() ? s.themeOverride : null;
   const dark = s.theme === "dark" ? true : s.theme === "light" ? false : override ? override.dark : sunIsDown(ha.states, now, HA);
+
+  // ── which layout: chosen, one a day, or Cinema after dark ──
+  const dayNumber = Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86_400_000);
+  const layout: LayoutId = s.cinemaAfterDark && dark ? "cinema"
+    : s.layoutDaily ? LAYOUTS[dayNumber % LAYOUTS.length].id
+    : s.layout;
+  // Cinema is always dark; the rest follow dark mode.
+  const darkLook = dark || (page === "home" && layout === "cinema");
   const toggleDark = () => {
     if (s.theme !== "auto") {
       change({ theme: dark ? "light" : "dark" });
@@ -170,12 +178,12 @@ export default function App() {
     change({ themeOverride: { dark: !dark, until } });
     toast(`${dark ? "Light" : "Dark"} until ${clock(new Date(until))}, then automatic again`);
   };
-  useEffect(() => { document.body.style.background = dark ? "#000" : "#fff"; }, [dark]);
+  useEffect(() => { document.body.style.background = darkLook ? "#000" : "#fff"; }, [darkLook]);
 
   // The screensaver button: the chosen one now. The TV's own is started by Android;
   // where a TV refuses that, MPTree's shows instead.
   const startSaver = () => {
-    if (s.saverKind === "mptree") { setSaver(true); return; }
+    if (s.saverStyle !== "tv") { setSaver(true); return; }
     Launcher.startScreensaver().catch(() => setSaver(true));
   };
 
@@ -185,12 +193,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className={"stage" + (dark ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
+    <div className={"stage" + (darkLook ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
       <div inert={heatOpen || undefined}>
       <TopBar name={s.name} page={page} onPage={goPage} dark={dark} onToggleDark={toggleDark} onSaver={startSaver} />
       {page === "home" && (
         <HomeView
-          now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
+          layout={layout} now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
           onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")}
           onOpenHeating={() => setHeatOpen(true)} toast={toast}
         />
@@ -202,7 +210,7 @@ export default function App() {
       </div>
       {heatOpen && <HeatingPanel ha={ha} toast={toast} onClose={closeHeat} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
-      {saver && <Saver now={now} ha={ha} stats={stats} />}
+      {saver && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} />}
     </div>
   );
 }

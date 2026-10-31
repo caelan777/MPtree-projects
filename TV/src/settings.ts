@@ -1,5 +1,15 @@
 import { Preferences } from "@capacitor/preferences";
 
+export type LayoutId = "classic" | "editorial" | "cinema" | "sky" | "dayline";
+
+export const LAYOUTS: { id: LayoutId; name: string; about: string }[] = [
+  { id: "classic", name: "Classic", about: "Clock and numbers left, the house right, apps below" },
+  { id: "editorial", name: "Editorial", about: "No tiles, the day in a few sentences" },
+  { id: "cinema", name: "Cinema", about: "Dark, with the apps as big cards" },
+  { id: "sky", name: "Sky", about: "The real sky behind frosted panels" },
+  { id: "dayline", name: "Day line", about: "The sun's path through your day" },
+];
+
 /** Everything the launcher remembers. Kept on the TV only (Capacitor Preferences). */
 export type Settings = {
   /** Shown in the account pill. */
@@ -16,8 +26,14 @@ export type Settings = {
   dockChosen: boolean;
   /** Minutes without a key press before the screensaver starts. 0 = never. */
   saverMinutes: number;
-  /** Whose screensaver: the TV's own (Google's photos) or MPTree's (clock, house, numbers). */
-  saverKind: "tv" | "mptree";
+  /** MPTree's with photos of places around the world, MPTree's plain one, or the TV's own. */
+  saverStyle: "photos" | "plain" | "tv";
+  /** The Home layout. */
+  layout: LayoutId;
+  /** A different layout every day, in turn. */
+  layoutDaily: boolean;
+  /** Cinema whenever it is dark, whatever the layout by day. */
+  cinemaAfterDark: boolean;
   /** "auto" goes dark when the sun goes down. */
   theme: "auto" | "light" | "dark";
   /** The quick switch in the top bar, in auto: holds until the next sunrise or sunset. */
@@ -32,7 +48,10 @@ export const DEFAULTS: Settings = {
   dock: [],
   dockChosen: false,
   saverMinutes: 10,
-  saverKind: "tv",
+  saverStyle: "photos",
+  layout: "classic",
+  layoutDaily: false,
+  cinemaAfterDark: false,
   theme: "auto",
   themeOverride: null,
 };

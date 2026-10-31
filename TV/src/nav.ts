@@ -61,7 +61,7 @@ export function move(dir: Dir): void {
     if (primary < -8) continue;
     // Sideways, stay on the same row if at all possible. Up and down may drift
     // sideways more: going up from the app row should reach the tiles, not the top bar.
-    const score = Math.max(0, primary) + orth * (dir === "left" || dir === "right" ? 2.5 : 1);
+    const score = Math.max(0, primary) + orth * (dir === "left" || dir === "right" ? 2.5 : 0.4);
     if (score < bestScore) { bestScore = score; best = el; }
   }
   if (best) focusEl(best);

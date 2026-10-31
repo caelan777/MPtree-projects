@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Settings } from "../settings";
+import { LAYOUTS, type Settings } from "../settings";
 import type { Ha } from "../ha";
 import { Launcher } from "../launcher";
 
@@ -16,6 +16,12 @@ type Props = {
 
 const SAVER_STEPS = [5, 10, 20, 30, 0];
 const THEMES: Settings["theme"][] = ["auto", "light", "dark"];
+const SAVERS: Settings["saverStyle"][] = ["photos", "plain", "tv"];
+const SAVER_LABEL: Record<Settings["saverStyle"], [string, string]> = {
+  photos: ["photos", "MPTree's, over photos of places around the world: clock, your home, the numbers"],
+  plain: ["plain", "MPTree's on white: clock, your home, the numbers"],
+  tv: ["the TV's own", "Android's own screensaver. When it starts is set in Android settings."],
+};
 const THEME_LABEL: Record<Settings["theme"], string> = { auto: "with the sun", light: "always light", dark: "always dark" };
 
 /** A text field that saves when you leave it, so typing with the remote's
@@ -50,7 +56,30 @@ export function SettingsView({ settings, onChange, ha, statsError, hasStats, toa
   return (
     <div className="page">
       <div className="form">
-        <div className="lab">You</div>
+        <div className="lab">Layout</div>
+        <div className="lgrid">
+          {LAYOUTS.map(l => (
+            <button
+              key={l.id} className={"f lpick" + (settings.layout === l.id ? " on" : "")} data-f=""
+              data-default={settings.layout === l.id ? "" : undefined}
+              onClick={() => { onChange({ layout: l.id, layoutDaily: false }); toast(`${l.name} it is`); }}
+            >
+              <span className={"thumb t-" + l.id} aria-hidden="true"><i /><i /><i /><i /><i /></span>
+              <span className="nm">{l.name}{settings.layout === l.id && !settings.layoutDaily ? <span className="cur"> · now</span> : null}</span>
+              <span className="sub">{l.about}</span>
+            </button>
+          ))}
+        </div>
+        <button className="f opt" data-f="" onClick={() => onChange({ layoutDaily: !settings.layoutDaily })}>
+          <span>A different one each day<div className="sub">Takes the five in turn, one a day</div></span>
+          <span className="val">{settings.layoutDaily ? "on" : "off"}</span>
+        </button>
+        <button className="f opt" data-f="" onClick={() => onChange({ cinemaAfterDark: !settings.cinemaAfterDark })}>
+          <span>Cinema after dark<div className="sub">From sunset to sunrise, whatever the layout by day</div></span>
+          <span className="val">{settings.cinemaAfterDark ? "on" : "off"}</span>
+        </button>
+
+        <div className="lab" style={{ marginTop: 30 }}>You</div>
         <Field id="name" label="Name" value={settings.name} hint="Shown at the top left." onSave={v => onChange({ name: v })} />
 
         <div className="lab" style={{ marginTop: 30 }}>Home Assistant</div>
@@ -88,16 +117,14 @@ export function SettingsView({ settings, onChange, ha, statsError, hasStats, toa
           <span>Dark mode<div className="sub">With the sun: dark from sunset to sunrise. The moon or sun button at the top switches it for a while.</div></span>
           <span className="val">{THEME_LABEL[settings.theme]}</span>
         </button>
-        <button className="f opt" data-f="" onClick={() => onChange({ saverKind: settings.saverKind === "tv" ? "mptree" : "tv" })}>
-          <span>Screensaver<div className="sub">{settings.saverKind === "tv"
-            ? "The TV's own, with photos of places around the world. When it starts is set in Android settings, Ambient mode."
-            : "Clock, your home and the MPTree numbers"}</div></span>
-          <span className="val">{settings.saverKind === "tv" ? "the TV's own" : "MPTree"}</span>
+        <button className="f opt" data-f="" onClick={() => onChange({ saverStyle: SAVERS[(SAVERS.indexOf(settings.saverStyle) + 1) % SAVERS.length] })}>
+          <span>Screensaver<div className="sub">{SAVER_LABEL[settings.saverStyle][1]}</div></span>
+          <span className="val">{SAVER_LABEL[settings.saverStyle][0]}</span>
         </button>
-        {settings.saverKind === "mptree" && (
+        {settings.saverStyle !== "tv" && (
           <>
             <button className="f opt" data-f="" onClick={() => onChange({ saverMinutes: nextSaver })}>
-              <span>Starts after<div className="sub">When the remote has been left alone</div></span>
+              <span>Starts after<div className="sub">When the remote has been left alone. Set Android's own screensaver later than this, or to never.</div></span>
               <span className="val">{settings.saverMinutes ? `${settings.saverMinutes} min` : "never"}</span>
             </button>
             <button className="f opt" data-f="" onClick={onSaverNow}>

@@ -11,10 +11,14 @@ It is its own project on purpose; nothing is shared with `MPTree-App/` (see the 
 Designs: `design/design.html` (first take), `design/directions.html` (ten
 directions), `design/layouts.html` (the layout picker and the Sunset switch).
 
-## What works in 0.2.0
+## What works in 0.4.0
 
-* **Home, Classic layout.** Clock, date, weather line, MPTree numbers, six Home
-  Assistant tiles, and the app row.
+* **Home, in five layouts** (Settings, Layout): Classic, Editorial (the day in a
+  few sentences), Cinema (dark, apps as big cards), Sky (the real sky behind
+  frosted panels) and Day line (the sun's path, with Sunset pinned to sunset). Or a
+  different one each day, and Cinema after dark. All show the same things: clock,
+  weather, inside temperature, Sunset, All lights off, Heating, the alarm, the
+  MPTree numbers and the app row.
 * **Apps page.** Every app on the TV, A to Z. OK opens it; **hold OK** puts it on
   Home or takes it off (Home holds six).
 * **Settings.** Your name, the Home Assistant address and token, the address of the
@@ -22,17 +26,19 @@ directions), `design/layouts.html` (the layout picker and the Sunset switch).
 * **Dark mode.** Dark from sunset to sunrise (Home Assistant's sun), or always
   light or dark (Settings). The sun/moon button next to Settings flips it until the
   next sunrise or sunset.
-* **Screensaver.** The TV's own by default (Google's ambient mode with photos;
-  Android starts it). Or MPTree's in Settings: a big clock, the house and the
-  MPTree numbers after a set time. Any key ends it.
+* **Screensaver.** After 10 minutes, or the picture button in the top bar:
+  the clock, the house and the MPTree numbers over a photo of somewhere beautiful
+  from Wikimedia Commons' Featured pictures (a new one every minute, with the
+  photographer's name). Or plain white, or the TV's own (Settings). Any key ends it.
+  Set Android's own screensaver later than MPTree's, or to never.
 * **The remote.** Arrows move focus to whatever is nearest in that direction. OK
   presses. Back goes to Home. The Home button always comes back to Home.
 * **Heating.** OK on the tile opens the heating screen: − and + change the set
   temperature by half a degree (sent a moment after the last press), and a button
   turns it on or off. Back or Done closes it.
 
-Not yet: the other four layouts and the picker, MPTree itself on the TV with music
-synced over the internet, and a place to host the numbers file (see below).
+Not yet: MPTree itself on the TV with music synced over the internet, and a place
+to host the numbers file (see below).
 
 ## Build and install
 
@@ -64,21 +70,28 @@ making it the home screen.
 
 ## Making it the home screen
 
-Google TV does not let you pick another home screen in its settings, so the
-Google one is switched off for your user over ADB:
+Google TV does not let you pick another home screen in its settings, so two
+Google parts are switched off for your user over ADB: the Google home screen,
+and the setup wizard (setupwraith), which otherwise claims the Home button
+first and, being off, makes Home do nothing.
 
 ```bash
 adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
+adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
+adb shell cmd package set-home-activity com.caelan.mptree.tv/.MainActivity
 ```
 
-Press Home and MPTree TV comes up. To undo it, any time:
+Press Home and MPTree TV comes up. To undo it, any time (and before a factory
+reset, which needs the setup wizard):
 
 ```bash
+adb shell pm enable com.google.android.tungsten.setupwraith
 adb shell pm enable com.google.android.apps.tv.launcherx
 ```
 
-Keep that undo line somewhere. If MPTree TV ever fails to start, it is how you get
-a home screen back.
+Keep those undo lines somewhere. If MPTree TV ever fails to start, they are how
+you get a home screen back. A big TV update can switch the Google home screen back
+on; then run the three lines above again.
 
 ## Setting it up
 
@@ -100,7 +113,10 @@ there, nowhere else.
 
 | Path | Role |
 |---|---|
-| `src/App.tsx` | Pages, the screensaver timer, Back and Home, the app row |
+| `src/App.tsx` | Pages, which layout and dark mode, the screensaver timer, Back and Home, the app row |
+| `src/home.ts` | What every layout shows and its buttons (sunset, lights, alarm), from Home Assistant |
+| `src/components/layouts/` | The five Home layouts |
+| `src/photos.ts` | Screensaver photos from Wikimedia Commons |
 | `src/nav.ts` | The remote: moves focus by position on screen; hold ◀ ▶ and hold OK |
 | `src/ha.ts` | Home Assistant over REST, polled every 20 s while the screen is on |
 | `src/homeConfig.ts` | The entity ids |
