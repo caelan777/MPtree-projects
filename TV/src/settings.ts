@@ -16,6 +16,12 @@ export type Settings = {
   dockChosen: boolean;
   /** Minutes without a key press before the screensaver starts. 0 = never. */
   saverMinutes: number;
+  /** Whose screensaver: the TV's own (Google's photos) or MPTree's (clock, house, numbers). */
+  saverKind: "tv" | "mptree";
+  /** "auto" goes dark when the sun goes down. */
+  theme: "auto" | "light" | "dark";
+  /** The quick switch in the top bar, in auto: holds until the next sunrise or sunset. */
+  themeOverride: { dark: boolean; until: number } | null;
 };
 
 export const DEFAULTS: Settings = {
@@ -26,6 +32,9 @@ export const DEFAULTS: Settings = {
   dock: [],
   dockChosen: false,
   saverMinutes: 10,
+  saverKind: "tv",
+  theme: "auto",
+  themeOverride: null,
 };
 
 const KEY = "mptree_tv_settings";

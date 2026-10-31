@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { AlarmClock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Heater, Moon, Power, Sun, Sunset, Wind } from "lucide-react";
 import { Logo } from "./Logo";
 import { AddTile, AppTile } from "./AppTile";
@@ -17,6 +16,7 @@ type Props = {
   onOpenApp: (a: TvApp) => void;
   onAddApp: () => void;
   onSettings: () => void;
+  onOpenHeating: () => void;
   toast: (msg: string) => void;
 };
 
@@ -35,7 +35,7 @@ function WeatherIcon({ state, size }: { state: string | undefined; size: number 
 }
 
 /** The Classic layout: clock and numbers on the left, the house on the right, apps below. */
-export function HomeView({ now, ha, stats, statsError, dock, onOpenApp, onAddApp, onSettings, toast }: Props) {
+export function HomeView({ now, ha, stats, statsError, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, toast }: Props) {
   const s = ha.states;
   const weather = s[HA.weather];
   const outside = num(weather, "temperature");
@@ -63,7 +63,7 @@ export function HomeView({ now, ha, stats, statsError, dock, onOpenApp, onAddApp
             <SunsetTile ha={ha} sunsetAt={sunsetAt} toast={toast} />
             <LightsTile ha={ha} toast={toast} />
             <AlarmTile ha={ha} toast={toast} />
-            <HeatingTile ha={ha} toast={toast} />
+            <HeatingTile ha={ha} onOpen={onOpenHeating} />
             <div className="c">
               <div className="sub" style={{ margin: 0 }}>Inside, living room</div>
               <div><div className="big">{deg(inside)}</div><div className="sub">{humidity !== null ? `Humidity ${Math.round(humidity)}%` : " "}</div></div>
@@ -161,57 +161,16 @@ function AlarmTile({ ha, toast }: TileProps) {
   );
 }
 
-/** OK turns the heating on or off. Holding left or right changes the set
- *  temperature by half a degree per step; it is sent once you let go. */
-function HeatingTile({ ha, toast }: TileProps) {
+/** OK opens the heating screen (HeatingPanel); the tile only shows the state. */
+function HeatingTile({ ha, onOpen }: { ha: Ha; onOpen: () => void }) {
   const e = ha.states[HA.heating];
   const on = !!e && e.state !== "off" && e.state !== "unavailable";
-  const target = num(e, "temperature");
-  const current = num(e, "current_temperature");
-  const min = num(e, "min_temp") ?? 5;
-  const max = num(e, "max_temp") ?? 30;
-  const ref = useRef<HTMLButtonElement>(null);
-  const [draft, setDraft] = useState<number | null>(null);
-  // The value being dialled in, read by the key handler without waiting for a render.
-  const draftRef = useRef<number | null>(null);
-  const send = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onHold = (ev: Event) => {
-      const dir = (ev as CustomEvent).detail as string;
-      const from = draftRef.current ?? target ?? 20;
-      const next = Math.min(max, Math.max(min, from + (dir === "right" ? 0.5 : -0.5)));
-      draftRef.current = next;
-      setDraft(next);
-      window.clearTimeout(send.current);
-      send.current = window.setTimeout(() => {
-        ha.patch(HA.heating, { attributes: { temperature: next } });
-        ha.call("climate", "set_temperature", { entity_id: HA.heating, temperature: next })
-          .then(() => toast(`Heating set to ${deg(next)}`), err => toast(err.message))
-          .finally(() => { draftRef.current = null; setDraft(null); });
-      }, 900);
-    };
-    el.addEventListener("tvhold", onHold);
-    return () => el.removeEventListener("tvhold", onHold);
-  }, [ha, target, min, max, toast]);
-
-  const shown = draft ?? target;
   return (
-    <button
-      ref={ref}
-      className="f c" data-f="" data-hold=""
-      onClick={() => {
-        const mode = on ? "off" : "heat";
-        ha.patch(HA.heating, { state: mode });
-        ha.call("climate", "set_hvac_mode", { entity_id: HA.heating, hvac_mode: mode }).then(() => toast(on ? "Heating off" : "Heating on"), err => toast(err.message));
-      }}
-    >
+    <button className="f c" data-f="" data-heat="" onClick={onOpen}>
       <div className="row"><span className="sub" style={{ margin: 0 }}>Heating</span><span className={"state" + (on ? "" : " off")}>{on ? "ON" : "OFF"}</span></div>
       <div>
-        <div className="big" style={{ display: "flex", alignItems: "center", gap: 14 }}><Heater size={44} />{deg(shown)}</div>
-        <div className="sub">{draft !== null ? "Let go to set it" : `Now ${deg(current)}. Hold ◀ ▶ to change.`}</div>
+        <div className="big" style={{ display: "flex", alignItems: "center", gap: 14 }}><Heater size={44} />{deg(num(e, "temperature"))}</div>
+        <div className="sub">Now {deg(num(e, "current_temperature"))}. OK to change.</div>
       </div>
     </button>
   );

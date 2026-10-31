@@ -9,9 +9,14 @@ type Props = {
   ha: Ha;
   statsError: string | null;
   hasStats: boolean;
+  toast: (m: string) => void;
+  /** Shows MPTree's screensaver straight away, to see what it looks like. */
+  onSaverNow: () => void;
 };
 
 const SAVER_STEPS = [5, 10, 20, 30, 0];
+const THEMES: Settings["theme"][] = ["auto", "light", "dark"];
+const THEME_LABEL: Record<Settings["theme"], string> = { auto: "with the sun", light: "always light", dark: "always dark" };
 
 /** A text field that saves when you leave it, so typing with the remote's
  *  on-screen keyboard does not save half an address on every letter. */
@@ -34,7 +39,7 @@ function Field({ id, label, value, hint, secret, onSave }: {
   );
 }
 
-export function SettingsView({ settings, onChange, ha, statsError, hasStats }: Props) {
+export function SettingsView({ settings, onChange, ha, statsError, hasStats, toast, onSaverNow }: Props) {
   const haLine =
     ha.status === "ok" ? <><b>Connected.</b> {Object.keys(ha.states).length} things found.</>
     : ha.status === "loading" ? "Connecting…"
@@ -60,7 +65,10 @@ export function SettingsView({ settings, onChange, ha, statsError, hasStats }: P
           onSave={v => onChange({ haToken: v })}
         />
         <div className="status">{haLine}</div>
-        <button className="f opt" data-f="" onClick={() => ha.refresh()}>
+        <button
+          className="f opt" data-f=""
+          onClick={() => ha.refresh().then(r => toast(r.ok ? `Connected, ${r.count} things found` : r.error))}
+        >
           <span>Check the connection</span><span className="val">OK</span>
         </button>
 
@@ -73,10 +81,30 @@ export function SettingsView({ settings, onChange, ha, statsError, hasStats }: P
         <div className="status">{!settings.statsUrl ? "Not set up yet." : hasStats ? <b>Loaded.</b> : statsError ?? "Loading…"}</div>
 
         <div className="lab" style={{ marginTop: 30 }}>This TV</div>
-        <button className="f opt" data-f="" onClick={() => onChange({ saverMinutes: nextSaver })}>
-          <span>Screensaver<div className="sub">Starts when the remote has been left alone</div></span>
-          <span className="val">{settings.saverMinutes ? `after ${settings.saverMinutes} min` : "never"}</span>
+        <button
+          className="f opt" data-f=""
+          onClick={() => onChange({ theme: THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length], themeOverride: null })}
+        >
+          <span>Dark mode<div className="sub">With the sun: dark from sunset to sunrise. The button at the top right switches it for a while.</div></span>
+          <span className="val">{THEME_LABEL[settings.theme]}</span>
         </button>
+        <button className="f opt" data-f="" onClick={() => onChange({ saverKind: settings.saverKind === "tv" ? "mptree" : "tv" })}>
+          <span>Screensaver<div className="sub">{settings.saverKind === "tv"
+            ? "The TV's own, with photos of places around the world. When it starts is set in Android settings, Ambient mode."
+            : "Clock, your home and the MPTree numbers"}</div></span>
+          <span className="val">{settings.saverKind === "tv" ? "the TV's own" : "MPTree"}</span>
+        </button>
+        {settings.saverKind === "mptree" && (
+          <>
+            <button className="f opt" data-f="" onClick={() => onChange({ saverMinutes: nextSaver })}>
+              <span>Starts after<div className="sub">When the remote has been left alone</div></span>
+              <span className="val">{settings.saverMinutes ? `${settings.saverMinutes} min` : "never"}</span>
+            </button>
+            <button className="f opt" data-f="" onClick={onSaverNow}>
+              <span>Show it now</span><span className="val">OK</span>
+            </button>
+          </>
+        )}
         <button className="f opt" data-f="" onClick={() => Launcher.openSystemSettings()}>
           <span>Android settings<div className="sub">Wi-Fi, picture, sound, the TV itself</div></span>
           <span className="val">Open</span>

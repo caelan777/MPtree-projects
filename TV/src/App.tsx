@@ -4,13 +4,16 @@ import { Launcher, type TvApp } from "./launcher";
 import { DEFAULTS, defaultDock, loadSettings, saveSettings, type Settings } from "./settings";
 import { useHomeAssistant } from "./ha";
 import { useMptreeStats } from "./stats";
-import { focusFirst, useRemote } from "./nav";
-import { STAGE_H, STAGE_W } from "./theme";
+import { focusEl, focusFirst, useRemote } from "./nav";
+import { STAGE_H, STAGE_W, nextSunChange, sunIsDown } from "./theme";
+import { HA } from "./homeConfig";
+import { clock } from "./format";
 import { TopBar, type Page } from "./components/TopBar";
 import { HomeView } from "./components/HomeView";
 import { AppsView } from "./components/AppsView";
 import { SettingsView } from "./components/SettingsView";
 import { Saver } from "./components/Saver";
+import { HeatingPanel } from "./components/HeatingPanel";
 
 /** The Home row holds this many apps, plus the "Add app" tile when there is room. */
 const DOCK_MAX = 6;
@@ -44,6 +47,7 @@ export default function App() {
   const [apps, setApps] = useState<TvApp[]>([]);
   const [page, setPage] = useState<Page>("home");
   const [saver, setSaver] = useState(false);
+  const [heatOpen, setHeatOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const s = settings ?? DEFAULTS;
 
@@ -115,13 +119,17 @@ export default function App() {
   // ── Back and Home buttons ──
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
+  const heatRef = useRef(heatOpen);
+  useEffect(() => { heatRef.current = heatOpen; }, [heatOpen]);
   useEffect(() => {
     const back = CapApp.addListener("backButton", () => {
+      if (heatRef.current) { setHeatOpen(false); requestAnimationFrame(() => focusFirst()); return; }
       if (pageRef.current !== "home") setPage("home");
       // On Home, Back does nothing: this is the home screen, there is nothing behind it.
     });
     const home = Launcher.addListener("home", () => {
       setSaver(false);
+      setHeatOpen(false);
       setPage("home");
       requestAnimationFrame(() => focusFirst());
     });
@@ -138,28 +146,54 @@ export default function App() {
   }, [saver]);
   useRemote(onKey);
   useEffect(() => {
-    if (!s.saverMinutes) return;
+    // The TV's own screensaver (Google's photos) needs nothing from us: Android starts it.
+    if (!s.saverMinutes || s.saverKind !== "mptree") return;
     const t = window.setInterval(() => {
       if (!document.hidden && Date.now() - lastKey.current > s.saverMinutes * 60_000) setSaver(true);
     }, 15_000);
     return () => window.clearInterval(t);
-  }, [s.saverMinutes]);
+  }, [s.saverMinutes, s.saverKind]);
 
   const goPage = useCallback((p: Page) => setPage(p), []);
 
+  // ── dark mode: automatic with the sun, or fixed in Settings ──
+  const override = s.themeOverride && s.themeOverride.until > now.getTime() ? s.themeOverride : null;
+  const dark = s.theme === "dark" ? true : s.theme === "light" ? false : override ? override.dark : sunIsDown(ha.states, now, HA);
+  const toggleDark = () => {
+    if (s.theme !== "auto") {
+      change({ theme: dark ? "light" : "dark" });
+      toast(dark ? "Always light" : "Always dark");
+      return;
+    }
+    // In auto the switch holds until the sun next rises or sets, then auto takes over again.
+    const until = nextSunChange(ha.states, new Date(), HA);
+    change({ themeOverride: { dark: !dark, until } });
+    toast(`${dark ? "Light" : "Dark"} until ${clock(new Date(until))}, then automatic again`);
+  };
+  useEffect(() => { document.body.style.background = dark ? "#000" : "#fff"; }, [dark]);
+
+  const closeHeat = useCallback(() => {
+    setHeatOpen(false);
+    requestAnimationFrame(() => focusEl(document.querySelector<HTMLElement>("[data-heat]")));
+  }, []);
+
   return (
-    <div className="stage" style={{ transform: `scale(${scale})` }}>
-      <TopBar name={s.name} page={page} onPage={goPage} onSaver={() => setSaver(true)} />
+    <div className={"stage" + (dark ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
+      <div inert={heatOpen || undefined}>
+      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} onToggleDark={toggleDark} />
       {page === "home" && (
         <HomeView
           now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
-          onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")} toast={toast}
+          onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")}
+          onOpenHeating={() => setHeatOpen(true)} toast={toast}
         />
       )}
       {page === "apps" && <AppsView apps={apps} dock={dock} onOpenApp={openApp} onTogglePin={togglePin} onGetApps={getApps} />}
       {page === "settings" && settings && (
-        <SettingsView settings={settings} onChange={change} ha={ha} statsError={statsError} hasStats={!!stats} />
+        <SettingsView settings={settings} onChange={change} ha={ha} statsError={statsError} hasStats={!!stats} toast={toast} onSaverNow={() => setSaver(true)} />
       )}
+      </div>
+      {heatOpen && <HeatingPanel ha={ha} toast={toast} onClose={closeHeat} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       {saver && <Saver now={now} ha={ha} stats={stats} />}
     </div>

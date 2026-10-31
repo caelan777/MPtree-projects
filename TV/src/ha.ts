@@ -47,16 +47,21 @@ export function useHomeAssistant(url: string, token: string) {
   const cfg = useRef({ url, token });
   useEffect(() => { cfg.current = { url, token }; }, [url, token]);
 
-  const refresh = useCallback(async () => {
+  /** Reads every state again. Says how it went: the number of things found, or the problem. */
+  const refresh = useCallback(async (): Promise<{ ok: true; count: number } | { ok: false; error: string }> => {
     const { url: u, token: t } = cfg.current;
-    if (!u || !t) { setStatus("unset"); return; }
+    if (!u || !t) { setStatus("unset"); return { ok: false, error: "Add the address and token first." }; }
     try {
-      setStates(await fetchStates(u, t));
+      const next = await fetchStates(u, t);
+      setStates(next);
       setStatus("ok");
       setError(null);
+      return { ok: true, count: Object.keys(next).length };
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       setStatus("error");
-      setError(err instanceof Error ? err.message : String(err));
+      setError(msg);
+      return { ok: false, error: msg };
     }
   }, []);
 

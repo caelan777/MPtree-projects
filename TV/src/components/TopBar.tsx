@@ -1,4 +1,4 @@
-import { Moon, Settings as Gear } from "lucide-react";
+import { Moon, Settings as Gear, Sun } from "lucide-react";
 
 export type Page = "home" | "apps" | "settings";
 
@@ -6,12 +6,14 @@ type Props = {
   name: string;
   page: Page;
   onPage: (p: Page) => void;
-  onSaver: () => void;
+  /** Whether the screen is dark right now; the button switches to the other. */
+  dark: boolean;
+  onToggleDark: () => void;
 };
 
-/** Account, Home and Apps on the left; Settings and the screensaver on the right.
+/** Account, Home and Apps on the left; Settings and the dark mode switch on the right.
  *  The same on every page, so Home is always one press up and left away. */
-export function TopBar({ name, page, onPage, onSaver }: Props) {
+export function TopBar({ name, page, onPage, dark, onToggleDark }: Props) {
   return (
     <div className="top">
       <div className="grp">
@@ -28,8 +30,8 @@ export function TopBar({ name, page, onPage, onSaver }: Props) {
         <button className={"f ib" + (page === "settings" ? " on" : "")} data-f="" onClick={() => onPage("settings")} aria-label="Settings">
           <Gear size={34} />
         </button>
-        <button className="f ib" data-f="" onClick={onSaver} aria-label="Screensaver">
-          <Moon size={32} />
+        <button className="f ib" data-f="" onClick={onToggleDark} aria-label={dark ? "Light mode" : "Dark mode"}>
+          {dark ? <Sun size={34} /> : <Moon size={32} />}
         </button>
       </div>
     </div>

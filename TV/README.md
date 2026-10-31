@@ -11,7 +11,7 @@ It is its own project on purpose; nothing is shared with `MPTree-App/` (see the 
 Designs: `design/design.html` (first take), `design/directions.html` (ten
 directions), `design/layouts.html` (the layout picker and the Sunset switch).
 
-## What works in 0.1.0
+## What works in 0.2.0
 
 * **Home, Classic layout.** Clock, date, weather line, MPTree numbers, six Home
   Assistant tiles, and the app row.
@@ -19,12 +19,17 @@ directions), `design/layouts.html` (the layout picker and the Sunset switch).
   Home or takes it off (Home holds six).
 * **Settings.** Your name, the Home Assistant address and token, the address of the
   MPTree numbers file, the screensaver delay, and a way into Android's own settings.
-* **Screensaver.** After 10 minutes without a key (or the moon button): a big
-  clock, the house and the MPTree numbers. Any key ends it.
+* **Dark mode.** Dark from sunset to sunrise (Home Assistant's sun), or always
+  light or dark (Settings). The sun/moon button next to Settings flips it until the
+  next sunrise or sunset.
+* **Screensaver.** The TV's own by default (Google's ambient mode with photos;
+  Android starts it). Or MPTree's in Settings: a big clock, the house and the
+  MPTree numbers after a set time. Any key ends it.
 * **The remote.** Arrows move focus to whatever is nearest in that direction. OK
   presses. Back goes to Home. The Home button always comes back to Home.
-* **Heating.** OK turns it on or off; **hold ◀ or ▶** to change the set
-  temperature by half a degree a step. It is sent when you let go.
+* **Heating.** OK on the tile opens the heating screen: − and + change the set
+  temperature by half a degree (sent a moment after the last press), and a button
+  turns it on or off. Back or Done closes it.
 
 Not yet: the other four layouts and the picker, MPTree itself on the TV with music
 synced over the internet, and a place to host the numbers file (see below).
