@@ -98,6 +98,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:m
   <symbol id="i-sunset" viewBox="0 0 24 24"><path d="M7 15a5 5 0 0 1 10 0M3 15h2M19 15h2M12 4v4M9.5 6.5L12 9l2.5-2.5M5.6 9.6l1.4 1.4M18.4 9.6L17 11M3 19h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-off" viewBox="0 0 24 24"><path d="M12 3v8M7 6.3a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 9v4l2.5 2M4 5l3-2.5M20 5l-3-2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-heat" viewBox="0 0 24 24"><path d="M5 6v13M9.5 6v13M14 6v13M18.5 6v13M3 19h18M3 6h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
 </defs></svg>
 
@@ -148,9 +150,11 @@ body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:m
         <div class="mpt"><div class="h"><span style="display:flex;gap:12px;align-items:center"><svg width="40" height="40"><use href="#i-logo"/></svg>MPTree</span><span class="mono" style="font-size:17px;color:var(--muted);font-weight:400">2 h ago</span></div>
           <div><div class="v">1,291</div><div class="k">Play installs</div></div><div><div class="v">4.6</div><div class="k">Rating</div></div><div><div class="v">212</div><div class="k">Windows</div></div><div><div class="v">3.4k</div><div class="k">Site, 7 days</div></div></div>
       </div>
-      <div class="ctl">
+      <div class="ctl" style="grid-template-columns:repeat(3,1fr)">
         <div class="c focus"><div class="row"><svg width="54" height="54"><use href="#i-sunset"/></svg><span class="state">ON</span></div><div><div class="t">Sunset</div><div class="s">On since 17:12. OK turns it off.</div></div></div>
         <div class="c"><div class="row"><svg width="54" height="54"><use href="#i-off"/></svg></div><div><div class="t">All lights off</div><div class="s">3 lights are on</div></div></div>
+        <div class="c"><div class="row"><svg width="54" height="54"><use href="#i-alarm"/></svg><span class="state" style="color:var(--muted)">OFF</span></div><div><div class="t">Alarm</div><div class="s">Wed and Thu, 08:00</div></div></div>
+        <div class="c"><div class="row"><span class="s" style="margin:0">Heating</span><svg width="40" height="40"><use href="#i-heat"/></svg></div><div><div class="big">21°</div><div class="s">Big heater, set. Now 20.4°</div></div></div>
         <div class="c"><div class="s">Inside, living room</div><div><div class="big">20.4°</div><div class="s">Humidity 62%</div></div></div>
         <div class="c"><div class="s" style="display:flex;justify-content:space-between">Outside, De Bilt <svg width="40" height="40"><use href="#i-cloud"/></svg></div><div><div class="big">8°</div><div class="s">Cloudy, rain at 20:00</div></div></div>
       </div>
@@ -159,7 +163,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:m
       <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
     </div>
   </div></div>
-  <p class="note"><b>One button, two states.</b> The tile says ON or nothing, and the line under it says what OK will do next. It turns on by itself at sunset (your automation), and you can always turn it off or on again from the couch. A short message at the top confirms the press.</p>
+  <p class="note"><b>Now with heating and the alarm.</b> Heating shows the big radiator's set temperature; with focus on it, left and right change it by half a degree, OK turns it on or off. The alarm is a switch for your Wednesday and Thursday 08:00 alarm. <b>One button, two states.</b> The tile says ON or nothing, and the line under it says what OK will do next. It turns on by itself at sunset (your automation), and you can always turn it off or on again from the couch. A short message at the top confirms the press.</p>
 </section>
 
 </div></div>
