@@ -13,6 +13,8 @@ interface LauncherPlugin {
   listApps(): Promise<{ apps: TvApp[] }>;
   launch(opts: { packageName: string }): Promise<void>;
   openSystemSettings(): Promise<void>;
+  /** The TV's own screensaver (Google's photos). Rejects where the TV does not allow it. */
+  startScreensaver(): Promise<void>;
   /** The Home button was pressed while the launcher was already in front. */
   addListener(event: "home", fn: () => void): Promise<PluginListenerHandle>;
   /** An app was installed, updated or removed. */
@@ -30,6 +32,7 @@ const webLauncher: LauncherPlugin = {
   listApps: async () => ({ apps: DEV_APPS }),
   launch: async ({ packageName }) => { console.log("launch", packageName); },
   openSystemSettings: async () => { console.log("open Android settings"); },
+  startScreensaver: async () => { throw new Error("No TV screensaver in the browser"); },
   addListener: async () => ({ remove: async () => {} }),
 };
 

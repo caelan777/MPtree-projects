@@ -145,6 +145,25 @@ public class LauncherPlugin extends Plugin {
         }
     }
 
+    /**
+     * Starts the TV's own screensaver (Google's ambient mode with the photos) now.
+     * Android has no public way to do this; SystemUI's Somnambulator is the
+     * activity behind "start now" in the screensaver settings and works on most
+     * TVs. If this TV has none, the call fails and the page shows MPTree's own.
+     */
+    @PluginMethod
+    public void startScreensaver(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_MAIN)
+                .setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("This TV cannot start its screensaver from an app", ex);
+        }
+    }
+
     /** Draws any drawable (adaptive icons included) into a PNG data URL. */
     private static String toDataUrl(Drawable d, int w, int h) {
         if (d == null) return null;

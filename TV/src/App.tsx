@@ -172,6 +172,13 @@ export default function App() {
   };
   useEffect(() => { document.body.style.background = dark ? "#000" : "#fff"; }, [dark]);
 
+  // The screensaver button: the chosen one now. The TV's own is started by Android;
+  // where a TV refuses that, MPTree's shows instead.
+  const startSaver = () => {
+    if (s.saverKind === "mptree") { setSaver(true); return; }
+    Launcher.startScreensaver().catch(() => setSaver(true));
+  };
+
   const closeHeat = useCallback(() => {
     setHeatOpen(false);
     requestAnimationFrame(() => focusEl(document.querySelector<HTMLElement>("[data-heat]")));
@@ -180,7 +187,7 @@ export default function App() {
   return (
     <div className={"stage" + (dark ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
       <div inert={heatOpen || undefined}>
-      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} onToggleDark={toggleDark} />
+      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} onToggleDark={toggleDark} onSaver={startSaver} />
       {page === "home" && (
         <HomeView
           now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}

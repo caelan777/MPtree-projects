@@ -85,7 +85,7 @@ export function SettingsView({ settings, onChange, ha, statsError, hasStats, toa
           className="f opt" data-f=""
           onClick={() => onChange({ theme: THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length], themeOverride: null })}
         >
-          <span>Dark mode<div className="sub">With the sun: dark from sunset to sunrise. The button at the top right switches it for a while.</div></span>
+          <span>Dark mode<div className="sub">With the sun: dark from sunset to sunrise. The moon or sun button at the top switches it for a while.</div></span>
           <span className="val">{THEME_LABEL[settings.theme]}</span>
         </button>
         <button className="f opt" data-f="" onClick={() => onChange({ saverKind: settings.saverKind === "tv" ? "mptree" : "tv" })}>
