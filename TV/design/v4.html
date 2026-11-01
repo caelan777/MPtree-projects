@@ -1,0 +1,395 @@
+<title>MPTree TV Round Four</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a working board. Six TV screens at real 1920×1080, scaled to fit, two per row
+   on a wide screen and one per row on a narrow one; a short list under each says what it is.
+   The screens keep MPTree's black and white; the board around them follows your theme. */
+:root{
+  --bg:#e8e9eb; --fg:#121314; --sub:#5b5e64; --line:#d0d2d6; --note:#ffd400;
+  --sans:"Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --serif:"Instrument Serif", Georgia, "Times New Roman", serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0c0e;--fg:#f1f2f4;--sub:#8a8e95;--line:#24262b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0c0e;--fg:#f1f2f4;--sub:#8a8e95;--line:#24262b;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:36px 56px}
+.intro{max-width:70ch;display:grid;gap:10px;margin-bottom:28px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}
+.intro h1{margin:0;font-size:clamp(28px,4vw,40px);letter-spacing:-0.03em;line-height:1.05;font-weight:600;text-wrap:balance}
+.intro p{margin:0;color:var(--sub);line-height:1.55;font-size:15px}
+.boards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,680px),1fr));gap:40px 28px;max-width:1960px}
+.board{display:grid;gap:12px;align-content:start;min-width:0}
+.cap{display:flex;gap:12px;align-items:baseline}
+.cap .n{font-family:var(--mono);font-size:12px;color:var(--sub)}
+.cap h2{margin:0;font-size:21px;letter-spacing:-0.02em;font-weight:600}
+.cap .k{font-size:14px;color:var(--sub)}
+.frame{position:relative;width:100%;aspect-ratio:16/9;max-width:100%;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:#fff}
+.frame>.tv{position:absolute;left:0;top:0;transform-origin:0 0;transform:scale(var(--s,.5))}
+.new{margin:0;padding:0;list-style:none;display:grid;gap:6px;font-size:14px;line-height:1.5;color:var(--sub);max-width:72ch}
+.new li{display:flex;gap:10px}.new li::before{content:"";flex:0 0 7px;height:7px;margin-top:8px;border-radius:50%;background:var(--fg);opacity:.5}
+.new b{color:var(--fg);font-weight:600}
+
+/* ── the TV: MPTree's palettes ─────────────────────────────────────────── */
+.tv,.tv *{box-sizing:border-box}
+.tv{--ink:#0d0e10;--ink2:#5e6168;--ink3:#9a9da3;--paper:#ffffff;--tile:#f3f4f5;--rule:#e2e4e7;--hi:#0d0e10;--hiFg:#ffffff;
+  width:1920px;height:1080px;position:relative;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--sans);font-stretch:100%}
+.tv.dark{--ink:#f4f5f6;--ink2:#a3a6ad;--ink3:#6b6e75;--paper:#060607;--tile:#131416;--rule:#232529;--hi:#ffffff;--hiFg:#060607}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+svg.i{width:1em;height:1em;display:block}
+
+/* shared top bar: quieter than before, one line */
+.bar{position:absolute;left:96px;right:96px;top:52px;height:76px;display:flex;align-items:center;gap:14px;z-index:5}
+.who{display:flex;align-items:center;gap:14px;font-size:27px;font-weight:600;padding:0 26px 0 10px;height:68px;border-radius:34px}
+.who .av{width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-size:22px;font-weight:700}
+.tabs{display:flex;gap:6px;font-size:26px;font-weight:600}
+.tabs span{height:58px;padding:0 26px;border-radius:29px;display:flex;align-items:center;color:var(--ink3)}
+.tabs .on{color:var(--ink);background:var(--tile)}
+.hint{margin:0 auto;display:flex;align-items:center;gap:12px;font-size:21px;color:var(--ink2)}
+.hint kbd{font-family:var(--mono);font-size:15px;font-weight:600;border:2px solid var(--rule);border-radius:9px;padding:3px 9px;color:var(--ink)}
+.hint b{color:var(--ink);font-weight:600}
+.tools{display:flex;gap:10px}
+.tools span{height:62px;padding:0 22px;border-radius:31px;display:flex;align-items:center;gap:10px;font-size:23px;font-weight:600;color:var(--ink2);background:var(--tile)}
+.tools svg{width:26px;height:26px}
+
+/* app tiles: the apps' own banners (stand-ins here) */
+.apps{position:absolute;left:96px;right:96px;bottom:44px;display:grid;grid-template-columns:repeat(6,1fr);gap:22px}
+.app{aspect-ratio:16/9;border-radius:22px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:-0.02em;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+.app small{display:none}
+.a-yt{background:#fff;color:#111;font-size:34px;border:2px solid var(--rule)}
+.a-yt i{width:46px;height:32px;border-radius:9px;background:#111;margin-right:10px;position:relative}
+.a-yt i::after{content:"";position:absolute;left:18px;top:9px;border-left:13px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent}
+.a-npo{background:#1d1d1d;color:#fff;font-size:34px}
+.a-hbo{background:linear-gradient(140deg,#2b2b2e,#0d0d0f);color:#fff;font-size:40px;letter-spacing:-0.05em}
+.a-br{background:#f1f1f1;color:#111;font-size:30px;letter-spacing:.08em}
+.a-nf{background:#0b0b0b;color:#fff;font-size:40px;letter-spacing:-0.03em}
+.a-mp{background:#fff;color:#111;border:2px solid var(--rule);gap:12px;font-size:30px}
+.a-mp svg{width:54px;height:54px}
+.app.sel{outline:5px solid var(--hi);outline-offset:6px;transform:scale(1.04)}
+
+/* note markers: on the board, not on the screen */
+.mk{position:absolute;z-index:20;width:54px;height:54px;border-radius:50%;background:var(--note);color:#111;border:4px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.3);font:700 26px/46px var(--sans);text-align:center}
+
+/* ── 1 CLASSIC · the clock as the picture ───────────────────────────────── */
+.c1 .clock{position:absolute;left:96px;top:176px;font-size:300px;line-height:.82;font-weight:600;font-stretch:78%;letter-spacing:-0.035em;font-variant-numeric:tabular-nums}
+.c1 .clock em{font-style:normal;color:var(--ink3);font-weight:400}
+.c1 .day{position:absolute;left:104px;top:438px;font-size:34px;color:var(--ink2);display:flex;gap:28px}
+.c1 .day b{color:var(--ink);font-weight:600}
+.c1 .hours{position:absolute;left:96px;top:512px;width:700px;display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:2px solid var(--rule);border-bottom:2px solid var(--rule)}
+.c1 .hours span{padding:16px 0 14px;display:grid;justify-items:center;gap:6px;font-size:19px;color:var(--ink3)}
+.c1 .hours b{font-size:28px;color:var(--ink);font-weight:600}
+.c1 .hours .rain{background:repeating-linear-gradient(135deg,transparent 0 9px,rgba(0,0,0,.06) 9px 11px)}
+.c1 .hours svg{width:28px;height:28px;color:var(--ink2)}
+.c1 .mpt{position:absolute;left:96px;top:660px;display:flex;gap:44px;align-items:baseline;font-size:19px;color:var(--ink3)}
+.c1 .mpt .lg{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:600;font-size:22px}
+.c1 .mpt .lg svg{width:32px;height:32px}
+.c1 .mpt b{display:block;font-size:34px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
+.c1 .house{position:absolute;left:880px;right:96px;top:172px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.tile{border-radius:28px;background:var(--tile);padding:24px 26px;height:212px;display:flex;flex-direction:column;justify-content:space-between;position:relative}
+.tile .top{display:flex;justify-content:space-between;align-items:center}
+.ico{width:58px;height:58px;border-radius:50%;background:var(--paper);display:grid;place-items:center;color:var(--ink)}
+.ico svg{width:30px;height:30px}
+.st{font-family:var(--mono);font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink2)}
+.st::before{content:"";width:11px;height:11px;border-radius:50%;border:2px solid currentColor}
+.st.on{color:var(--ink)}.st.on::before{background:currentColor}
+.tile .t{font-size:28px;font-weight:600;letter-spacing:-0.01em}
+.tile .s{font-size:19px;color:var(--ink2);margin-top:4px;line-height:1.35}
+.tile .big{font-size:66px;font-weight:600;font-stretch:85%;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums}
+.tile.sel{background:var(--hi);color:var(--hiFg);transform:scale(1.035);box-shadow:0 22px 50px rgba(0,0,0,.22)}
+.tile.sel .s,.tile.sel .st{color:rgba(255,255,255,.7)}.tile.sel .ico{background:rgba(255,255,255,.14);color:#fff}
+.np{position:absolute;left:880px;right:96px;top:640px;height:94px;border-radius:47px;background:var(--tile);display:flex;align-items:center;gap:20px;padding:0 14px 0 14px}
+.np .art{width:66px;height:66px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#f4f4f4 0 9%,#2d2d30 10% 30%,#6d6d72 31% 33%,#1a1a1c 34%);flex-shrink:0}
+.np .tx{flex:1;min-width:0;display:grid;gap:2px}
+.np .tx b{font-size:25px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np .tx span{font-size:18px;color:var(--ink2)}
+.np .line{position:absolute;left:100px;right:220px;bottom:12px;height:3px;border-radius:2px;background:var(--rule)}
+.np .line i{position:absolute;inset:0 62% 0 0;background:var(--ink);border-radius:2px}
+.np .btns{display:flex;gap:8px}
+.np .btns span{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;background:var(--paper)}
+.np .btns .pl{background:var(--ink);color:var(--paper)}
+.np .btns svg{width:26px;height:26px}
+
+/* ── 2 EDITORIAL · a magazine cover ─────────────────────────────────────── */
+.c2{--paper:#fbfbfa}
+.c2 .mast{position:absolute;left:120px;right:120px;top:150px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--ink);padding-bottom:14px;font-family:var(--mono);font-size:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+.c2 .mast b{color:var(--ink);font-weight:600}
+.c2 .lede{position:absolute;left:120px;right:120px;top:212px;margin:0;font-family:var(--serif);font-weight:400;font-size:112px;line-height:1.02;letter-spacing:-0.015em;color:var(--ink3);text-wrap:balance}
+.c2 .lede b{color:var(--ink);font-weight:400}
+.c2 .lede i{color:var(--ink)}
+.c2 .cols{position:absolute;left:120px;right:120px;top:600px;display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:56px}
+.c2 .col{border-top:1px solid var(--rule);padding-top:16px;font-size:24px;line-height:1.45;color:var(--ink2)}
+.c2 .col .h{font-family:var(--mono);font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+.c2 .col b{color:var(--ink);font-weight:600}
+.c2 .acts{position:absolute;left:112px;top:820px;display:flex;gap:10px;font-family:var(--serif);font-style:italic;font-size:46px}
+.c2 .acts span{padding:4px 18px 8px;border-radius:14px}
+.c2 .acts span:not(.sel){text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:10px;text-decoration-color:var(--ink3)}
+.c2 .acts .sel{background:var(--hi);color:var(--hiFg)}
+.c2 .applist{position:absolute;left:120px;right:120px;bottom:52px;display:flex;justify-content:space-between;border-top:2px solid var(--ink);padding-top:18px;font-size:34px;font-weight:600;letter-spacing:-0.02em}
+.c2 .applist span:last-child{color:var(--ink3)}
+
+/* ── 3 CINEMA · the chosen app fills the room ───────────────────────────── */
+.c3 .backdrop{position:absolute;inset:0;background:
+  radial-gradient(70% 90% at 30% 35%,rgba(255,255,255,.13),transparent 60%),
+  radial-gradient(60% 70% at 80% 10%,rgba(255,255,255,.06),transparent 60%),
+  linear-gradient(180deg,#121214 0%,#060607 62%)}
+.c3 .backdrop::after{content:"";position:absolute;left:-10%;right:-10%;top:180px;height:520px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 2px,transparent 2px 120px);filter:blur(1px);opacity:.6}
+.c3 .feature{position:absolute;left:120px;top:210px;width:900px}
+.c3 .feature .kick{font-family:var(--mono);font-size:18px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3)}
+.c3 .feature h3{margin:14px 0 0;font-size:150px;line-height:.9;letter-spacing:-0.04em;font-weight:600;font-stretch:80%}
+.c3 .feature p{margin:20px 0 0;font-size:28px;color:var(--ink2)}
+.c3 .clockline{position:absolute;right:120px;top:212px;text-align:right}
+.c3 .clockline b{display:block;font-size:96px;font-weight:500;font-stretch:80%;letter-spacing:-0.03em;line-height:.9}
+.c3 .clockline span{font-size:24px;color:var(--ink2)}
+.c3 .row{position:absolute;left:120px;right:120px;top:560px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px;align-items:end}
+.c3 .card{height:250px;border-radius:24px;background:#18191b;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:22px;font-size:28px;font-weight:600}
+.c3 .card.sel{height:300px;background:#f2f2f2;color:#0b0b0b;box-shadow:0 30px 80px rgba(255,255,255,.12)}
+.c3 .card .glyph{position:absolute;left:22px;top:18px;font-size:92px;font-weight:700;letter-spacing:-0.06em;opacity:.12;line-height:1}
+.c3 .card.sel .glyph{opacity:.9;font-size:40px;letter-spacing:-0.02em;top:24px}
+.c3 .card.add{background:transparent;border:2px dashed #2c2d30;color:var(--ink3)}
+.c3 .dock{position:absolute;left:120px;right:120px;bottom:56px;display:flex;justify-content:space-between;align-items:center}
+.c3 .chips{display:flex;gap:10px}
+.c3 .chip{height:62px;padding:0 24px;border-radius:31px;background:rgba(255,255,255,.07);display:flex;align-items:center;gap:12px;font-size:22px;font-weight:600;color:#e7e7e8;white-space:nowrap}
+.c3 .chip .d{width:11px;height:11px;border-radius:50%;background:#fff}
+.c3 .chip .d.off{background:transparent;border:2px solid #77797e}
+.c3 .chip .ttl{max-width:300px;overflow:hidden;text-overflow:ellipsis}
+.c3 .nums{font-family:var(--mono);font-size:19px;color:var(--ink3);display:flex;gap:26px}
+.c3 .nums b{color:var(--ink);font-weight:600}
+
+/* ── 4 SKY · the window ─────────────────────────────────────────────────── */
+.c4{--paper:transparent}
+.c4 .sky{position:absolute;inset:0;background:linear-gradient(180deg,#b9c3cf 0%,#d7dde3 38%,#ece6de 64%,#f2e9de 74%)}
+.c4 .sun{position:absolute;left:1270px;top:520px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,#fffaf2 0 34%,rgba(255,248,236,.6) 46%,rgba(255,244,228,0) 70%)}
+.c4 .cl{position:absolute;border-radius:50%;background:radial-gradient(ellipse,rgba(255,255,255,.75),rgba(255,255,255,0) 68%);filter:blur(6px)}
+.c4 .h{position:absolute;left:-200px;right:-200px;border-radius:50% 50% 0 0}
+.c4 .h1{bottom:-120px;height:420px;background:linear-gradient(180deg,#b8b6b2,#a3a19d)}
+.c4 .h2{bottom:-210px;height:470px;left:500px;background:linear-gradient(180deg,#9a9894,#83817d)}
+.c4 .h3{bottom:-300px;height:440px;right:900px;background:linear-gradient(180deg,#7d7b78,#6a6866)}
+.glass{background:rgba(255,255,255,.5);backdrop-filter:blur(30px) saturate(140%);-webkit-backdrop-filter:blur(30px) saturate(140%);border:1.5px solid rgba(255,255,255,.7);border-radius:34px;box-shadow:0 12px 40px rgba(40,50,60,.08)}
+.c4 .bar .who,.c4 .bar .tabs .on,.c4 .tools span{background:rgba(255,255,255,.45)}
+.c4 .time{position:absolute;left:110px;top:176px;font-size:200px;font-weight:400;font-stretch:80%;letter-spacing:-0.04em;line-height:.9;color:#14161a}
+.c4 .sub{position:absolute;left:118px;top:378px;font-size:30px;color:#3c4048;display:flex;gap:26px}
+.c4 .sub b{color:#14161a;font-weight:600}
+.c4 .hrs{position:absolute;left:96px;top:450px;width:760px;padding:18px 22px;display:flex;justify-content:space-between}
+.c4 .hrs span{display:grid;justify-items:center;gap:6px;font-size:18px;color:#4a4e56;padding:6px 10px;border-radius:14px}
+.c4 .hrs b{font-size:28px;color:#14161a;font-weight:600}
+.c4 .hrs svg{width:28px;height:28px;color:#2a2d33}
+.c4 .hrs .rain{border:2px dashed rgba(20,22,26,.35)}
+.c4 .side{position:absolute;right:96px;top:172px;width:610px;display:grid;gap:14px}
+.c4 .gb{padding:18px 22px;display:flex;align-items:center;gap:20px;min-width:0}
+.c4 .gb .gi{width:60px;height:60px;border-radius:50%;background:#14161a;color:#fff;display:grid;place-items:center;flex-shrink:0}
+.c4 .gb .gi svg{width:28px;height:28px}
+.c4 .gb .tx{min-width:0;font-size:27px;font-weight:600;color:#14161a}
+.c4 .gb .tx span{display:block;font-size:19px;font-weight:500;color:#4a4e56;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c4 .gb .tx b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c4 .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.c4 .gb.sel{background:rgba(20,22,26,.92);border-color:transparent}
+.c4 .gb.sel .tx,.c4 .gb.sel .tx b{color:#fff}.c4 .gb.sel .tx span{color:rgba(255,255,255,.7)}.c4 .gb.sel .gi{background:#fff;color:#14161a}
+.c4 .shelf{position:absolute;left:50%;transform:translateX(-50%);bottom:40px;width:1500px;padding:18px;display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.c4 .shelf .app small{bottom:-34px;color:#2e3137}
+
+/* ── 5 DAY LINE · the day as one drawing ────────────────────────────────── */
+.c5 .head{position:absolute;left:96px;right:96px;top:170px;display:flex;justify-content:space-between;align-items:flex-end}
+.c5 .head .t{font-size:170px;font-weight:600;font-stretch:78%;letter-spacing:-0.035em;line-height:.82}
+.c5 .head .d{font-size:30px;color:var(--ink2);margin-top:18px}
+.c5 .temps{display:flex;gap:64px;text-align:right}
+.c5 .temps b{display:block;font-size:84px;font-weight:600;font-stretch:80%;letter-spacing:-0.03em;line-height:.9}
+.c5 .temps span{font-size:22px;color:var(--ink2)}
+.c5 svg.day{position:absolute;left:96px;top:420px;overflow:visible}
+.c5 .pills{position:absolute;left:96px;right:96px;top:790px;display:flex;gap:12px;align-items:center}
+.c5 .pill{height:64px;padding:0 24px;border-radius:32px;background:var(--tile);display:flex;align-items:center;gap:12px;font-size:23px;font-weight:600;white-space:nowrap}
+.c5 .pill .m{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink2)}
+.c5 .pill.sel{background:var(--hi);color:var(--hiFg)}
+.c5 .pill svg{width:24px;height:24px}
+.c5 .nums{margin-left:auto;font-family:var(--mono);font-size:19px;color:var(--ink3);display:flex;gap:26px}
+.c5 .nums b{color:var(--ink);font-weight:600}
+.c5 .sunbtn{position:absolute;left:1235px;top:520px;width:420px;padding:20px 26px;border-radius:26px;background:var(--hi);color:var(--hiFg);display:grid;gap:4px}
+.c5 .sunbtn b{font-size:29px;font-weight:600;display:flex;gap:12px;align-items:center}
+.c5 .sunbtn b svg{width:32px;height:32px}
+.c5 .sunbtn span{font-size:19px;color:rgba(255,255,255,.7)}
+
+/* ── 6 WITHOUT HOME ASSISTANT ───────────────────────────────────────────── */
+.c6 .greet{position:absolute;left:96px;top:190px;font-family:var(--serif);font-size:150px;line-height:.95;letter-spacing:-0.01em;max-width:1100px}
+.c6 .greet i{color:var(--ink3)}
+.c6 .meta{position:absolute;left:104px;top:520px;display:flex;gap:40px;font-size:30px;color:var(--ink2)}
+.c6 .meta b{color:var(--ink);font-weight:600}
+.c6 .music{position:absolute;right:96px;top:190px;width:560px;height:520px;border-radius:40px;background:var(--ink);color:var(--paper);padding:40px;display:flex;flex-direction:column;justify-content:space-between}
+.c6 .music .rec{width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,#f4f4f4 0 8%,#2a2a2d 9% 28%,#4a4a4e 29% 30%,#18181a 31% 52%,#3a3a3e 53% 54%,#141416 55%);align-self:flex-end}
+.c6 .music h4{margin:0;font-size:52px;letter-spacing:-0.02em;font-weight:600}
+.c6 .music p{margin:6px 0 0;font-size:23px;color:rgba(255,255,255,.65)}
+.c6 .music .go{margin-top:24px;align-self:flex-start;height:72px;padding:0 30px;border-radius:36px;background:#fff;color:#111;display:flex;align-items:center;gap:12px;font-size:25px;font-weight:600}
+.c6 .music .go svg{width:26px;height:26px}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="logo" viewBox="-250 -250 1500 1500"><path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="sunico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="pic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M21 16l-5-5-9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="sunset" viewBox="0 0 24 24"><path d="M7 15a5 5 0 0 1 10 0M3 15h2M19 15h2M12 4v4M9.5 6.5L12 9l2.5-2.5M5.6 9.6l1.4 1.4M18.4 9.6L17 11M3 19h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="power" viewBox="0 0 24 24"><path d="M12 3v8M7 6.3a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 9v4l2.5 2M4 5l3-2.5M20 5l-3-2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="heat" viewBox="0 0 24 24"><path d="M5 6v13M9.5 6v13M14 6v13M18.5 6v13M3 19h18M3 6h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="drop" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="rain" viewBox="0 0 24 24"><path d="M7 15h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 15zM9 18l-1 3M13 18l-1 3M17 18l-1 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+  <symbol id="pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></symbol>
+  <symbol id="next" viewBox="0 0 24 24"><path d="M6 5.5v13l9-6.5zM16.5 5.5h2.5v13h-2.5z" fill="currentColor"/></symbol>
+  <symbol id="prev" viewBox="0 0 24 24"><path d="M18 5.5v13l-9-6.5zM7.5 5.5H5v13h2.5z" fill="currentColor"/></symbol>
+  <symbol id="shuffle" viewBox="0 0 24 24"><path d="M3 7h4c4 0 6 10 10 10h4M3 17h4c1.6 0 2.8-1.6 4-3.6M13 9.6C14.2 8 15.4 7 17 7h4M18 4l3 3-3 3M18 14l3 3-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<header class="intro">
+  <span class="eyebrow">MPTree TV · round four · design only · 1 Nov 2026</span>
+  <h1>The same five Homes, made more beautiful</h1>
+  <p>Each layout now has one idea it is built around: the clock as the picture, a magazine cover, the chosen app filling the room, a window onto the sky, and the day as one drawing. Underneath they keep what round three made clear: words on buttons, ON and OFF apart from what OK does, and the line at the top. The sixth screen is Home with Home Assistant switched off. The yellow circles are notes for you, not part of the screen.</p>
+</header>
+
+<div class="boards">
+
+<!-- 1 CLASSIC -->
+<section class="board">
+  <div class="cap"><span class="n">01</span><h2>Classic</h2><span class="k">the clock as the picture</span></div>
+  <div class="frame"><div class="tv c1">
+    <span class="mk" style="left:40px;top:190px">1</span><span class="mk" style="left:40px;top:520px">2</span><span class="mk" style="left:830px;top:180px">3</span><span class="mk" style="left:830px;top:660px">4</span>
+    <div class="bar"><span class="who"><span class="av">C</span>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="hint"><kbd>OK</kbd><b>Turn all lights off</b></span><span class="tools"><span><svg class="i"><use href="#gear"/></svg>Settings</span><span><svg class="i"><use href="#moon"/></svg>Dark</span><span><svg class="i"><use href="#pic"/></svg>Screensaver</span></span></div>
+    <div class="clock">16<em>:</em>40</div>
+    <div class="day"><span><b>Sunday</b> 1 November</span><span><b>9°</b> cloudy</span><span><b>20.2°</b> inside</span></div>
+    <div class="hours"><span>17:00<svg class="i"><use href="#cloud"/></svg><b>9°</b></span><span>18:00<svg class="i"><use href="#cloud"/></svg><b>8°</b></span><span>19:00<svg class="i"><use href="#cloud"/></svg><b>8°</b></span><span>20:00<svg class="i"><use href="#cloud"/></svg><b>7°</b></span><span class="rain">21:00<svg class="i"><use href="#rain"/></svg><b>7°</b></span><span class="rain">22:00<svg class="i"><use href="#rain"/></svg><b>6°</b></span></div>
+    <div class="mpt"><span class="lg"><svg class="i"><use href="#logo"/></svg>MPTree</span><span><b>1,284</b>installs</span><span><b>+23</b>today</span><span><b>4.6</b>rating</span></div>
+    <div class="house">
+      <div class="tile"><div class="top"><span class="ico"><svg class="i"><use href="#sunset"/></svg></span><span class="st">OFF</span></div><div><div class="t">Sunset lights</div><div class="s">Sunset 17:08, in 28 min</div></div></div>
+      <div class="tile sel"><div class="top"><span class="ico"><svg class="i"><use href="#power"/></svg></span><span class="st on" style="color:#fff">2 ON</span></div><div><div class="t">All lights off</div><div class="s">Master bedroom, Corner lamp</div></div></div>
+      <div class="tile"><div class="top"><span class="ico"><svg class="i"><use href="#alarm"/></svg></span><span class="st">OFF</span></div><div><div class="t">Alarm</div><div class="s">Wed and Thu, 08:00</div></div></div>
+      <div class="tile"><div class="top"><span class="ico"><svg class="i"><use href="#heat"/></svg></span><span class="st on">ON</span></div><div><div class="big">21°</div><div class="s">Room 20.2°, warming up</div></div></div>
+      <div class="tile"><div class="top"><span class="ico"><svg class="i"><use href="#drop"/></svg></span><span class="st" style="opacity:0">.</span></div><div><div class="big">63%</div><div class="s">Humidity, living room</div></div></div>
+      <div class="tile"><div class="top"><span class="ico"><svg class="i"><use href="#cloud"/></svg></span><span class="st" style="opacity:0">.</span></div><div><div class="big">9°</div><div class="s">De Bilt, rain from 21:00</div></div></div>
+    </div>
+    <div class="np"><span class="art"></span><span class="tx"><b>Warning Sign</b><span>Coldplay · Living room speaker</span></span><span class="btns"><span><svg class="i"><use href="#prev"/></svg></span><span class="pl"><svg class="i"><use href="#pause"/></svg></span><span><svg class="i"><use href="#next"/></svg></span></span><span class="line"><i></i></span></div>
+    <div class="apps"><div class="app a-yt"><i></i>YouTube<small>YouTube</small></div><div class="app a-npo">NPO Start<small>NPO Start</small></div><div class="app a-hbo">HBO max<small>HBO Max</small></div><div class="app a-br">BROWSER<small>Browser</small></div><div class="app a-nf">NETFLIX<small>Netflix</small></div><div class="app a-mp"><svg class="i"><use href="#logo"/></svg>MPTree<small>MPTree</small></div></div>
+  </div></div>
+  <ul class="new"><li><span><b>The clock is the picture.</b> Tall, narrow figures, the colon greyed back, so the time reads across the room. Date, outside and inside on one line under it.</span></li><li><span><b>The hours as a ruled strip.</b> Rain is shaded with fine lines instead of a dashed box.</span></li><li><span><b>The house in soft tiles</b> without borders: a round icon, a dot for ON or OFF, and below it what is on.</span></li><li><span><b>Now playing like a record</b>, with a thin line for how far into the song, and previous, pause, next.</span></li></ul>
+</section>
+
+<!-- 2 EDITORIAL -->
+<section class="board">
+  <div class="cap"><span class="n">02</span><h2>Editorial</h2><span class="k">a magazine cover</span></div>
+  <div class="frame"><div class="tv c2">
+    <span class="mk" style="left:50px;top:220px">1</span><span class="mk" style="left:50px;top:600px">2</span><span class="mk" style="left:50px;top:830px">3</span>
+    <div class="bar"><span class="who"><span class="av">C</span>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="hint"><kbd>OK</kbd><b>Shuffle all songs, MPTree on this TV</b></span><span class="tools"><span><svg class="i"><use href="#gear"/></svg>Settings</span><span><svg class="i"><use href="#moon"/></svg>Dark</span><span><svg class="i"><use href="#pic"/></svg>Screensaver</span></span></div>
+    <div class="mast"><span><b>The Living Room</b> · Sunday edition</span><span>1 November 2026</span><span>De Bilt</span></div>
+    <p class="lede">Good afternoon. It is <b>16:40</b>, a cloudy <b>9°</b> outside and <b>20.2°</b> in here. The sun sets in <i>half an hour</i>.</p>
+    <div class="cols">
+      <div class="col"><div class="h">Tonight</div>Rain from <b>21:00</b>, about <b>6°</b>. The heating is <b>on</b> at 21° and warming up.</div>
+      <div class="col"><div class="h">The house</div><b>2 lights</b> are on: Master bedroom and the corner lamp. The Wednesday alarm is <b>off</b>.</div>
+      <div class="col"><div class="h">MPTree</div><b>1,284</b> installs, <b>23</b> of them today. Rated <b>4.6</b>.</div>
+    </div>
+    <div class="acts"><span>Sunset lights</span><span>All lights off</span><span>Heating</span><span>Alarm</span><span class="sel">Shuffle music</span></div>
+    <div class="applist"><span>YouTube</span><span>NPO Start</span><span>HBO Max</span><span>Browser</span><span>Netflix</span><span>MPTree</span><span>+ Add</span></div>
+  </div></div>
+  <ul class="new"><li><span><b>A cover line in a serif</b>, set big: the time, the weather and the sun in one sentence. The numbers are black, the words around them grey.</span></li><li><span><b>Three short columns</b> under a masthead: tonight, the house, MPTree.</span></li><li><span><b>The buttons are italic words</b>, underlined; the selected one turns black. Apps run along the foot like a contents line.</span></li></ul>
+</section>
+
+<!-- 3 CINEMA -->
+<section class="board">
+  <div class="cap"><span class="n">03</span><h2>Cinema</h2><span class="k">the chosen app fills the room</span></div>
+  <div class="frame"><div class="tv dark c3">
+    <div class="backdrop"></div>
+    <span class="mk" style="left:60px;top:210px">1</span><span class="mk" style="left:60px;top:600px">2</span><span class="mk" style="left:60px;top:960px">3</span>
+    <div class="bar"><span class="who"><span class="av">C</span>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="hint"><kbd>OK</kbd><b>Open Netflix</b></span><span class="tools"><span><svg class="i"><use href="#gear"/></svg>Settings</span><span><svg class="i"><use href="#sunico"/></svg>Light</span><span><svg class="i"><use href="#pic"/></svg>Screensaver</span></span></div>
+    <div class="feature"><div class="kick">Selected</div><h3>Netflix</h3><p>OK opens it. Hold OK to move it on Home.</p></div>
+    <div class="clockline"><b>21:14</b><span>7° rain · 20.4° inside</span></div>
+    <div class="row">
+      <div class="card"><span class="glyph">Yt</span>YouTube</div>
+      <div class="card"><span class="glyph">N</span>NPO Start</div>
+      <div class="card"><span class="glyph">H</span>HBO Max</div>
+      <div class="card"><span class="glyph">B</span>Browser</div>
+      <div class="card sel"><span class="glyph">NETFLIX</span>Netflix</div>
+      <div class="card"><span class="glyph" style="opacity:.25"><svg class="i" style="width:84px;height:84px"><use href="#logo"/></svg></span>MPTree</div>
+    </div>
+    <div class="dock"><div class="chips"><span class="chip"><span class="d off"></span>Sunset lights</span><span class="chip">All lights off · 2 on</span><span class="chip"><span class="d"></span>Heating 21°</span><span class="chip"><span class="d off"></span>Alarm</span><span class="chip"><svg class="i" style="width:22px;height:22px"><use href="#pause"/></svg><span class="ttl">Warning Sign (320) (1) (from the album A Rush Of Blood…</span></span></div><span class="nums"><span><b>1,284</b> installs</span><span><b>+23</b></span></span></div>
+  </div></div>
+  <ul class="new"><li><span><b>The selected app gets the stage:</b> its name huge at the top left, and a soft light behind it. Move along the row and the name changes with you.</span></li><li><span><b>Cards stand on one line</b>; the chosen one rises and turns white. The time sits quietly at the right.</span></li><li><span><b>The house as small chips</b> along the bottom. A long song title stops at the edge instead of pushing the screen.</span></li></ul>
+</section>
+
+<!-- 4 SKY -->
+<section class="board">
+  <div class="cap"><span class="n">04</span><h2>Sky</h2><span class="k">a window onto the weather</span></div>
+  <div class="frame"><div class="tv c4">
+    <div class="sky"></div><span class="cl" style="left:120px;top:110px;width:820px;height:220px"></span><span class="cl" style="left:1000px;top:250px;width:700px;height:180px"></span><span class="cl" style="left:620px;top:380px;width:520px;height:140px;opacity:.7"></span><span class="sun"></span>
+    <span class="h h3"></span><span class="h h2"></span><span class="h h1"></span>
+    <span class="mk" style="left:40px;top:190px">1</span><span class="mk" style="left:40px;top:470px">2</span><span class="mk" style="left:1240px;top:180px">3</span>
+    <div class="bar"><span class="who glass" style="border-radius:34px"><span class="av">C</span>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="hint"><kbd>OK</kbd><b>Open the music controls</b></span><span class="tools"><span><svg class="i"><use href="#gear"/></svg>Settings</span><span><svg class="i"><use href="#moon"/></svg>Dark</span><span><svg class="i"><use href="#pic"/></svg>Screensaver</span></span></div>
+    <div class="time">16:40</div>
+    <div class="sub"><span><b>9°</b> cloudy</span><span><b>20.2°</b> inside</span><span>Sun sets in <b>28 min</b></span></div>
+    <div class="hrs glass"><span>17:00<svg class="i"><use href="#sunset"/></svg><b>9°</b></span><span>18:00<svg class="i"><use href="#cloud"/></svg><b>8°</b></span><span>19:00<svg class="i"><use href="#cloud"/></svg><b>8°</b></span><span>20:00<svg class="i"><use href="#cloud"/></svg><b>7°</b></span><span class="rain">21:00<svg class="i"><use href="#rain"/></svg><b>7°</b></span><span class="rain">22:00<svg class="i"><use href="#rain"/></svg><b>6°</b></span></div>
+    <div class="side">
+      <div class="glass gb"><span class="gi"><svg class="i"><use href="#sunset"/></svg></span><span class="tx">Sunset lights<span>Off · sunset at 17:08</span></span></div>
+      <div class="glass gb"><span class="gi"><svg class="i"><use href="#power"/></svg></span><span class="tx">All lights off<span>On now: Master bedroom, Corner lamp</span></span></div>
+      <div class="pair"><div class="glass gb"><span class="gi"><svg class="i"><use href="#heat"/></svg></span><span class="tx">Heating<span>On · 21°</span></span></div><div class="glass gb"><span class="gi"><svg class="i"><use href="#alarm"/></svg></span><span class="tx">Alarm<span>Off · Wed, Thu</span></span></div></div>
+      <div class="glass gb sel"><span class="gi"><svg class="i"><use href="#pause"/></svg></span><span class="tx"><b>Warning Sign (320) (1) (from the album A Rush Of Blood To The Head)</b><span>Playing · Living room speaker</span></span></div>
+    </div>
+    <div class="glass shelf"><div class="app a-yt"><i></i>YouTube<small>YouTube</small></div><div class="app a-npo">NPO Start<small>NPO Start</small></div><div class="app a-hbo">HBO max<small>HBO Max</small></div><div class="app a-br">BROWSER<small>Browser</small></div><div class="app a-nf">NETFLIX<small>Netflix</small></div><div class="app a-mp"><svg class="i"><use href="#logo"/></svg>MPTree<small>MPTree</small></div></div>
+  </div></div>
+  <ul class="new"><li><span><b>The time floats on the sky</b> with no panel around it; the sky itself is the background, with layered hills and a low sun before sunset.</span></li><li><span><b>The next hours</b> on one strip of frosted glass, the sunset marked at its hour.</span></li><li><span><b>The house as frosted buttons</b>, each with its state under it. The selected one turns dark glass. The apps sit on a glass shelf.</span></li></ul>
+</section>
+
+<!-- 5 DAY LINE -->
+<section class="board">
+  <div class="cap"><span class="n">05</span><h2>Day line</h2><span class="k">the day as one drawing</span></div>
+  <div class="frame"><div class="tv c5">
+    <span class="mk" style="left:40px;top:180px">1</span><span class="mk" style="left:40px;top:470px">2</span><span class="mk" style="left:1185px;top:520px">3</span>
+    <div class="bar"><span class="who"><span class="av">C</span>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="hint"><kbd>OK</kbd><b>Turn the sunset lights on now</b></span><span class="tools"><span><svg class="i"><use href="#gear"/></svg>Settings</span><span><svg class="i"><use href="#moon"/></svg>Dark</span><span><svg class="i"><use href="#pic"/></svg>Screensaver</span></span></div>
+    <div class="head"><div><div class="t">16:40</div><div class="d">Sunday 1 November</div></div><div class="temps"><div><b>9°</b><span>outside, cloudy</span></div><div><b>20.2°</b><span>inside, 63%</span></div></div></div>
+    <!-- 06:00 to 24:00 across 1728 px: 96 px an hour. Temperature 4° to 10° maps to y 250 to 130. -->
+    <svg class="day" width="1728" height="340" viewBox="0 -40 1728 340" aria-hidden="true">
+      <defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#ffffff"/><rect width="3" height="10" fill="#d4d6da"/></pattern>
+        <linearGradient id="tfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0e10" stop-opacity=".10"/><stop offset="1" stop-color="#0d0e10" stop-opacity="0"/></linearGradient></defs>
+      <rect x="1440" y="40" width="192" height="210" fill="url(#hatch)"/>
+      <text x="1536" y="30" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="18" fill="#6b6e75">rain</text>
+      <path d="M0 230 C 96 230, 192 220, 288 200 S 576 150, 672 150 S 864 160, 960 170 S 1152 190, 1248 200 S 1440 220, 1536 225 S 1728 232, 1728 232 L1728 250 L0 250 Z" fill="url(#tfill)"/>
+      <path d="M0 230 C 96 230, 192 220, 288 200 S 576 150, 672 150 S 864 160, 960 170 S 1152 190, 1248 200 S 1440 220, 1536 225 S 1728 232, 1728 232" fill="none" stroke="#9a9da3" stroke-width="2.5"/>
+      <line x1="0" y1="250" x2="1728" y2="250" stroke="#e2e4e7" stroke-width="3"/>
+      <rect x="1069" y="250" width="659" height="8" fill="#0d0e10" opacity=".07"/>
+      <path d="M144 250 C 400 -30, 820 -30, 1069 250" fill="none" stroke="#0d0e10" stroke-width="4"/>
+      <circle cx="1000" cy="150" r="20" fill="#0d0e10"/><text x="1000" y="112" text-anchor="middle" font-family="Instrument Sans, sans-serif" font-size="24" font-weight="600" fill="#0d0e10">now</text>
+      <line x1="1000" y1="172" x2="1000" y2="250" stroke="#0d0e10" stroke-width="2" stroke-dasharray="4 6"/>
+      <line x1="192" y1="236" x2="192" y2="264" stroke="#0d0e10" stroke-width="3"/><text x="198" y="290" font-family="IBM Plex Mono, monospace" font-size="17" fill="#0d0e10">08:00 alarm (off)</text>
+      <g font-family="IBM Plex Mono, monospace" font-size="20" fill="#9a9da3"><text x="0" y="290">06</text><text x="384" y="290">10</text><text x="768" y="290">14</text><text x="1152" y="290">18</text><text x="1536" y="290">22</text></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="19" fill="#0d0e10" text-anchor="middle"><text x="288" y="188">7°</text><text x="672" y="138">9°</text><text x="1248" y="188">8°</text><text x="1536" y="213">6°</text></g>
+      <text x="126" y="222" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="18" fill="#0d0e10">07:32</text>
+    </svg>
+    <div class="sunbtn"><b><svg class="i"><use href="#sunset"/></svg>Sunset lights · 17:08</b><span>Off now · OK turns them on</span></div>
+    <div class="pills"><span class="pill">All lights off <span class="m">2 ON</span></span><span class="pill">Heating <span class="m">ON 21°</span></span><span class="pill">Alarm <span class="m">OFF</span></span><span class="pill"><svg class="i"><use href="#pause"/></svg>Warning Sign</span><span class="nums"><span><b>1,284</b> installs</span><span><b>+23</b> today</span></span></div>
+    <div class="apps"><div class="app a-yt"><i></i>YouTube<small>YouTube</small></div><div class="app a-npo">NPO Start<small>NPO Start</small></div><div class="app a-hbo">HBO max<small>HBO Max</small></div><div class="app a-br">BROWSER<small>Browser</small></div><div class="app a-nf">NETFLIX<small>Netflix</small></div><div class="app a-mp"><svg class="i"><use href="#logo"/></svg>MPTree<small>MPTree</small></div></div>
+  </div></div>
+  <ul class="new"><li><span><b>Time, outside and inside</b> as three big figures.</span></li><li><span><b>One drawing of the day</b>, 06:00 to midnight: the sun's arc with a dot for now, the temperature as a soft shaded curve under it, rain as a hatched block, and the alarm marked at 08:00.</span></li><li><span><b>Sunset lights</b> stays pinned where the sun goes down.</span></li></ul>
+</section>
+
+<!-- 6 WITHOUT HOME ASSISTANT -->
+<section class="board">
+  <div class="cap"><span class="n">06</span><h2>Without Home Assistant</h2><span class="k">Classic, switched off</span></div>
+  <div class="frame"><div class="tv c6">
+    <span class="mk" style="left:40px;top:200px">1</span><span class="mk" style="left:1220px;top:200px">2</span>
+    <div class="bar"><span class="who"><span class="av">C</span>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="hint"><kbd>OK</kbd><b>Shuffle all songs, MPTree on this TV</b></span><span class="tools"><span><svg class="i"><use href="#gear"/></svg>Settings</span><span><svg class="i"><use href="#moon"/></svg>Dark</span><span><svg class="i"><use href="#pic"/></svg>Screensaver</span></span></div>
+    <div class="greet">Good evening, Caelan. <i>It's 21:14.</i></div>
+    <div class="meta"><span><b>Sunday</b> 1 November</span><span><b>1,284</b> MPTree installs</span></div>
+    <div class="music"><span class="rec"></span><div><h4>Shuffle music</h4><p>All your songs, from MPTree on this TV</p><span class="go"><svg class="i"><use href="#shuffle"/></svg>Shuffle all</span></div></div>
+    <div class="apps"><div class="app a-yt"><i></i>YouTube<small>YouTube</small></div><div class="app a-npo">NPO Start<small>NPO Start</small></div><div class="app a-hbo">HBO max<small>HBO Max</small></div><div class="app a-br">BROWSER<small>Browser</small></div><div class="app a-nf">NETFLIX<small>Netflix</small></div><div class="app a-mp"><svg class="i"><use href="#logo"/></svg>MPTree<small>MPTree</small></div></div>
+  </div></div>
+  <ul class="new"><li><span><b>No house, no reminders.</b> With Home Assistant off, the space goes to a greeting, the date and your numbers.</span></li><li><span><b>Music gets the room</b>: one big card that shuffles all your songs in MPTree on the TV. The other four layouts drop the house the same way.</span></li></ul>
+</section>
+
+</div>
+
+<script>
+// Fit each 1920×1080 screen into its frame.
+(function () {
+  const fit = () => document.querySelectorAll(".frame").forEach(f => f.style.setProperty("--s", f.clientWidth / 1920));
+  fit();
+  window.addEventListener("resize", fit);
+})();
+</script>
