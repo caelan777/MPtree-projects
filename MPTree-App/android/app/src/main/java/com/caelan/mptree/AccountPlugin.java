@@ -4,7 +4,11 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.app.UiModeManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.os.Build;
 
 import androidx.activity.result.ActivityResult;
@@ -104,6 +108,13 @@ public class AccountPlugin extends Plugin {
                 : AccountManager.newChooseAccountIntent(null, null, types, true, null, null, null, null);
     }
 
+    private boolean isTv() {
+        Context ctx = getContext();
+        UiModeManager ui = (UiModeManager) ctx.getSystemService(Context.UI_MODE_SERVICE);
+        return (ui != null && ui.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
+            || ctx.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+    }
+
     private AuthorizationClient client() {
         return Identity.getAuthorizationClient(getActivity());
     }
@@ -139,6 +150,10 @@ public class AccountPlugin extends Plugin {
      *  Resolves { token } or { cancelled: true }. */
     @PluginMethod
     public void signIn(PluginCall call) {
+        // A TV has no use for the phone's account chooser: on Google TV it opens
+        // and never answers, which left the app on "Signing in…". The TV's own
+        // Google account is the one; Play services asks it straight away.
+        if (isTv()) { authorize(call, null, true); return; }
         pending = call;
         try {
             chooser.launch(chooserIntent());
