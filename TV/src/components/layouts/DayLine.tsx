@@ -1,20 +1,21 @@
-import { AlarmClock, Pause, Play, Shuffle, Sunset } from "lucide-react";
+import { Pause, Play, Shuffle } from "lucide-react";
 import { AddTile, AppTile } from "../AppTile";
 import { HA } from "../../homeConfig";
-import { connectText, sunsetOk } from "../../home";
 import { clock, deg, longDate } from "../../format";
-import { StateTag, StatsLine, type LayoutProps } from "./parts";
+import { Nums, type DayProps } from "./parts";
 
 // The line runs from 06:00 to 24:00 across 1728 px: 96 px an hour.
 const START_H = 6;
 const PX_H = 96;
 const W = 1728;
-const BASE = 200;
+const BASE = 250;
+/** The temperature curve lives between these two heights. */
+const T_TOP = 120, T_LOW = 232;
 
 const hourOf = (d: Date) => d.getHours() + d.getMinutes() / 60;
 const xOf = (h: number) => Math.min(W, Math.max(0, (h - START_H) * PX_H));
 
-/** The time of day a Home Assistant timestamp falls on, as hours (17.2 for 17:12). */
+/** The time of day a timestamp falls on, as hours (17.2 for 17:12). */
 function hourFrom(iso: string | undefined, fallback: number): number {
   const t = Date.parse(iso ?? "");
   return Number.isFinite(t) ? hourOf(new Date(t)) : fallback;
@@ -25,46 +26,48 @@ function bezier(t: number, p0: number, p1: number, p2: number, p3: number): numb
   return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
 }
 
-/** Day line: the day from 06:00 to midnight. The sun's path with a dot for now,
- *  the temperature through the day, rain as a dashed box, the 08:00 alarm, and the
- *  Sunset lights button pinned to the moment the sun goes down. */
-export function DayLine({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
-  const rise = hourFrom(ha.states[HA.sunrise]?.state, 7.5);
-  const set = hourFrom(ha.states[HA.sunset]?.state, 17.2);
+/** A smooth line through the points (Catmull-Rom, as cubic Béziers). */
+function smooth(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return "";
+  let d = `M${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1 = { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 };
+    const c2 = { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 };
+    d += ` C ${c1.x.toFixed(1)} ${c1.y.toFixed(1)}, ${c2.x.toFixed(1)} ${c2.y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/** Day line: the day as one drawing, 06:00 to midnight. The sun's arc with a dot
+ *  for now, the temperature as a soft shaded curve under it, rain as a hatched
+ *  block, and the sunset marked where the sun goes down. */
+export function DayLine({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
+  const states = h.sunStates;
+  const rise = hourFrom(states.sunrise, 7.5);
+  const set = hourFrom(states.sunset, 17.2);
   const xr = xOf(rise), xs = xOf(set);
-  const c1 = xr + (xs - xr) * 0.28, c2 = xr + (xs - xr) * 0.72, top = -40;
+  const c1 = xr + (xs - xr) * 0.28, c2 = xr + (xs - xr) * 0.72, top = -30;
   const nowH = hourOf(now);
   const up = nowH > rise && nowH < set;
   const t = up ? (nowH - rise) / (set - rise) : 0;
   const dot = up
     ? { x: bezier(t, xr, c1, c2, xs), y: bezier(t, BASE, top, top, BASE) }
     : { x: xOf(nowH < START_H ? START_H : nowH), y: BASE };
-  // The part of the path already behind the sun, drawn heavier: the curve split
-  // at "now" (de Casteljau), so it follows the arc exactly.
-  const lerp = (a: number, b: number) => a + (b - a) * t;
-  const q1 = { x: lerp(xr, c1), y: lerp(BASE, top) };
-  const mid = { x: lerp(c1, c2), y: top };
-  const q2 = { x: q1.x + (mid.x - q1.x) * t, y: q1.y + (mid.y - q1.y) * t };
-  const done = up ? `M${xr} ${BASE} C ${q1.x} ${q1.y}, ${q2.x} ${q2.y}, ${dot.x} ${dot.y}` : "";
-  // The button sits just right of where the sun goes down, above the line, in the evening.
-  const btnLeft = Math.min(W - 400, Math.max(0, xs + 24));
 
-  // Where the arc is at a given x, so the temperatures can sit just under it.
-  const arc: { x: number; y: number }[] = [];
-  for (let i = 0; i <= 40; i++) arc.push({ x: bezier(i / 40, xr, c1, c2, xs), y: bezier(i / 40, BASE, top, top, BASE) });
-  const arcY = (x: number) => {
-    if (x <= xr || x >= xs) return BASE;
-    const j = arc.findIndex(p => p.x >= x);
-    const a = arc[Math.max(0, j - 1)], b = arc[j];
-    return a.y + (b.y - a.y) * ((x - a.x) / Math.max(1, b.x - a.x));
-  };
-
-  // Today's hours that fall on the line.
+  // Today's hours that fall on the line, with their temperatures.
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  const today = h.hours.filter(x => x.at >= dayStart.getTime() + START_H * 3_600_000 && x.at < dayStart.getTime() + 24 * 3_600_000)
-    .map(x => ({ ...x, hr: hourOf(new Date(x.at)) }));
-  const temps = today.filter(x => Math.round(x.hr) % 2 === 0 && x.temp !== null && x.at > now.getTime() - 3_600_000);
-  // Rain: one dashed box per run of rainy hours.
+  const from = dayStart.getTime() + START_H * 3_600_000, to = dayStart.getTime() + 24 * 3_600_000;
+  const today = h.allHours.filter(x => x.at >= from && x.at <= to).map(x => ({ ...x, hr: (x.at - dayStart.getTime()) / 3_600_000 }));
+  const temps = today.filter(x => x.temp !== null) as (typeof today[number] & { temp: number })[];
+  let lo = Math.min(...temps.map(x => x.temp)), hi = Math.max(...temps.map(x => x.temp));
+  if (hi - lo < 4) { const mid = (hi + lo) / 2; lo = mid - 2; hi = mid + 2; }
+  const yT = (v: number) => T_LOW - ((v - lo) / (hi - lo)) * (T_LOW - T_TOP);
+  const pts = temps.map(x => ({ x: xOf(x.hr), y: yT(x.temp) }));
+  const curve = pts.length >= 2 ? smooth(pts) : "";
+  const labels = temps.filter(x => Math.abs(x.hr % 4) < 0.01 && x.hr > START_H && x.hr < 24);
+
+  // Rain: one hatched block per run of rainy hours.
   const rain: { from: number; to: number }[] = [];
   for (const x of today) {
     if (!x.rain) continue;
@@ -73,72 +76,68 @@ export function DayLine({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, on
     else rain.push({ from: x.hr, to: x.hr + 1 });
   }
   const xAlarm = xOf(8);
-  const p = h.playing;
 
   return (
     <div className="dl">
       <div className="dl-head">
         <div><div className="t">{clock(now)}</div><div className="d">{longDate(now)}</div></div>
-        {h.ready && (
-          <div className="dl-temps">
-            <div><div className="n">{deg(h.outside, 0)}</div><div className="k">outside, {h.conditionText.toLowerCase()}</div></div>
-            <div><div className="n">{deg(h.inside)}</div><div className="k">inside{h.humidity !== null ? `, ${Math.round(h.humidity)}%` : ""}</div></div>
-          </div>
-        )}
+        <div className="dl-temps">
+          {h.hasWeather && <div><b>{deg(h.outside, 0)}</b><span>outside, {h.conditionText.toLowerCase()}</span></div>}
+          {h.inside !== null && <div><b>{deg(h.inside)}</b><span>inside{h.humidity !== null ? `, ${Math.round(h.humidity)}%` : ""}</span></div>}
+        </div>
       </div>
 
-      <svg className="dl-svg" viewBox={`0 -60 ${W} 330`} width={W} height={330} aria-hidden="true">
-        <line x1="0" y1={BASE} x2={W} y2={BASE} stroke="var(--border)" strokeWidth="3" />
-        <rect x={xs} y={BASE} width={W - xs} height="10" fill="var(--text)" opacity=".08" />
-        {rain.map(r => (
-          <g key={r.from}>
-            <rect x={xOf(r.from)} y={BASE - 50} width={Math.max(40, xOf(r.to) - xOf(r.from))} height="50" rx="10" fill="none" stroke="var(--muted)" strokeWidth="2" strokeDasharray="8 8" />
-            <text x={xOf(r.from) + Math.max(40, xOf(r.to) - xOf(r.from)) / 2} y={BASE + 26} textAnchor="middle" className="dl-rain">rain</text>
-          </g>
-        ))}
-        <path d={`M${xr} ${BASE} C ${c1} ${top}, ${c2} ${top}, ${xs} ${BASE}`} fill="none" stroke="var(--text)" strokeWidth="4" />
-        {up && <path d={done} fill="none" stroke="var(--text)" strokeWidth="12" strokeLinecap="round" opacity=".12" />}
-        {temps.map(x => {
-          const px = xOf(x.hr);
-          return <text key={x.at} x={px} y={Math.min(BASE - 22, arcY(px) + 44)} textAnchor="middle" className="dl-temp">{deg(x.temp, 0)}</text>;
+      <svg className="dl-svg" viewBox={`0 -50 ${W} 350`} width={W} height={350} aria-hidden="true">
+        <defs>
+          <pattern id="dl-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="10" height="10" fill="var(--bg)" /><rect width="3" height="10" fill="var(--border)" />
+          </pattern>
+          <linearGradient id="dl-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--text)" stopOpacity=".12" /><stop offset="1" stopColor="var(--text)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {rain.map(r => {
+          const x = xOf(r.from), w = Math.max(48, xOf(r.to) - xOf(r.from));
+          return (
+            <g key={r.from}>
+              <rect x={x} y={40} width={w} height={BASE - 40} fill="url(#dl-hatch)" />
+              <text x={x + w / 2} y={28} textAnchor="middle" className="dl-small">rain</text>
+            </g>
+          );
         })}
+        {curve && (
+          <>
+            <path d={`${curve} L${pts[pts.length - 1].x} ${BASE} L${pts[0].x} ${BASE} Z`} fill="url(#dl-fill)" />
+            <path d={curve} fill="none" stroke="var(--muted)" strokeWidth="2.5" />
+          </>
+        )}
+        <line x1="0" y1={BASE} x2={W} y2={BASE} stroke="var(--border)" strokeWidth="3" />
+        <rect x={xs} y={BASE} width={W - xs} height="8" fill="var(--text)" opacity=".07" />
+        <path d={`M${xr} ${BASE} C ${c1} ${top}, ${c2} ${top}, ${xs} ${BASE}`} fill="none" stroke="var(--text)" strokeWidth="4" />
+        {labels.map(x => <text key={x.at} x={xOf(x.hr)} y={yT(x.temp) - 14} textAnchor="middle" className="dl-temp">{deg(x.temp, 0)}</text>)}
+        <line x1={dot.x} y1={dot.y + 22} x2={dot.x} y2={BASE} stroke="var(--text)" strokeWidth="2" strokeDasharray="4 6" />
         <circle cx={dot.x} cy={dot.y} r="20" fill="var(--text)" />
         <text x={dot.x} y={dot.y - 36} textAnchor="middle" className="dl-now">now</text>
-        {[6, 10, 14, 18, 22].map(hr => <text key={hr} x={xOf(hr)} y={BASE + 44} className="dl-tick">{String(hr).padStart(2, "0")}</text>)}
-        {h.sunriseAt && <text x={xr - 12} y={BASE - 12} textAnchor="end" className="dl-mark">{h.sunriseAt}</text>}
-        {h.ready && <line x1={xAlarm} y1={BASE - 14} x2={xAlarm} y2={BASE + 14} stroke="var(--text)" strokeWidth="3" />}
-      </svg>
-      {h.ready && (
-        <div className="dl-alarm" style={{ left: 96 + xAlarm - 14 }}>
-          <AlarmClock size={24} />08:00 alarm Wed, Thu ({h.alarmOn ? "on" : "off"})
-        </div>
-      )}
-
-      {h.ready && (
-        <button className="f dl-sun" data-f="" data-ok={sunsetOk(h)} style={{ left: 96 + btnLeft }} onClick={h.sunset}>
-          <span><Sunset size={34} />Sunset lights{h.sunsetAt ? ` · ${h.sunsetAt}` : ""}</span>
-          <span className="sub">{h.sunsetLightsOn === true ? "On now · OK turns them off" : h.sunsetLightsOn === false ? "Off now · OK turns them on" : "OK switches them now"}</span>
-        </button>
-      )}
-
-      <div className="dl-acts">
-        {h.ready ? (
+        {[6, 10, 14, 18, 22].map(hr => <text key={hr} x={xOf(hr)} y={BASE + 42} className="dl-tick">{String(hr).padStart(2, "0")}</text>)}
+        {h.sunriseAt && <text x={xr - 12} y={BASE - 14} textAnchor="end" className="dl-mark">{h.sunriseAt}</text>}
+        {h.sunsetAt && <text x={xs + 14} y={BASE - 14} className="dl-mark">sunset {h.sunsetAt}</text>}
+        {h.ready && (
           <>
-            <button className="f pill" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>All lights off<span className="sub">{h.lightsOn.length ? `${h.lightsOn.length} on` : "all off"}</span></button>
-            <button className="f pill" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>Heating <StateTag on={h.heatOn} className="stt" />{h.heatOn ? deg(h.heatTarget) : ""}</button>
-            <button className="f pill" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>Alarm <StateTag on={h.alarmOn} className="stt" /></button>
+            <line x1={xAlarm} y1={BASE - 14} x2={xAlarm} y2={BASE + 14} stroke="var(--text)" strokeWidth="3" />
+            <text x={xAlarm + 8} y={BASE + 42} className="dl-small strong">{HA.alarmLabel.split(", ")[1] ?? "08:00"} alarm ({h.alarmOn ? "on" : "off"})</text>
           </>
-        ) : h.off ? null : (
-          <button className="f pill" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>{connectText(ha).title}</button>
         )}
-        {p ? (
-          <button className="f pill np-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
-            {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
+      </svg>
+
+      <div className="dl-pills">
+        {m ? (
+          <button className="f dl-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
+            {m.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{m.title}</span><span className="m">{m.where}</span>
           </button>
-        ) : h.shuffleName ? (
-          <button className="f pill" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}><Shuffle size={24} />Shuffle music</button>
+        ) : shuffle ? (
+          <button className="f dl-pill" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}><Shuffle size={24} />Shuffle music<span className="m">{shuffle.where}</span></button>
         ) : null}
-        <StatsLine stats={stats} />
+        <Nums stats={stats} className="nums dl-nums" />
       </div>
 
       <div className="dock">

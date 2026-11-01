@@ -2,14 +2,17 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { App as CapApp } from "@capacitor/app";
 import { Launcher, type TvApp } from "./launcher";
 import { DEFAULTS, LAYOUTS, defaultDock, haOn, loadSettings, saveSettings, type LayoutId, type Settings } from "./settings";
-import { useHaExtras, useHomeAssistant } from "./ha";
+import { useHaExtras, useHomeAssistant, type Ha } from "./ha";
+import { useOpenWeather } from "./weather";
+import { homeOf } from "./home";
+import { haMusic, pickMusic, tvMusic, useTvMedia, type ShuffleAll } from "./music";
 import { useMptreeStats } from "./stats";
-import { focusEl, focusFirst, useOkHint, useRemote } from "./nav";
+import { focusEl, focusFirst, focusOne, useOkHint, useRemote } from "./nav";
 import { STAGE_H, STAGE_W, nextSunChange, sunIsDown } from "./theme";
 import { HA } from "./homeConfig";
 import { clock } from "./format";
 import { TopBar, type Page } from "./components/TopBar";
-import { HomeView } from "./components/HomeView";
+import { HomeView, type Side } from "./components/HomeView";
 import { AppsView } from "./components/AppsView";
 import { SettingsView } from "./components/SettingsView";
 import { Saver } from "./components/Saver";
@@ -47,16 +50,24 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [apps, setApps] = useState<TvApp[]>([]);
   const [page, setPage] = useState<Page>("home");
+  /** Home's two pages: the day (always there) and the house (with Home Assistant). */
+  const [side, setSide] = useState<Side>("day");
   const [saver, setSaver] = useState(false);
   const [heatOpen, setHeatOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  // A toast is the message and when it was shown, so the same message twice shows twice.
+  const [toastMsg, setToastMsg] = useState<{ text: string; at: number } | null>(null);
   const s = settings ?? DEFAULTS;
 
   // Home Assistant switched off in Settings: nothing is asked of it at all.
   const useHa = haOn(s);
-  const ha = useHomeAssistant(useHa ? s.haUrl : "", useHa ? s.haToken : "");
-  const extras = useHaExtras(s.haUrl, s.haToken, HA.weather, HA.sunsetScript, useHa && ha.status === "ok");
+  const haLive = useHomeAssistant(useHa ? s.haUrl : "", useHa ? s.haToken : "");
+  const extrasLive = useHaExtras(s.haUrl, s.haToken, HA.weather, HA.sunsetScript, useHa && haLive.status === "ok");
+  // The weather and the sun without Home Assistant (Open-Meteo). Home Assistant's
+  // own win wherever it has them; the screens can't tell where they came from.
+  const wx = useOpenWeather();
+  const ha: Ha = { ...haLive, states: { ...wx.states, ...(useHa ? haLive.states : {}) } };
+  const extras = { ...extrasLive, hours: extrasLive.hours.length ? extrasLive.hours : wx.hours };
   const hint = useOkHint();
   const { stats, error: statsError } = useMptreeStats(s.statsUrl);
 
@@ -71,12 +82,12 @@ export default function App() {
   }, []);
 
   // ── toast ──
-  const toastTimer = useRef<number | undefined>(undefined);
-  const toast = useCallback((msg: string) => {
-    setToastMsg(msg);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToastMsg(null), 2600);
-  }, []);
+  const toast = useCallback((text: string) => setToastMsg({ text, at: Date.now() }), []);
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = window.setTimeout(() => setToastMsg(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [toastMsg]);
 
   // ── apps on the TV ──
   const loadApps = useCallback(() => {
@@ -118,6 +129,19 @@ export default function App() {
     Launcher.launch({ packageName: MPTREE, action: "shuffle" }).catch(() => toast("MPTree would not open"));
   }, [toast]);
 
+  // ── Home's two pages ──
+  const lastDayFocus = useRef<HTMLElement | null>(null);
+  const goSide = useCallback((next: Side) => {
+    if (next === "house") lastDayFocus.current = document.activeElement as HTMLElement | null;
+    setSide(next);
+    // Once the other page is reachable (no longer inert): back where you were, or its first thing.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const back = lastDayFocus.current;
+      if (next === "day" && back && back.isConnected && !back.closest("[inert]")) focusEl(back);
+      else focusFirst(document.querySelectorAll(".hp")[next === "house" ? 1 : 0] ?? document);
+    }));
+  }, []);
+
   const getApps = useCallback(() => {
     if (apps.some(a => a.packageName === PLAY_STORE)) Launcher.launch({ packageName: PLAY_STORE });
     else toast("The Play Store is not on this TV");
@@ -135,26 +159,30 @@ export default function App() {
   // ── Back and Home buttons ──
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
+  const sideRef = useRef(side);
+  useEffect(() => { sideRef.current = side; }, [side]);
   const heatRef = useRef(heatOpen);
   useEffect(() => { heatRef.current = heatOpen; }, [heatOpen]);
   const musicRef = useRef(musicOpen);
   useEffect(() => { musicRef.current = musicOpen; }, [musicOpen]);
   useEffect(() => {
     const back = CapApp.addListener("backButton", () => {
-      if (heatRef.current) { setHeatOpen(false); requestAnimationFrame(() => focusFirst()); return; }
-      if (musicRef.current) { setMusicOpen(false); requestAnimationFrame(() => focusFirst()); return; }
-      if (pageRef.current !== "home") setPage("home");
-      // On Home, Back does nothing: this is the home screen, there is nothing behind it.
+      if (heatRef.current) { setHeatOpen(false); requestAnimationFrame(() => focusOne("[data-heat]")); return; }
+      if (musicRef.current) { setMusicOpen(false); requestAnimationFrame(() => focusOne("[data-ok='Open the music controls'], [data-ok^='Shuffle all songs']")); return; }
+      if (pageRef.current !== "home") { setPage("home"); setSide("day"); return; }
+      if (sideRef.current === "house") { goSide("day"); return; }
+      // On Home, Back does nothing else: this is the home screen, there is nothing behind it.
     });
     const home = Launcher.addListener("home", () => {
       setSaver(false);
       setHeatOpen(false);
       setMusicOpen(false);
       setPage("home");
+      setSide("day");
       requestAnimationFrame(() => focusFirst());
     });
     return () => { back.then(h => h.remove()); home.then(h => h.remove()); };
-  }, []);
+  }, [goSide]);
 
   // ── screensaver: after a while without a key, and any key ends it ──
   const lastKey = useRef(0);
@@ -174,7 +202,8 @@ export default function App() {
     return () => window.clearInterval(t);
   }, [s.saverMinutes, s.saverStyle]);
 
-  const goPage = useCallback((p: Page) => setPage(p), []);
+  // Leaving Home and coming back starts on its first page again.
+  const goPage = useCallback((p: Page) => { setPage(p); setSide("day"); }, []);
 
   // ── dark mode: automatic with the sun, or fixed in Settings ──
   const override = s.themeOverride && s.themeOverride.until > now.getTime() ? s.themeOverride : null;
@@ -212,39 +241,50 @@ export default function App() {
 
   const closeMusic = useCallback(() => {
     setMusicOpen(false);
-    requestAnimationFrame(() => focusEl(document.querySelector<HTMLElement>(".np-main, [data-ok='Open the music controls']")));
+    requestAnimationFrame(() => focusOne("[data-ok='Open the music controls'], [data-ok^='Shuffle all songs']"));
   }, []);
 
   const closeHeat = useCallback(() => {
     setHeatOpen(false);
-    requestAnimationFrame(() => focusEl(document.querySelector<HTMLElement>("[data-heat]")));
+    requestAnimationFrame(() => focusOne("[data-heat]"));
   }, []);
 
+  // ── the house, the music ──
+  const home = homeOf(ha, extras, now, toast, s.haUrl, !useHa);
+  const tv = useTvMedia((page === "home" || page === "settings") && !saver);
+  const speaker = haMusic(home, now.getTime());
+  const music = pickMusic(tvMusic(tv.np, tv.control), speaker);
+  // Shuffle all songs: MPTree on this TV when it is there, else the speaker's script.
+  const shuffle: ShuffleAll = hasMptree
+    ? { where: "MPTree, on this TV", run: async () => mptreeShuffle() }
+    : home.shuffleName ? { where: HA.speakerLabel, run: home.shuffleMusic } : null;
+  const houseOn = useHa;
+
   return (
-    <div className={"stage" + (darkLook ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
+    <div className={"stage" + (darkLook ? " dark" : "") + (page === "home" && (side === "day" || !houseOn) ? " on-" + layout : "")} style={{ transform: `scale(${scale})` }}>
       <div inert={heatOpen || musicOpen || undefined}>
       <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver}
         onAndroidSettings={() => Launcher.openSystemSettings().catch(() => toast("The TV's settings would not open"))} hint={saver || heatOpen || musicOpen ? null : hint} />
       {page === "home" && (
         <HomeView
-          layout={layout} now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
-          onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")}
-          onOpenHeating={() => setHeatOpen(true)} onOpenMusic={() => setMusicOpen(true)} toast={toast} extras={extras} haUrl={s.haUrl}
-          haOff={!useHa} mptreeShuffle={hasMptree ? mptreeShuffle : null}
+          layout={layout} now={now} name={s.name} home={home} music={music} shuffle={shuffle} stats={stats} dock={dockApps}
+          onOpenApp={openApp} onAddApp={() => goPage("apps")} onOpenMusic={() => setMusicOpen(true)}
+          houseOn={houseOn} side={side} onSide={goSide} ha={ha} speaker={speaker}
+          onOpenHeating={() => setHeatOpen(true)} onSettings={() => goPage("settings")}
         />
       )}
       {page === "apps" && <AppsView apps={apps} dock={dock} onOpenApp={openApp} onTogglePin={togglePin} onGetApps={getApps} />}
       {page === "settings" && settings && (
         <SettingsView
-          settings={settings} onChange={change} ha={ha} stats={stats} statsError={statsError} toast={toast} onSaverNow={() => setSaver(true)}
-          apps={apps} dock={dockApps.map(a => a.packageName)} dockMax={DOCK_MAX} onSetDock={setDock} now={now}
+          settings={settings} onChange={change} ha={haLive} stats={stats} statsError={statsError} toast={toast} onSaverNow={() => setSaver(true)}
+          apps={apps} dock={dockApps.map(a => a.packageName)} dockMax={DOCK_MAX} onSetDock={setDock} now={now} tvMediaAllowed={tv.allowed}
         />
       )}
       </div>
-      {heatOpen && <HeatingPanel ha={ha} toast={toast} onClose={closeHeat} />}
-      {musicOpen && <MusicPanel ha={ha} extras={extras} haUrl={s.haUrl} toast={toast} onClose={closeMusic} />}
-      {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
-      {saver && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} />}
+      {heatOpen && <HeatingPanel ha={haLive} toast={toast} onClose={closeHeat} />}
+      {musicOpen && <MusicPanel music={side === "house" && houseOn ? speaker : music} shuffle={side === "house" && houseOn ? (home.shuffleName ? { where: HA.speakerLabel, run: home.shuffleMusic } : null) : shuffle} onClose={closeMusic} />}
+      {toastMsg && <div className="toast" role="status">{toastMsg.text}</div>}
+      {saver && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} night={s.saverNight !== false} />}
     </div>
   );
 }

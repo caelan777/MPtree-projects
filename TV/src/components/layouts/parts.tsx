@@ -1,23 +1,26 @@
-import { Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Pause, Play, Shuffle, SkipBack, SkipForward, Sun, Sunset, Wind } from "lucide-react";
+import { ChevronLeft, ChevronRight, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Pause, Play, Shuffle, SkipBack, SkipForward, Sun, Sunset, Wind } from "lucide-react";
 import { Logo } from "../Logo";
 import type { TvApp } from "../../launcher";
-import type { Ha } from "../../ha";
 import { pickHours, type Home, type Hour } from "../../home";
+import { kicker, progressAt, type Music, type ShuffleAll } from "../../music";
 import { clock, deg } from "../../format";
 import { ago, short, type MptreeStats } from "../../stats";
 
-/** What every layout gets. */
-export type LayoutProps = {
+/** What every layout gets. The layouts are Home's first page: the day, the music
+ *  and the apps. The house (Home Assistant) is the second page, HouseView. */
+export type DayProps = {
   now: Date;
-  ha: Ha;
+  /** The name typed into Settings, for the greeting. */
+  name: string;
   home: Home;
+  /** What plays on this TV or on a speaker, or null. */
+  music: Music | null;
+  /** Shuffle all songs, when nothing plays. */
+  shuffle: ShuffleAll;
   stats: MptreeStats | null;
-  statsError: string | null;
   dock: TvApp[];
   onOpenApp: (a: TvApp) => void;
   onAddApp: () => void;
-  onSettings: () => void;
-  onOpenHeating: () => void;
   /** The music panel: every control for what is playing. */
   onOpenMusic: () => void;
 };
@@ -36,13 +39,13 @@ export function WeatherIcon({ state, size }: { state: string | undefined; size: 
   }
 }
 
-/** A row of hours: time, weather, temperature. Rain is a dashed box; the hour the
- *  sun sets in shows the sunset (when `sunsetAt` is given). */
-export function Hours({ hours, now, n, className, sunsetHour }: { hours: Hour[]; now: Date; n: number; className: string; sunsetHour?: number | null }) {
+/** The next hours in a row: time, weather, temperature. Rainy hours are shaded;
+ *  the hour the sun sets in shows the sunset (when `sunsetHour` is given). */
+export function HourStrip({ hours, now, n, className, sunsetHour }: { hours: Hour[]; now: Date; n: number; className: string; sunsetHour?: number | null }) {
   const list = pickHours(hours, now, n);
   if (!list.length) return null;
   return (
-    <div className={className}>
+    <div className={"hrs " + className}>
       {list.map(h => {
         const d = new Date(h.at);
         const sun = sunsetHour != null && d.getHours() === sunsetHour && !h.rain;
@@ -58,45 +61,93 @@ export function Hours({ hours, now, n, className, sunsetHour }: { hours: Hour[];
   );
 }
 
-/** ON / OFF, in a small box. Nothing when it can't be told. */
-export function StateTag({ on, className = "state" }: { on: boolean | null; className?: string }) {
-  if (on === null) return null;
-  return <span className={className + (on ? "" : " off")}>{on ? "ON" : "OFF"}</span>;
+/** A record, or the song's cover when there is one. */
+export function Cover({ m, className }: { m: Music | null; className: string }) {
+  return m?.art ? <img className={className + " cover"} src={m.art} alt="" /> : <span className={className + " rec"} />;
 }
 
-/** The strip under the house: what is playing on a speaker. OK on the song opens
- *  the music panel (every control); previous, play/pause and next sit right next
- *  to it. When nothing plays, it offers to shuffle all songs instead. Nothing at
- *  all when neither is there. */
-export function NowPlaying({ h, onOpen, className = "np" }: { h: Home; onOpen: () => void; className?: string }) {
-  const p = h.playing;
-  if (p) {
-    return (
-      <div className={className + " np-row"}>
-        <button className="f np-main" data-f="" data-ok="Open the music controls" onClick={onOpen}>
-          {p.art ? <img className="art" src={p.art} alt="" /> : <span className="art" />}
-          <span className="sp"><b>{p.title}</b> <span>{p.artist ? `· ${p.artist} ` : ""}· {p.where}</span></span>
-        </button>
-        {p.can.prev && <button className="f nb" data-f="" data-ok="Previous song" onClick={() => h.skip("prev")} aria-label="Previous"><SkipBack size={26} /></button>}
-        <button className="f nb pp" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause} aria-label={p.playing ? "Pause" : "Play"}>
-          {p.playing ? <Pause size={26} /> : <Play size={26} />}
-        </button>
-        {p.can.next && <button className="f nb" data-f="" data-ok="Next song" onClick={() => h.skip("next")} aria-label="Next"><SkipForward size={26} /></button>}
-      </div>
-    );
-  }
-  if (!h.shuffleName) return null;
+/** Previous, play/pause and next for what is playing. */
+export function MusicButtons({ m, className = "mb" }: { m: Music; className?: string }) {
   return (
-    <button className={"f " + className} data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}>
-      <span className="art icon"><Shuffle size={30} /></span>
-      <span className="sp"><b>Shuffle music</b> <span>· all songs · {h.shuffleWhere}</span></span>
-      <span className="pp"><Play size={26} /></span>
-    </button>
+    <>
+      {m.can.prev && <button className={"f " + className} data-f="" data-ok="Previous song" onClick={() => m.skip("prev")} aria-label="Previous"><SkipBack size={28} /></button>}
+      <button className={"f " + className + " pl"} data-f="" data-ok={m.playing ? `Pause ${m.title}` : `Play ${m.title}`} onClick={m.playPause} aria-label={m.playing ? "Pause" : "Play"}>
+        {m.playing ? <Pause size={30} /> : <Play size={30} />}
+      </button>
+      {m.can.next && <button className={"f " + className} data-f="" data-ok="Next song" onClick={() => m.skip("next")} aria-label="Next"><SkipForward size={28} /></button>}
+    </>
   );
 }
 
+/** How far into the song, as a thin line. */
+export function SongLine({ m, now, className = "songline" }: { m: Music; now: Date; className?: string }) {
+  if (m.duration === null) return null;
+  return <span className={className}><i style={{ width: `${progressAt(m, now.getTime())}%` }} /></span>;
+}
+
+/**
+ * The music as one big card (Classic). What plays: the cover, the song, a line for
+ * how far, and previous, pause, next, plus every control. Nothing playing: shuffle
+ * all songs. Nothing at all when neither is there.
+ */
+export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | null; shuffle: ShuffleAll; now: Date; onOpen: () => void; className: string }) {
+  if (m) {
+    return (
+      <div className={"mcard playing " + className}>
+        <Cover m={m} className="mc-art" />
+        <div className="mc-body">
+          <div className="mc-kick">{kicker(m)}</div>
+          <h4 className="mc-title">{m.title}</h4>
+          {m.artist && <p className="mc-by">{m.artist}</p>}
+          <SongLine m={m} now={now} className="mc-line" />
+          <div className="mc-btns">
+            <MusicButtons m={m} className="mc-b" />
+            <button className="f mc-go" data-f="" data-ok="Open the music controls" onClick={onOpen}>All controls</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (!shuffle) return null;
+  return (
+    <div className={"mcard " + className}>
+      <span className="mc-rec rec" />
+      <div className="mc-body">
+        <h4 className="mc-title">Shuffle music</h4>
+        <p className="mc-by">All your songs · {shuffle.where}</p>
+        <button className="f mc-go" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}><Shuffle size={26} />Shuffle all</button>
+      </div>
+    </div>
+  );
+}
+
+/** The MPTree numbers on one line: installs, today, rating. Nothing when not set up. */
+export function Nums({ stats, className = "nums" }: { stats: MptreeStats | null; className?: string }) {
+  if (!stats) return null;
+  return (
+    <span className={className}>
+      <span className="lg"><Logo size={30} />MPTree</span>
+      <span><b>{short(stats.installs)}</b> installs</span>
+      {stats.installsToday ? <span><b>+{stats.installsToday}</b> today</span> : null}
+      {stats.rating ? <span><b>{stats.rating}</b> rating</span> : null}
+    </span>
+  );
+}
+
+/** The tab at the edge of the screen that says Right (or Left) goes to the other page. */
+export function EdgeTab({ side, label }: { side: "left" | "right"; label: string }) {
+  return (
+    <div className={"edge " + side} aria-hidden="true">
+      {side === "left" && <ChevronLeft size={28} />}
+      <span>{label}</span>
+      {side === "right" && <ChevronRight size={28} />}
+    </div>
+  );
+}
+
+/** The MPTree numbers as a card (Settings, MPTree numbers). */
 export function StatsCard({ stats, error, now }: { stats: MptreeStats | null; error: string | null; now: Date }) {
-  // Never set up: no card at all, rather than a reminder on the home screen.
+  // Never set up: no card at all, rather than a reminder.
   if (!stats && !error) return null;
   return (
     <div className="mpt">
@@ -115,18 +166,5 @@ export function StatsCard({ stats, error, now }: { stats: MptreeStats | null; er
         <div className="empty">{error ?? "Add the address of the numbers file in Settings, MPTree numbers, to see installs, rating and downloads here."}</div>
       )}
     </div>
-  );
-}
-
-/** One line of MPTree numbers, for layouts without room for the card. */
-export function StatsLine({ stats }: { stats: MptreeStats | null }) {
-  if (!stats) return null;
-  return (
-    <span className="statsline">
-      <Logo size={30} />
-      <span><b>{short(stats.installs)}</b> installs</span>
-      {stats.installsToday ? <span><b>+{stats.installsToday}</b> today</span> : null}
-      {stats.rating ? <span><b>{stats.rating}</b> rating</span> : null}
-    </span>
   );
 }

@@ -26,7 +26,12 @@ type Props = {
   dockMax: number;
   onSetDock: (next: string[]) => void;
   now: Date;
+  /** Whether Android lets the launcher see what plays on the TV; null while unknown. */
+  tvMediaAllowed: boolean | null;
 };
+
+/** The one command that lets the launcher see what plays on the TV (see MediaListener.java). */
+const LISTENER_CMD = "adb shell cmd notification allow_listener com.caelan.mptree.tv/com.caelan.mptree.tv.MediaListener";
 
 type Section = "look" | "apps" | "ha" | "numbers" | "tv";
 const SECTIONS: { id: Section; name: string; icon: ReactNode }[] = [
@@ -200,6 +205,10 @@ function Look({ settings: s, onChange, toast, onSaverNow }: Props) {
       ) : (
         <div className="lead">The TV's own screensaver starts when Android's settings say. MPTree's waits.</div>
       )}
+      {s.saverStyle !== "tv" && (
+        <Switch on={s.saverNight !== false} title="Night clock" sub="From midnight to 06:00 the screensaver is only a dim clock on black"
+          onFlip={() => onChange({ saverNight: s.saverNight === false })} />
+      )}
     </>
   );
 }
@@ -300,14 +309,14 @@ function HomeAssistant({ settings: s, onChange, ha, toast }: Props) {
 
   const on = haOn(s);
   const flip = <Switch on={on} title="Use Home Assistant"
-    sub={on ? "Home shows your lights, heating, weather and music." : "Off: Home shows the time, your apps, MPTree and its music, without the house."}
+    sub={on ? "Home gets a second page, the house: press Right at the right edge of Home." : "Off: Home shows the time, the weather, your apps and MPTree's music, without the house."}
     onFlip={() => { onChange({ haEnabled: !on }); toast(on ? "Home Assistant off" : "Home Assistant on"); }} />;
   if (!on) {
     return (
       <>
         <h3>Home Assistant</h3>
         {flip}
-        <div className="lead">The address and token stay saved, so switching it on again needs nothing else.</div>
+        <div className="lead">The address and token stay saved, so switching it on again needs nothing else. The weather then comes from Open-Meteo, for {HA.outsideLabel}.</div>
       </>
     );
   }
@@ -361,7 +370,7 @@ function Numbers({ settings: s, onChange, stats, statsError, now }: Props) {
 
 // ── This TV ──────────────────────────────────────────────────────────────────
 
-function ThisTv({ settings: s, onChange, onSaverNow }: Props) {
+function ThisTv({ settings: s, onChange, onSaverNow, tvMediaAllowed }: Props) {
   return (
     <>
       <h3>This TV</h3>
@@ -371,6 +380,18 @@ function ThisTv({ settings: s, onChange, onSaverNow }: Props) {
       <button className="f swrow" data-f="" data-ok="Show the screensaver now" onClick={onSaverNow}>
         <span>Show the screensaver now<span className="ss">To see what it looks like. Any key ends it.</span></span><span className="val">OK</span>
       </button>
+      <div className={"setstatus" + (tvMediaAllowed ? "" : " bad")}>
+        <span className="ok">{tvMediaAllowed ? <Check size={34} /> : <X size={34} />}</span>
+        <div>
+          <div className="big">{tvMediaAllowed ? "Home shows what plays on this TV" : "MPTree's song on Home: one step"}</div>
+          <div className="ss">
+            {tvMediaAllowed ? "The song in MPTree (or any app) shows on Home, with pause and skip."
+              : tvMediaAllowed === null ? "Not on a TV, or not checked yet."
+              : "Android asks for this once, from your computer, with the TV on the same network:"}
+          </div>
+          {tvMediaAllowed === false && <div className="cmd mono">{LISTENER_CMD}</div>}
+        </div>
+      </div>
       <Field id="name" label="Your name" value={s.name} ok="Change your name" hint="Shown at the top left. OK on it opens these settings." onSave={v => onChange({ name: v })} />
       <div className="lead">MPTree TV {__APP_VERSION__}</div>
     </>

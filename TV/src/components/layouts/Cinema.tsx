@@ -1,62 +1,58 @@
+import { useState } from "react";
 import { Pause, Play, Plus, Shuffle } from "lucide-react";
-import { connectText, heatLine, sunsetOk } from "../../home";
 import { clock, deg } from "../../format";
-import { StatsLine, type LayoutProps } from "./parts";
+import { Nums, type DayProps } from "./parts";
 
-/** A filled dot for on, an empty one for off, none when it can't be told. */
-function Dot({ on }: { on: boolean | null }) {
-  return on === null ? null : <span className={"dot" + (on ? "" : " off")} />;
-}
-
-/** Cinema: always dark. The apps are the stars, as tall cards; the selected one
- *  turns white and says "OK to open". The house is a row of small buttons below. */
-export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
-  const p = h.playing;
+/** Cinema: always dark. The selected app gets the stage: its name huge at the top
+ *  left, with a soft light behind it; the apps stand on one line and the chosen one
+ *  rises and turns white. The time sits quietly at the right, the music at the foot. */
+export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
+  // Which card is selected: the stage shows its name. -1 is "Add app".
+  const [sel, setSel] = useState(0);
+  const app = sel >= 0 ? dock[sel] ?? dock[0] : undefined;
+  const title = app ? app.label : "Add app";
   return (
-    <div className="cin">
-      <div className="cin-top">
+    <div className="ci">
+      <div className="ci-back" aria-hidden="true" />
+      <div className="ci-feature">
+        <div className="kick">Selected</div>
+        <h2 className={title.length > 9 ? "long" : undefined}>{title}</h2>
+        <p>{app ? "OK opens it." : "OK chooses an app to put on Home."}</p>
+      </div>
+      <div className="ci-clock">
         <b>{clock(now)}</b>
-        {h.ready && <span>{deg(h.outside, 0)} {h.conditionText.toLowerCase()} · {deg(h.inside)} inside</span>}
+        {h.hasWeather && (
+          <span>{deg(h.outside, 0)} {h.conditionText.toLowerCase()}{h.inside !== null ? ` · ${deg(h.inside)} inside` : ""}</span>
+        )}
       </div>
 
-      <div className="cin-row">
+      <div className="ci-row">
         {dock.map((a, i) => (
-          <button key={a.packageName} className="f poster" data-f="" data-ok={`Open ${a.label}`} data-default={i === 0 ? "" : undefined} onClick={() => onOpenApp(a)}>
-            <span className="ghost">{a.label.slice(0, 2)}</span>
-            {a.image && <img className={a.isBanner ? "bn" : "ic"} src={a.image} alt="" />}
+          <button key={a.packageName} className="f ci-card" data-f="" data-ok={`Open ${a.label}`} data-default={i === 0 ? "" : undefined}
+            onFocus={() => setSel(i)} onClick={() => onOpenApp(a)}>
+            {a.image ? <img className={a.isBanner ? "bn" : "ic"} src={a.image} alt="" /> : <span className="glyph">{a.label.slice(0, 2)}</span>}
             <span className="nm">{a.label}</span>
-            <span className="open">OK to open</span>
           </button>
         ))}
         {dock.length < 6 && (
-          <button className="f poster add" data-f="" data-ok="Choose an app to add to Home" onClick={onAddApp}>
+          <button className="f ci-card add" data-f="" data-ok="Choose an app to add to Home" onFocus={() => setSel(-1)} onClick={onAddApp}>
             <Plus size={44} />
             <span className="nm">Add app</span>
           </button>
         )}
       </div>
 
-      <div className="cin-bottom">
-        <div className="grp">
-          {h.ready ? (
-            <>
-              <button className="f pill" data-f="" data-ok={sunsetOk(h)} onClick={h.sunset}><Dot on={h.sunsetLightsOn} />Sunset lights</button>
-              <button className="f pill" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>All lights off{h.lightsOn.length ? <span className="sub">{h.lightsOn.length} on</span> : null}</button>
-              <button className="f pill" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}><Dot on={h.heatOn} />Heating {heatLine(h)}</button>
-              <button className="f pill" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}><Dot on={h.alarmOn} />Alarm</button>
-            </>
-          ) : h.off ? null : (
-            <button className="f pill" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>{connectText(ha).title}</button>
-          )}
-          {p ? (
-            <button className="f pill np-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
-              {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
+      <div className="ci-foot">
+        <div className="ci-chips">
+          {m ? (
+            <button className="f ci-chip" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
+              {m.playing ? <Pause size={22} /> : <Play size={22} />}<span className="ttl">{m.title}</span><span className="dim">{m.where}</span>
             </button>
-          ) : h.shuffleName ? (
-            <button className="f pill" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}><Shuffle size={24} />Shuffle music</button>
+          ) : shuffle ? (
+            <button className="f ci-chip" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}><Shuffle size={22} />Shuffle music</button>
           ) : null}
         </div>
-        <StatsLine stats={stats} />
+        <Nums stats={stats} className="nums ci-nums" />
       </div>
     </div>
   );

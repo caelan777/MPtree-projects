@@ -118,11 +118,17 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
     ready: !off && ha.status === "ok",
     /** Home Assistant is switched off in Settings: Home leaves the house out, with no "connect" prompts. */
     off,
+    /** The weather is known: from Home Assistant, or from Open-Meteo without it. */
+    hasWeather: num(weather, "temperature") !== null,
+    /** The sun is down now. */
+    night,
     outside: num(weather, "temperature"),
     condition: weather?.state,
     conditionText: CONDITION[weather?.state ?? ""] ?? weather?.state ?? "",
     inside: num(s[HA.insideTemp]),
     humidity: num(s[HA.insideHumidity]),
+    /** The next sunrise and sunset as Home Assistant (or Open-Meteo) gives them. */
+    sunStates: { sunrise: s[HA.sunrise]?.state, sunset: s[HA.sunset]?.state },
     sunsetAt: timeOf(s[HA.sunset]?.state),
     sunriseAt: timeOf(s[HA.sunrise]?.state),
     /** Minutes until the sun sets, or null when it has set. */
@@ -137,6 +143,8 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
     /** "warming up", "at temperature", or "". */
     heatDoing: !heatOn ? "" : heatAction === "heating" ? "warming up" : heatAction === "idle" ? "at temperature" : "",
     hours,
+    /** Every hour known, the ones already past today too (the Day line draws the whole day). */
+    allHours: extras.hours,
     rainAt: rainHour ? clock(new Date(rainHour.at)) : null,
     playing,
     shuffleName: shuffle ? friendly(shuffle) : null as string | null,
@@ -249,6 +257,16 @@ export function connectText(ha: Ha): { title: string; body: string } {
   if (ha.status === "unset") return { title: "Connect Home Assistant", body: "Add its address and a token in Settings, and your lights, heating and the weather show up here." };
   if (ha.status === "loading") return { title: "Connecting to Home Assistant", body: "One moment." };
   return { title: "Home Assistant can't be reached", body: (ha.error ?? "") + " Press OK to check the address and token." };
+}
+
+/** The weather as a word that fits "9° and … in De Bilt": cloudy, rainy, sunny. */
+export function weatherWord(state: string | undefined): string {
+  const w: Record<string, string> = {
+    "clear-night": "clear", cloudy: "cloudy", exceptional: "unusual", fog: "foggy", hail: "hailing", lightning: "stormy",
+    "lightning-rainy": "stormy", partlycloudy: "partly cloudy", pouring: "pouring", rainy: "rainy", snowy: "snowing",
+    "snowy-rainy": "sleety", sunny: "sunny", windy: "windy", "windy-variant": "windy",
+  };
+  return w[state ?? ""] ?? "";
 }
 
 /** "Good morning", "Good afternoon", "Good evening". */

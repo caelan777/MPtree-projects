@@ -1,32 +1,31 @@
-
+import { useEffect, useRef } from "react";
 import type { LayoutId } from "../settings";
-import { homeOf } from "../home";
-import type { HaExtras } from "../ha";
+import type { Ha } from "../ha";
+import type { Music } from "../music";
 import { Classic } from "./layouts/Classic";
 import { Editorial } from "./layouts/Editorial";
 import { Cinema } from "./layouts/Cinema";
 import { Sky } from "./layouts/Sky";
 import { DayLine } from "./layouts/DayLine";
-import type { LayoutProps } from "./layouts/parts";
+import { EdgeTab, type DayProps } from "./layouts/parts";
+import { HouseView } from "./HouseView";
 
-type Props = Omit<LayoutProps, "home"> & {
-  layout: LayoutId; toast: (m: string) => void; extras: HaExtras; haUrl: string;
-  /** Home Assistant switched off in Settings. */
-  haOff: boolean;
-  /** When MPTree is on this TV, Shuffle music starts it, shuffling all songs. */
-  mptreeShuffle: (() => void) | null;
+export type Side = "day" | "house";
+
+type Props = DayProps & {
+  layout: LayoutId;
+  /** Home Assistant is switched on: there is a House page to the right. */
+  houseOn: boolean;
+  side: Side;
+  onSide: (s: Side) => void;
+  ha: Ha;
+  /** What plays on a speaker in the house, for the House page. */
+  speaker: Music | null;
+  onOpenHeating: () => void;
+  onSettings: () => void;
 };
 
-/** Home, in whichever of the five layouts is chosen. They all show the same
- *  things and use the same buttons (src/home.ts); only the arrangement differs. */
-export function HomeView({ layout, toast, extras, haUrl, haOff, mptreeShuffle, ...rest }: Props) {
-  const home = homeOf(rest.ha, extras, rest.now, toast, haUrl, haOff);
-  if (mptreeShuffle) {
-    home.shuffleName = "MPTree";
-    home.shuffleWhere = "MPTree, on this TV";
-    home.shuffleMusic = async () => mptreeShuffle();
-  }
-  const p: LayoutProps = { ...rest, home };
+function Day({ layout, ...p }: DayProps & { layout: LayoutId }) {
   switch (layout) {
     case "editorial": return <Editorial {...p} />;
     case "cinema": return <Cinema {...p} />;
@@ -34,4 +33,39 @@ export function HomeView({ layout, toast, extras, haUrl, haOff, mptreeShuffle, .
     case "dayline": return <DayLine {...p} />;
     default: return <Classic {...p} />;
   }
+}
+
+/**
+ * Home is two pages side by side. The first is the day in the chosen layout: the
+ * time, the weather, the music and the apps. With Home Assistant switched on, the
+ * second is the house: Right at the right edge slides over to it, Left at its left
+ * edge (or Back) slides back. The page that is away can't be reached (inert).
+ */
+export function HomeView({ layout, houseOn, side, onSide, ha, speaker, onOpenHeating, onSettings, ...day }: Props) {
+  const dayRef = useRef<HTMLElement>(null);
+  const houseRef = useRef<HTMLElement>(null);
+  const at: Side = houseOn ? side : "day";
+
+  useEffect(() => {
+    const d = dayRef.current, hs = houseRef.current;
+    const toHouse = (e: Event) => { if ((e as CustomEvent<string>).detail === "right") onSide("house"); };
+    const toDay = (e: Event) => { if ((e as CustomEvent<string>).detail === "left") onSide("day"); };
+    if (houseOn) d?.addEventListener("tvedge", toHouse);
+    hs?.addEventListener("tvedge", toDay);
+    return () => { d?.removeEventListener("tvedge", toHouse); hs?.removeEventListener("tvedge", toDay); };
+  }, [houseOn, onSide]);
+
+  return (
+    <div className={"pages" + (at === "house" ? " at-house" : "")}>
+      <section className="hp" ref={dayRef} data-zone="" inert={at !== "day" || undefined}>
+        <Day layout={layout} {...day} />
+        {houseOn && <EdgeTab side="right" label="House" />}
+      </section>
+      {houseOn && (
+        <section className="hp house" ref={houseRef} data-zone="" inert={at !== "house" || undefined}>
+          <HouseView now={day.now} ha={ha} home={day.home} speaker={speaker} onOpenHeating={onOpenHeating} onOpenMusic={day.onOpenMusic} onSettings={onSettings} />
+        </section>
+      )}
+    </div>
+  );
 }

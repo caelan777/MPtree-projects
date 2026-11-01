@@ -5,14 +5,19 @@ import { short, type MptreeStats } from "../stats";
 import { clock, deg, longDate } from "../format";
 import { usePhoto } from "../photos";
 
-type Props = { now: Date; ha: Ha; stats: MptreeStats | null; photos: boolean };
+type Props = {
+  now: Date; ha: Ha; stats: MptreeStats | null; photos: boolean;
+  /** From midnight to 06:00, only a dim clock on black. */
+  night: boolean;
+};
 
 /** The screensaver: a big clock, the house and the MPTree numbers, over a photo of
  *  somewhere beautiful (Wikimedia Commons) that changes every minute. Without
  *  photos (switched off, or no internet) it is the plain white one. The text
  *  drifts a little every minute so nothing burns into the screen. */
-export function Saver({ now, ha, stats, photos }: Props) {
-  const photo = usePhoto(photos);
+export function Saver({ now, ha, stats, photos, night }: Props) {
+  const isNight = night && now.getHours() < 6;
+  const photo = usePhoto(photos && !isNight);
   const s = ha.states;
   const minute = Math.floor(now.getTime() / 60000);
   const dx = ((minute * 37) % 60) - 30;
@@ -20,16 +25,36 @@ export function Saver({ now, ha, stats, photos }: Props) {
   const lightsOn = Object.values(s).filter(e => e.entity_id.startsWith("light.") && e.entity_id !== HA.allLights && e.state === "on").length;
   const heat = s[HA.heating];
 
-  const home = ha.status === "ok" && (
+  const house = ha.status === "ok";
+  const outside = num(s[HA.weather], "temperature");
+  const home = (house || outside !== null) && (
     <>
-      <div className="lh">Home</div>
-      <div className="li"><span>Outside, {HA.outsideLabel}</span><span>{deg(num(s[HA.weather], "temperature"), 0)} {(CONDITION[s[HA.weather]?.state ?? ""] ?? "").toLowerCase()}</span></div>
-      <div className="li"><span>Inside</span><span>{deg(num(s[HA.insideTemp]))}</span></div>
-      <div className="li"><span>Heating</span><span>{heat && heat.state !== "off" ? deg(num(heat, "temperature")) : "Off"}</span></div>
-      <div className="li"><span>Lights on</span><span>{lightsOn}</span></div>
-      <div className="li"><span>Alarm, {HA.alarmLabel}</span><span>{s[HA.alarm]?.state === "on" ? "On" : "Off"}</span></div>
+      <div className="lh">{house ? "Home" : "Weather"}</div>
+      {outside !== null && <div className="li"><span>Outside, {HA.outsideLabel}</span><span>{deg(outside, 0)} {(CONDITION[s[HA.weather]?.state ?? ""] ?? "").toLowerCase()}</span></div>}
+      {house && (
+        <>
+          <div className="li"><span>Inside</span><span>{deg(num(s[HA.insideTemp]))}</span></div>
+          <div className="li"><span>Heating</span><span>{heat && heat.state !== "off" ? deg(num(heat, "temperature")) : "Off"}</span></div>
+          <div className="li"><span>Lights on</span><span>{lightsOn}</span></div>
+          <div className="li"><span>Alarm, {HA.alarmLabel}</span><span>{s[HA.alarm]?.state === "on" ? "On" : "Off"}</span></div>
+        </>
+      )}
     </>
   );
+
+  if (isNight) {
+    // Night: the clock wanders across the whole screen, a little every minute, dim.
+    const x = 160 + ((minute * 389) % 1100);
+    const y = 140 + ((minute * 241) % 620);
+    return (
+      <div className="saver night">
+        <div className="nt" style={{ transform: `translate(${x}px, ${y}px)` }}>
+          <div className="time">{clock(now)}</div>
+          <div className="date">{now.toLocaleDateString("en-GB", { weekday: "long" })}</div>
+        </div>
+      </div>
+    );
+  }
   const numbers = stats && (
     <>
       <div className="lh">MPTree</div>

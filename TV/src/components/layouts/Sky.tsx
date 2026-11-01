@@ -1,80 +1,59 @@
-import { AlarmClock, Heater, Pause, Play, Power, Shuffle, Sunset } from "lucide-react";
+import { Shuffle } from "lucide-react";
 import { AddTile, AppTile } from "../AppTile";
-import { HA } from "../../homeConfig";
-import { connectText, inTime, lightsNames, sunsetOk } from "../../home";
+import { inTime } from "../../home";
 import { short } from "../../stats";
+import { kicker } from "../../music";
 import { clock, deg, longDate } from "../../format";
-import { Hours, type LayoutProps } from "./parts";
+import { Cover, HourStrip, MusicButtons, SongLine, type DayProps } from "./parts";
 
 const CLOUDY = new Set(["cloudy", "partlycloudy", "rainy", "pouring", "fog", "snowy", "snowy-rainy", "lightning-rainy", "windy-variant"]);
 
-/** "On · ", "Off · ", or nothing when it can't be told. */
-const st = (on: boolean | null) => (on === null ? "" : on ? "On · " : "Off · ");
-
-/** Sky: the background is the weather. Grey day, a lower warmer light in the hour
- *  before sunset, dark at night (with dark mode), clouds when it is cloudy.
- *  Frosted panels float on top; every button says its state under its name. */
-export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
+/** Sky: a window onto the weather. The sky is the background (grey by day, a low
+ *  warm sun in the hour before sunset, dark at night, clouds when it is cloudy),
+ *  with layered hills. The time floats on it; the rest is frosted glass. */
+export function Sky({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
   const dusk = h.toSunset !== null && h.toSunset < 75;
   const cloudy = CLOUDY.has(h.condition ?? "");
-  const setAt = Date.parse(ha.states[HA.sunset]?.state ?? "");
-  const sunsetHour = Number.isFinite(setAt) ? new Date(setAt).getHours() : null;
-  const p = h.playing;
+  const setAt = h.sunsetAt ? Number(h.sunsetAt.slice(0, 2)) : null;
 
   return (
-    <div className={"sky" + (dusk ? " dusk" : "") + (cloudy ? " cloudy" : "")}>
-      <div className="sky-bg" aria-hidden="true">
-        <span className="orb" /><span className="cloud c1" /><span className="cloud c2" /><span className="cloud c3" />
-        <span className="hill h1" /><span className="hill h2" />
+    <div className={"sk" + (dusk ? " dusk" : "") + (cloudy ? " cloudy" : "")}>
+      <div className="sk-bg" aria-hidden="true">
+        <span className="cloud c1" /><span className="cloud c2" /><span className="cloud c3" />
+        <span className="sun" />
+        <span className="hill h3" /><span className="hill h2" /><span className="hill h1" />
       </div>
 
-      <div className="glass sky-clock">
-        <div className="t">{clock(now)}</div>
-        <div className="d">{longDate(now)}</div>
-        {h.ready && (
-          <div className="w">
-            <span><b>{deg(h.outside, 0)}</b> {h.conditionText.toLowerCase()}</span>
-            <span><b>{deg(h.inside)}</b> inside</span>
-            {h.toSunset !== null ? <span>Sun sets in <b>{inTime(h.toSunset)}</b></span> : h.sunriseAt ? <span>Sun up at <b>{h.sunriseAt}</b></span> : null}
-          </div>
-        )}
+      <div className="sk-time">{clock(now)}</div>
+      <div className="sk-sub">
+        <span>{longDate(now)}</span>
+        {h.hasWeather && <span><b>{deg(h.outside, 0)}</b> {h.conditionText.toLowerCase()}</span>}
+        {h.inside !== null && <span><b>{deg(h.inside)}</b> inside</span>}
+        {h.toSunset !== null ? <span>Sun sets in <b>{inTime(h.toSunset)}</b></span> : h.sunriseAt ? <span>Sun up at <b>{h.sunriseAt}</b></span> : null}
       </div>
-      {h.ready && <Hours hours={h.hours} now={now} n={6} className="glass sky-fc" sunsetHour={sunsetHour} />}
+      <HourStrip hours={h.hours} now={now} n={6} className="glass sk-hrs" sunsetHour={setAt} />
 
-      <div className="sky-col">
-        {h.ready ? (
-          <>
-            <button className="f glass gbtn" data-f="" data-ok={sunsetOk(h)} onClick={h.sunset}>
-              <span className="gi"><Sunset size={34} /></span>
-              <span>Sunset lights<span className="sub">{st(h.sunsetLightsOn)}{h.sunsetAt ? `sun sets at ${h.sunsetAt}` : "the sunset lights"}</span></span>
-            </button>
-            <button className="f glass gbtn" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>
-              <span className="gi"><Power size={30} /></span><span>All lights off<span className="sub">{lightsNames(h.lightsOn)}</span></span>
-            </button>
-            <div className="sky-pair">
-              <button className="f glass gbtn" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>
-                <span className="gi"><Heater size={30} /></span><span>Heating<span className="sub">{h.heatOn ? `On · ${deg(h.heatTarget)}` : "Off"}</span></span>
-              </button>
-              <button className="f glass gbtn" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>
-                <span className="gi"><AlarmClock size={30} /></span><span>Alarm<span className="sub">{h.alarmOn ? "On" : "Off"} · Wed, Thu 08:00</span></span>
-              </button>
+      <div className="sk-side">
+        {m ? (
+          <div className="glass sk-np">
+            <div className="head">
+              <Cover m={m} className="art" />
+              <div className="tx"><span>{kicker(m)}</span><b>{m.title}</b>{m.artist && <span>{m.artist}</span>}</div>
             </div>
-          </>
-        ) : h.off ? null : (
-          <button className="f glass gbtn" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}><span>{connectText(ha).title}<span className="sub">{connectText(ha).body}</span></span></button>
-        )}
-        {p ? (
-          <button className="f glass gbtn" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
-            <span className="gi">{p.playing ? <Pause size={30} /> : <Play size={30} />}</span>
-            <span className="ell">{p.title}<span className="sub">{p.playing ? "Playing" : "Paused"} · {p.where}</span></span>
-          </button>
-        ) : h.shuffleName ? (
-          <button className="f glass gbtn" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}>
-            <span className="gi"><Shuffle size={30} /></span><span>Shuffle music<span className="sub">{h.shuffleWhere}</span></span>
+            <SongLine m={m} now={now} />
+            <div className="btns">
+              <MusicButtons m={m} className="gb-r" />
+              <button className="f glass gb-more" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>All controls</button>
+            </div>
+          </div>
+        ) : shuffle ? (
+          <button className="f glass gb" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}>
+            <span className="gi"><Shuffle size={30} /></span>
+            <span className="tx">Shuffle music<span>All your songs · {shuffle.where}</span></span>
           </button>
         ) : null}
         {stats && (
-          <div className="glass sky-stats">
+          <div className="glass sk-stats">
             <div><b>{short(stats.installs)}</b>MPTree installs</div>
             <div><b>{stats.installsToday ? `+${stats.installsToday}` : "–"}</b>today</div>
             <div><b>{stats.rating ?? "–"}</b>rating</div>
@@ -82,7 +61,7 @@ export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSett
         )}
       </div>
 
-      <div className="glass sky-dock">
+      <div className="glass sk-shelf">
         {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}
         {dock.length < 6 && <AddTile label="Add" onOpen={onAddApp} />}
       </div>

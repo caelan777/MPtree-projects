@@ -1,97 +1,31 @@
-import { AlarmClock, Heater, Power, Shuffle, Sunset } from "lucide-react";
 import { AddTile, AppTile } from "../AppTile";
-import { HA } from "../../homeConfig";
-import { connectText, greeting, heatSub, sunsetOk, sunsetSub } from "../../home";
-import { clock, deg, longDate } from "../../format";
-import { Hours, NowPlaying, StateTag, StatsCard, WeatherIcon, type LayoutProps } from "./parts";
+import { greeting } from "../../home";
+import { clock, deg } from "../../format";
+import { HourStrip, MusicCard, Nums, type DayProps } from "./parts";
 
-/** Classic: clock, the next hours and the numbers on the left; the house on the
- *  right, each tile saying what is on now; what's playing; apps below. */
-export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
-  const connect = connectText(ha);
-  const chips = h.lightsOn.slice(0, 3);
-  const more = h.lightsOn.length - chips.length;
+/** Classic: a greeting with the time in it, the day and the weather under it, the
+ *  next hours as a ruled strip, and the music as one big card. Apps below. */
+export function Classic({ now, name, home: h, music, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
+  const who = name.trim();
   return (
-    <>
-      <div className="mid">
-        <div>
-          <div className="time">{clock(now)}</div>
-          <div className="date">{longDate(now)}</div>
-          {h.ready && (
-            <div className="wx">
-              <span><b>{deg(h.outside, 0)}</b> {HA.outsideLabel}, {h.conditionText.toLowerCase()}</span>
-              <span><b>{deg(h.inside)}</b> inside</span>
-            </div>
-          )}
-          {h.ready && <Hours hours={h.hours} now={now} n={5} className="fc" />}
-          <StatsCard stats={stats} error={statsError} now={now} />
+    <div className="cl">
+      <div className="cl-left">
+        <h1 className="cl-greet">{greeting(now)}{who ? `, ${who}` : ""}. <i>It's {clock(now)}.</i></h1>
+        <div className="cl-meta">
+          <span><b>{now.toLocaleDateString("en-GB", { weekday: "long" })}</b> {now.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}</span>
+          {h.hasWeather && <span><b>{deg(h.outside, 0)}</b> {h.conditionText.toLowerCase()}</span>}
+          {h.inside !== null && <span><b>{deg(h.inside)}</b> inside</span>}
         </div>
-
-        {h.ready ? (
-          <div className="ctl">
-            <button className="f c" data-f="" data-ok={sunsetOk(h)} onClick={h.sunset}>
-              <div className="row"><Sunset size={50} /><StateTag on={h.sunsetLightsOn} /></div>
-              <div><div className="t">Sunset lights</div><div className="sub">{sunsetSub(h)}</div></div>
-            </button>
-            <button className="f c" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>
-              <Power size={50} />
-              <div>
-                <div className="t">All lights off</div>
-                {h.lightsOn.length ? (
-                  <>
-                    <div className="sub">On now:</div>
-                    <div className="chips">{chips.map(n => <i key={n}>{n}</i>)}{more > 0 && <i>+{more}</i>}</div>
-                  </>
-                ) : <div className="sub">All off now</div>}
-              </div>
-            </button>
-            <button className="f c" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>
-              <div className="row"><AlarmClock size={50} /><StateTag on={h.alarmOn} /></div>
-              <div><div className="t">Alarm</div><div className="sub">{HA.alarmLabel}</div></div>
-            </button>
-            <button className="f c" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>
-              <div className="row"><span className="sub" style={{ margin: 0 }}>Heating</span><StateTag on={h.heatOn} /></div>
-              <div>
-                <div className="big" style={{ display: "flex", alignItems: "center", gap: 12 }}><Heater size={40} />{h.heatOn ? deg(h.heatTarget) : "Off"}</div>
-                <div className="sub">{heatSub(h)}</div>
-              </div>
-            </button>
-            <div className="c">
-              <div className="sub" style={{ margin: 0 }}>Inside, living room</div>
-              <div><div className="big">{deg(h.inside)}</div><div className="sub">{h.humidity !== null ? `Humidity ${Math.round(h.humidity)}%` : " "}</div></div>
-            </div>
-            <div className="c">
-              <div className="row"><span className="sub" style={{ margin: 0 }}>Outside, {HA.outsideLabel}</span><WeatherIcon state={h.condition} size={38} /></div>
-              <div><div className="big">{deg(h.outside, 0)}</div><div className="sub">{h.conditionText || " "}{h.rainAt ? `, rain at ${h.rainAt}` : ""}</div></div>
-            </div>
-          </div>
-        ) : h.off ? (
-          // No Home Assistant: the day and the music, calmly, instead of the house.
-          <div className="solo">
-            <div className="solo-day">{greeting(now)}</div>
-            {h.shuffleName && (
-              <button className="f c solo-btn" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}>
-                <Shuffle size={50} />
-                <div><div className="t">Shuffle music</div><div className="sub">All songs · {h.shuffleWhere}</div></div>
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="ctl">
-            <button className="f c wide" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>
-              <span className="t">{connect.title}</span>
-              <span className="sub">{connect.body}</span>
-            </button>
-          </div>
-        )}
+        <HourStrip hours={h.hours} now={now} n={6} className="cl-hours" />
+        <Nums stats={stats} className="nums cl-nums" />
       </div>
 
-      {h.ready && <NowPlaying h={h} onOpen={onOpenMusic} className="np np-classic" />}
+      <MusicCard m={music} shuffle={shuffle} now={now} onOpen={onOpenMusic} className="cl-music" />
 
       <div className="dock">
         {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}
         {dock.length < 6 && <AddTile label="Add app" onOpen={onAddApp} />}
       </div>
-    </>
+    </div>
   );
 }

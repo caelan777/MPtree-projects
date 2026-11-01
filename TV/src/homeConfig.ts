@@ -18,6 +18,9 @@ export const HA = {
   /** Home Assistant's own forecast for the home location (De Bilt). */
   weather: "weather.forecast_home",
   outsideLabel: "De Bilt",
+  /** Where De Bilt is, for the weather without Home Assistant (Open-Meteo). */
+  lat: 52.1,
+  lon: 5.18,
   /** When the sun goes down and comes up next. Also drive dark mode. */
   sunset: "sensor.sun_next_setting",
   sunrise: "sensor.sun_next_rising",

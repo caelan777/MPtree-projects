@@ -16,6 +16,9 @@ import { useEffect, useState } from "react";
 //   data-group Coming into a group from outside lands on its element marked
 //              data-current (Settings: Left from a page goes back to that page's
 //              section, not to whichever section happens to be nearest).
+//   data-zone  Left and right stay inside it. When there is nothing further that
+//              way, the zone gets a "tvedge" event instead (Home slides to the
+//              House page this way, and back).
 
 /** How long OK has to be held to count as holding. */
 const LONG_MS = 550;
@@ -44,10 +47,20 @@ export function focusEl(el: HTMLElement | null | undefined): void {
   if (el.closest(".page, .set-main")) el.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
-/** Focus the element marked `data-default` in a container, else its first focusable. */
+/** Focus the element marked `data-default` in a container, else its first focusable.
+ *  Never one that can't be reached (inside something inert, like the Home page that
+ *  is slid away). */
 export function focusFirst(root: ParentNode = document): void {
-  const el = root.querySelector<HTMLElement>("[data-default]") ?? root.querySelector<HTMLElement>("[data-f]");
+  const ok = (el: HTMLElement) => !el.closest("[inert]");
+  const el = [...root.querySelectorAll<HTMLElement>("[data-default]")].find(ok)
+    ?? [...root.querySelectorAll<HTMLElement>("[data-f]")].find(ok);
   focusEl(el);
+}
+
+/** Focus the first reachable element matching `selector`, else the first thing there is. */
+export function focusOne(selector: string): void {
+  const el = [...document.querySelectorAll<HTMLElement>(selector)].find(e => !e.closest("[inert]"));
+  if (el) focusEl(el); else focusFirst();
 }
 
 export function move(dir: Dir): void {
@@ -55,10 +68,13 @@ export function move(dir: Dir): void {
   const all = focusables();
   if (!cur || !all.includes(cur)) { focusFirst(); return; }
   const a = cur.getBoundingClientRect();
+  const sideways = dir === "left" || dir === "right";
+  const zone = sideways ? cur.closest<HTMLElement>("[data-zone]") : null;
   let best: HTMLElement | null = null;
   let bestScore = Infinity;
   for (const el of all) {
     if (el === cur) continue;
+    if (zone && !zone.contains(el)) continue;
     const b = el.getBoundingClientRect();
     let primary: number, orth: number;
     if (dir === "left" || dir === "right") {
@@ -71,7 +87,6 @@ export function move(dir: Dir): void {
     if (primary < -8) continue;
     // Sideways, stay on the same row if at all possible. Up and down may drift
     // sideways more: going up from the app row should reach the tiles, not the top bar.
-    const sideways = dir === "left" || dir === "right";
     // Up and down prefer what is in the same column: something beside you in
     // another column (the Settings sections next to a page) is not "below".
     const score = Math.max(0, primary) + orth * (sideways ? 2.5 : 0.4) + (!sideways && orth > 0 ? 40 : 0);
@@ -84,6 +99,8 @@ export function move(dir: Dir): void {
       if (current && all.includes(current)) best = current;
     }
     focusEl(best);
+  } else if (zone) {
+    zone.dispatchEvent(new CustomEvent("tvedge", { detail: dir }));
   }
 }
 

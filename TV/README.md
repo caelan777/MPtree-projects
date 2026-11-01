@@ -1,8 +1,9 @@
 # MPTree TV
 
-A home screen (launcher) for the living room Android TV, in MPTree's white look:
-the clock, the MPTree numbers, Home Assistant (sunset lights, all lights off, the
-alarm, heating, inside and outside temperature) and a row of six apps.
+A home screen (launcher) for the living room Android TV, in MPTree's black and
+white look: the clock, the weather, the music, the MPTree numbers and a row of six
+apps; and, one page to the right, the house through Home Assistant (sunset lights,
+all lights off, the alarm, heating, inside temperature, the speaker).
 
 Built like the Android app: React + Vite + Capacitor, with one small native plugin.
 It is its own project on purpose; nothing is shared with `MPTree-App/` (see the root
@@ -10,76 +11,97 @@ It is its own project on purpose; nothing is shared with `MPTree-App/` (see the 
 
 Designs: `design/design.html` (first take), `design/directions.html` (ten
 directions), `design/layouts.html` (the layout picker and the Sunset switch),
-`design/v2.html` and `design/v3.html` (rounds two and three; 0.5.0 is round three).
+`design/v2.html`, `design/v3.html` and `design/v4.html` (rounds two to four; 0.6.0
+is round four).
 
-## What works in 0.5.2
+## What works in 0.6.0
 
-Built from design round three (`design/v3.html`): every screen explains itself.
+Built from design round four (`design/v4.html`): the five Homes made more
+beautiful, and Home in two pages.
 
-* **Home, in five layouts** (Settings, Look): Classic, Editorial (the day in a
-  few sentences), Cinema (dark, apps as big cards), Sky (the real sky behind
-  frosted panels) and Day line (the sun's path, with Sunset lights pinned to
-  sunset). Or a different one each day, and Cinema after dark. All show the same
-  things: clock, weather and the next hours (rain in a dashed box), inside
-  temperature, Sunset lights, All lights off (with the lights that are on, by
-  name), Heating (warming up or not), the alarm, what is playing in the house, the
-  MPTree numbers and the app row.
+* **Home is two pages.** The first is the day in the chosen layout: the time, the
+  weather and the next hours, the music and the apps. It is the same with or
+  without Home Assistant. With Home Assistant switched on there is a second page,
+  **the house**: press **Right at the right edge** of Home (a "House ›" tab at the
+  edge says so) and it slides over. **Left at its left edge**, or **Back**, slides
+  back. The top bar never slides. Leaving Home (Apps, Settings) and coming back
+  starts on the first page again.
+* **The five layouts, round four** (Settings, Look):
+  * **Classic**: "Good evening, Caelan. It's 21:14." in a serif, the date, the
+    weather and inside temperature on one line, the next hours as a ruled strip
+    (rain shaded), the MPTree numbers, and the music as one big black card (white
+    in dark mode).
+  * **Editorial**: a magazine cover. A masthead, one big serif sentence with the
+    numbers in black, three columns (tonight, music, MPTree), the buttons as italic
+    underlined words and the apps as a contents line.
+  * **Cinema** (always dark): the selected app's name huge at the top left; the
+    apps as cards, the selected one rises and turns white. The time at the right,
+    the music at the foot.
+  * **Sky**: the time floats on the sky (grey by day, a low sun before sunset,
+    dark with a moon at night, clouds when cloudy) with layered hills; the next
+    hours, the music and the numbers on frosted glass; the apps on a glass shelf.
+  * **Day line**: the day from 06:00 to midnight as one drawing: the sun's arc with
+    a dot for now, the temperature as a shaded curve, rain as a hatched block,
+    sunrise and sunset marked, the 08:00 alarm (with Home Assistant).
+* **The house page**: Sunset lights, All lights off (with the lights that are on,
+  by name), the alarm, the heating (OK opens the heating screen), inside
+  temperature and humidity, outside, each with ON/OFF; and what plays on the
+  speaker with previous, pause, next and All controls (or Shuffle music on the
+  speaker). When Home Assistant can't be reached, it says why, with a button to
+  Settings.
+* **Weather without Home Assistant.** From Open-Meteo (open-meteo.com: free, no
+  account, no key) for De Bilt, every 30 minutes: the weather now, the next hours
+  with rain, and sunrise and sunset, so dark mode, Sky and Day line work without
+  Home Assistant too. Home Assistant's own weather wins whenever it has it.
+* **MPTree's song on Home.** Whatever plays on this TV (MPTree first, any app
+  otherwise) shows on Home with previous, pause and next, read from Android's media
+  sessions every few seconds. **Once**, from a computer, Android has to allow it
+  (Android TV has no screen for this):
+
+  ```
+  adb shell cmd notification allow_listener com.caelan.mptree.tv/com.caelan.mptree.tv.MediaListener
+  ```
+
+  Settings, This TV says whether it is allowed. The launcher only reads the media
+  sessions (song, artist, play or pause), never notifications. Without it, a
+  speaker in the house (Home Assistant) still shows.
+* **The music panel** works for both: the song big, how far, previous / play-pause
+  / next, and for a speaker also shuffle, repeat and volume; Shuffle all again.
+* **Shuffle music** starts MPTree on this TV, shuffling all songs, when MPTree is
+  installed (the extra `mptree_action=shuffle`); otherwise the Home Assistant
+  shuffle script on the speaker.
+* **Night clock.** From midnight to 06:00 the screensaver is only a dim clock on
+  black that wanders a little every minute. A switch in Settings, Look (on).
+* **Typefaces**: Instrument Sans (with narrow widths for the big clocks),
+  Instrument Serif and IBM Plex Mono, bundled in the app (no internet needed).
 * **What OK does.** A line at the top says what OK will do on whatever is
-  selected: "OK Turn all lights off", "OK Move NPO Start one place left". Buttons
-  show their state (ON/OFF) apart from what pressing them does.
-* **Now playing.** When a speaker in the house plays (any `media_player` with a
-  title), a strip shows the song and where, with previous, play/pause and next.
-  OK on the song opens the **music panel**: the cover, how far into the song,
-  previous / play-pause / next, shuffle, repeat (off, all, this song), volume − /
-  +, and Shuffle all again. Each control only shows when the speaker can do it
-  (its `supported_features`). When nothing plays, the strip offers **Shuffle
-  music** (`HA.shuffleScript`, or any script with "shuffle" in its name).
-* **Sunset lights ON/OFF.** Read from the lights inside the sunset script's own
-  config (`/api/config/script/config/sunset`, needs an admin token). When that
-  can't be read, the state is left out and OK still switches them.
-* **The next hours.** Home Assistant's hourly forecast
-  (`weather.get_forecasts`, every 30 minutes).
+  selected. Buttons show their state (ON/OFF) apart from what pressing them does.
 * **Apps page.** Every app on the TV, A to Z. OK opens it; **hold OK** puts it on
   Home or takes it off (Home holds six).
 * **Top bar.** Your name opens MPTree TV's settings; **Settings** opens the TV's own
   Android settings (Wi-Fi, picture, sound).
-* **Without Home Assistant.** Settings, Home Assistant, "Use Home Assistant" switches
-  it off (it starts off until an address and token are filled in). Home then
-  leaves the house out entirely, with no "connect" prompts: the time, the apps,
-  MPTree and its music. The MPTree numbers card only shows once a numbers file is
-  set.
-* **Shuffle music** starts MPTree on this TV, shuffling all songs, when MPTree is
-  installed (it launches it with the extra `mptree_action=shuffle`); otherwise the
-  Home Assistant shuffle script on the speaker.
 * **Settings**, in sections (Up and Down pick one, Right goes in, Left comes back).
-  Text fields are buttons: OK opens them for typing, so the TV's keyboard never
-  pops up by itself:
-  * **Look**: the five layouts as pictures, dark mode and screensaver as three
-    choices each, two switches, and − / + for when the screensaver starts.
-  * **Apps on Home**: the six in order; choose one to move it left or right or
-    remove it; OK on any other app adds it.
-  * **Home Assistant**: connected or not, how many things and when last checked,
-    the address, the token (never shown), and which entity each button uses (and
-    whether Home Assistant has it).
+  Text fields are buttons: OK opens them for typing.
+  * **Look**: the five layouts, dark mode, the screensaver, the night clock.
+  * **Apps on Home**: the six in order; move, remove, add.
+  * **Home Assistant**: the on/off switch, connected or not, the address, the
+    token (never shown), and which entity each button uses.
   * **MPTree numbers**: whether they loaded, the numbers, the file's address.
-  * **This TV**: your name, the screensaver now, Android settings, the version.
-* **Dark mode.** Dark from sunset to sunrise (Home Assistant's sun), or always
-  light or dark (Settings). The Dark/Light button in the top bar flips it until the
-  next sunrise or sunset.
-* **Screensaver.** After 10 minutes, or the Screensaver button in the top bar:
-  the clock, the house and the MPTree numbers over a photo of somewhere beautiful
-  from Wikimedia Commons' Featured pictures (a new one every minute, with the
-  photographer's name). Or plain white, or the TV's own (Settings). Any key ends it.
-  Set Android's own screensaver later than MPTree's, or to never.
-* **The remote.** Arrows move focus to whatever is nearest in that direction (also
-  out of text fields: while the TV's keyboard is open it takes the arrows itself).
-  OK presses. Back goes to Home. The Home button always comes back to Home.
-* **Heating.** OK on the tile opens the heating screen: − and + change the set
-  temperature by half a degree (sent a moment after the last press), and a button
-  turns it on or off. Back or Done closes it.
+  * **This TV**: Android settings, the screensaver now, whether the song on Home is
+    allowed (and the command if not), your name, the version.
+* **Dark mode.** Dark from sunset to sunrise (Home Assistant's sun, or Open-Meteo's),
+  or always light or dark. The Dark/Light button flips it until the next sunrise or
+  sunset.
+* **Screensaver.** After 10 minutes, or the Screensaver button: the clock, the
+  weather, the house and the MPTree numbers over a photo from Wikimedia Commons'
+  Featured pictures. Or plain white, or the TV's own. Any key ends it.
+* **The remote.** Arrows move focus to whatever is nearest in that direction. OK
+  presses. Back closes a panel, then goes back to Home's first page. The Home
+  button always comes back to Home.
+* **Heating.** − and + change the set temperature by half a degree, and a button
+  turns it on or off.
 
-Not yet: MPTree itself on the TV (the player on the right, design board 06), and
-the MPTree numbers through your MPTree account instead of a file address.
+Not yet: the MPTree numbers through your MPTree account instead of a file address.
 
 ## Build and install
 
@@ -156,7 +178,11 @@ there, nowhere else.
 |---|---|
 | `src/App.tsx` | Pages, which layout and dark mode, the screensaver timer, Back and Home, the app row |
 | `src/home.ts` | What every layout shows and its buttons (sunset, lights, alarm), from Home Assistant |
-| `src/components/layouts/` | The five Home layouts |
+| `src/weather.ts` | The weather without Home Assistant (Open-Meteo), as Home Assistant states |
+| `src/music.ts` | What plays: on this TV (media sessions) or a speaker, as one shape |
+| `src/components/layouts/` | The five Home layouts (the first page) |
+| `src/components/HouseView.tsx` | The house page (the second page) |
+| `src/home.css` | Round four: the layouts, the two pages, the house page |
 | `src/photos.ts` | Screensaver photos from Wikimedia Commons |
 | `src/nav.ts` | The remote: moves focus by position on screen; hold ◀ ▶ and hold OK |
 | `src/ha.ts` | Home Assistant over REST, polled every 20 s while the screen is on |
@@ -164,7 +190,8 @@ there, nowhere else.
 | `src/stats.ts` | Reads the MPTree numbers file |
 | `src/settings.ts` | What the launcher remembers (Capacitor Preferences) |
 | `src/components/` | Top bar, Home, Apps, Settings, Screensaver, app tiles |
-| `android/.../LauncherPlugin.java` | Lists apps with their TV banners, opens them, Home button, app changes |
+| `android/.../LauncherPlugin.java` | Lists apps with their TV banners, opens them, Home button, app changes, what plays on the TV |
+| `android/.../MediaListener.java` | The notification listener Android requires before an app may see media sessions |
 | `android/.../AndroidManifest.xml` | HOME + LEANBACK_LAUNCHER, the banner, plain http allowed for Home Assistant |
 
 The screen is drawn at 1920×1080 and scaled to whatever the TV reports, so every

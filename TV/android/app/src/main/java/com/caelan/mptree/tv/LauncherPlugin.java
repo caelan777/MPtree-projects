@@ -1,6 +1,7 @@
 package com.caelan.mptree.tv;
 
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -10,6 +11,11 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.media.MediaMetadata;
+import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Base64;
 
@@ -23,6 +29,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,6 +177,150 @@ public class LauncherPlugin extends Plugin {
             call.resolve();
         } catch (Exception ex) {
             call.reject("This TV cannot start its screensaver from an app", ex);
+        }
+    }
+
+    // ── What is playing on this TV ──────────────────────────────────────────
+
+    private static final String MPTREE = "com.caelan.mptree";
+    private static final int ART_PX = 256;
+    /** The last cover sent, so it is only drawn and sent again when the song changes. */
+    private String artKey = null;
+    private String artUrl = null;
+
+    /** Every app on the TV that is playing (or paused on) something, or null when
+     *  the launcher is not allowed to see them (see MediaListener). */
+    private List<MediaController> sessions() {
+        try {
+            MediaSessionManager msm = (MediaSessionManager) getContext().getSystemService(Context.MEDIA_SESSION_SERVICE);
+            if (msm == null) return Collections.emptyList();
+            List<MediaController> list = msm.getActiveSessions(new ComponentName(getContext(), MediaListener.class));
+            return list != null ? list : Collections.<MediaController>emptyList();
+        } catch (SecurityException ex) {
+            return null;
+        }
+    }
+
+    private static boolean isPlaying(MediaController c) {
+        PlaybackState ps = c.getPlaybackState();
+        if (ps == null) return false;
+        int st = ps.getState();
+        return st == PlaybackState.STATE_PLAYING || st == PlaybackState.STATE_BUFFERING;
+    }
+
+    private static String titleOf(MediaController c) {
+        MediaMetadata md = c.getMetadata();
+        if (md == null) return null;
+        String t = md.getString(MediaMetadata.METADATA_KEY_TITLE);
+        if (t == null && md.getDescription() != null && md.getDescription().getTitle() != null) t = md.getDescription().getTitle().toString();
+        return t == null || t.isEmpty() ? null : t;
+    }
+
+    /** The one to show: what plays, MPTree first; else what is paused, MPTree first. */
+    private static MediaController pick(List<MediaController> list) {
+        MediaController best = null;
+        int bestScore = -1;
+        for (MediaController c : list) {
+            if (titleOf(c) == null) continue;
+            int score = (isPlaying(c) ? 2 : 0) + (MPTREE.equals(c.getPackageName()) ? 1 : 0);
+            if (score > bestScore) { best = c; bestScore = score; }
+        }
+        return best;
+    }
+
+    /**
+     * The song playing on this TV: { allowed, package, app, title, artist, playing,
+     * position, duration (seconds), canPrev, canNext, artKey, art }. `art` (a JPEG
+     * data URL) is left out when the page already has it: it passes the artKey it has.
+     */
+    @PluginMethod
+    public void nowPlaying(PluginCall call) {
+        JSObject ret = new JSObject();
+        List<MediaController> list = sessions();
+        ret.put("allowed", list != null);
+        MediaController c = list == null ? null : pick(list);
+        if (c == null) { call.resolve(ret); return; }
+
+        MediaMetadata md = c.getMetadata();
+        PlaybackState ps = c.getPlaybackState();
+        String pkg = c.getPackageName();
+        String title = titleOf(c);
+        String artist = md.getString(MediaMetadata.METADATA_KEY_ARTIST);
+        if (artist == null) artist = md.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
+        boolean playing = isPlaying(c);
+        ret.put("package", pkg);
+        ret.put("app", appLabel(pkg));
+        ret.put("title", title);
+        ret.put("artist", artist == null ? "" : artist);
+        ret.put("playing", playing);
+
+        long duration = md.getLong(MediaMetadata.METADATA_KEY_DURATION);
+        if (duration > 0) ret.put("duration", duration / 1000.0);
+        if (ps != null && ps.getPosition() >= 0) {
+            long pos = ps.getPosition();
+            // The position is as of its last update; while playing it has moved on since.
+            if (playing && ps.getLastPositionUpdateTime() > 0) {
+                pos += (long) ((SystemClock.elapsedRealtime() - ps.getLastPositionUpdateTime()) * ps.getPlaybackSpeed());
+            }
+            if (duration > 0) pos = Math.min(pos, duration);
+            ret.put("position", Math.max(0, pos) / 1000.0);
+        }
+        long actions = ps == null ? 0 : ps.getActions();
+        ret.put("canPrev", (actions & PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0);
+        ret.put("canNext", (actions & PlaybackState.ACTION_SKIP_TO_NEXT) != 0);
+
+        String key = pkg + "|" + title + "|" + (artist == null ? "" : artist) + "|" + md.getString(MediaMetadata.METADATA_KEY_ALBUM);
+        if (!key.equals(artKey)) {
+            Bitmap art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+            if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
+            if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
+            artUrl = art == null ? null : toJpeg(art);
+            artKey = key;
+        }
+        ret.put("artKey", key);
+        if (!key.equals(call.getString("artKey"))) ret.put("art", artUrl);
+        call.resolve(ret);
+    }
+
+    /** Play, pause, toggle, next or prev on what nowPlaying shows. */
+    @PluginMethod
+    public void mediaControl(PluginCall call) {
+        String action = call.getString("action", "toggle");
+        List<MediaController> list = sessions();
+        if (list == null) { call.reject("Not allowed to see what plays on this TV"); return; }
+        MediaController c = pick(list);
+        if (c == null) { call.reject("Nothing is playing"); return; }
+        MediaController.TransportControls tc = c.getTransportControls();
+        switch (action) {
+            case "play": tc.play(); break;
+            case "pause": tc.pause(); break;
+            case "next": tc.skipToNext(); break;
+            case "prev": tc.skipToPrevious(); break;
+            default: if (isPlaying(c)) tc.pause(); else tc.play(); break;
+        }
+        call.resolve();
+    }
+
+    private String appLabel(String pkg) {
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            return String.valueOf(pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)));
+        } catch (Exception ex) {
+            return pkg;
+        }
+    }
+
+    private static String toJpeg(Bitmap src) {
+        try {
+            int w = src.getWidth(), h = src.getHeight();
+            if (w <= 0 || h <= 0) return null;
+            float k = Math.min(1f, (float) ART_PX / Math.max(w, h));
+            Bitmap bmp = k < 1f ? Bitmap.createScaledBitmap(src, Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)), true) : src;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            bmp.compress(Bitmap.CompressFormat.JPEG, 85, out);
+            return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+        } catch (Exception ex) {
+            return null;
         }
     }
 

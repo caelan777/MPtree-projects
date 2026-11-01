@@ -3,11 +3,11 @@ import { Preferences } from "@capacitor/preferences";
 export type LayoutId = "classic" | "editorial" | "cinema" | "sky" | "dayline";
 
 export const LAYOUTS: { id: LayoutId; name: string; about: string }[] = [
-  { id: "classic", name: "Classic", about: "Clock and numbers left, the house right, apps below" },
-  { id: "editorial", name: "Editorial", about: "No tiles, the day in a few sentences" },
-  { id: "cinema", name: "Cinema", about: "Dark, with the apps as big cards" },
-  { id: "sky", name: "Sky", about: "The real sky behind frosted panels" },
-  { id: "dayline", name: "Day line", about: "The sun's path through your day" },
+  { id: "classic", name: "Classic", about: "A greeting with the time, the next hours, the music as a big card" },
+  { id: "editorial", name: "Editorial", about: "A magazine cover: the day in one big sentence" },
+  { id: "cinema", name: "Cinema", about: "Dark, the selected app fills the screen" },
+  { id: "sky", name: "Sky", about: "A window onto the weather, frosted glass" },
+  { id: "dayline", name: "Day line", about: "The whole day as one drawing" },
 ];
 
 /** Everything the launcher remembers. Kept on the TV only (Capacitor Preferences). */
@@ -31,6 +31,8 @@ export type Settings = {
   saverMinutes: number;
   /** MPTree's with photos of places around the world, MPTree's plain one, or the TV's own. */
   saverStyle: "photos" | "plain" | "tv";
+  /** From midnight to 06:00 MPTree's screensaver is only a dim clock on black. Unset means on. */
+  saverNight?: boolean;
   /** The Home layout. */
   layout: LayoutId;
   /** A different layout every day, in turn. */
