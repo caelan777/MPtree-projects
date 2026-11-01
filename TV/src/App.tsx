@@ -2,9 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { App as CapApp } from "@capacitor/app";
 import { Launcher, type TvApp } from "./launcher";
 import { DEFAULTS, LAYOUTS, defaultDock, loadSettings, saveSettings, type LayoutId, type Settings } from "./settings";
-import { useHomeAssistant } from "./ha";
+import { useHaExtras, useHomeAssistant } from "./ha";
 import { useMptreeStats } from "./stats";
-import { focusEl, focusFirst, useRemote } from "./nav";
+import { focusEl, focusFirst, useOkHint, useRemote } from "./nav";
 import { STAGE_H, STAGE_W, nextSunChange, sunIsDown } from "./theme";
 import { HA } from "./homeConfig";
 import { clock } from "./format";
@@ -52,6 +52,8 @@ export default function App() {
   const s = settings ?? DEFAULTS;
 
   const ha = useHomeAssistant(s.haUrl, s.haToken);
+  const extras = useHaExtras(s.haUrl, s.haToken, HA.weather, HA.sunsetScript, ha.status === "ok");
+  const hint = useOkHint();
   const { stats, error: statsError } = useMptreeStats(s.statsUrl);
 
   // ── settings ──
@@ -101,6 +103,9 @@ export default function App() {
       toast(`${a.label} is on Home`);
     }
   }, [dock, dockApps.length, change, toast]);
+
+  /** Apps on Home, from Settings: move one place left or right, take off, or add at the end. */
+  const setDock = useCallback((next: string[]) => change({ dock: next, dockChosen: true }), [change]);
 
   const getApps = useCallback(() => {
     if (apps.some(a => a.packageName === PLAY_STORE)) Launcher.launch({ packageName: PLAY_STORE });
@@ -167,6 +172,9 @@ export default function App() {
     : s.layout;
   // Cinema is always dark; the rest follow dark mode.
   const darkLook = dark || (page === "home" && layout === "cinema");
+  const darkOk = s.theme !== "auto"
+    ? (dark ? "Always light" : "Always dark")
+    : `${dark ? "Light" : "Dark"} until ${sunIsDown(ha.states, now, HA) ? "sunrise" : "sunset"}, then automatic`;
   const toggleDark = () => {
     if (s.theme !== "auto") {
       change({ theme: dark ? "light" : "dark" });
@@ -195,17 +203,20 @@ export default function App() {
   return (
     <div className={"stage" + (darkLook ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
       <div inert={heatOpen || undefined}>
-      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} onToggleDark={toggleDark} onSaver={startSaver} />
+      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver} hint={saver || heatOpen ? null : hint} />
       {page === "home" && (
         <HomeView
           layout={layout} now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
           onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")}
-          onOpenHeating={() => setHeatOpen(true)} toast={toast}
+          onOpenHeating={() => setHeatOpen(true)} toast={toast} extras={extras} haUrl={s.haUrl}
         />
       )}
       {page === "apps" && <AppsView apps={apps} dock={dock} onOpenApp={openApp} onTogglePin={togglePin} onGetApps={getApps} />}
       {page === "settings" && settings && (
-        <SettingsView settings={settings} onChange={change} ha={ha} statsError={statsError} hasStats={!!stats} toast={toast} onSaverNow={() => setSaver(true)} />
+        <SettingsView
+          settings={settings} onChange={change} ha={ha} stats={stats} statsError={statsError} toast={toast} onSaverNow={() => setSaver(true)}
+          apps={apps} dock={dockApps.map(a => a.packageName)} dockMax={DOCK_MAX} onSetDock={setDock} now={now}
+        />
       )}
       </div>
       {heatOpen && <HeatingPanel ha={ha} toast={toast} onClose={closeHeat} />}

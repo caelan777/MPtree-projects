@@ -9,36 +9,62 @@ It is its own project on purpose; nothing is shared with `MPTree-App/` (see the 
 `CLAUDE.md`).
 
 Designs: `design/design.html` (first take), `design/directions.html` (ten
-directions), `design/layouts.html` (the layout picker and the Sunset switch).
+directions), `design/layouts.html` (the layout picker and the Sunset switch),
+`design/v2.html` and `design/v3.html` (rounds two and three; 0.5.0 is round three).
 
-## What works in 0.4.0
+## What works in 0.5.0
 
-* **Home, in five layouts** (Settings, Layout): Classic, Editorial (the day in a
+Built from design round three (`design/v3.html`): every screen explains itself.
+
+* **Home, in five layouts** (Settings, Look): Classic, Editorial (the day in a
   few sentences), Cinema (dark, apps as big cards), Sky (the real sky behind
-  frosted panels) and Day line (the sun's path, with Sunset pinned to sunset). Or a
-  different one each day, and Cinema after dark. All show the same things: clock,
-  weather, inside temperature, Sunset, All lights off, Heating, the alarm, the
+  frosted panels) and Day line (the sun's path, with Sunset lights pinned to
+  sunset). Or a different one each day, and Cinema after dark. All show the same
+  things: clock, weather and the next hours (rain in a dashed box), inside
+  temperature, Sunset lights, All lights off (with the lights that are on, by
+  name), Heating (warming up or not), the alarm, what is playing in the house, the
   MPTree numbers and the app row.
+* **What OK does.** A line at the top says what OK will do on whatever is
+  selected: "OK Turn all lights off", "OK Move NPO Start one place left". Buttons
+  show their state (ON/OFF) apart from what pressing them does.
+* **Now playing.** When a speaker in the house plays (any `media_player` with a
+  title), a strip shows the song and where, with play/pause. When nothing plays,
+  the same place offers **Shuffle music** (`HA.shuffleScript`, or any script
+  with "shuffle" in its name).
+* **Sunset lights ON/OFF.** Read from the lights inside the sunset script's own
+  config (`/api/config/script/config/sunset`, needs an admin token). When that
+  can't be read, the state is left out and OK still switches them.
+* **The next hours.** Home Assistant's hourly forecast
+  (`weather.get_forecasts`, every 30 minutes).
 * **Apps page.** Every app on the TV, A to Z. OK opens it; **hold OK** puts it on
   Home or takes it off (Home holds six).
-* **Settings.** Your name, the Home Assistant address and token, the address of the
-  MPTree numbers file, the screensaver delay, and a way into Android's own settings.
+* **Settings**, in sections (Up and Down pick one, Right goes in, Left comes back):
+  * **Look**: the five layouts as pictures, dark mode and screensaver as three
+    choices each, two switches, and − / + for when the screensaver starts.
+  * **Apps on Home**: the six in order; choose one to move it left or right or
+    remove it; OK on any other app adds it.
+  * **Home Assistant**: connected or not, how many things and when last checked,
+    the address, the token (never shown), and which entity each button uses (and
+    whether Home Assistant has it).
+  * **MPTree numbers**: whether they loaded, the numbers, the file's address.
+  * **This TV**: your name, the screensaver now, Android settings, the version.
 * **Dark mode.** Dark from sunset to sunrise (Home Assistant's sun), or always
-  light or dark (Settings). The sun/moon button next to Settings flips it until the
+  light or dark (Settings). The Dark/Light button in the top bar flips it until the
   next sunrise or sunset.
-* **Screensaver.** After 10 minutes, or the picture button in the top bar:
+* **Screensaver.** After 10 minutes, or the Screensaver button in the top bar:
   the clock, the house and the MPTree numbers over a photo of somewhere beautiful
   from Wikimedia Commons' Featured pictures (a new one every minute, with the
   photographer's name). Or plain white, or the TV's own (Settings). Any key ends it.
   Set Android's own screensaver later than MPTree's, or to never.
-* **The remote.** Arrows move focus to whatever is nearest in that direction. OK
-  presses. Back goes to Home. The Home button always comes back to Home.
+* **The remote.** Arrows move focus to whatever is nearest in that direction (also
+  out of text fields: while the TV's keyboard is open it takes the arrows itself).
+  OK presses. Back goes to Home. The Home button always comes back to Home.
 * **Heating.** OK on the tile opens the heating screen: − and + change the set
   temperature by half a degree (sent a moment after the last press), and a button
   turns it on or off. Back or Done closes it.
 
-Not yet: MPTree itself on the TV with music synced over the internet, and a place
-to host the numbers file (see below).
+Not yet: MPTree itself on the TV (the player on the right, design board 06), and
+the MPTree numbers through your MPTree account instead of a file address.
 
 ## Build and install
 

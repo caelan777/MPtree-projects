@@ -24,9 +24,10 @@ export function AppsView({ apps, dock, onOpenApp, onTogglePin, onGetApps }: Prop
             isDefault={i === 0}
             onOpen={() => onOpenApp(a)}
             onLong={() => onTogglePin(a)}
+            ok={`Open ${a.label} · hold OK to ${dock.includes(a.packageName) ? "take it off Home" : "put it on Home"}`}
           />
         ))}
-        <AddTile label="Get apps" onOpen={onGetApps} />
+        <AddTile label="Get apps" onOpen={onGetApps} ok="Open the Play Store" />
       </div>
     </div>
   );

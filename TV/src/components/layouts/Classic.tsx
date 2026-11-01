@@ -1,13 +1,16 @@
 import { AlarmClock, Heater, Power, Sunset } from "lucide-react";
 import { AddTile, AppTile } from "../AppTile";
 import { HA } from "../../homeConfig";
-import { connectText, lightsLine } from "../../home";
+import { connectText, heatSub, sunsetOk, sunsetSub } from "../../home";
 import { clock, deg, longDate } from "../../format";
-import { StatsCard, WeatherIcon, type LayoutProps } from "./parts";
+import { Hours, NowPlaying, StateTag, StatsCard, WeatherIcon, type LayoutProps } from "./parts";
 
-/** Classic: clock and numbers on the left, the house on the right, apps below. */
+/** Classic: clock, the next hours and the numbers on the left; the house on the
+ *  right, each tile saying what is on now; what's playing; apps below. */
 export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
   const connect = connectText(ha);
+  const chips = h.lightsOn.slice(0, 3);
+  const more = h.lightsOn.length - chips.length;
   return (
     <>
       <div className="mid">
@@ -20,48 +23,59 @@ export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, 
               <span><b>{deg(h.inside)}</b> inside</span>
             </div>
           )}
+          {h.ready && <Hours hours={h.hours} now={now} n={5} className="fc" />}
           <StatsCard stats={stats} error={statsError} now={now} />
         </div>
 
         {h.ready ? (
           <div className="ctl">
-            <button className="f c" data-f="" onClick={h.sunset}>
-              <Sunset size={54} />
-              <div><div className="t">Sunset</div><div className="sub">{h.sunsetAt ? `Sun sets at ${h.sunsetAt}. OK switches the lights.` : "OK switches the sunset lights"}</div></div>
+            <button className="f c" data-f="" data-ok={sunsetOk(h)} onClick={h.sunset}>
+              <div className="row"><Sunset size={50} /><StateTag on={h.sunsetLightsOn} /></div>
+              <div><div className="t">Sunset lights</div><div className="sub">{sunsetSub(h)}</div></div>
             </button>
-            <button className="f c" data-f="" onClick={h.allOff}>
-              <Power size={54} />
-              <div><div className="t">All lights off</div><div className="sub">{lightsLine(h.lightsOn)}</div></div>
+            <button className="f c" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>
+              <Power size={50} />
+              <div>
+                <div className="t">All lights off</div>
+                {h.lightsOn.length ? (
+                  <>
+                    <div className="sub">On now:</div>
+                    <div className="chips">{chips.map(n => <i key={n}>{n}</i>)}{more > 0 && <i>+{more}</i>}</div>
+                  </>
+                ) : <div className="sub">All off now</div>}
+              </div>
             </button>
-            <button className="f c" data-f="" onClick={h.toggleAlarm}>
-              <div className="row"><AlarmClock size={54} /><span className={"state" + (h.alarmOn ? "" : " off")}>{h.alarmOn ? "ON" : "OFF"}</span></div>
+            <button className="f c" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>
+              <div className="row"><AlarmClock size={50} /><StateTag on={h.alarmOn} /></div>
               <div><div className="t">Alarm</div><div className="sub">{HA.alarmLabel}</div></div>
             </button>
-            <button className="f c" data-f="" data-heat="" onClick={onOpenHeating}>
-              <div className="row"><span className="sub" style={{ margin: 0 }}>Heating</span><span className={"state" + (h.heatOn ? "" : " off")}>{h.heatOn ? "ON" : "OFF"}</span></div>
+            <button className="f c" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>
+              <div className="row"><span className="sub" style={{ margin: 0 }}>Heating</span><StateTag on={h.heatOn} /></div>
               <div>
-                <div className="big" style={{ display: "flex", alignItems: "center", gap: 14 }}><Heater size={44} />{deg(h.heatTarget)}</div>
-                <div className="sub">Now {deg(h.heatCurrent)}. OK to change.</div>
+                <div className="big" style={{ display: "flex", alignItems: "center", gap: 12 }}><Heater size={40} />{h.heatOn ? deg(h.heatTarget) : "Off"}</div>
+                <div className="sub">{heatSub(h)}</div>
               </div>
             </button>
             <div className="c">
               <div className="sub" style={{ margin: 0 }}>Inside, living room</div>
-              <div><div className="big">{deg(h.inside)}</div><div className="sub">{h.humidity !== null ? `Humidity ${Math.round(h.humidity)}%` : " "}</div></div>
+              <div><div className="big">{deg(h.inside)}</div><div className="sub">{h.humidity !== null ? `Humidity ${Math.round(h.humidity)}%` : " "}</div></div>
             </div>
             <div className="c">
-              <div className="row"><span className="sub" style={{ margin: 0 }}>Outside, {HA.outsideLabel}</span><WeatherIcon state={h.condition} size={40} /></div>
-              <div><div className="big">{deg(h.outside, 0)}</div><div className="sub">{h.conditionText || " "}</div></div>
+              <div className="row"><span className="sub" style={{ margin: 0 }}>Outside, {HA.outsideLabel}</span><WeatherIcon state={h.condition} size={38} /></div>
+              <div><div className="big">{deg(h.outside, 0)}</div><div className="sub">{h.conditionText || " "}{h.rainAt ? `, rain at ${h.rainAt}` : ""}</div></div>
             </div>
           </div>
         ) : (
           <div className="ctl">
-            <button className="f c wide" data-f="" onClick={onSettings}>
+            <button className="f c wide" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>
               <span className="t">{connect.title}</span>
               <span className="sub">{connect.body}</span>
             </button>
           </div>
         )}
       </div>
+
+      {h.ready && <NowPlaying h={h} className="np np-classic" />}
 
       <div className="dock">
         {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}

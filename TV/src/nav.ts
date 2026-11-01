@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // Moving around with the remote. Anything marked `data-f` can take focus; the
 // arrow keys move focus to the nearest such element in that direction, by where
@@ -10,6 +10,12 @@ import { useEffect } from "react";
 //              press still moves focus.
 //   data-long  Holding OK for half a second fires "tvlong" (the Apps page pins an app this way).
 //              A short press still clicks.
+//
+// And two for explaining and grouping:
+//   data-ok    What OK does on this element, in words. Shown in the line at the top.
+//   data-group Coming into a group from outside lands on its element marked
+//              data-current (Settings: Left from a page goes back to that page's
+//              section, not to whichever section happens to be nearest).
 
 /** How long OK has to be held to count as holding. */
 const LONG_MS = 550;
@@ -67,7 +73,33 @@ export function move(dir: Dir): void {
     const score = Math.max(0, primary) + orth * (dir === "left" || dir === "right" ? 2.5 : 0.4);
     if (score < bestScore) { bestScore = score; best = el; }
   }
-  if (best) focusEl(best);
+  if (best) {
+    const group = best.closest<HTMLElement>("[data-group]");
+    if (group && !group.contains(cur)) {
+      const current = group.querySelector<HTMLElement>("[data-current]");
+      if (current && all.includes(current)) best = current;
+    }
+    focusEl(best);
+  }
+}
+
+/** What OK does on the focused element, from its data-ok, kept up to date as
+ *  focus moves and as the element changes (an ON switch becoming OFF). */
+export function useOkHint(): string | null {
+  const [hint, setHint] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () => {
+      const el = document.activeElement as HTMLElement | null;
+      setHint(el?.closest<HTMLElement>("[data-ok]")?.dataset.ok ?? null);
+    };
+    const obs = new MutationObserver(read);
+    obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-ok"] });
+    document.addEventListener("focusin", read);
+    document.addEventListener("focusout", read);
+    read();
+    return () => { obs.disconnect(); document.removeEventListener("focusin", read); document.removeEventListener("focusout", read); };
+  }, []);
+  return hint;
 }
 
 /**
@@ -87,10 +119,10 @@ export function useRemote(onKey?: (e: KeyboardEvent) => boolean): void {
       if (onKey?.(e)) { e.preventDefault(); return; }
       const cur = document.activeElement as HTMLElement | null;
       const dir = ARROWS[e.key];
-      const typing = cur instanceof HTMLInputElement;
 
       if (dir) {
-        if (typing && (dir === "left" || dir === "right")) return;
+        // Text fields: while the TV's keyboard is open it takes the arrows itself,
+        // so an arrow that reaches us means nobody is typing: move, like anywhere else.
         e.preventDefault();
         if (cur?.hasAttribute("data-hold") && (dir === "left" || dir === "right")) {
           if (!e.repeat) { pendingDir = dir; held = false; return; }

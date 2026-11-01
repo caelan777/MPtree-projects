@@ -23,4 +23,8 @@ export const HA = {
   sunrise: "sensor.sun_next_rising",
   /** "above_horizon" or "below_horizon", when the sun integration provides it. */
   sun: "sun.sun",
+  /** "Shuffle music living room": starts all songs, shuffled, on the living room speaker.
+   *  When this id is missing, any script with "shuffle" in its name is used. */
+  shuffleScript: "script.shuffle_alle_nummers",
+  speakerLabel: "Living room speaker",
 };

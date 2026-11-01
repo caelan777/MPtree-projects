@@ -20,7 +20,7 @@ function base(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
-async function request(url: string, token: string, path: string, body?: unknown): Promise<unknown> {
+export async function request(url: string, token: string, path: string, body?: unknown): Promise<unknown> {
   const res = await fetch(base(url) + path, {
     method: body === undefined ? "GET" : "POST",
     headers: { Authorization: `Bearer ${token.trim()}`, "Content-Type": "application/json" },
@@ -42,6 +42,7 @@ export function useHomeAssistant(url: string, token: string) {
   const [states, setStates] = useState<States>({});
   const [status, setStatus] = useState<HaStatus>(url && token ? "loading" : "unset");
   const [error, setError] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const configured = !!(url && token);
   // The latest address and token, for calls made from timers and key handlers.
   const cfg = useRef({ url, token });
@@ -56,6 +57,7 @@ export function useHomeAssistant(url: string, token: string) {
       setStates(next);
       setStatus("ok");
       setError(null);
+      setCheckedAt(Date.now());
       return { ok: true, count: Object.keys(next).length };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -93,7 +95,7 @@ export function useHomeAssistant(url: string, token: string) {
     setStates(s => s[id] ? { ...s, [id]: { ...s[id], ...change, attributes: { ...s[id].attributes, ...(change.attributes ?? {}) } } } : s);
   }, []);
 
-  return { states, status: configured ? status : ("unset" as HaStatus), error, call, refresh, patch };
+  return { states, status: configured ? status : ("unset" as HaStatus), error, checkedAt, call, refresh, patch };
 }
 
 export type Ha = ReturnType<typeof useHomeAssistant>;
@@ -111,3 +113,72 @@ export const CONDITION: Record<string, string> = {
   lightning: "Thunder", "lightning-rainy": "Thunder and rain", partlycloudy: "Partly cloudy", pouring: "Heavy rain",
   rainy: "Rain", snowy: "Snow", "snowy-rainy": "Sleet", sunny: "Sunny", windy: "Windy", "windy-variant": "Windy, cloudy",
 };
+
+// ── Things Home Assistant only gives when asked ──────────────────────────────
+
+/** One hour of the forecast. */
+export type Hour = { at: number; condition: string; temp: number | null; rain: boolean };
+
+const RAINY = new Set(["rainy", "pouring", "lightning-rainy", "snowy-rainy", "hail"]);
+
+function toHours(list: unknown): Hour[] {
+  if (!Array.isArray(list)) return [];
+  return list.map((f: Record<string, unknown>) => {
+    const at = Date.parse(String(f.datetime ?? ""));
+    const condition = String(f.condition ?? "");
+    const temp = typeof f.temperature === "number" ? f.temperature : null;
+    const mm = typeof f.precipitation === "number" ? f.precipitation : 0;
+    const chance = typeof f.precipitation_probability === "number" ? f.precipitation_probability : null;
+    const rain = RAINY.has(condition) || mm >= 0.3 || (chance !== null && chance >= 60);
+    return { at, condition, temp, rain };
+  }).filter(h => Number.isFinite(h.at));
+}
+
+/** Every light a script switches, read from the script's own config, so "Sunset
+ *  lights" can say whether they are on. Empty when it can't be read. */
+function lightsIn(node: unknown, out = new Set<string>()): Set<string> {
+  if (typeof node === "string") { if (/^light\.[a-z0-9_]+$/.test(node)) out.add(node); }
+  else if (Array.isArray(node)) node.forEach(n => lightsIn(n, out));
+  else if (node && typeof node === "object") Object.values(node).forEach(v => lightsIn(v, out));
+  return out;
+}
+
+/** The hourly forecast (every 30 minutes) and the lights in the sunset script (once). */
+export function useHaExtras(url: string, token: string, weatherId: string, scriptId: string, ok: boolean) {
+  const [hours, setHours] = useState<Hour[]>([]);
+  const [scriptLights, setScriptLights] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!ok || !url || !token) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        // Home Assistant 2023.9 and later: a service that answers. Older ones kept it in an attribute.
+        const res = await request(url, token, "/api/services/weather/get_forecasts?return_response", { entity_id: weatherId, type: "hourly" }) as
+          { service_response?: Record<string, { forecast?: unknown }> };
+        if (alive) setHours(toHours(res.service_response?.[weatherId]?.forecast));
+      } catch {
+        try {
+          const st = await request(url, token, `/api/states/${weatherId}`) as EntityState;
+          if (alive) setHours(toHours(st.attributes.forecast));
+        } catch { /* no forecast: the screens leave it out */ }
+      }
+    };
+    load();
+    const t = window.setInterval(load, 30 * 60_000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [ok, url, token, weatherId]);
+
+  useEffect(() => {
+    if (!ok || !url || !token) return;
+    let alive = true;
+    request(url, token, `/api/config/script/config/${scriptId.replace(/^script\./, "")}`)
+      .then(cfg => { if (alive) setScriptLights([...lightsIn(cfg)]); })
+      .catch(() => { /* not an admin token, or a script made in YAML: the state is left out */ });
+    return () => { alive = false; };
+  }, [ok, url, token, scriptId]);
+
+  return { hours, scriptLights };
+}
+
+export type HaExtras = ReturnType<typeof useHaExtras>;

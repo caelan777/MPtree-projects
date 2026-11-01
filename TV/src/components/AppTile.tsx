@@ -16,9 +16,11 @@ type Props = {
   onLong?: () => void;
   pinned?: boolean;
   isDefault?: boolean;
+  /** What OK does, for the line at the top. "Open YouTube" when not given. */
+  ok?: string;
 };
 
-export function AppTile({ app, onOpen, onLong, pinned, isDefault }: Props) {
+export function AppTile({ app, onOpen, onLong, pinned, isDefault, ok }: Props) {
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -36,6 +38,7 @@ export function AppTile({ app, onOpen, onLong, pinned, isDefault }: Props) {
         data-f=""
         data-default={isDefault ? "" : undefined}
         data-long={onLong ? "" : undefined}
+        data-ok={ok ?? `Open ${app.label}`}
         onClick={onOpen}
         aria-label={app.label}
       >
@@ -54,10 +57,10 @@ export function AppTile({ app, onOpen, onLong, pinned, isDefault }: Props) {
 }
 
 /** The dashed tile at the end of a row. */
-export function AddTile({ label, onOpen }: { label: string; onOpen: () => void }) {
+export function AddTile({ label, onOpen, ok = "Choose an app to add to Home" }: { label: string; onOpen: () => void; ok?: string }) {
   return (
     <div className="tile">
-      <button className="f face add" data-f="" onClick={onOpen}>
+      <button className="f face add" data-f="" data-ok={ok} onClick={onOpen}>
         <span className="mk add"><Plus size={30} /></span>
         <span className="nm">{label}</span>
       </button>

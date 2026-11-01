@@ -1,11 +1,17 @@
-import { AlarmClock, Heater, Plus, Power, Sunset } from "lucide-react";
-import { connectText, heatLine } from "../../home";
+import { Pause, Play, Plus, Shuffle } from "lucide-react";
+import { connectText, heatLine, sunsetOk } from "../../home";
 import { clock, deg } from "../../format";
 import { StatsLine, type LayoutProps } from "./parts";
 
-/** Cinema: always dark. The apps are the stars, as tall cards; the house and the
- *  numbers sit in thin strips above and below. */
+/** A filled dot for on, an empty one for off, none when it can't be told. */
+function Dot({ on }: { on: boolean | null }) {
+  return on === null ? null : <span className={"dot" + (on ? "" : " off")} />;
+}
+
+/** Cinema: always dark. The apps are the stars, as tall cards; the selected one
+ *  turns white and says "OK to open". The house is a row of small buttons below. */
 export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
+  const p = h.playing;
   return (
     <div className="cin">
       <div className="cin-top">
@@ -15,14 +21,15 @@ export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onS
 
       <div className="cin-row">
         {dock.map((a, i) => (
-          <button key={a.packageName} className="f poster" data-f="" data-default={i === 0 ? "" : undefined} onClick={() => onOpenApp(a)}>
+          <button key={a.packageName} className="f poster" data-f="" data-ok={`Open ${a.label}`} data-default={i === 0 ? "" : undefined} onClick={() => onOpenApp(a)}>
             <span className="ghost">{a.label.slice(0, 2)}</span>
             {a.image && <img className={a.isBanner ? "bn" : "ic"} src={a.image} alt="" />}
             <span className="nm">{a.label}</span>
+            <span className="open">OK to open</span>
           </button>
         ))}
         {dock.length < 6 && (
-          <button className="f poster add" data-f="" onClick={onAddApp}>
+          <button className="f poster add" data-f="" data-ok="Choose an app to add to Home" onClick={onAddApp}>
             <Plus size={44} />
             <span className="nm">Add app</span>
           </button>
@@ -33,13 +40,20 @@ export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onS
         <div className="grp">
           {h.ready ? (
             <>
-              <button className="f pill" data-f="" onClick={h.sunset}><Sunset size={34} />Sunset{h.sunsetAt ? ` ${h.sunsetAt}` : ""}</button>
-              <button className="f pill" data-f="" onClick={h.allOff}><Power size={30} />All lights off</button>
-              <button className="f pill" data-f="" data-heat="" onClick={onOpenHeating}><Heater size={30} />{heatLine(h)}</button>
-              <button className="f pill" data-f="" onClick={h.toggleAlarm}><AlarmClock size={30} />{h.alarmOn ? "Alarm on" : "Alarm off"}</button>
+              <button className="f pill" data-f="" data-ok={sunsetOk(h)} onClick={h.sunset}><Dot on={h.sunsetLightsOn} />Sunset lights</button>
+              <button className="f pill" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>All lights off{h.lightsOn.length ? <span className="sub">{h.lightsOn.length} on</span> : null}</button>
+              <button className="f pill" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}><Dot on={h.heatOn} />Heating {heatLine(h)}</button>
+              <button className="f pill" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}><Dot on={h.alarmOn} />Alarm</button>
+              {p ? (
+                <button className="f pill np-pill" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause}>
+                  {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
+                </button>
+              ) : h.shuffleName ? (
+                <button className="f pill" data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}><Shuffle size={24} />Shuffle music</button>
+              ) : null}
             </>
           ) : (
-            <button className="f pill" data-f="" onClick={onSettings}>{connectText(ha).title}</button>
+            <button className="f pill" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>{connectText(ha).title}</button>
           )}
         </div>
         <StatsLine stats={stats} />

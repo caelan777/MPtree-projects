@@ -8,36 +8,45 @@ type Props = {
   onPage: (p: Page) => void;
   /** Whether the screen is dark right now; the button switches to the other. */
   dark: boolean;
+  /** What the Dark/Light button does, in words: "Dark until sunrise", "Always light". */
+  darkOk: string;
   onToggleDark: () => void;
   onSaver: () => void;
+  /** What OK does on the focused thing, shown in the middle. */
+  hint: string | null;
 };
 
-/** Account, Home and Apps on the left; Settings, the dark mode switch and the screensaver on the right.
- *  The same on every page, so Home is always one press up and left away. */
-export function TopBar({ name, page, onPage, dark, onToggleDark, onSaver }: Props) {
+/** Account, Home and Apps on the left; Settings, Dark and Screensaver on the right, in
+ *  words. In the middle: what OK does right now. The same on every page. */
+export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver, hint }: Props) {
   return (
-    <div className="top">
-      <div className="grp">
-        <button className="f acc" data-f="" onClick={() => onPage("settings")}>
-          <span className="av">{(name.trim()[0] ?? "?").toUpperCase()}</span>
-          {name.trim() || "Account"}
-        </button>
-        <div className="seg">
-          <button className={"f" + (page === "home" ? " on" : "")} data-f="" onClick={() => onPage("home")}>Home</button>
-          <button className={"f" + (page === "apps" ? " on" : "")} data-f="" onClick={() => onPage("apps")}>Apps</button>
+    <>
+      <div className="top">
+        <div className="grp">
+          <button className="f acc" data-f="" data-ok="Open Settings" onClick={() => onPage("settings")}>
+            <span className="av">{(name.trim()[0] ?? "?").toUpperCase()}</span>
+            {name.trim() || "Account"}
+          </button>
+          <div className="seg">
+            <button className={"f" + (page === "home" ? " on" : "")} data-f="" data-ok="Go to Home" onClick={() => onPage("home")}>Home</button>
+            <button className={"f" + (page === "apps" ? " on" : "")} data-f="" data-ok="See all apps" onClick={() => onPage("apps")}>Apps</button>
+          </div>
+        </div>
+        <div className="grp">
+          <button className={"f tb" + (page === "settings" ? " on" : "")} data-f="" data-ok="Open Settings" onClick={() => onPage("settings")}>
+            <Gear size={30} />Settings
+          </button>
+          <button className="f tb" data-f="" data-ok={darkOk} onClick={onToggleDark}>
+            {dark ? <Sun size={30} /> : <Moon size={28} />}{dark ? "Light" : "Dark"}
+          </button>
+          <button className="f tb" data-f="" data-ok="Start the screensaver" onClick={onSaver}>
+            <Image size={28} />Screensaver
+          </button>
         </div>
       </div>
-      <div className="grp">
-        <button className={"f ib" + (page === "settings" ? " on" : "")} data-f="" onClick={() => onPage("settings")} aria-label="Settings">
-          <Gear size={34} />
-        </button>
-        <button className="f ib" data-f="" onClick={onToggleDark} aria-label={dark ? "Light mode" : "Dark mode"}>
-          {dark ? <Sun size={34} /> : <Moon size={32} />}
-        </button>
-        <button className="f ib" data-f="" onClick={onSaver} aria-label="Screensaver">
-          <Image size={32} />
-        </button>
-      </div>
-    </div>
+      {hint && (
+        <div className="rhint" aria-live="polite"><kbd>OK</kbd><b>{hint}</b></div>
+      )}
+    </>
   );
 }
