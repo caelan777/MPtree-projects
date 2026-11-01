@@ -40,7 +40,8 @@ function focusables(): HTMLElement[] {
 export function focusEl(el: HTMLElement | null | undefined): void {
   if (!el) return;
   el.focus({ preventScroll: true });
-  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  // Only the pages that scroll (Apps, Settings) scroll to it; Home never moves.
+  if (el.closest(".page, .set-main")) el.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 /** Focus the element marked `data-default` in a container, else its first focusable. */
@@ -70,12 +71,15 @@ export function move(dir: Dir): void {
     if (primary < -8) continue;
     // Sideways, stay on the same row if at all possible. Up and down may drift
     // sideways more: going up from the app row should reach the tiles, not the top bar.
-    const score = Math.max(0, primary) + orth * (dir === "left" || dir === "right" ? 2.5 : 0.4);
+    const sideways = dir === "left" || dir === "right";
+    // Up and down prefer what is in the same column: something beside you in
+    // another column (the Settings sections next to a page) is not "below".
+    const score = Math.max(0, primary) + orth * (sideways ? 2.5 : 0.4) + (!sideways && orth > 0 ? 40 : 0);
     if (score < bestScore) { bestScore = score; best = el; }
   }
   if (best) {
     const group = best.closest<HTMLElement>("[data-group]");
-    if (group && !group.contains(cur)) {
+    if (group && !group.contains(cur) && (dir === "left" || dir === "right")) {
       const current = group.querySelector<HTMLElement>("[data-current]");
       if (current && all.includes(current)) best = current;
     }

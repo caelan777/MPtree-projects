@@ -125,7 +125,16 @@ public class LauncherPlugin extends Plugin {
         Intent intent = pm.getLeanbackLaunchIntentForPackage(pkg);
         if (intent == null) intent = pm.getLaunchIntentForPackage(pkg);
         if (intent == null) { call.reject("Cannot open " + pkg); return; }
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+        // An app that understands it can be told what to do as it opens:
+        // MPTree takes "shuffle" (shuffle all songs). CLEAR_TOP makes a running
+        // MPTree get it too (onNewIntent), not just come to the front.
+        String action = call.getString("action");
+        if (action != null) {
+            intent.putExtra("mptree_action", action);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        } else {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+        }
         try {
             getContext().startActivity(intent);
             call.resolve();

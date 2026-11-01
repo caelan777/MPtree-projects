@@ -28,9 +28,12 @@ export function Editorial({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, 
         {greeting(now)}. It's <b>{clock(now)}</b>
         {h.ready ? (
           <>, <b>{deg(h.outside, 0)}</b>{h.conditionText ? ` and ${h.conditionText.toLowerCase()}` : ""} in {HA.outsideLabel} and <b>{deg(h.inside)}</b> inside. {sunSentence(h)}</>
-        ) : "."}
+        ) : <> on {now.toLocaleDateString("en-GB", { weekday: "long" })}.</>}
       </p>
 
+      {!h.ready && stats?.installs != null && (
+        <p className="ed-more">MPTree has <b>{short(stats.installs)}</b> installs{stats.installsToday ? <>, <b>{stats.installsToday}</b> today</> : null}.</p>
+      )}
       {h.ready && (
         <p className="ed-more">
           {h.rainAt ? <>Rain from <b>{h.rainAt}</b>. </> : null}
@@ -51,15 +54,15 @@ export function Editorial({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, 
             <button className="f ed-act" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>All lights off</button>
             <button className="f ed-act" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>Heating {heatLine(h)}</button>
             <button className="f ed-act" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>Alarm {h.alarmOn ? "on" : "off"}</button>
-            {p ? (
-              <button className="f ed-act" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>Music controls</button>
-            ) : h.shuffleName ? (
-              <button className="f ed-act" data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}>Music in the living room</button>
-            ) : null}
           </>
-        ) : (
+        ) : h.off ? null : (
           <button className="f ed-act" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>{connectText(ha).title}</button>
         )}
+        {p ? (
+          <button className="f ed-act" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>Music controls</button>
+        ) : h.shuffleName ? (
+          <button className="f ed-act" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}>Shuffle music</button>
+        ) : null}
       </div>
 
       <div className="ed-apps">

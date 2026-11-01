@@ -461,3 +461,26 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .round.sm { width: 72px; height: 72px; }
 .mu-none { display: grid; gap: 30px; }
 .mu-none .mu-low { justify-content: flex-start; }
+
+/* ── Never let the screen itself scroll: a too-wide button once shifted the whole
+   stage sideways when it took focus (scrollIntoView scrolls overflow:hidden). ── */
+.stage { overflow: clip; }
+.sky-col { grid-template-columns: minmax(0, 1fr); }
+.gbtn { min-width: 0; }
+.gbtn > span:not(.gi) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gbtn > span:not(.gi) .sub { overflow: hidden; text-overflow: ellipsis; }
+
+/* text fields as buttons (Settings) */
+.fieldbtn { height: 76px; border-radius: 20px; border: 2px solid var(--border); background: var(--surface); font-size: 26px; padding: 0 26px; display: flex; align-items: center; justify-content: space-between; gap: 20px; width: 100%; text-align: left; }
+.fieldbtn > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fieldbtn .ph { color: var(--muted); }
+.fieldbtn .edit { font-size: 20px; font-weight: 700; color: var(--textSub); flex-shrink: 0; }
+.f:focus .edit, .f:focus .ph { color: var(--focusSub); }
+.acc.on { background: var(--dim); }
+
+/* Classic without Home Assistant: the day and the music instead of the house */
+.solo { display: grid; align-content: start; gap: 18px; padding: 10px 0 0 20px; }
+.solo-day { font-size: 96px; font-weight: 800; letter-spacing: -0.045em; line-height: 1; }
+.solo-date { font-size: 40px; color: var(--textSub); letter-spacing: -0.02em; margin-bottom: 30px; }
+.solo-btn { flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; gap: 26px; height: 150px; max-width: 760px; }
+.solo-btn .t { font-size: 34px; }

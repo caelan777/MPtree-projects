@@ -18,6 +18,9 @@ export type Settings = {
   haUrl: string;
   /** A Home Assistant long-lived access token. Never leaves the TV. */
   haToken: string;
+  /** Home Assistant on Home: the house, the weather, the music. Unset means "on
+   *  once an address and token are filled in". */
+  haEnabled?: boolean;
   /** Where the MPTree numbers are read from: a copy of Dashboard/data.json. */
   statsUrl: string;
   /** Package names of the apps in the row at the bottom, in order. */
@@ -82,4 +85,9 @@ export function defaultDock(labels: { packageName: string; label: string }[]): s
     if (hit) out.push(hit.packageName);
   }
   return out;
+}
+
+/** Whether Home shows Home Assistant: switched on, or never switched and set up. */
+export function haOn(s: Settings): boolean {
+  return s.haEnabled ?? !!(s.haUrl && s.haToken);
 }

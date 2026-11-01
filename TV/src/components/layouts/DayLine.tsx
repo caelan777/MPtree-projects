@@ -127,17 +127,17 @@ export function DayLine({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, on
             <button className="f pill" data-f="" data-ok="Turn all lights off" onClick={h.allOff}>All lights off<span className="sub">{h.lightsOn.length ? `${h.lightsOn.length} on` : "all off"}</span></button>
             <button className="f pill" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>Heating <StateTag on={h.heatOn} className="stt" />{h.heatOn ? deg(h.heatTarget) : ""}</button>
             <button className="f pill" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>Alarm <StateTag on={h.alarmOn} className="stt" /></button>
-            {p ? (
-              <button className="f pill np-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
-                {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
-              </button>
-            ) : h.shuffleName ? (
-              <button className="f pill" data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}><Shuffle size={24} />Shuffle music</button>
-            ) : null}
           </>
-        ) : (
+        ) : h.off ? null : (
           <button className="f pill" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}>{connectText(ha).title}</button>
         )}
+        {p ? (
+          <button className="f pill np-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
+            {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
+          </button>
+        ) : h.shuffleName ? (
+          <button className="f pill" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}><Shuffle size={24} />Shuffle music</button>
+        ) : null}
         <StatsLine stats={stats} />
       </div>
 

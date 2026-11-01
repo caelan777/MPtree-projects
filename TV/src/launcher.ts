@@ -11,7 +11,8 @@ export type TvApp = {
 
 interface LauncherPlugin {
   listApps(): Promise<{ apps: TvApp[] }>;
-  launch(opts: { packageName: string }): Promise<void>;
+  /** `action` is passed to apps that understand it: MPTree takes "shuffle". */
+  launch(opts: { packageName: string; action?: string }): Promise<void>;
   openSystemSettings(): Promise<void>;
   /** The TV's own screensaver (Google's photos). Rejects where the TV does not allow it. */
   startScreensaver(): Promise<void>;
@@ -26,11 +27,12 @@ interface LauncherPlugin {
 const DEV_APPS: TvApp[] = [
   "YouTube", "NPO Start", "HBO Max", "TV Bro", "Netflix", "Spotify", "Play Store", "Plex", "VLC",
   "Disney+", "Videoland", "Kodi",
-].map(label => ({ packageName: "dev." + label.toLowerCase().replace(/\W/g, ""), label, image: null, isBanner: false }));
+].map(label => ({ packageName: "dev." + label.toLowerCase().replace(/\W/g, ""), label, image: null, isBanner: false }))
+  .concat({ packageName: "com.caelan.mptree", label: "MPTree", image: null, isBanner: false });
 
 const webLauncher: LauncherPlugin = {
   listApps: async () => ({ apps: DEV_APPS }),
-  launch: async ({ packageName }) => { console.log("launch", packageName); },
+  launch: async ({ packageName, action }) => { console.log("launch", packageName, action ?? ""); },
   openSystemSettings: async () => { console.log("open Android settings"); },
   startScreensaver: async () => { throw new Error("No TV screensaver in the browser"); },
   addListener: async () => ({ remove: async () => {} }),

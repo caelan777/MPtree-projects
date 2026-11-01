@@ -31,7 +31,7 @@ export function inTime(min: number): string {
 
 /** Everything the layouts show about the house, read from Home Assistant's
  *  states, plus the buttons. Every layout uses this, so they all behave alike. */
-export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) => void, haUrl: string) {
+export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) => void, haUrl: string, off = false) {
   const s = ha.states;
   const weather = s[HA.weather];
   const heat = s[HA.heating];
@@ -49,7 +49,11 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
   // The sunset lights are on when any light the sunset script switches is on.
   const sunsetLightsOn = extras.scriptLights.length ? extras.scriptLights.some(id => s[id]?.state === "on") : null;
   const setAt = Date.parse(s[HA.sunset]?.state ?? "");
-  const toSunset = Number.isFinite(setAt) && setAt > t ? (setAt - t) / 60000 : null;
+  const riseAt = Date.parse(s[HA.sunrise]?.state ?? "");
+  // Night: the sun is down, or it comes up before it next sets. Then there is no
+  // "sun sets in 20 hours", only when it comes up.
+  const night = s[HA.sun]?.state === "below_horizon" || (Number.isFinite(riseAt) && Number.isFinite(setAt) && riseAt < setAt);
+  const toSunset = !night && Number.isFinite(setAt) && setAt > t ? (setAt - t) / 60000 : null;
 
   // The next hours, from the next whole hour on.
   const hours = extras.hours.filter(h => h.at > t - 30 * 60000);
@@ -111,7 +115,9 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
   })();
 
   return {
-    ready: ha.status === "ok",
+    ready: !off && ha.status === "ok",
+    /** Home Assistant is switched off in Settings: Home leaves the house out, with no "connect" prompts. */
+    off,
     outside: num(weather, "temperature"),
     condition: weather?.state,
     conditionText: CONDITION[weather?.state ?? ""] ?? weather?.state ?? "",
@@ -133,7 +139,9 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
     hours,
     rainAt: rainHour ? clock(new Date(rainHour.at)) : null,
     playing,
-    shuffleName: shuffle ? friendly(shuffle) : null,
+    shuffleName: shuffle ? friendly(shuffle) : null as string | null,
+    /** Where Shuffle music plays: the speaker, or MPTree on this TV. */
+    shuffleWhere: HA.speakerLabel,
 
     /** The sunset script switches the sunset lights on, or off again. */
     sunset: () => ha.call("script", "turn_on", { entity_id: HA.sunsetScript })
@@ -176,7 +184,7 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
       return ha.call("media_player", "repeat_set", { entity_id: playing.id, repeat: next })
         .then(() => toast(next === "off" ? "Repeat off" : next === "all" ? "Repeat all" : "Repeat this song"), fail);
     },
-    shuffleMusic: () => shuffle
+    shuffleMusic: (): Promise<unknown> => shuffle
       ? ha.call("script", "turn_on", { entity_id: shuffle.entity_id }).then(() => toast("Shuffling all songs"), fail)
       : Promise.resolve(),
   };
@@ -247,4 +255,10 @@ export function connectText(ha: Ha): { title: string; body: string } {
 export function greeting(now: Date): string {
   const h = now.getHours();
   return h < 6 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+
+/** 1st, 2nd, 3rd, 4th … 21st. */
+export function ordinal(n: number): string {
+  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${n % 10 > 3 ? "th" : s}`;
 }

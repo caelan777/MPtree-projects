@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { App as CapApp } from "@capacitor/app";
 import { Launcher, type TvApp } from "./launcher";
-import { DEFAULTS, LAYOUTS, defaultDock, loadSettings, saveSettings, type LayoutId, type Settings } from "./settings";
+import { DEFAULTS, LAYOUTS, defaultDock, haOn, loadSettings, saveSettings, type LayoutId, type Settings } from "./settings";
 import { useHaExtras, useHomeAssistant } from "./ha";
 import { useMptreeStats } from "./stats";
 import { focusEl, focusFirst, useOkHint, useRemote } from "./nav";
@@ -53,8 +53,10 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const s = settings ?? DEFAULTS;
 
-  const ha = useHomeAssistant(s.haUrl, s.haToken);
-  const extras = useHaExtras(s.haUrl, s.haToken, HA.weather, HA.sunsetScript, ha.status === "ok");
+  // Home Assistant switched off in Settings: nothing is asked of it at all.
+  const useHa = haOn(s);
+  const ha = useHomeAssistant(useHa ? s.haUrl : "", useHa ? s.haToken : "");
+  const extras = useHaExtras(s.haUrl, s.haToken, HA.weather, HA.sunsetScript, useHa && ha.status === "ok");
   const hint = useOkHint();
   const { stats, error: statsError } = useMptreeStats(s.statsUrl);
 
@@ -108,6 +110,13 @@ export default function App() {
 
   /** Apps on Home, from Settings: move one place left or right, take off, or add at the end. */
   const setDock = useCallback((next: string[]) => change({ dock: next, dockChosen: true }), [change]);
+
+  // MPTree on this TV: Shuffle music opens it, shuffling all songs (it reads "shuffle").
+  const MPTREE = "com.caelan.mptree";
+  const hasMptree = apps.some(a => a.packageName === MPTREE);
+  const mptreeShuffle = useCallback(() => {
+    Launcher.launch({ packageName: MPTREE, action: "shuffle" }).catch(() => toast("MPTree would not open"));
+  }, [toast]);
 
   const getApps = useCallback(() => {
     if (apps.some(a => a.packageName === PLAY_STORE)) Launcher.launch({ packageName: PLAY_STORE });
@@ -214,12 +223,14 @@ export default function App() {
   return (
     <div className={"stage" + (darkLook ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
       <div inert={heatOpen || musicOpen || undefined}>
-      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver} hint={saver || heatOpen || musicOpen ? null : hint} />
+      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver}
+        onAndroidSettings={() => Launcher.openSystemSettings().catch(() => toast("The TV's settings would not open"))} hint={saver || heatOpen || musicOpen ? null : hint} />
       {page === "home" && (
         <HomeView
           layout={layout} now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
           onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")}
           onOpenHeating={() => setHeatOpen(true)} onOpenMusic={() => setMusicOpen(true)} toast={toast} extras={extras} haUrl={s.haUrl}
+          haOff={!useHa} mptreeShuffle={hasMptree ? mptreeShuffle : null}
         />
       )}
       {page === "apps" && <AppsView apps={apps} dock={dock} onOpenApp={openApp} onTogglePin={togglePin} onGetApps={getApps} />}

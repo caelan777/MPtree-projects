@@ -3,7 +3,6 @@ import { Logo } from "../Logo";
 import type { TvApp } from "../../launcher";
 import type { Ha } from "../../ha";
 import { pickHours, type Home, type Hour } from "../../home";
-import { HA } from "../../homeConfig";
 import { clock, deg } from "../../format";
 import { ago, short, type MptreeStats } from "../../stats";
 
@@ -90,13 +89,15 @@ export function NowPlaying({ h, onOpen, className = "np" }: { h: Home; onOpen: (
   return (
     <button className={"f " + className} data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}>
       <span className="art icon"><Shuffle size={30} /></span>
-      <span className="sp"><b>Shuffle music</b> <span>· all songs · {HA.speakerLabel}</span></span>
+      <span className="sp"><b>Shuffle music</b> <span>· all songs · {h.shuffleWhere}</span></span>
       <span className="pp"><Play size={26} /></span>
     </button>
   );
 }
 
 export function StatsCard({ stats, error, now }: { stats: MptreeStats | null; error: string | null; now: Date }) {
+  // Never set up: no card at all, rather than a reminder on the home screen.
+  if (!stats && !error) return null;
   return (
     <div className="mpt">
       <div className="h">

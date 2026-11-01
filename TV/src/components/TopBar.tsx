@@ -12,18 +12,21 @@ type Props = {
   darkOk: string;
   onToggleDark: () => void;
   onSaver: () => void;
+  /** The TV's own Android settings: Wi-Fi, picture, sound. */
+  onAndroidSettings: () => void;
   /** What OK does on the focused thing, shown in the middle. */
   hint: string | null;
 };
 
-/** Account, Home and Apps on the left; Settings, Dark and Screensaver on the right, in
- *  words. In the middle: what OK does right now. The same on every page. */
-export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver, hint }: Props) {
+/** Your name (MPTree TV's own settings), Home and Apps on the left; the TV's
+ *  Settings, Dark and Screensaver on the right, in words. In the middle: what OK
+ *  does right now. The same on every page. */
+export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver, onAndroidSettings, hint }: Props) {
   return (
     <>
       <div className="top">
         <div className="grp">
-          <button className="f acc" data-f="" data-ok="Open Settings" onClick={() => onPage("settings")}>
+          <button className={"f acc" + (page === "settings" ? " on" : "")} data-f="" data-ok="Open MPTree TV settings" onClick={() => onPage("settings")}>
             <span className="av">{(name.trim()[0] ?? "?").toUpperCase()}</span>
             {name.trim() || "Account"}
           </button>
@@ -33,7 +36,7 @@ export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver
           </div>
         </div>
         <div className="grp">
-          <button className={"f tb" + (page === "settings" ? " on" : "")} data-f="" data-ok="Open Settings" onClick={() => onPage("settings")}>
+          <button className="f tb" data-f="" data-ok="Open the TV's settings: Wi-Fi, picture, sound" onClick={onAndroidSettings}>
             <Gear size={30} />Settings
           </button>
           <button className="f tb" data-f="" data-ok={darkOk} onClick={onToggleDark}>

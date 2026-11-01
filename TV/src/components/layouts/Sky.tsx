@@ -35,7 +35,7 @@ export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSett
           <div className="w">
             <span><b>{deg(h.outside, 0)}</b> {h.conditionText.toLowerCase()}</span>
             <span><b>{deg(h.inside)}</b> inside</span>
-            {h.toSunset !== null && <span>Sun sets in <b>{inTime(h.toSunset)}</b></span>}
+            {h.toSunset !== null ? <span>Sun sets in <b>{inTime(h.toSunset)}</b></span> : h.sunriseAt ? <span>Sun up at <b>{h.sunriseAt}</b></span> : null}
           </div>
         )}
       </div>
@@ -59,20 +59,20 @@ export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSett
                 <span className="gi"><AlarmClock size={30} /></span><span>Alarm<span className="sub">{h.alarmOn ? "On" : "Off"} · Wed, Thu 08:00</span></span>
               </button>
             </div>
-            {p ? (
-              <button className="f glass gbtn" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
-                <span className="gi">{p.playing ? <Pause size={30} /> : <Play size={30} />}</span>
-                <span className="ell">{p.title}<span className="sub">{p.playing ? "Playing" : "Paused"} · {p.where}</span></span>
-              </button>
-            ) : h.shuffleName ? (
-              <button className="f glass gbtn" data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}>
-                <span className="gi"><Shuffle size={30} /></span><span>Shuffle music<span className="sub">{HA.speakerLabel}</span></span>
-              </button>
-            ) : null}
           </>
-        ) : (
+        ) : h.off ? null : (
           <button className="f glass gbtn" data-f="" data-ok="Open Settings, Home Assistant" onClick={onSettings}><span>{connectText(ha).title}<span className="sub">{connectText(ha).body}</span></span></button>
         )}
+        {p ? (
+          <button className="f glass gbtn" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
+            <span className="gi">{p.playing ? <Pause size={30} /> : <Play size={30} />}</span>
+            <span className="ell">{p.title}<span className="sub">{p.playing ? "Playing" : "Paused"} · {p.where}</span></span>
+          </button>
+        ) : h.shuffleName ? (
+          <button className="f glass gbtn" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}>
+            <span className="gi"><Shuffle size={30} /></span><span>Shuffle music<span className="sub">{h.shuffleWhere}</span></span>
+          </button>
+        ) : null}
         {stats && (
           <div className="glass sky-stats">
             <div><b>{short(stats.installs)}</b>MPTree installs</div>

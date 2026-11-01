@@ -12,7 +12,7 @@ Designs: `design/design.html` (first take), `design/directions.html` (ten
 directions), `design/layouts.html` (the layout picker and the Sunset switch),
 `design/v2.html` and `design/v3.html` (rounds two and three; 0.5.0 is round three).
 
-## What works in 0.5.1
+## What works in 0.5.2
 
 Built from design round three (`design/v3.html`): every screen explains itself.
 
@@ -41,7 +41,19 @@ Built from design round three (`design/v3.html`): every screen explains itself.
   (`weather.get_forecasts`, every 30 minutes).
 * **Apps page.** Every app on the TV, A to Z. OK opens it; **hold OK** puts it on
   Home or takes it off (Home holds six).
-* **Settings**, in sections (Up and Down pick one, Right goes in, Left comes back):
+* **Top bar.** Your name opens MPTree TV's settings; **Settings** opens the TV's own
+  Android settings (Wi-Fi, picture, sound).
+* **Without Home Assistant.** Settings, Home Assistant, "Use Home Assistant" switches
+  it off (it starts off until an address and token are filled in). Home then
+  leaves the house out entirely, with no "connect" prompts: the time, the apps,
+  MPTree and its music. The MPTree numbers card only shows once a numbers file is
+  set.
+* **Shuffle music** starts MPTree on this TV, shuffling all songs, when MPTree is
+  installed (it launches it with the extra `mptree_action=shuffle`); otherwise the
+  Home Assistant shuffle script on the speaker.
+* **Settings**, in sections (Up and Down pick one, Right goes in, Left comes back).
+  Text fields are buttons: OK opens them for typing, so the TV's keyboard never
+  pops up by itself:
   * **Look**: the five layouts as pictures, dark mode and screensaver as three
     choices each, two switches, and − / + for when the screensaver starts.
   * **Apps on Home**: the six in order; choose one to move it left or right or

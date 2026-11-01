@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Home as HouseIcon, LayoutTemplate, Minus, Plus, Rows3, Trash2, Tv, X } from "lucide-react";
-import { LAYOUTS, type LayoutId, type Settings } from "../settings";
+import { LAYOUTS, haOn, type LayoutId, type Settings } from "../settings";
 import type { Ha } from "../ha";
 import { HA } from "../homeConfig";
 import { Launcher, type TvApp } from "../launcher";
@@ -97,23 +97,41 @@ function Switch({ on, title, sub, onFlip }: { on: boolean; title: string; sub: s
   );
 }
 
-/** A text field that saves when you leave it, so typing with the remote's
- *  on-screen keyboard does not save half an address on every letter. */
+/** A text field, as a button: the remote moves past it like any button, and only
+ *  OK opens it for typing (so the TV's keyboard never pops up by itself and traps
+ *  you). Enter, or leaving it, saves; Back leaves it as it was. */
 function Field({ id, label, value, placeholder, hint, secret, ok, onSave }: {
   id: string; label: string; value: string; placeholder?: string; hint?: string; secret?: boolean; ok?: string; onSave: (v: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const btn = useRef<HTMLButtonElement>(null);
+  const finish = (save: boolean) => {
+    setEditing(false);
+    if (save && draft.trim() !== value && (draft.trim() || !secret)) onSave(draft.trim());
+    requestAnimationFrame(() => btn.current?.focus());
+  };
+  const shown = secret ? (value ? "Saved on this TV" : placeholder) : value || placeholder;
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id} data-f="" value={draft} type={secret ? "password" : "text"} placeholder={placeholder}
-        data-ok={ok ?? `Type the ${label.toLowerCase()}`}
-        autoComplete="off" autoCapitalize="off" spellCheck={false}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { if (draft.trim() !== value) onSave(draft.trim()); }}
-        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      />
+      {editing ? (
+        <input
+          id={id} autoFocus value={draft} type={secret ? "password" : "text"} placeholder={placeholder}
+          autoComplete="off" autoCapitalize="off" spellCheck={false}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => finish(true)}
+          onKeyDown={e => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") { setDraft(value); finish(false); } }}
+        />
+      ) : (
+        <button
+          id={id} ref={btn} className="f fieldbtn" data-f=""
+          data-ok={ok ?? `Change the ${label.toLowerCase()}`}
+          onClick={() => { setDraft(secret ? "" : value); setEditing(true); }}
+        >
+          <span className={value ? "" : "ph"}>{shown}</span><span className="edit">{value ? "Change" : "Add"}</span>
+        </button>
+      )}
       {hint && <span className="hint">{hint}</span>}
     </div>
   );
@@ -280,20 +298,34 @@ function HomeAssistant({ settings: s, onChange, ha, toast }: Props) {
     ["Now playing", player ?? "any speaker that plays", true],
   ];
 
+  const on = haOn(s);
+  const flip = <Switch on={on} title="Use Home Assistant"
+    sub={on ? "Home shows your lights, heating, weather and music." : "Off: Home shows the time, your apps, MPTree and its music, without the house."}
+    onFlip={() => { onChange({ haEnabled: !on }); toast(on ? "Home Assistant off" : "Home Assistant on"); }} />;
+  if (!on) {
+    return (
+      <>
+        <h3>Home Assistant</h3>
+        {flip}
+        <div className="lead">The address and token stay saved, so switching it on again needs nothing else.</div>
+      </>
+    );
+  }
   return (
     <>
       <h3>Home Assistant</h3>
+      {flip}
       <Status good={good} title={title} sub={sub}>
-        <button className="f pill" data-f="" data-default="" data-ok="Check the connection now"
+        <button className="f pill" data-f="" data-ok="Check the connection now"
           onClick={() => ha.refresh().then(r => toast(r.ok ? `Connected, ${r.count} things found` : r.error))}>Check now</button>
       </Status>
       <div className="row2">
         <Field id="haUrl" label="Address" value={s.haUrl} placeholder="http://homeassistant.local:8123"
           hint="The address you open Home Assistant with at home." onSave={v => onChange({ haUrl: v })} />
-        <Field id="haToken" label="Token" value="" secret ok={s.haToken ? "Type a new token to replace the saved one" : "Paste the token"}
-          placeholder={s.haToken ? "Saved on this TV · type to replace" : "Paste a long-lived token"}
+        <Field id="haToken" label="Token" value={s.haToken} secret ok={s.haToken ? "Type a new token to replace the saved one" : "Paste the token"}
+          placeholder="Paste a long-lived token"
           hint="Your profile, Security, Long-lived access tokens. Never shown, and it stays on this TV."
-          onSave={v => { if (v) { onChange({ haToken: v }); toast("New token saved"); } }} />
+          onSave={v => { onChange({ haToken: v }); toast("New token saved"); }} />
       </div>
       <div className="lbl">What Home shows</div>
       <div className="ents">
@@ -333,13 +365,13 @@ function ThisTv({ settings: s, onChange, onSaverNow }: Props) {
   return (
     <>
       <h3>This TV</h3>
-      <Field id="name" label="Your name" value={s.name} ok="Type your name" hint="Shown at the top left." onSave={v => onChange({ name: v })} />
+      <button className="f swrow" data-f="" data-default="" data-ok="Open the TV's own settings" onClick={() => Launcher.openSystemSettings()}>
+        <span>Android settings<span className="ss">Wi-Fi, picture, sound, apps, the TV itself. Also the Settings button at the top.</span></span><span className="val">Open</span>
+      </button>
       <button className="f swrow" data-f="" data-ok="Show the screensaver now" onClick={onSaverNow}>
         <span>Show the screensaver now<span className="ss">To see what it looks like. Any key ends it.</span></span><span className="val">OK</span>
       </button>
-      <button className="f swrow" data-f="" data-ok="Open Android settings" onClick={() => Launcher.openSystemSettings()}>
-        <span>Android settings<span className="ss">Wi-Fi, picture, sound, the TV itself</span></span><span className="val">Open</span>
-      </button>
+      <Field id="name" label="Your name" value={s.name} ok="Change your name" hint="Shown at the top left. OK on it opens these settings." onSave={v => onChange({ name: v })} />
       <div className="lead">MPTree TV {__APP_VERSION__}</div>
     </>
   );

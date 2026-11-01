@@ -1,7 +1,7 @@
-import { AlarmClock, Heater, Power, Sunset } from "lucide-react";
+import { AlarmClock, Heater, Power, Shuffle, Sunset } from "lucide-react";
 import { AddTile, AppTile } from "../AppTile";
 import { HA } from "../../homeConfig";
-import { connectText, heatSub, sunsetOk, sunsetSub } from "../../home";
+import { connectText, greeting, heatSub, sunsetOk, sunsetSub } from "../../home";
 import { clock, deg, longDate } from "../../format";
 import { Hours, NowPlaying, StateTag, StatsCard, WeatherIcon, type LayoutProps } from "./parts";
 
@@ -64,6 +64,17 @@ export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, 
               <div className="row"><span className="sub" style={{ margin: 0 }}>Outside, {HA.outsideLabel}</span><WeatherIcon state={h.condition} size={38} /></div>
               <div><div className="big">{deg(h.outside, 0)}</div><div className="sub">{h.conditionText || " "}{h.rainAt ? `, rain at ${h.rainAt}` : ""}</div></div>
             </div>
+          </div>
+        ) : h.off ? (
+          // No Home Assistant: the day and the music, calmly, instead of the house.
+          <div className="solo">
+            <div className="solo-day">{greeting(now)}</div>
+            {h.shuffleName && (
+              <button className="f c solo-btn" data-f="" data-ok={`Shuffle all songs, ${h.shuffleWhere}`} onClick={h.shuffleMusic}>
+                <Shuffle size={50} />
+                <div><div className="t">Shuffle music</div><div className="sub">All songs · {h.shuffleWhere}</div></div>
+              </button>
+            )}
           </div>
         ) : (
           <div className="ctl">
