@@ -765,5 +765,8 @@ export const NL: Record<string, string> = {
   "Shuffle all songs": "Alle nummers shufflen",
   "Position": "Positie",
   "Up next": "Hierna",
+  "Say a song or an artist": "Spreek een nummer of artiest in",
+  "Voice search isn't available on this TV": "Spraakzoeken werkt niet op deze tv",
+  "Search by voice": "Zoeken met je stem",
   "Nothing after this song": "Niets meer na dit nummer",
 };

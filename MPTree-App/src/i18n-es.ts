@@ -765,5 +765,8 @@ export const ES: Record<string, string> = {
   "Shuffle all songs": "Todas en aleatorio",
   "Position": "Posición",
   "Up next": "A continuación",
+  "Say a song or an artist": "Di una canción o un artista",
+  "Voice search isn't available on this TV": "La búsqueda por voz no está disponible en esta tele",
+  "Search by voice": "Buscar con la voz",
   "Nothing after this song": "Nada después de esta canción",
 };

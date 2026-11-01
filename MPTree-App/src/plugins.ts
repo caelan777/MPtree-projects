@@ -87,6 +87,11 @@ export type SystemPlugin = {
   isTelevision(): Promise<{ tv: boolean }>;
   /** What another app asked for as it opened MPTree, once: "shuffle" from the TV launcher. */
   takeAction(): Promise<{ action: string | null }>;
+  /** Listens (on a TV: the remote's microphone) and gives back what was said; no
+   *  text when nothing was said. Rejects with code UNAVAILABLE without a recognizer. */
+  voiceSearch(options?: { prompt?: string }): Promise<{ text?: string }>;
+  /** The remote's search button was pressed (on a TV). */
+  addListener(event: "searchKey", handler: () => void): Promise<{ remove(): void }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
   /** mailto:, market: or https:. Rejects with code NO_HANDLER when nothing on
@@ -173,6 +178,8 @@ const SystemWeb: SystemPlugin = {
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   isTelevision: async () => ({ tv: false }),
   takeAction: async () => ({ action: null }),
+  voiceSearch: async () => { throw Object.assign(new Error("No voice search in a browser"), { code: "UNAVAILABLE" }); },
+  addListener: async () => ({ remove() {} }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
   checkPlayUpdate:   async () => ({ available: false }),

@@ -8,6 +8,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.PluginHandle;
 
 public class MainActivity extends BridgeActivity {
 
@@ -43,6 +44,24 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AdsPlugin.class);
         super.onCreate(savedInstanceState);
         takeActionFrom(getIntent());
+    }
+
+    /**
+     * The remote's search button, on a TV: MPTree searches its own songs by
+     * voice instead of Android opening its global search. (Remotes whose
+     * microphone button is the Google Assistant button go to the Assistant;
+     * the microphone next to the search field in MPTree works on every TV.)
+     */
+    @Override
+    public boolean onSearchRequested() {
+        if (bridge != null && SystemPlugin.isTv(this)) {
+            PluginHandle h = bridge.getPlugin("System");
+            if (h != null && h.getInstance() instanceof SystemPlugin) {
+                ((SystemPlugin) h.getInstance()).searchKey();
+                return true;
+            }
+        }
+        return super.onSearchRequested();
     }
 
     // ── Immersive navigation ─────────────────────────────────────────────────

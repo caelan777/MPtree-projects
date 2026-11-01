@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import { IC } from "../components/Icons";
 import { Logo } from "../components/Logo";
 import { AlbumArt } from "../components/AlbumArt";
+import { System } from "../plugins";
 import { focusFirst, useTvRemote } from "./tvNav";
 import "./tv.css";
 
@@ -57,7 +58,18 @@ type Props = {
   onRepeat: () => void;
   onAccount: () => void;
   onSettings: () => void;
+  /** Back goes up one level here first (a playlist, then the playlists, then the
+   *  search) before it leaves the app. TvView hands App.tsx the function that does
+   *  it; App calls it on Back, and true means it was handled. */
+  setBack: (fn: (() => boolean) | null) => void;
 };
+
+/** A microphone, for voice search. */
+const Mic = () => (
+  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+  </svg>
+);
 
 function useStageScale(): number {
   const calc = () => Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
@@ -83,6 +95,44 @@ export function TvView(p: Props) {
   useTvRemote(true);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
   const [openPl, setOpenPl] = useState<Playlist | null>(null);
+  /** The playlist last opened, so coming back lands on it. */
+  const [lastPl, setLastPl] = useState<string | null>(null);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
+
+  // Back: out of a playlist, then from the playlists to the songs, then clear the
+  // search; only after that does it leave MPTree.
+  const { setBack, search, setSearch } = p;
+  useEffect(() => {
+    setBack(() => {
+      if (openPl) { setOpenPl(null); return true; }
+      if (page === "playlists") { setPage("songs"); return true; }
+      if (search) { setSearch(""); return true; }
+      return false;
+    });
+    return () => setBack(null);
+  }, [setBack, openPl, page, search, setSearch]);
+
+  // Voice search: what was said becomes the search, on the songs.
+  const voiceRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    voiceRef.current = () => {
+      setVoiceNote(null);
+      System.voiceSearch({ prompt: t("Say a song or an artist") })
+        .then(r => {
+          if (!r.text) return;
+          setOpenPl(null);
+          setPage("songs");
+          p.setSearch(r.text);
+          requestAnimationFrame(() => requestAnimationFrame(() => focusFirst(root.current?.querySelector(".tvv-songs") ?? root.current ?? document)));
+        })
+        .catch(() => setVoiceNote(t("Voice search isn't available on this TV")));
+    };
+  });
+  // The remote's own search button starts it too, where the remote has one.
+  useEffect(() => {
+    const sub = System.addListener("searchKey", () => voiceRef.current());
+    return () => { sub.then(s => s.remove()); };
+  }, []);
 
   const byId = useMemo(() => new Map(p.allSongs.map(s => [s.id, s])), [p.allSongs]);
   const plSongs = useMemo(
@@ -128,13 +178,16 @@ export function TvView(p: Props) {
             </div>
             {page === "songs" && (
               <>
-                <label className="srch">
-                  <span className="ic">{IC.Search(p.TH.muted)}</span>
-                  <input value={p.search} onChange={e => p.setSearch(e.target.value)} placeholder={t("Search songs or artists…")}
-                    onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-                </label>
+                <div className="srow">
+                  <label className="srch">
+                    <span className="ic">{IC.Search(p.TH.muted)}</span>
+                    <input value={p.search} onChange={e => p.setSearch(e.target.value)} placeholder={t("Search songs or artists…")}
+                      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                  </label>
+                  <button className="ib mic" onClick={() => voiceRef.current()} aria-label={t("Search by voice")}><Mic /></button>
+                </div>
                 <div className="cnt">
-                  <span>{t("{n} songs", { n: p.songs.length })}</span>
+                  <span>{voiceNote ?? t("{n} songs", { n: p.songs.length })}</span>
                   <button className="flt" onClick={nextFilter}>{t(filterLabel)} <span className="ic sm">{IC.Chevron()}</span></button>
                 </div>
               </>
@@ -156,7 +209,7 @@ export function TvView(p: Props) {
           ) : (
             <div className="tvv-pls">
               {p.playlists.length ? p.playlists.map((pl, i) => (
-                <button key={pl.id} className="pl" data-tv-default={i === 0 ? "" : undefined} onClick={() => setOpenPl(pl)}>
+                <button key={pl.id} className="pl" data-tv-default={(lastPl ? pl.id === lastPl : i === 0) ? "" : undefined} onClick={() => { setLastPl(pl.id); setOpenPl(pl); }}>
                   <span className="nm">{pl.name}</span>
                   <span className="n">{t("{n} songs", { n: pl.songIds.filter(id => byId.has(id)).length })}</span>
                 </button>

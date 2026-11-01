@@ -1,5 +1,6 @@
 package com.caelan.mptree;
 
+import android.app.Activity;
 import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
@@ -16,12 +17,18 @@ import androidx.core.graphics.drawable.IconCompat;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.speech.RecognizerIntent;
 import android.webkit.WebSettings;
+
+import androidx.activity.result.ActivityResult;
+
+import java.util.ArrayList;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.android.play.core.appupdate.AppUpdateManager;
@@ -69,16 +76,62 @@ public class SystemPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** Android's TV mode, or the leanback (TV) feature. */
+    static boolean isTv(Context ctx) {
+        UiModeManager ui = (UiModeManager) ctx.getSystemService(Context.UI_MODE_SERVICE);
+        return (ui != null && ui.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
+            || ctx.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+    }
+
     /** Whether this is a TV, so the app shows its screen for the remote (src/tv). */
     @PluginMethod
     public void isTelevision(PluginCall call) {
-        Context ctx = getContext();
-        UiModeManager ui = (UiModeManager) ctx.getSystemService(Context.UI_MODE_SERVICE);
-        boolean tv = (ui != null && ui.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
-            || ctx.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
         JSObject ret = new JSObject();
-        ret.put("tv", tv);
+        ret.put("tv", isTv(getContext()));
         call.resolve(ret);
+    }
+
+    // ── Voice search (MPTree on a TV) ────────────────────────────────────────
+
+    /**
+     * Listens with the device's speech recognizer (on a TV: the remote's
+     * microphone, through Google's speech service) and gives back what was said:
+     * { text }, or {} when nothing was said or it was cancelled. Rejects with
+     * code UNAVAILABLE when the device has no recognizer.
+     */
+    @PluginMethod
+    public void voiceSearch(PluginCall call) {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        String prompt = call.getString("prompt");
+        if (prompt != null) intent.putExtra(RecognizerIntent.EXTRA_PROMPT, prompt);
+        if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+            call.reject("No speech recognizer on this device", "UNAVAILABLE");
+            return;
+        }
+        try {
+            startActivityForResult(call, intent, "voiceResult");
+        } catch (ActivityNotFoundException ex) {
+            call.reject("No speech recognizer on this device", "UNAVAILABLE");
+        }
+    }
+
+    @ActivityCallback
+    private void voiceResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        JSObject ret = new JSObject();
+        Intent data = result.getData();
+        if (result.getResultCode() == Activity.RESULT_OK && data != null) {
+            ArrayList<String> said = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (said != null && !said.isEmpty() && said.get(0) != null) ret.put("text", said.get(0));
+        }
+        call.resolve(ret);
+    }
+
+    /** The remote's search button (from MainActivity): the page starts a voice search. */
+    void searchKey() {
+        notifyListeners("searchKey", new JSObject());
     }
 
     /** factor: 0.9, 1 or 1.15. Scales every piece of text in the app. */

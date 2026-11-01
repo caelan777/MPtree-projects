@@ -2866,6 +2866,9 @@ export default function App() {
   // refreshed every render, so the native listener is registered exactly once
   // but always sees current state.
   const backHandlerRef = useRef<() => void>(() => {});
+  /** Set by TvView: Back one level up inside the TV screen; false when at the top. */
+  const tvBackRef = useRef<(() => boolean) | null>(null);
+  const setTvBack = useCallback((fn: (() => boolean) | null) => { tvBackRef.current = fn; }, []);
   useEffect(() => {
     backHandlerRef.current = () => {
       // Topmost layers first. Each branch returns after handling one level.
@@ -2902,6 +2905,8 @@ export default function App() {
       if (menuSong)            { setMenuSong(null); return; }
       if (multiAddOpen)        { setMultiAddOpen(false); return; }
       if (selectMode)          { exitSelectMode(); return; }
+      // MPTree on a TV: its own levels first (a playlist, the playlists, the search).
+      if (isTv && tvBackRef.current?.()) return;
       if (page === "playlists") {
         // PlaylistsView owns its own nested navigation, so hand Back to it and
         // let it pop one level. It reports back through onDetailChange when it
@@ -4108,6 +4113,7 @@ export default function App() {
             }}
             onShuffleToggle={toggleShuffleFromPlayer} onRepeat={toggleRepeatFromPlayer}
             onAccount={() => setAccountOpen(true)} onSettings={() => setSettingsOpen(true)}
+            setBack={setTvBack}
           />
         )}
 

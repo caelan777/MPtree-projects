@@ -24,6 +24,9 @@
 .tvv .seg button.on { background: var(--text); color: var(--bg); }
 .tvv .ib { height: 66px; min-width: 66px; border-radius: 33px; border: 2px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; }
 .tvv .ib.txt { padding: 0 26px; font-size: 24px; font-weight: 600; }
+.tvv .srow { display: flex; gap: 14px; }
+.tvv .srow .srch { flex: 1; min-width: 0; }
+.tvv .mic { width: 70px; height: 70px; border-radius: 18px; flex-shrink: 0; color: var(--text); }
 .tvv .srch { height: 70px; border-radius: 18px; background: var(--input); border: 2px solid var(--border); display: flex; align-items: center; gap: 14px; padding: 0 22px; }
 .tvv .srch input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text); font: inherit; font-size: 26px; }
 .tvv .srch:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent); }
