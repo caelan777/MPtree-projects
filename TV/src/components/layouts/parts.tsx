@@ -1,4 +1,4 @@
-import { Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Pause, Play, Shuffle, Sun, Sunset, Wind } from "lucide-react";
+import { Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Pause, Play, Shuffle, SkipBack, SkipForward, Sun, Sunset, Wind } from "lucide-react";
 import { Logo } from "../Logo";
 import type { TvApp } from "../../launcher";
 import type { Ha } from "../../ha";
@@ -19,6 +19,8 @@ export type LayoutProps = {
   onAddApp: () => void;
   onSettings: () => void;
   onOpenHeating: () => void;
+  /** The music panel: every control for what is playing. */
+  onOpenMusic: () => void;
 };
 
 export function WeatherIcon({ state, size }: { state: string | undefined; size: number }) {
@@ -63,18 +65,25 @@ export function StateTag({ on, className = "state" }: { on: boolean | null; clas
   return <span className={className + (on ? "" : " off")}>{on ? "ON" : "OFF"}</span>;
 }
 
-/** The strip under the house: what is playing on a speaker, with play/pause.
- *  When nothing plays, it offers to shuffle all songs instead. Nothing at all when
- *  neither is there. */
-export function NowPlaying({ h, className = "np" }: { h: Home; className?: string }) {
+/** The strip under the house: what is playing on a speaker. OK on the song opens
+ *  the music panel (every control); previous, play/pause and next sit right next
+ *  to it. When nothing plays, it offers to shuffle all songs instead. Nothing at
+ *  all when neither is there. */
+export function NowPlaying({ h, onOpen, className = "np" }: { h: Home; onOpen: () => void; className?: string }) {
   const p = h.playing;
   if (p) {
     return (
-      <button className={"f " + className} data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause}>
-        {p.art ? <img className="art" src={p.art} alt="" /> : <span className="art" />}
-        <span className="sp"><b>{p.title}</b> <span>{p.artist ? `· ${p.artist} ` : ""}· {p.where}</span></span>
-        <span className="pp">{p.playing ? <Pause size={26} /> : <Play size={26} />}</span>
-      </button>
+      <div className={className + " np-row"}>
+        <button className="f np-main" data-f="" data-ok="Open the music controls" onClick={onOpen}>
+          {p.art ? <img className="art" src={p.art} alt="" /> : <span className="art" />}
+          <span className="sp"><b>{p.title}</b> <span>{p.artist ? `· ${p.artist} ` : ""}· {p.where}</span></span>
+        </button>
+        {p.can.prev && <button className="f nb" data-f="" data-ok="Previous song" onClick={() => h.skip("prev")} aria-label="Previous"><SkipBack size={26} /></button>}
+        <button className="f nb pp" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause} aria-label={p.playing ? "Pause" : "Play"}>
+          {p.playing ? <Pause size={26} /> : <Play size={26} />}
+        </button>
+        {p.can.next && <button className="f nb" data-f="" data-ok="Next song" onClick={() => h.skip("next")} aria-label="Next"><SkipForward size={26} /></button>}
+      </div>
     );
   }
   if (!h.shuffleName) return null;

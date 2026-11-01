@@ -12,7 +12,7 @@ Designs: `design/design.html` (first take), `design/directions.html` (ten
 directions), `design/layouts.html` (the layout picker and the Sunset switch),
 `design/v2.html` and `design/v3.html` (rounds two and three; 0.5.0 is round three).
 
-## What works in 0.5.0
+## What works in 0.5.1
 
 Built from design round three (`design/v3.html`): every screen explains itself.
 
@@ -28,9 +28,12 @@ Built from design round three (`design/v3.html`): every screen explains itself.
   selected: "OK Turn all lights off", "OK Move NPO Start one place left". Buttons
   show their state (ON/OFF) apart from what pressing them does.
 * **Now playing.** When a speaker in the house plays (any `media_player` with a
-  title), a strip shows the song and where, with play/pause. When nothing plays,
-  the same place offers **Shuffle music** (`HA.shuffleScript`, or any script
-  with "shuffle" in its name).
+  title), a strip shows the song and where, with previous, play/pause and next.
+  OK on the song opens the **music panel**: the cover, how far into the song,
+  previous / play-pause / next, shuffle, repeat (off, all, this song), volume − /
+  +, and Shuffle all again. Each control only shows when the speaker can do it
+  (its `supported_features`). When nothing plays, the strip offers **Shuffle
+  music** (`HA.shuffleScript`, or any script with "shuffle" in its name).
 * **Sunset lights ON/OFF.** Read from the lights inside the sunset script's own
   config (`/api/config/script/config/sunset`, needs an admin token). When that
   can't be read, the state is left out and OK still switches them.

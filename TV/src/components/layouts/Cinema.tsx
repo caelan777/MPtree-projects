@@ -10,7 +10,7 @@ function Dot({ on }: { on: boolean | null }) {
 
 /** Cinema: always dark. The apps are the stars, as tall cards; the selected one
  *  turns white and says "OK to open". The house is a row of small buttons below. */
-export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
+export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
   const p = h.playing;
   return (
     <div className="cin">
@@ -45,7 +45,7 @@ export function Cinema({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onS
               <button className="f pill" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}><Dot on={h.heatOn} />Heating {heatLine(h)}</button>
               <button className="f pill" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}><Dot on={h.alarmOn} />Alarm</button>
               {p ? (
-                <button className="f pill np-pill" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause}>
+                <button className="f pill np-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
                   {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
                 </button>
               ) : h.shuffleName ? (

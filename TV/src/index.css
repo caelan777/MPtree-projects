@@ -429,3 +429,35 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .slot .mk, .agrid.small .mk, .slot .tile .face img.icon, .agrid.small .tile .face img.icon { width: 44px; height: 44px; border-radius: 12px; font-size: 19px; }
 .slot .tile .nm, .agrid.small .tile .nm { font-size: 20px; }
 .agrid.small .tile { gap: 4px; }
+
+/* ── the music strip: the song (opens the panel), then previous, play/pause, next ── */
+.np.np-row { padding: 0 8px 0 6px; gap: 6px; }
+.np-main { flex: 1; min-width: 0; height: 60px; display: flex; align-items: center; gap: 18px; padding: 0 16px 0 6px; border-radius: 30px; text-align: left; }
+.np-main:focus { transform: none; }
+.nb { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 2px solid var(--border); background: var(--bg); }
+.nb.pp { background: var(--accent); color: var(--btnFg); border-color: var(--accent); }
+
+/* ── the music panel ── */
+.panel.music { width: 1240px; background: var(--bg); border: 2px solid var(--border); border-radius: 44px; box-shadow: 0 30px 80px rgba(0, 0, 0, .25); padding: 48px 56px; display: grid; gap: 36px; }
+.mu-top { display: grid; grid-template-columns: 300px 1fr; gap: 44px; align-items: center; }
+.mu-art { width: 300px; height: 300px; border-radius: 30px; object-fit: cover; display: block; background: radial-gradient(circle at 30% 30%, #d9d9d9 0 18%, #5a5a5a 19% 34%, #1d1d1d 35%); box-shadow: 0 20px 50px rgba(0, 0, 0, .25); }
+.mu-t { min-width: 0; }
+.mu-t .where, .mu-none .by, .mu-t .by { font-size: 24px; color: var(--textSub); }
+.mu-t h3, .mu-none h3 { margin: 10px 0 6px; font-size: 64px; letter-spacing: -0.04em; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mu-t .by { font-size: 30px; }
+.mu-prog { margin-top: 30px; }
+.mu-prog .bar, .vbar { height: 8px; background: var(--dim); border-radius: 4px; position: relative; overflow: hidden; }
+.mu-prog .bar i, .vbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--text); border-radius: 4px; }
+.mu-prog .times { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 20px; color: var(--muted); margin-top: 10px; }
+.mu-ctrls { display: flex; justify-content: center; align-items: center; gap: 30px; }
+.cb { width: 100px; height: 100px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; }
+.cb.pl { width: 136px; height: 136px; background: var(--accent); color: var(--btnFg); border-color: var(--accent); }
+.cb.sm { width: 80px; height: 80px; background: transparent; color: var(--muted); }
+.cb.sm.on { color: var(--text); border-color: var(--text); }
+.mu-low { display: flex; align-items: center; gap: 18px; }
+.mu-vol { display: flex; align-items: center; gap: 18px; flex: 1; }
+.mu-vol .vbar { flex: 1; }
+.mu-vol .vnum { font-family: var(--mono); font-size: 22px; color: var(--textSub); min-width: 90px; text-align: center; }
+.round.sm { width: 72px; height: 72px; }
+.mu-none { display: grid; gap: 30px; }
+.mu-none .mu-low { justify-content: flex-start; }

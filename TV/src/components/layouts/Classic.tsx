@@ -7,7 +7,7 @@ import { Hours, NowPlaying, StateTag, StatsCard, WeatherIcon, type LayoutProps }
 
 /** Classic: clock, the next hours and the numbers on the left; the house on the
  *  right, each tile saying what is on now; what's playing; apps below. */
-export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
+export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
   const connect = connectText(ha);
   const chips = h.lightsOn.slice(0, 3);
   const more = h.lightsOn.length - chips.length;
@@ -75,7 +75,7 @@ export function Classic({ now, ha, home: h, stats, statsError, dock, onOpenApp, 
         )}
       </div>
 
-      {h.ready && <NowPlaying h={h} className="np np-classic" />}
+      {h.ready && <NowPlaying h={h} onOpen={onOpenMusic} className="np np-classic" />}
 
       <div className="dock">
         {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}

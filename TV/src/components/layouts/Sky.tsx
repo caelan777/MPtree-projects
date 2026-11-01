@@ -14,7 +14,7 @@ const st = (on: boolean | null) => (on === null ? "" : on ? "On · " : "Off · "
 /** Sky: the background is the weather. Grey day, a lower warmer light in the hour
  *  before sunset, dark at night (with dark mode), clouds when it is cloudy.
  *  Frosted panels float on top; every button says its state under its name. */
-export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
+export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
   const dusk = h.toSunset !== null && h.toSunset < 75;
   const cloudy = CLOUDY.has(h.condition ?? "");
   const setAt = Date.parse(ha.states[HA.sunset]?.state ?? "");
@@ -60,7 +60,7 @@ export function Sky({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSett
               </button>
             </div>
             {p ? (
-              <button className="f glass gbtn" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause}>
+              <button className="f glass gbtn" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
                 <span className="gi">{p.playing ? <Pause size={30} /> : <Play size={30} />}</span>
                 <span className="ell">{p.title}<span className="sub">{p.playing ? "Playing" : "Paused"} · {p.where}</span></span>
               </button>

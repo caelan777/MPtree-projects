@@ -18,7 +18,7 @@ function sunSentence(h: Home) {
 
 /** Editorial: no tiles, the screen reads like the opening of a newspaper. The
  *  numbers are black, the words around them grey; the buttons are underlined words. */
-export function Editorial({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
+export function Editorial({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
   const n = h.lightsOn.length;
   const p = h.playing;
   return (
@@ -52,7 +52,7 @@ export function Editorial({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, 
             <button className="f ed-act" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>Heating {heatLine(h)}</button>
             <button className="f ed-act" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>Alarm {h.alarmOn ? "on" : "off"}</button>
             {p ? (
-              <button className="f ed-act" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause}>{p.playing ? "Pause" : "Play"} the music</button>
+              <button className="f ed-act" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>Music controls</button>
             ) : h.shuffleName ? (
               <button className="f ed-act" data-f="" data-ok="Shuffle all songs in the living room" onClick={h.shuffleMusic}>Music in the living room</button>
             ) : null}

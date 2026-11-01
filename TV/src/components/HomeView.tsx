@@ -1,6 +1,7 @@
+
+import type { LayoutId } from "../settings";
 import { homeOf } from "../home";
 import type { HaExtras } from "../ha";
-import type { LayoutId } from "../settings";
 import { Classic } from "./layouts/Classic";
 import { Editorial } from "./layouts/Editorial";
 import { Cinema } from "./layouts/Cinema";

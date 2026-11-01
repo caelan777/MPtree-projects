@@ -14,6 +14,7 @@ import { AppsView } from "./components/AppsView";
 import { SettingsView } from "./components/SettingsView";
 import { Saver } from "./components/Saver";
 import { HeatingPanel } from "./components/HeatingPanel";
+import { MusicPanel } from "./components/MusicPanel";
 
 /** The Home row holds this many apps, plus the "Add app" tile when there is room. */
 const DOCK_MAX = 6;
@@ -48,6 +49,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [saver, setSaver] = useState(false);
   const [heatOpen, setHeatOpen] = useState(false);
+  const [musicOpen, setMusicOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const s = settings ?? DEFAULTS;
 
@@ -126,15 +128,19 @@ export default function App() {
   useEffect(() => { pageRef.current = page; }, [page]);
   const heatRef = useRef(heatOpen);
   useEffect(() => { heatRef.current = heatOpen; }, [heatOpen]);
+  const musicRef = useRef(musicOpen);
+  useEffect(() => { musicRef.current = musicOpen; }, [musicOpen]);
   useEffect(() => {
     const back = CapApp.addListener("backButton", () => {
       if (heatRef.current) { setHeatOpen(false); requestAnimationFrame(() => focusFirst()); return; }
+      if (musicRef.current) { setMusicOpen(false); requestAnimationFrame(() => focusFirst()); return; }
       if (pageRef.current !== "home") setPage("home");
       // On Home, Back does nothing: this is the home screen, there is nothing behind it.
     });
     const home = Launcher.addListener("home", () => {
       setSaver(false);
       setHeatOpen(false);
+      setMusicOpen(false);
       setPage("home");
       requestAnimationFrame(() => focusFirst());
     });
@@ -195,6 +201,11 @@ export default function App() {
     Launcher.startScreensaver().catch(() => setSaver(true));
   };
 
+  const closeMusic = useCallback(() => {
+    setMusicOpen(false);
+    requestAnimationFrame(() => focusEl(document.querySelector<HTMLElement>(".np-main, [data-ok='Open the music controls']")));
+  }, []);
+
   const closeHeat = useCallback(() => {
     setHeatOpen(false);
     requestAnimationFrame(() => focusEl(document.querySelector<HTMLElement>("[data-heat]")));
@@ -202,13 +213,13 @@ export default function App() {
 
   return (
     <div className={"stage" + (darkLook ? " dark" : "")} style={{ transform: `scale(${scale})` }}>
-      <div inert={heatOpen || undefined}>
-      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver} hint={saver || heatOpen ? null : hint} />
+      <div inert={heatOpen || musicOpen || undefined}>
+      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver} hint={saver || heatOpen || musicOpen ? null : hint} />
       {page === "home" && (
         <HomeView
           layout={layout} now={now} ha={ha} stats={stats} statsError={statsError} dock={dockApps}
           onOpenApp={openApp} onAddApp={() => setPage("apps")} onSettings={() => setPage("settings")}
-          onOpenHeating={() => setHeatOpen(true)} toast={toast} extras={extras} haUrl={s.haUrl}
+          onOpenHeating={() => setHeatOpen(true)} onOpenMusic={() => setMusicOpen(true)} toast={toast} extras={extras} haUrl={s.haUrl}
         />
       )}
       {page === "apps" && <AppsView apps={apps} dock={dock} onOpenApp={openApp} onTogglePin={togglePin} onGetApps={getApps} />}
@@ -220,6 +231,7 @@ export default function App() {
       )}
       </div>
       {heatOpen && <HeatingPanel ha={ha} toast={toast} onClose={closeHeat} />}
+      {musicOpen && <MusicPanel ha={ha} extras={extras} haUrl={s.haUrl} toast={toast} onClose={closeMusic} />}
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
       {saver && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} />}
     </div>

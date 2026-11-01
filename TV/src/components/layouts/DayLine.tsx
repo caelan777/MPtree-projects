@@ -28,7 +28,7 @@ function bezier(t: number, p0: number, p1: number, p2: number, p3: number): numb
 /** Day line: the day from 06:00 to midnight. The sun's path with a dot for now,
  *  the temperature through the day, rain as a dashed box, the 08:00 alarm, and the
  *  Sunset lights button pinned to the moment the sun goes down. */
-export function DayLine({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating }: LayoutProps) {
+export function DayLine({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, onSettings, onOpenHeating, onOpenMusic }: LayoutProps) {
   const rise = hourFrom(ha.states[HA.sunrise]?.state, 7.5);
   const set = hourFrom(ha.states[HA.sunset]?.state, 17.2);
   const xr = xOf(rise), xs = xOf(set);
@@ -128,7 +128,7 @@ export function DayLine({ now, ha, home: h, stats, dock, onOpenApp, onAddApp, on
             <button className="f pill" data-f="" data-heat="" data-ok="Change the heating" onClick={onOpenHeating}>Heating <StateTag on={h.heatOn} className="stt" />{h.heatOn ? deg(h.heatTarget) : ""}</button>
             <button className="f pill" data-f="" data-ok={h.alarmOn ? "Turn the alarm off" : "Turn the alarm on"} onClick={h.toggleAlarm}>Alarm <StateTag on={h.alarmOn} className="stt" /></button>
             {p ? (
-              <button className="f pill np-pill" data-f="" data-ok={p.playing ? `Pause ${p.title}` : `Play ${p.title}`} onClick={h.playPause}>
+              <button className="f pill np-pill" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>
                 {p.playing ? <Pause size={24} /> : <Play size={24} />}<span className="ttl">{p.title}</span>
               </button>
             ) : h.shuffleName ? (
