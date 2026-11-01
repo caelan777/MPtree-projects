@@ -85,6 +85,8 @@ export type SystemPlugin = {
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
   /** Android says this is a TV (its TV mode, or the leanback feature). */
   isTelevision(): Promise<{ tv: boolean }>;
+  /** What another app asked for as it opened MPTree, once: "shuffle" from the TV launcher. */
+  takeAction(): Promise<{ action: string | null }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
   /** mailto:, market: or https:. Rejects with code NO_HANDLER when nothing on
@@ -170,6 +172,7 @@ export type SyncPlugin = {
 const SystemWeb: SystemPlugin = {
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   isTelevision: async () => ({ tv: false }),
+  takeAction: async () => ({ action: null }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
   checkPlayUpdate:   async () => ({ available: false }),

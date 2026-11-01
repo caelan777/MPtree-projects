@@ -1,5 +1,6 @@
 package com.caelan.mptree;
 
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -9,6 +10,26 @@ import android.view.WindowInsetsController;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+
+    /** What another app asked for as it opened MPTree, until the app takes it
+     *  (SystemPlugin.takeAction). The MPTree TV launcher's Shuffle music button
+     *  sends "shuffle": shuffle all songs. */
+    static volatile String pendingAction = null;
+
+    private static void takeActionFrom(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getStringExtra("mptree_action");
+        if (action != null) {
+            pendingAction = action;
+            intent.removeExtra("mptree_action");
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        takeActionFrom(intent);
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -21,6 +42,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SyncPlugin.class);
         registerPlugin(AdsPlugin.class);
         super.onCreate(savedInstanceState);
+        takeActionFrom(getIntent());
     }
 
     // ── Immersive navigation ─────────────────────────────────────────────────

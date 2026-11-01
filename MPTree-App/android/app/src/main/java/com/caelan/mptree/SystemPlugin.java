@@ -59,6 +59,16 @@ public class SystemPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** What another app asked for as it opened MPTree ("shuffle"), once. */
+    @PluginMethod
+    public void takeAction(PluginCall call) {
+        String action = MainActivity.pendingAction;
+        MainActivity.pendingAction = null;
+        JSObject ret = new JSObject();
+        ret.put("action", action);
+        call.resolve(ret);
+    }
+
     /** Whether this is a TV, so the app shows its screen for the remote (src/tv). */
     @PluginMethod
     public void isTelevision(PluginCall call) {

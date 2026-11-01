@@ -2168,6 +2168,28 @@ export default function App() {
   useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
   const songsRef = useRef<Song[]>([]);
   useEffect(() => { songsRef.current = songs; }, [songs]);
+
+  // ── Opened by another app with a request ──────────────────────────────────
+  // The MPTree TV launcher's "Shuffle music" opens MPTree with "shuffle": all
+  // songs, shuffled. Asked for when the library is ready and whenever MPTree
+  // comes back to the front (the launcher may open it while it is running).
+  const shuffleAllRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    shuffleAllRef.current = () => {
+      const all = songsRef.current;
+      if (!all.length) return;
+      const q = shuffleArray(all);
+      setPlayMode("shuffle"); playContextRef.current = all; setPlaySource(null); playSong(q[0], q);
+      showToast(t("Shuffling all songs"));
+    };
+  });
+  useEffect(() => {
+    if (!libraryReady) return;
+    const take = () => { System.takeAction().then(r => { if (r.action === "shuffle") shuffleAllRef.current(); }).catch(() => {}); };
+    take();
+    const sub = CapApp.addListener("resume", take);
+    return () => { sub.then(h => h.remove()); };
+  }, [libraryReady]);
   const syncHostRef = useRef<Host | null>(null);
   // Refreshed after every render, so the engine always calls this render's
   // functions.
