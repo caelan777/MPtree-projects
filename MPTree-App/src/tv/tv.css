@@ -1,0 +1,88 @@
+/* MPTree on a TV. A 1920×1080 stage, scaled to the screen (TvView.tsx), so every
+   size here is in TV pixels. Colours come from the theme as variables. */
+.tvv { position: fixed; inset: 0; z-index: 50; overflow: hidden; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.tvv-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+.tvv button { font: inherit; color: inherit; background: none; border: none; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+.tvv button:focus, .tvv input:focus { outline: none; }
+.tvv .ic { display: inline-flex; align-items: center; justify-content: center; }
+.tvv .ic svg { width: 36px; height: 36px; }
+.tvv .ic.sm svg { width: 22px; height: 22px; }
+.tvv .ic.lg svg { width: 56px; height: 56px; }
+
+/* The highlight: the accent, filled, a little bigger. As in the TV launcher. */
+.tvv button:focus { background: var(--accent) !important; color: var(--btnFg) !important; border-color: var(--accent) !important; }
+.tvv button:focus .d, .tvv button:focus .ar, .tvv button:focus .n { color: var(--btnFg) !important; opacity: .7; }
+
+/* ── left ── */
+.tvv-left { position: absolute; left: 40px; top: 40px; bottom: 40px; width: 1080px; display: grid; grid-template-rows: auto 1fr; gap: 14px; }
+.tvv-head { background: var(--card); border: 2px solid var(--border); border-radius: 30px; padding: 16px 22px 18px; display: grid; gap: 14px; }
+.tvv-head .hr { display: flex; align-items: center; gap: 16px; }
+.tvv-head .logo { display: flex; color: var(--text); }
+.tvv-head .grow { flex: 1; }
+.tvv .seg { display: flex; background: var(--surface); border: 2px solid var(--border); border-radius: 36px; padding: 5px; gap: 4px; }
+.tvv .seg button { height: 56px; padding: 0 30px; border-radius: 28px; font-size: 26px; font-weight: 700; color: var(--muted); display: flex; align-items: center; }
+.tvv .seg button.on { background: var(--text); color: var(--bg); }
+.tvv .ib { height: 66px; min-width: 66px; border-radius: 33px; border: 2px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; }
+.tvv .ib.txt { padding: 0 26px; font-size: 24px; font-weight: 600; }
+.tvv .srch { height: 70px; border-radius: 18px; background: var(--input); border: 2px solid var(--border); display: flex; align-items: center; gap: 14px; padding: 0 22px; }
+.tvv .srch input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text); font: inherit; font-size: 26px; }
+.tvv .srch:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent); }
+.tvv .srch input::placeholder { color: var(--muted); }
+.tvv .cnt { display: flex; justify-content: space-between; align-items: center; font-size: 22px; color: var(--muted); }
+.tvv .cnt b { color: var(--text); }
+.tvv .flt { border: 2px solid var(--border); border-radius: 22px; padding: 8px 18px; font-size: 21px; font-weight: 600; color: var(--sub); display: inline-flex; align-items: center; gap: 8px; }
+
+.tvv-songs { position: relative; overflow-y: auto; scrollbar-width: none; }
+.tvv-songs::-webkit-scrollbar { display: none; }
+.tvv .song { position: absolute; left: 0; right: 0; height: 96px; display: flex; align-items: center; gap: 20px; padding: 0 20px; border-radius: 22px; text-align: left; }
+.tvv .song.act { background: var(--card); box-shadow: inset 0 0 0 2px var(--border); }
+.tvv .song .a { width: 70px; height: 70px; flex-shrink: 0; border-radius: 14px; overflow: hidden; display: flex; }
+.tvv .song .tx { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.tvv .song .tt { font-size: 27px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvv .song.act .tt { font-weight: 800; }
+.tvv .song .bt { display: flex; gap: 12px; font-size: 20px; }
+.tvv .song .d { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tvv .song .ar { flex: 1; text-align: right; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tvv-pls { display: grid; gap: 10px; align-content: start; overflow-y: auto; scrollbar-width: none; }
+.tvv .pl { display: flex; justify-content: space-between; align-items: center; height: 96px; padding: 0 28px; border-radius: 22px; background: var(--card); border: 2px solid var(--border); font-size: 28px; font-weight: 700; }
+.tvv .pl .n { font-size: 21px; font-weight: 500; color: var(--sub); }
+
+.tvv-empty { padding: 40px 30px; display: grid; gap: 18px; align-content: start; max-width: 860px; }
+.tvv-empty h3, .tvv-right h3 { margin: 0; font-size: 44px; letter-spacing: -0.03em; }
+.tvv-empty p, .tvv-right.none p { margin: 0; font-size: 26px; line-height: 1.45; color: var(--sub); }
+.tvv .big { justify-self: start; height: 80px; padding: 0 36px; border-radius: 40px; background: var(--surface); border: 2px solid var(--border); font-size: 28px; font-weight: 700; display: inline-flex; align-items: center; gap: 14px; }
+
+/* ── right: the player ── */
+.tvv-right { position: absolute; right: 40px; top: 40px; bottom: 40px; width: 740px; border-radius: 40px; background: var(--player); border: 2px solid var(--border); padding: 40px 44px; display: grid; grid-template-rows: auto auto auto auto 1fr; gap: 24px; }
+.tvv-right .art { justify-self: center; display: flex; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .35)); }
+.tvv-right .mp-t h3 { font-size: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvv-right .mp-t div { font-size: 26px; color: var(--sub); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvv .prog { display: block; width: 100%; padding: 12px 0 !important; border-radius: 10px; }
+.tvv .prog .bar { display: block; height: 8px; background: var(--dim); border-radius: 4px; position: relative; overflow: hidden; }
+.tvv .prog .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--text); }
+.tvv .prog:focus { background: transparent !important; }
+.tvv .prog:focus .bar { height: 14px; background: var(--border); box-shadow: 0 0 0 4px var(--accent); }
+.tvv .prog:focus .bar i { background: var(--accent); }
+.tvv .pt { display: flex; justify-content: space-between; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 20px; color: var(--muted); margin-top: 4px; }
+.tvv .pt .hint { opacity: 0; }
+.tvv .prog:focus + .pt .hint { opacity: 1; }
+.tvv .ctrls { display: flex; justify-content: center; align-items: center; gap: 26px; }
+.tvv .cb { width: 88px; height: 88px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border) !important; display: flex; align-items: center; justify-content: center; position: relative; }
+.tvv .cb.pl { width: 120px; height: 120px; background: var(--accent); color: var(--btnFg); }
+.tvv .cb.pl:focus { box-shadow: 0 0 0 6px var(--bg), 0 0 0 10px var(--accent); }
+.tvv .cb.sm { width: 70px; height: 70px; background: transparent; color: var(--muted); }
+.tvv .cb.sm.on { color: var(--text); border-color: var(--text) !important; }
+.tvv .cb .one { position: absolute; right: 10px; top: 8px; font-size: 16px; font-weight: 800; }
+.tvv .upn { align-self: end; }
+.tvv .upn .lbl { font-size: 19px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+.tvv .un { display: flex; justify-content: space-between; gap: 20px; font-size: 24px; padding: 6px 0; }
+.tvv .un span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvv .un .d { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tvv-right.none { grid-template-rows: auto auto auto auto; align-content: center; justify-items: center; text-align: center; }
+.tvv-right .art-none { width: 300px; height: 300px; border-radius: 28px; background: var(--card); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.tvv-right.none .big { justify-self: center; }
+
+/* Sheets from the phone (account, settings, Pro) opened on a TV: the highlight. */
+html.tv-mode button:focus-visible, html.tv-mode [role="button"]:focus-visible, html.tv-mode [tabindex="0"]:focus-visible, html.tv-mode input:focus-visible { outline: 4px solid currentColor; outline-offset: 3px; }
+html.tv-mode .tvv button:focus-visible { outline: none; }

@@ -753,4 +753,17 @@ export const NL: Record<string, string> = {
   "Follow MPTree": "Volg MPTree",
   "Remove photo?": "Foto weghalen?",
   "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" krijgt weer de gewone hoes. De foto zelf blijft gewoon op je telefoon staan.",
+  // MPTree on a TV (src/tv)
+  "Playlists you make on your phone come here with your account.": "Afspeellijsten die je op je telefoon maakt, komen hier via je account.",
+  "This playlist is empty": "Deze afspeellijst is leeg",
+  "Try another word.": "Probeer een ander woord.",
+  "No songs on this TV yet": "Nog geen nummers op deze tv",
+  "Sign in with your MPTree account, the one your phone uses. Your songs then come over from your phone: keep MPTree open on both.": "Log in met je MPTree-account, hetzelfde als op je telefoon. Je nummers komen dan van je telefoon hierheen: houd MPTree op allebei open.",
+  "MPTree account": "MPTree-account",
+  "Nothing is playing": "Er speelt niets",
+  "Choose a song on the left, or shuffle them all.": "Kies links een nummer, of shuffle ze allemaal.",
+  "Shuffle all songs": "Alle nummers shufflen",
+  "Position": "Positie",
+  "Up next": "Hierna",
+  "Nothing after this song": "Niets meer na dit nummer",
 };

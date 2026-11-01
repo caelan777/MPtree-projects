@@ -71,6 +71,8 @@ import type { BackupData } from "./storage";
 
 import { MusicScanner, AudioPlayer, System } from "./plugins";
 import { checkForUpdate, checkForPlayUpdate, dismissUpdate, NOTICES_KEY, type UpdateInfo } from "./updateCheck";
+import { TvView } from "./tv/TvView";
+import { isTvDevice } from "./tv/tvNav";
 
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -166,6 +168,10 @@ const WIDE_PHONE = 390;
 const WIDE_ROW_EXTRA = 10;
 
 export default function App() {
+  /** A TV: the remote screen, src/tv. Guessed straight away (no touch screen),
+   *  then Android's own answer, which only ever turns it on. */
+  const [isTv, setIsTv] = useState(isTvDevice);
+  useEffect(() => { System.isTelevision().then(r => { if (r.tv) setIsTv(true); }).catch(() => {}); }, []);
   const [songs,          setSongs]         = useState<Song[]>([]);
   const [removedSongs,   setRemovedSongs]  = useState<Song[]>([]);
   const [meta,           setMeta]          = useState<Record<string, SongMeta>>({});
@@ -3267,6 +3273,8 @@ export default function App() {
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
         </>}
 
+        {/* On a TV, everything from here to the TV screen below is left out. */}
+        {!isTv && <>
         {/* ═══ FLOATING HEADER CARD ════════════════════════════════════════ */}
         {/* Everything up top lives in one rounded card that floats ABOVE the
             list — the songs scroll underneath it. Its height is measured via
@@ -4056,6 +4064,30 @@ export default function App() {
             onSelectAll={() => setSelected(new Set(displayList.map(s => s.id)))} onClearAll={() => setSelected(new Set())}
             onClose={exitSelectMode} T={TH} />
         )}
+        </>}
+
+        {/* ═══ ON A TV ════════════════════════════════════════════════════ */}
+        {/* The landscape screen for the remote: songs left, the player always
+            open on the right (src/tv/TvView.tsx). It replaces the phone's
+            header card, list and players above; the sheets below open over it. */}
+        {isTv && (
+          <TvView
+            TH={TH} songs={displayList} allSongs={songs} libraryReady={libraryReady}
+            search={search} setSearch={setSearch} filter={filter} setFilter={setFilter}
+            playlists={playlists} meta={getMeta} dispName={dispName} dispArtist={dispArtist}
+            current={currentSong} isPlaying={isPlaying} currentTime={currentTime} duration={duration}
+            upNext={(() => { const at = currentSong ? queue.findIndex(x => x.id === currentSong.id) : -1; return at >= 0 ? queue.slice(at + 1, at + 4) : []; })()}
+            playMode={playMode} repeatOne={repeatOn} repeatAll={repeatAll} nowPlayingPhoto={nowPlayingPhoto}
+            onPlay={(song, list) => { setPlayMode("off"); playContextRef.current = list; setPlaySource(null); playSong(song, list); }}
+            onToggle={togglePlay} onSkip={skip} onSeek={seekTo}
+            onShuffleAll={() => {
+              if (!displayList.length) return;
+              const q = buildShuffleQ(displayList); setPlayMode("shuffle"); playContextRef.current = displayList; setPlaySource(null); playSong(q[0], q);
+            }}
+            onShuffleToggle={toggleShuffleFromPlayer} onRepeat={toggleRepeatFromPlayer}
+            onAccount={() => setAccountOpen(true)} onSettings={() => setSettingsOpen(true)}
+          />
+        )}
 
         {lyricsSong && (
           <LyricsSheet
@@ -4407,7 +4439,7 @@ export default function App() {
         )}
 
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
-        {!isInitializing && libraryReady && showOnboarding && !welcome && (
+        {!isInitializing && libraryReady && showOnboarding && !welcome && !isTv && (
           <OnboardingOverlay onDone={finishOnboarding} T={TH} />
         )}
 

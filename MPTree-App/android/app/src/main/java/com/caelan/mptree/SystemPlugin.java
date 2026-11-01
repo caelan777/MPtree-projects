@@ -1,6 +1,9 @@
 package com.caelan.mptree;
 
+import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
+import android.content.res.Configuration;
 import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -53,6 +56,18 @@ public class SystemPlugin extends Plugin {
         ret.put("model", Build.MODEL);
         ret.put("androidVersion", Build.VERSION.RELEASE);
         ret.put("sdk", Build.VERSION.SDK_INT);
+        call.resolve(ret);
+    }
+
+    /** Whether this is a TV, so the app shows its screen for the remote (src/tv). */
+    @PluginMethod
+    public void isTelevision(PluginCall call) {
+        Context ctx = getContext();
+        UiModeManager ui = (UiModeManager) ctx.getSystemService(Context.UI_MODE_SERVICE);
+        boolean tv = (ui != null && ui.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
+            || ctx.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+        JSObject ret = new JSObject();
+        ret.put("tv", tv);
         call.resolve(ret);
     }
 

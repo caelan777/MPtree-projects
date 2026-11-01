@@ -753,4 +753,17 @@ export const ES: Record<string, string> = {
   "Follow MPTree": "Sigue a MPTree",
   "Remove photo?": "¿Quitar la foto?",
   "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" vuelve a tener la portada normal. La foto sigue en tu teléfono.",
+  // MPTree on a TV (src/tv)
+  "Playlists you make on your phone come here with your account.": "Las listas que creas en tu teléfono llegan aquí con tu cuenta.",
+  "This playlist is empty": "Esta lista está vacía",
+  "Try another word.": "Prueba con otra palabra.",
+  "No songs on this TV yet": "Aún no hay canciones en esta tele",
+  "Sign in with your MPTree account, the one your phone uses. Your songs then come over from your phone: keep MPTree open on both.": "Inicia sesión con tu cuenta de MPTree, la misma de tu teléfono. Tus canciones llegan entonces desde tu teléfono: deja MPTree abierto en los dos.",
+  "MPTree account": "Cuenta de MPTree",
+  "Nothing is playing": "No suena nada",
+  "Choose a song on the left, or shuffle them all.": "Elige una canción a la izquierda, o pon todas en aleatorio.",
+  "Shuffle all songs": "Todas en aleatorio",
+  "Position": "Posición",
+  "Up next": "A continuación",
+  "Nothing after this song": "Nada después de esta canción",
 };
