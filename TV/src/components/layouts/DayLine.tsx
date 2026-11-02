@@ -1,8 +1,8 @@
 import { Pause, Play, Shuffle } from "lucide-react";
-import { AddTile, AppTile } from "../AppTile";
+import { AllAppsTile, AppTile } from "../AppTile";
 import { HA } from "../../homeConfig";
 import { clock, deg, longDate } from "../../format";
-import { Nums, type DayProps } from "./parts";
+import { AppRow, Nums, type DayProps } from "./parts";
 
 // The line runs from 06:00 to 24:00 across 1728 px: 96 px an hour.
 const START_H = 6;
@@ -42,7 +42,7 @@ function smooth(pts: { x: number; y: number }[]): string {
 /** Day line: the day as one drawing, 06:00 to midnight. The sun's arc with a dot
  *  for now, the temperature as a soft shaded curve under it, rain as a hatched
  *  block, and the sunset marked where the sun goes down. */
-export function DayLine({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
+export function DayLine({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
   const states = h.sunStates;
   const rise = hourFrom(states.sunrise, 7.5);
   const set = hourFrom(states.sunset, 17.2);
@@ -120,7 +120,8 @@ export function DayLine({ now, home: h, music: m, shuffle, stats, dock, onOpenAp
         <text x={dot.x} y={dot.y - 36} textAnchor="middle" className="dl-now">now</text>
         {[6, 10, 14, 18, 22].map(hr => <text key={hr} x={xOf(hr)} y={BASE + 42} className="dl-tick">{String(hr).padStart(2, "0")}</text>)}
         {h.sunriseAt && <text x={xr - 12} y={BASE - 14} textAnchor="end" className="dl-mark">{h.sunriseAt}</text>}
-        {h.sunsetAt && <text x={xs + 14} y={BASE - 14} className="dl-mark">sunset {h.sunsetAt}</text>}
+        {/* Kept clear of the dot when the sun is about to set. */}
+        {h.sunsetAt && <text x={Math.abs(dot.x - xs) < 160 ? Math.max(xs, dot.x) + 36 : xs + 14} y={BASE - 14} className="dl-mark">sunset {h.sunsetAt}</text>}
         {h.ready && (
           <>
             <line x1={xAlarm} y1={BASE - 14} x2={xAlarm} y2={BASE + 14} stroke="var(--text)" strokeWidth="3" />
@@ -140,10 +141,10 @@ export function DayLine({ now, home: h, music: m, shuffle, stats, dock, onOpenAp
         <Nums stats={stats} className="nums dl-nums" />
       </div>
 
-      <div className="dock">
+      <AppRow className="dock">
         {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}
-        {dock.length < 6 && <AddTile label="Add app" onOpen={onAddApp} />}
-      </div>
+        <AllAppsTile key="all" onOpen={onAllApps} />
+      </AppRow>
     </div>
   );
 }

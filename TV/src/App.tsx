@@ -5,11 +5,11 @@ import { DEFAULTS, LAYOUTS, defaultDock, haOn, loadSettings, saveSettings, type 
 import { useHaExtras, useHomeAssistant, type Ha } from "./ha";
 import { useOpenWeather } from "./weather";
 import { homeOf } from "./home";
-import { haMusic, pickMusic, tvMusic, useTvMedia, type ShuffleAll } from "./music";
+import { MPTREE, tvMusic, useTvMedia, type ShuffleAll } from "./music";
 import { useMptreeStats } from "./stats";
 import { focusEl, focusFirst, focusOne, useOkHint, useRemote } from "./nav";
 import { STAGE_H, STAGE_W, nextSunChange, sunIsDown } from "./theme";
-import { HA } from "./homeConfig";
+import { HA, STATS_URL } from "./homeConfig";
 import { clock } from "./format";
 import { TopBar, type Page } from "./components/TopBar";
 import { HomeView, type Side } from "./components/HomeView";
@@ -18,10 +18,16 @@ import { SettingsView } from "./components/SettingsView";
 import { Saver } from "./components/Saver";
 import { HeatingPanel } from "./components/HeatingPanel";
 import { MusicPanel } from "./components/MusicPanel";
+import { Intro } from "./components/Intro";
 
-/** The Home row holds this many apps, plus the "Add app" tile when there is room. */
+/** The Home row holds this many apps; "All apps" comes after them. */
 const DOCK_MAX = 6;
 const PLAY_STORE = "com.android.vending";
+/** The launcher starting this soon after the TV itself started is the TV turning on. */
+const BOOT_WINDOW_MS = 5 * 60_000;
+
+/** The logo intro: waiting to know whether to play it (a black screen), playing, or done. */
+type IntroState = "wait" | "play" | "off";
 
 /** Scale the 1920×1080 stage to whatever size the TV's WebView reports. */
 function useStageScale(): number {
@@ -69,7 +75,7 @@ export default function App() {
   const ha: Ha = { ...haLive, states: { ...wx.states, ...(useHa ? haLive.states : {}) } };
   const extras = { ...extrasLive, hours: extrasLive.hours.length ? extrasLive.hours : wx.hours };
   const hint = useOkHint();
-  const { stats, error: statsError } = useMptreeStats(s.statsUrl);
+  const { stats } = useMptreeStats(STATS_URL);
 
   // ── settings ──
   useEffect(() => { loadSettings().then(setSettings); }, []);
@@ -90,9 +96,10 @@ export default function App() {
   }, [toastMsg]);
 
   // ── apps on the TV ──
-  const loadApps = useCallback(() => {
-    Launcher.listApps().then(r => setApps(r.apps)).catch(() => {});
-  }, []);
+  const loadApps = useCallback(
+    () => Launcher.listApps().then(r => setApps(r.apps)).catch(() => {}),
+    [],
+  );
   useEffect(() => {
     loadApps();
     const sub = Launcher.addListener("appsChanged", loadApps);
@@ -122,11 +129,17 @@ export default function App() {
   /** Apps on Home, from Settings: move one place left or right, take off, or add at the end. */
   const setDock = useCallback((next: string[]) => change({ dock: next, dockChosen: true }), [change]);
 
-  // MPTree on this TV: Shuffle music opens it, shuffling all songs (it reads "shuffle").
-  const MPTREE = "com.caelan.mptree";
+  // Shuffle music: MPTree shuffles all its songs in the background and this screen
+  // stays. An MPTree from before that could only be opened, shuffling, so that is
+  // what happens with one.
   const hasMptree = apps.some(a => a.packageName === MPTREE);
-  const mptreeShuffle = useCallback(() => {
-    Launcher.launch({ packageName: MPTREE, action: "shuffle" }).catch(() => toast("MPTree would not open"));
+  const mptreeShuffle = useCallback(async () => {
+    try {
+      await Launcher.shuffleMptree();
+      toast("Shuffling all songs in MPTree");
+    } catch {
+      Launcher.launch({ packageName: MPTREE, action: "shuffle" }).catch(() => toast("MPTree would not open"));
+    }
   }, [toast]);
 
   // ── Home's two pages ──
@@ -147,8 +160,35 @@ export default function App() {
     else toast("The Play Store is not on this TV");
   }, [apps, toast]);
 
+  // ── the logo intro, when the TV turns on ──
+  // Started with the TV (the first minutes after it booted), or the screen coming
+  // on again from standby: the Verkuijl logo, and Home only once the apps and Home
+  // Assistant have been read. Opening the launcher any other way skips it.
+  const [intro, setIntro] = useState<IntroState>("wait");
+  const [introReady, setIntroReady] = useState(false);
+  /** Goes up by one for every intro, so each one reads the apps and the house afresh. */
+  const [introRun, setIntroRun] = useState(0);
+  useEffect(() => {
+    Launcher.startInfo()
+      .then(r => { if (r.sinceBootMs < BOOT_WINDOW_MS) { setIntro("play"); setIntroRun(n => n + 1); } else setIntro("off"); })
+      .catch(() => setIntro("off"));
+  }, []);
+  const loaded = settings !== null;
+  const { refresh: haRefresh } = haLive;
+  useEffect(() => {
+    if (!introRun || !loaded) return;
+    let alive = true;
+    // Both, whatever each answers: a Home Assistant that is down is "read" too
+    // (the house page says so), and the intro gives up waiting after a while.
+    Promise.allSettled([loadApps(), useHa ? haRefresh() : Promise.resolve()])
+      .then(() => { if (alive) setIntroReady(true); });
+    return () => { alive = false; };
+  }, [introRun, loaded, useHa, loadApps, haRefresh]);
+  const endIntro = useCallback(() => setIntro("off"), []);
+
   // ── focus: whenever the page changes, start on its first thing ──
-  const ready = settings !== null && apps.length > 0;
+  // Also once the intro is over (or skipped): until then Home can't take focus.
+  const ready = settings !== null && apps.length > 0 && intro === "off";
   useLayoutEffect(() => {
     if (!ready || saver) return;
     // Inside a page (Apps, Settings) start in the page, not on the top bar.
@@ -189,9 +229,11 @@ export default function App() {
   useEffect(() => { lastKey.current = Date.now(); }, []);
   const onKey = useCallback((e: KeyboardEvent) => {
     lastKey.current = Date.now();
+    // During the intro the remote waits: Home is not there yet.
+    if (intro !== "off") return true;
     if (saver && e.type === "keydown") { setSaver(false); return true; }
     return false;
-  }, [saver]);
+  }, [saver, intro]);
   useRemote(onKey);
   useEffect(() => {
     // The TV's own screensaver (Google's photos) needs nothing from us: Android starts it.
@@ -201,6 +243,37 @@ export default function App() {
     }, 15_000);
     return () => window.clearInterval(t);
   }, [s.saverMinutes, s.saverStyle]);
+  // Coming back into view counts as a key: the time spent away (in an app, or with
+  // the TV off) is not time the remote was left alone.
+  useEffect(() => {
+    const onVisible = () => { if (!document.hidden) lastKey.current = Date.now(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  // ── the TV going off and on ──
+  // Off: no screensaver left standing, and the screen black, ready for the intro.
+  // On, with this screen in front: the intro, then Home's first page, never the
+  // screensaver. On with an app in front: nothing here (no intro behind it).
+  useEffect(() => {
+    const off = Launcher.addListener("screenOff", () => {
+      setSaver(false);
+      setIntro(i => (i === "off" ? "wait" : i));
+    });
+    const on = Launcher.addListener("screenOn", () => {
+      lastKey.current = Date.now();
+      setSaver(false);
+      setHeatOpen(false);
+      setMusicOpen(false);
+      if (document.hidden) { setIntro("off"); return; }
+      setPage("home");
+      setSide("day");
+      setIntroReady(false);
+      setIntro("play");
+      setIntroRun(n => n + 1);
+    });
+    return () => { off.then(h => h.remove()); on.then(h => h.remove()); };
+  }, []);
 
   // Leaving Home and coming back starts on its first page again.
   const goPage = useCallback((p: Page) => { setPage(p); setSide("day"); }, []);
@@ -209,13 +282,13 @@ export default function App() {
   const override = s.themeOverride && s.themeOverride.until > now.getTime() ? s.themeOverride : null;
   const dark = s.theme === "dark" ? true : s.theme === "light" ? false : override ? override.dark : sunIsDown(ha.states, now, HA);
 
-  // ── which layout: chosen, one a day, or Cinema after dark ──
+  // ── which layout: chosen, or one a day ──
   const dayNumber = Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86_400_000);
-  const layout: LayoutId = s.cinemaAfterDark && dark ? "cinema"
-    : s.layoutDaily ? LAYOUTS[dayNumber % LAYOUTS.length].id
-    : s.layout;
-  // Cinema is always dark; the rest follow dark mode.
-  const darkLook = dark || (page === "home" && layout === "cinema");
+  const layout: LayoutId = s.layoutDaily ? LAYOUTS[dayNumber % LAYOUTS.length].id : s.layout;
+  const houseOn = useHa;
+  // Cinema is always dark, so on it there is no Dark/Light button; the rest follow dark mode.
+  const onCinema = page === "home" && layout === "cinema" && (side === "day" || !houseOn);
+  const darkLook = dark || onCinema;
   const darkOk = s.theme !== "auto"
     ? (dark ? "Always light" : "Always dark")
     : `${dark ? "Light" : "Dark"} until ${sunIsDown(ha.states, now, HA) ? "sunrise" : "sunset"}, then automatic`;
@@ -230,7 +303,7 @@ export default function App() {
     change({ themeOverride: { dark: !dark, until } });
     toast(`${dark ? "Light" : "Dark"} until ${clock(new Date(until))}, then automatic again`);
   };
-  useEffect(() => { document.body.style.background = darkLook ? "#000" : "#fff"; }, [darkLook]);
+  useEffect(() => { document.body.style.background = darkLook || intro !== "off" ? "#000" : "#fff"; }, [darkLook, intro]);
 
   // The screensaver button: the chosen one now. The TV's own is started by Android;
   // where a TV refuses that, MPTree's shows instead.
@@ -250,41 +323,38 @@ export default function App() {
   }, []);
 
   // ── the house, the music ──
-  const home = homeOf(ha, extras, now, toast, s.haUrl, !useHa);
-  const tv = useTvMedia((page === "home" || page === "settings") && !saver);
-  const speaker = haMusic(home, now.getTime());
-  const music = pickMusic(tvMusic(tv.np, tv.control), speaker);
-  // Shuffle all songs: MPTree on this TV when it is there, else the speaker's script.
-  const shuffle: ShuffleAll = hasMptree
-    ? { where: "MPTree, on this TV", run: async () => mptreeShuffle() }
-    : home.shuffleName ? { where: HA.speakerLabel, run: home.shuffleMusic } : null;
-  const houseOn = useHa;
+  const home = homeOf(ha, extras, now, toast, !useHa);
+  const tv = useTvMedia((page === "home" || page === "settings") && !saver && intro === "off");
+  const music = tvMusic(tv.np, tv.control);
+  // Shuffle all songs: only ever MPTree on this TV.
+  const shuffle: ShuffleAll = hasMptree ? { where: "MPTree, on this TV", run: mptreeShuffle } : null;
 
   return (
     <div className={"stage" + (darkLook ? " dark" : "") + (page === "home" && (side === "day" || !houseOn) ? " on-" + layout : "")} style={{ transform: `scale(${scale})` }}>
-      <div inert={heatOpen || musicOpen || undefined}>
-      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={toggleDark} onSaver={startSaver}
+      <div inert={heatOpen || musicOpen || intro !== "off" || undefined}>
+      <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={onCinema ? null : toggleDark} onSaver={startSaver}
         onAndroidSettings={() => Launcher.openSystemSettings().catch(() => toast("The TV's settings would not open"))} hint={saver || heatOpen || musicOpen ? null : hint} />
       {page === "home" && (
         <HomeView
           layout={layout} now={now} name={s.name} home={home} music={music} shuffle={shuffle} stats={stats} dock={dockApps}
-          onOpenApp={openApp} onAddApp={() => goPage("apps")} onOpenMusic={() => setMusicOpen(true)}
-          houseOn={houseOn} side={side} onSide={goSide} ha={ha} speaker={speaker}
+          onOpenApp={openApp} onAllApps={() => goPage("apps")} onOpenMusic={() => setMusicOpen(true)}
+          houseOn={houseOn} side={side} onSide={goSide} ha={ha}
           onOpenHeating={() => setHeatOpen(true)} onSettings={() => goPage("settings")}
         />
       )}
       {page === "apps" && <AppsView apps={apps} dock={dock} onOpenApp={openApp} onTogglePin={togglePin} onGetApps={getApps} />}
       {page === "settings" && settings && (
         <SettingsView
-          settings={settings} onChange={change} ha={haLive} stats={stats} statsError={statsError} toast={toast} onSaverNow={() => setSaver(true)}
+          settings={settings} onChange={change} ha={haLive} toast={toast} onSaverNow={() => setSaver(true)}
           apps={apps} dock={dockApps.map(a => a.packageName)} dockMax={DOCK_MAX} onSetDock={setDock} now={now} tvMediaAllowed={tv.allowed}
         />
       )}
       </div>
       {heatOpen && <HeatingPanel ha={haLive} toast={toast} onClose={closeHeat} />}
-      {musicOpen && <MusicPanel music={side === "house" && houseOn ? speaker : music} shuffle={side === "house" && houseOn ? (home.shuffleName ? { where: HA.speakerLabel, run: home.shuffleMusic } : null) : shuffle} onClose={closeMusic} />}
-      {toastMsg && <div className="toast" role="status">{toastMsg.text}</div>}
-      {saver && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} night={s.saverNight !== false} />}
+      {musicOpen && <MusicPanel music={music} shuffle={shuffle} onClose={closeMusic} />}
+      {toastMsg && intro === "off" && <div className="toast" role="status">{toastMsg.text}</div>}
+      {saver && intro === "off" && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} />}
+      {intro !== "off" && <Intro key={introRun} playing={intro === "play"} ready={introReady} onDone={endIntro} />}
     </div>
   );
 }

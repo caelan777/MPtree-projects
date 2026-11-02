@@ -30,10 +30,17 @@ interface LauncherPlugin {
   startScreensaver(): Promise<void>;
   nowPlaying(opts: { artKey?: string }): Promise<TvNowPlaying>;
   mediaControl(opts: { action: "play" | "pause" | "toggle" | "next" | "prev" }): Promise<void>;
+  /** MPTree shuffles all its songs in the background; MPTree's screen does not open.
+   *  Rejects with an MPTree that can't do that yet (then it is opened instead). */
+  shuffleMptree(): Promise<void>;
+  /** How long ago the TV itself started: the launcher starting just after is the TV turning on. */
+  startInfo(): Promise<{ sinceBootMs: number }>;
   /** The Home button was pressed while the launcher was already in front. */
   addListener(event: "home", fn: () => void): Promise<PluginListenerHandle>;
   /** An app was installed, updated or removed. */
   addListener(event: "appsChanged", fn: () => void): Promise<PluginListenerHandle>;
+  /** The screen went off (standby) or came on again. */
+  addListener(event: "screenOff" | "screenOn", fn: () => void): Promise<PluginListenerHandle>;
 }
 
 // In the browser (npm run dev) there is no Android underneath, so a few made-up
@@ -65,6 +72,9 @@ const webLauncher: LauncherPlugin = {
     if (action === "next" || action === "prev") { devSong.n += action === "next" ? 1 : 2; devSong.at = Date.now(); }
     else devSong.playing = action === "play" ? true : action === "pause" ? false : !devSong.playing;
   },
+  shuffleMptree: async () => { console.log("MPTree: shuffle all, in the background"); },
+  // ?intro in the address plays the intro, as if the TV just turned on.
+  startInfo: async () => ({ sinceBootMs: /[?&]intro\b/.test(location.search) ? 0 : 3_600_000 }),
   addListener: async () => ({ remove: async () => {} }),
 };
 

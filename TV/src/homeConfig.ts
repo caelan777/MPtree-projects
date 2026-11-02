@@ -1,5 +1,8 @@
 // Which Home Assistant entities the launcher uses. Names come from Caelan's own
 // Home Assistant (Developer tools, Template). Change them here, nowhere else.
+//
+// No speakers in here, on purpose: music on Home only ever comes from MPTree on
+// this TV, never from Home Assistant.
 
 export const HA = {
   /** A script that switches the sunset lights: run it once for on, again for off. */
@@ -26,8 +29,9 @@ export const HA = {
   sunrise: "sensor.sun_next_rising",
   /** "above_horizon" or "below_horizon", when the sun integration provides it. */
   sun: "sun.sun",
-  /** "Shuffle music living room": starts all songs, shuffled, on the living room speaker.
-   *  When this id is missing, any script with "shuffle" in its name is used. */
-  shuffleScript: "script.shuffle_alle_nummers",
-  speakerLabel: "Living room speaker",
 };
+
+/** The MPTree numbers: the address of a copy of Dashboard/data.json (what
+ *  `node Dashboard/collect.mjs` writes on the PC). Empty: no numbers on Home.
+ *  It lives here, not in Settings: it is one address, set once. */
+export const STATS_URL = "";

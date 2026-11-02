@@ -18,11 +18,9 @@ export type Settings = {
   haUrl: string;
   /** A Home Assistant long-lived access token. Never leaves the TV. */
   haToken: string;
-  /** Home Assistant on Home: the house, the weather, the music. Unset means "on
-   *  once an address and token are filled in". */
+  /** Home Assistant on Home: the house and the weather. Unset means "on once an
+   *  address and token are filled in". */
   haEnabled?: boolean;
-  /** Where the MPTree numbers are read from: a copy of Dashboard/data.json. */
-  statsUrl: string;
   /** Package names of the apps in the row at the bottom, in order. */
   dock: string[];
   /** False until the row has been filled once, so a deliberately empty row stays empty. */
@@ -31,14 +29,10 @@ export type Settings = {
   saverMinutes: number;
   /** MPTree's with photos of places around the world, MPTree's plain one, or the TV's own. */
   saverStyle: "photos" | "plain" | "tv";
-  /** From midnight to 06:00 MPTree's screensaver is only a dim clock on black. Unset means on. */
-  saverNight?: boolean;
   /** The Home layout. */
   layout: LayoutId;
   /** A different layout every day, in turn. */
   layoutDaily: boolean;
-  /** Cinema whenever it is dark, whatever the layout by day. */
-  cinemaAfterDark: boolean;
   /** "auto" goes dark when the sun goes down. */
   theme: "auto" | "light" | "dark";
   /** The quick switch in the top bar, in auto: holds until the next sunrise or sunset. */
@@ -49,14 +43,12 @@ export const DEFAULTS: Settings = {
   name: "Caelan",
   haUrl: "",
   haToken: "",
-  statsUrl: "",
   dock: [],
   dockChosen: false,
   saverMinutes: 10,
   saverStyle: "photos",
   layout: "classic",
   layoutDaily: false,
-  cinemaAfterDark: false,
   theme: "auto",
   themeOverride: null,
 };

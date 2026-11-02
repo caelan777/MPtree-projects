@@ -1,9 +1,10 @@
 # MPTree TV
 
 A home screen (launcher) for the living room Android TV, in MPTree's black and
-white look: the clock, the weather, the music, the MPTree numbers and a row of six
-apps; and, one page to the right, the house through Home Assistant (sunset lights,
-all lights off, the alarm, heating, inside temperature, the speaker).
+white look: the clock, the weather, MPTree's music and a row of six apps; and, one
+page to the right, the house through Home Assistant (sunset lights, all lights off,
+the alarm, heating, inside and outside temperature). Music only ever comes from
+MPTree on this TV, never from Home Assistant.
 
 Built like the Android app: React + Vite + Capacitor, with one small native plugin.
 It is its own project on purpose; nothing is shared with `MPTree-App/` (see the root
@@ -12,9 +13,45 @@ It is its own project on purpose; nothing is shared with `MPTree-App/` (see the 
 Designs: `design/design.html` (first take), `design/directions.html` (ten
 directions), `design/layouts.html` (the layout picker and the Sunset switch),
 `design/v2.html`, `design/v3.html` and `design/v4.html` (rounds two to four; 0.6.0
-is round four).
+is round four), `design/v5-classic.html` (five ways to do Classic's left side; the
+first, the ruled strip tidied, was picked and built). The Verkuijl logo artwork is
+`design/verkuijl-owl.png`.
 
-## What works in 0.6.0
+## New in 0.7.0
+
+* **The intro when the TV turns on**: the Verkuijl logo on black with the name
+  small at the foot of the screen, then the logo grows towards you and you fly
+  through it, the way MPTree opens, onto Home. It plays when the TV starts (the
+  launcher starting within five minutes of the TV) and when the screen comes on
+  again from standby with Home in front; never when the launcher is opened any
+  other way. Home only comes once the apps and Home Assistant have been read (it
+  gives up waiting after 12 seconds, so a Home Assistant that is down never keeps
+  the TV on the logo). The logo is the line-drawn owl, traced to SVG so it stays
+  sharp as it grows; you fly in between its eyes (`src/components/Intro.tsx`,
+  `OWL` and `FLY_ORIGIN`).
+* **No screensaver when the TV comes on**: it is closed when the screen goes off,
+  and the time the TV was off (or an app was in front) no longer counts as the
+  remote being left alone.
+* **"All apps" at the end of every app row.** With six apps on Home it waits just
+  past the right edge; Right on the sixth app slides the row one place along.
+* **Shuffle music shuffles in the background**: MPTree's player shuffles all
+  songs and plays, and MPTree's screen does not open (MPTree's `ShuffleActivity`;
+  an older MPTree is opened, shuffling, as before).
+* **Editorial is minimal**: a hairline masthead, the greeting and the time in one
+  big serif, one line about the weather, the song as a few italic words, the apps
+  as a contents line.
+* **Sky at night**: a deep blue sky with stars, a crescent moon, moonlit clouds and
+  hills, darker glass.
+* **Aligned**: every layout keeps to the same 96 px margins as the top bar, and the
+  big times and greetings line up with what is beside them (measured from the
+  letters themselves, not their boxes).
+* **Settings**: a row that is chosen no longer grows behind the edge.
+* **Gone**: music from Home Assistant (the speaker, its shuffle script, its
+  settings), Cinema after dark, the night clock, the Dark/Light button on Cinema
+  (always dark), and MPTree numbers in Settings (the address is `STATS_URL` in
+  `src/homeConfig.ts` now; empty, so no numbers show).
+
+## What 0.6.0 brought (0.7.0, above, changed some of it)
 
 Built from design round four (`design/v4.html`): the five Homes made more
 beautiful, and Home in two pages.
@@ -179,7 +216,7 @@ there, nowhere else.
 | `src/App.tsx` | Pages, which layout and dark mode, the screensaver timer, Back and Home, the app row |
 | `src/home.ts` | What every layout shows and its buttons (sunset, lights, alarm), from Home Assistant |
 | `src/weather.ts` | The weather without Home Assistant (Open-Meteo), as Home Assistant states |
-| `src/music.ts` | What plays: on this TV (media sessions) or a speaker, as one shape |
+| `src/music.ts` | What MPTree plays on this TV (media sessions) |
 | `src/components/layouts/` | The five Home layouts (the first page) |
 | `src/components/HouseView.tsx` | The house page (the second page) |
 | `src/home.css` | Round four: the layouts, the two pages, the house page |
@@ -187,7 +224,7 @@ there, nowhere else.
 | `src/nav.ts` | The remote: moves focus by position on screen; hold ◀ ▶ and hold OK |
 | `src/ha.ts` | Home Assistant over REST, polled every 20 s while the screen is on |
 | `src/homeConfig.ts` | The entity ids |
-| `src/stats.ts` | Reads the MPTree numbers file |
+| `src/stats.ts` | Reads the MPTree numbers file (`STATS_URL` in `src/homeConfig.ts`) |
 | `src/settings.ts` | What the launcher remembers (Capacitor Preferences) |
 | `src/components/` | Top bar, Home, Apps, Settings, Screensaver, app tiles |
 | `android/.../LauncherPlugin.java` | Lists apps with their TV banners, opens them, Home button, app changes, what plays on the TV |

@@ -43,7 +43,7 @@ button:focus, input:focus { outline: none; }
 .v { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .k { font-size: 17px; color: var(--textSub); margin-top: 2px; }
 
-.dock { position: absolute; left: 96px; right: 96px; bottom: 40px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+.dock { position: absolute; left: 96px; right: 96px; bottom: 40px; }
 
 /* app tiles, used by the dock and the Apps page */
 .tile { display: grid; gap: 10px; }
@@ -202,7 +202,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .set-nav .it { height: 84px; border-radius: 24px; padding: 0 26px; display: flex; align-items: center; gap: 18px; font-size: 28px; font-weight: 600; color: var(--textSub); border: 2px solid transparent; }
 .set-nav .it svg { flex-shrink: 0; }
 .set-nav .it.on { background: var(--card); color: var(--text); border-color: var(--border); }
-.set-main { position: absolute; left: 484px; right: 0; top: 0; bottom: 0; overflow-y: auto; padding: 8px 14px 60px; display: grid; gap: 22px; align-content: start; scrollbar-width: none; }
+.set-main { position: absolute; left: 456px; right: -28px; top: 0; bottom: 0; overflow-y: auto; padding: 14px 42px 60px 42px; display: grid; gap: 22px; align-content: start; scrollbar-width: none; }
 .set-main::-webkit-scrollbar { display: none; }
 .set-main h3 { margin: 0; font-size: 48px; letter-spacing: -0.035em; }
 .set-main .lead { font-size: 24px; color: var(--textSub); line-height: 1.45; }
@@ -302,3 +302,9 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .f:focus .edit, .f:focus .ph { color: var(--focusSub); }
 .acc.on { background: var(--dim); }
 
+
+/* Settings: wide rows grow less when chosen, so the bigger row stays inside the
+   scrolling area (it used to go partly behind its edge). */
+.set-main .f:focus { transform: scale(1.02); }
+.set-main .lpick:focus, .set-main .slot .face:focus, .set-main .agrid .face:focus { transform: scale(1.05); }
+.set-main .segc button:focus, .set-main .step > button:focus { transform: none; }

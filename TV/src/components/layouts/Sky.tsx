@@ -1,17 +1,29 @@
 import { Shuffle } from "lucide-react";
-import { AddTile, AppTile } from "../AppTile";
+import { AllAppsTile, AppTile } from "../AppTile";
 import { inTime } from "../../home";
 import { short } from "../../stats";
 import { kicker } from "../../music";
 import { clock, deg, longDate } from "../../format";
-import { Cover, HourStrip, MusicButtons, SongLine, type DayProps } from "./parts";
+import { AppRow, Cover, HourStrip, MusicButtons, SongLine, type DayProps } from "./parts";
 
 const CLOUDY = new Set(["cloudy", "partlycloudy", "rainy", "pouring", "fog", "snowy", "snowy-rainy", "lightning-rainy", "windy-variant"]);
 
+/** The night's stars: the same every night (a fixed sequence), more and brighter
+ *  high up, fewer towards the hills. Only shown in dark mode. */
+const STARS = (() => {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  return Array.from({ length: 90 }, () => {
+    const y = Math.pow(rnd(), 1.6) * 620;
+    return { x: rnd() * 1920, y, r: rnd() < 0.12 ? 2.4 : rnd() < 0.5 ? 1.6 : 1.1, o: 0.25 + rnd() * 0.6 * (1 - y / 900), tw: rnd() < 0.15 };
+  });
+})();
+
 /** Sky: a window onto the weather. The sky is the background (grey by day, a low
- *  warm sun in the hour before sunset, dark at night, clouds when it is cloudy),
- *  with layered hills. The time floats on it; the rest is frosted glass. */
-export function Sky({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
+ *  warm sun in the hour before sunset; at night a deep blue with stars, a crescent
+ *  moon and moonlit hills; clouds when it is cloudy). The time floats on it; the
+ *  rest is frosted glass. */
+export function Sky({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
   const dusk = h.toSunset !== null && h.toSunset < 75;
   const cloudy = CLOUDY.has(h.condition ?? "");
   const setAt = h.sunsetAt ? Number(h.sunsetAt.slice(0, 2)) : null;
@@ -19,8 +31,13 @@ export function Sky({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, o
   return (
     <div className={"sk" + (dusk ? " dusk" : "") + (cloudy ? " cloudy" : "")}>
       <div className="sk-bg" aria-hidden="true">
+        <svg className="stars" viewBox="0 0 1920 1080" width="1920" height="1080">
+          {STARS.map((st, i) => <circle key={i} cx={st.x} cy={st.y} r={st.r} opacity={st.o} className={st.tw ? "tw" : undefined} />)}
+        </svg>
         <span className="cloud c1" /><span className="cloud c2" /><span className="cloud c3" />
         <span className="sun" />
+        <span className="moon" />
+        <span className="glow" />
         <span className="hill h3" /><span className="hill h2" /><span className="hill h1" />
       </div>
 
@@ -62,8 +79,10 @@ export function Sky({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, o
       </div>
 
       <div className="glass sk-shelf">
-        {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}
-        {dock.length < 6 && <AddTile label="Add" onOpen={onAddApp} />}
+        <AppRow className="sk-row">
+          {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}
+          <AllAppsTile key="all" onOpen={onAllApps} />
+        </AppRow>
       </div>
     </div>
   );

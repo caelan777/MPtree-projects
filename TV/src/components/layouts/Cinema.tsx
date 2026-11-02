@@ -1,23 +1,23 @@
 import { useState } from "react";
-import { Pause, Play, Plus, Shuffle } from "lucide-react";
+import { LayoutGrid, Pause, Play, Shuffle } from "lucide-react";
 import { clock, deg } from "../../format";
-import { Nums, type DayProps } from "./parts";
+import { AppRow, Nums, type DayProps } from "./parts";
 
 /** Cinema: always dark. The selected app gets the stage: its name huge at the top
  *  left, with a soft light behind it; the apps stand on one line and the chosen one
  *  rises and turns white. The time sits quietly at the right, the music at the foot. */
-export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
-  // Which card is selected: the stage shows its name. -1 is "Add app".
+export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
+  // Which card is selected: the stage shows its name. -1 is "All apps".
   const [sel, setSel] = useState(0);
   const app = sel >= 0 ? dock[sel] ?? dock[0] : undefined;
-  const title = app ? app.label : "Add app";
+  const title = app ? app.label : "All apps";
   return (
     <div className="ci">
       <div className="ci-back" aria-hidden="true" />
       <div className="ci-feature">
         <div className="kick">Selected</div>
         <h2 className={title.length > 9 ? "long" : undefined}>{title}</h2>
-        <p>{app ? "OK opens it." : "OK chooses an app to put on Home."}</p>
+        <p>{app ? "OK opens it." : "OK shows every app on this TV."}</p>
       </div>
       <div className="ci-clock">
         <b>{clock(now)}</b>
@@ -26,7 +26,7 @@ export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp
         )}
       </div>
 
-      <div className="ci-row">
+      <AppRow className="ci-row">
         {dock.map((a, i) => (
           <button key={a.packageName} className="f ci-card" data-f="" data-ok={`Open ${a.label}`} data-default={i === 0 ? "" : undefined}
             onFocus={() => setSel(i)} onClick={() => onOpenApp(a)}>
@@ -34,13 +34,11 @@ export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp
             <span className="nm">{a.label}</span>
           </button>
         ))}
-        {dock.length < 6 && (
-          <button className="f ci-card add" data-f="" data-ok="Choose an app to add to Home" onFocus={() => setSel(-1)} onClick={onAddApp}>
-            <Plus size={44} />
-            <span className="nm">Add app</span>
-          </button>
-        )}
-      </div>
+        <button key="all" className="f ci-card add" data-f="" data-ok="See all apps on this TV" onFocus={() => setSel(-1)} onClick={onAllApps}>
+          <LayoutGrid size={44} />
+          <span className="nm">All apps</span>
+        </button>
+      </AppRow>
 
       <div className="ci-foot">
         <div className="ci-chips">

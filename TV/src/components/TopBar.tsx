@@ -10,7 +10,8 @@ type Props = {
   dark: boolean;
   /** What the Dark/Light button does, in words: "Dark until sunrise", "Always light". */
   darkOk: string;
-  onToggleDark: () => void;
+  /** Null where there is no light and dark: Cinema is always dark. */
+  onToggleDark: (() => void) | null;
   onSaver: () => void;
   /** The TV's own Android settings: Wi-Fi, picture, sound. */
   onAndroidSettings: () => void;
@@ -19,7 +20,7 @@ type Props = {
 };
 
 /** Your name (MPTree TV's own settings), Home and Apps on the left; the TV's
- *  Settings, Dark and Screensaver on the right, in words. In the middle: what OK
+ *  Settings, Dark (not on Cinema) and Screensaver on the right, in words. In the middle: what OK
  *  does right now. The same on every page. */
 export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver, onAndroidSettings, hint }: Props) {
   return (
@@ -39,9 +40,11 @@ export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver
           <button className="f tb" data-f="" data-ok="Open the TV's settings: Wi-Fi, picture, sound" onClick={onAndroidSettings}>
             <Gear size={30} />Settings
           </button>
-          <button className="f tb" data-f="" data-ok={darkOk} onClick={onToggleDark}>
-            {dark ? <Sun size={30} /> : <Moon size={28} />}{dark ? "Light" : "Dark"}
-          </button>
+          {onToggleDark && (
+            <button className="f tb" data-f="" data-ok={darkOk} onClick={onToggleDark}>
+              {dark ? <Sun size={30} /> : <Moon size={28} />}{dark ? "Light" : "Dark"}
+            </button>
+          )}
           <button className="f tb" data-f="" data-ok="Start the screensaver" onClick={onSaver}>
             <Image size={28} />Screensaver
           </button>

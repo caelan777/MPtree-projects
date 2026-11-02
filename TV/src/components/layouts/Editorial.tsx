@@ -1,79 +1,45 @@
 import { HA } from "../../homeConfig";
-import { greeting, pickHours, weatherWord, type Home } from "../../home";
-import { short } from "../../stats";
+import { greeting, inTime } from "../../home";
 import { clock, deg } from "../../format";
 import { type DayProps } from "./parts";
 
-/** "2 hours", "1 hour", "40 minutes". */
-function roughly(min: number): string {
-  if (min < 55) return `${Math.max(1, Math.round(min / 5) * 5)} minutes`;
-  const h = Math.round(min / 60);
-  return h === 1 ? "1 hour" : `${h} hours`;
-}
-
-function sunSentence(h: Home) {
-  if (h.toSunset !== null) return <> The sun sets in <i>{roughly(h.toSunset)}</i>.</>;
-  return h.sunriseAt ? <> The sun comes up at <i>{h.sunriseAt}</i>.</> : null;
-}
-
-/** Editorial: a magazine cover. A masthead, one big sentence in a serif with the
- *  numbers in black, three short columns, the buttons as italic underlined words
- *  and the apps along the foot like a contents line. */
-export function Editorial({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
-  const word = weatherWord(h.condition);
-  const later = pickHours(h.hours, now, 6);
-  const last = later[later.length - 1];
-  const evening = now.getHours() >= 15;
+/** Editorial, made minimal: a hairline masthead, the greeting and the time in one
+ *  big serif, one quiet line about the weather, what plays as a few italic words,
+ *  and the apps as a contents line at the foot. No columns, no numbers, a lot of
+ *  white. */
+export function Editorial({ now, home: h, music: m, shuffle, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
+  const weather = [
+    h.hasWeather ? `${deg(h.outside, 0)} and ${h.conditionText.toLowerCase()} in ${HA.outsideLabel}` : null,
+    h.inside !== null ? `${deg(h.inside)} inside` : null,
+    h.rainAt ? `rain from ${h.rainAt}` : null,
+    h.toSunset !== null ? `sunset in ${inTime(h.toSunset)}` : h.sunriseAt ? `sun up at ${h.sunriseAt}` : null,
+  ].filter(Boolean).join(" · ");
   return (
     <div className="ed">
       <div className="ed-mast">
-        <span><b>The Living Room</b> · {now.toLocaleDateString("en-GB", { weekday: "long" })} edition</span>
-        <span>{now.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</span>
+        <span>{now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span>
         <span>{HA.outsideLabel}</span>
       </div>
 
-      <div className="ed-flow">
-      <p className="ed-lede">
-        {greeting(now)}. It is <b>{clock(now)}</b>
-        {h.hasWeather ? (
-          <>, <b>{deg(h.outside, 0)}</b>{word ? ` and ${word}` : ""} in {HA.outsideLabel}{h.inside !== null ? <>, <b>{deg(h.inside)}</b> in here</> : null}.{sunSentence(h)}</>
-        ) : <> on {now.toLocaleDateString("en-GB", { weekday: "long" })}.</>}
-      </p>
+      <h1 className="ed-lede">{greeting(now)}.<br /><i>It's {clock(now)}.</i></h1>
+      {weather && <p className="ed-line">{weather.charAt(0).toUpperCase() + weather.slice(1)}.</p>}
 
-      <div className="ed-cols">
-        {h.hasWeather && (
-          <div className="ed-col">
-            <div className="h">{evening ? "Tonight" : "Today"}</div>
-            {h.rainAt ? <>Rain from <b>{h.rainAt}</b>. </> : <>No rain on the way. </>}
-            {last && last.temp !== null ? <>About <b>{deg(last.temp, 0)}</b> by {clock(new Date(last.at))}.</> : null}
-          </div>
-        )}
-        <div className="ed-col">
-          <div className="h">Music</div>
-          {m ? (
-            <><b>{m.title}</b>{m.artist ? ` by ${m.artist}` : ""} is {m.playing ? "playing" : "paused"} {m.place}.</>
-          ) : shuffle ? <>Nothing is playing. <b>Shuffle music</b> starts all your songs, {shuffle.where}.</> : <>Nothing is playing.</>}
-        </div>
-        {stats && (
-          <div className="ed-col">
-            <div className="h">MPTree</div>
-            <b>{short(stats.installs)}</b> installs{stats.installsToday ? <>, <b>{stats.installsToday}</b> of them today</> : null}.
-            {stats.rating ? <> Rated <b>{stats.rating}</b>.</> : null}
-          </div>
-        )}
-      </div>
-
-      <div className="ed-acts">
+      <div className="ed-music">
         {m ? (
           <>
-            <button className="f ed-act" data-f="" data-ok={m.playing ? `Pause ${m.title}` : `Play ${m.title}`} onClick={m.playPause}>{m.playing ? "Pause" : "Play"}</button>
-            {m.can.next && <button className="f ed-act" data-f="" data-ok="Next song" onClick={() => m.skip("next")}>Next song</button>}
-            <button className="f ed-act" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>Music controls</button>
+            <div className="ed-kick">{m.playing ? "Playing" : "Paused"}</div>
+            <div className="ed-song"><b>{m.title}</b>{m.artist ? `, ${m.artist}` : ""}</div>
+            <div className="ed-acts">
+              <button className="f ed-act" data-f="" data-ok={m.playing ? `Pause ${m.title}` : `Play ${m.title}`} onClick={m.playPause}>{m.playing ? "Pause" : "Play"}</button>
+              {m.can.next && <button className="f ed-act" data-f="" data-ok="Next song" onClick={() => m.skip("next")}>Next</button>}
+              <button className="f ed-act" data-f="" data-ok="Open the music controls" onClick={onOpenMusic}>More</button>
+            </div>
           </>
         ) : shuffle ? (
-          <button className="f ed-act" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}>Shuffle music</button>
+          <div className="ed-acts">
+            <button className="f ed-act" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}>Shuffle music</button>
+          </div>
         ) : null}
-      </div>
       </div>
 
       <div className="ed-apps">
@@ -82,7 +48,7 @@ export function Editorial({ now, home: h, music: m, shuffle, stats, dock, onOpen
             {a.label}
           </button>
         ))}
-        {dock.length < 6 && <button className="f ed-app dim" data-f="" data-ok="Choose an app to add to Home" onClick={onAddApp}>+ Add</button>}
+        <button className="f ed-app dim" data-f="" data-ok="See all apps on this TV" onClick={onAllApps}>All apps</button>
       </div>
     </div>
   );

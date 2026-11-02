@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Launcher, type TvNowPlaying } from "./launcher";
-import type { Home } from "./home";
 
-// The music Home shows: what plays on this TV (MPTree first, read from Android's
-// media sessions), or else what plays on a speaker in the house (Home Assistant).
-// Both look the same to the screens and the music panel.
+// The music Home shows: what MPTree plays on this TV, read from Android's media
+// sessions. Only MPTree: never a speaker from Home Assistant, and never another
+// app (a YouTube video is not music on Home).
+
+/** MPTree's package on the TV. */
+export const MPTREE = "com.caelan.mptree";
 
 export type Music = {
-  source: "tv" | "ha";
   title: string;
   artist: string;
-  /** "MPTree, on this TV", "Living room speaker". */
+  /** "MPTree, on this TV". */
   where: string;
-  /** The same in a sentence: "in MPTree on this TV", "on the living room speaker". */
+  /** The same in a sentence: "in MPTree on this TV". */
   place: string;
   art: string | null;
   playing: boolean;
@@ -20,19 +21,12 @@ export type Music = {
   position: number | null;
   duration: number | null;
   asOf: number;
-  /** 0 to 1, when known. */
-  volume: number | null;
-  shuffle: boolean | null;
-  repeat: "off" | "all" | "one" | null;
-  can: { prev: boolean; next: boolean; volume: boolean; shuffle: boolean; repeat: boolean };
+  can: { prev: boolean; next: boolean };
   playPause: () => Promise<unknown>;
   skip: (dir: "prev" | "next") => Promise<unknown>;
-  volumeBy: (by: number) => Promise<unknown>;
-  setShuffle: (on: boolean) => Promise<unknown>;
-  nextRepeat: () => Promise<unknown>;
 };
 
-/** Shuffle all songs: in MPTree on this TV, or with the speaker's script. */
+/** Shuffle all songs in MPTree on this TV, or null when MPTree is not installed. */
 export type ShuffleAll = { where: string; run: () => Promise<unknown> } | null;
 
 /** Where the song is now: moved on since `asOf` while it plays. */
@@ -100,47 +94,21 @@ export function useTvMedia(on: boolean) {
   return { np, allowed: np ? np.allowed : null, control };
 }
 
-const nothing = async () => {};
-
-/** The song on this TV, as Music. */
+/** The song MPTree plays on this TV, as Music. Nothing for any other app. */
 export function tvMusic(np: TvState, control: (a: "toggle" | "next" | "prev") => Promise<void>): Music | null {
-  if (!np || !np.allowed || !np.title) return null;
+  if (!np || !np.allowed || !np.title || np.package !== MPTREE) return null;
   return {
-    source: "tv",
     title: np.title,
     artist: np.artist ?? "",
-    where: `${np.app ?? "An app"}, on this TV`,
-    place: `in ${np.app ?? "an app"} on this TV`,
+    where: "MPTree, on this TV",
+    place: "in MPTree on this TV",
     art: np.art ?? null,
     playing: !!np.playing,
     position: np.position ?? null,
     duration: np.duration ?? null,
     asOf: np.at,
-    volume: null, shuffle: null, repeat: null,
-    can: { prev: !!np.canPrev, next: !!np.canNext, volume: false, shuffle: false, repeat: false },
+    can: { prev: !!np.canPrev, next: !!np.canNext },
     playPause: () => control("toggle"),
     skip: dir => control(dir),
-    volumeBy: nothing, setShuffle: nothing, nextRepeat: nothing,
   };
-}
-
-/** The song on a speaker in the house, as Music. */
-export function haMusic(h: Home, nowMs: number): Music | null {
-  const p = h.playing;
-  if (!p) return null;
-  return {
-    source: "ha",
-    title: p.title, artist: p.artist, where: p.where, place: `on the ${p.where.toLowerCase()}`, art: p.art, playing: p.playing,
-    position: p.position, duration: p.duration, asOf: nowMs,
-    volume: p.volume, shuffle: p.shuffle, repeat: p.repeat,
-    can: { prev: p.can.prev, next: p.can.next, volume: p.can.volume, shuffle: p.can.shuffle, repeat: p.can.repeat },
-    playPause: h.playPause, skip: h.skip, volumeBy: h.volumeBy, setShuffle: h.setShuffle, nextRepeat: h.nextRepeat,
-  };
-}
-
-/** What plays wins over what is paused; the TV wins over a speaker. */
-export function pickMusic(tv: Music | null, ha: Music | null): Music | null {
-  if (tv?.playing) return tv;
-  if (ha?.playing) return ha;
-  return tv ?? ha;
 }

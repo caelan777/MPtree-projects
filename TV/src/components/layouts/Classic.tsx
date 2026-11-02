@@ -1,11 +1,11 @@
-import { AddTile, AppTile } from "../AppTile";
+import { AllAppsTile, AppTile } from "../AppTile";
 import { greeting } from "../../home";
 import { clock, deg } from "../../format";
-import { HourStrip, MusicCard, Nums, type DayProps } from "./parts";
+import { AppRow, HourStrip, MusicCard, Nums, type DayProps } from "./parts";
 
 /** Classic: a greeting with the time in it, the day and the weather under it, the
  *  next hours as a ruled strip, and the music as one big card. Apps below. */
-export function Classic({ now, name, home: h, music, shuffle, stats, dock, onOpenApp, onAddApp, onOpenMusic }: DayProps) {
+export function Classic({ now, name, home: h, music, shuffle, stats, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
   const who = name.trim();
   return (
     <div className="cl">
@@ -22,10 +22,10 @@ export function Classic({ now, name, home: h, music, shuffle, stats, dock, onOpe
 
       <MusicCard m={music} shuffle={shuffle} now={now} onOpen={onOpenMusic} className="cl-music" />
 
-      <div className="dock">
+      <AppRow className="dock">
         {dock.map((a, i) => <AppTile key={a.packageName} app={a} onOpen={() => onOpenApp(a)} isDefault={i === 0} />)}
-        {dock.length < 6 && <AddTile label="Add app" onOpen={onAddApp} />}
-      </div>
+        <AllAppsTile key="all" onOpen={onAllApps} />
+      </AppRow>
     </div>
   );
 }

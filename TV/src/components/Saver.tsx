@@ -5,19 +5,14 @@ import { short, type MptreeStats } from "../stats";
 import { clock, deg, longDate } from "../format";
 import { usePhoto } from "../photos";
 
-type Props = {
-  now: Date; ha: Ha; stats: MptreeStats | null; photos: boolean;
-  /** From midnight to 06:00, only a dim clock on black. */
-  night: boolean;
-};
+type Props = { now: Date; ha: Ha; stats: MptreeStats | null; photos: boolean };
 
 /** The screensaver: a big clock, the house and the MPTree numbers, over a photo of
  *  somewhere beautiful (Wikimedia Commons) that changes every minute. Without
  *  photos (switched off, or no internet) it is the plain white one. The text
  *  drifts a little every minute so nothing burns into the screen. */
-export function Saver({ now, ha, stats, photos, night }: Props) {
-  const isNight = night && now.getHours() < 6;
-  const photo = usePhoto(photos && !isNight);
+export function Saver({ now, ha, stats, photos }: Props) {
+  const photo = usePhoto(photos);
   const s = ha.states;
   const minute = Math.floor(now.getTime() / 60000);
   const dx = ((minute * 37) % 60) - 30;
@@ -42,19 +37,6 @@ export function Saver({ now, ha, stats, photos, night }: Props) {
     </>
   );
 
-  if (isNight) {
-    // Night: the clock wanders across the whole screen, a little every minute, dim.
-    const x = 160 + ((minute * 389) % 1100);
-    const y = 140 + ((minute * 241) % 620);
-    return (
-      <div className="saver night">
-        <div className="nt" style={{ transform: `translate(${x}px, ${y}px)` }}>
-          <div className="time">{clock(now)}</div>
-          <div className="date">{now.toLocaleDateString("en-GB", { weekday: "long" })}</div>
-        </div>
-      </div>
-    );
-  }
   const numbers = stats && (
     <>
       <div className="lh">MPTree</div>

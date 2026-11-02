@@ -20,7 +20,7 @@ The two are independent: the launcher talks to MPTree only through Android
 Switching branches: `TV/node_modules` and `TV/dist` are untracked and stay behind on
 the app branch, so `git status` there shows `?? TV/`. Don't commit them.
 
-## The launcher (`TV/`, 0.6.0, versionCode 9)
+## The launcher (`TV/`, 0.7.0, versionCode 10)
 
 React 19 + Vite + Capacitor 8, app id `com.caelan.mptree.tv`. A 1920×1080 stage
 scaled to the screen, so every CSS size is a real TV pixel.
@@ -130,16 +130,54 @@ Gotchas: `TV` is next to `MPTree-App`, not inside it. If checkout complains abou
 - Open-Meteo from the TV (blocked from the sandbox; written to the documented format).
 - MPTree's Back levels and voice search.
 - Media-session reading after the adb command.
+- Round five on the TV: the intro on boot and after standby (screen on/off broadcasts),
+  background shuffle (`ShuffleActivity` and the foreground start), MPTree's player
+  and Settings panel at the TV's real size.
+
+## Round five (2 November 2026): launcher 0.7.0, MPTree on the TV
+
+Asked for by the user for family use, no other limits. What changed is in
+`TV/README.md` ("New in 0.7.0"). The rules it adds:
+
+- **Music is MPTree's only.** No Home Assistant speaker anywhere (data, house page,
+  music panel, Settings, `homeConfig.ts`); the native `nowPlaying` only reads
+  MPTree's media session (`LauncherPlugin.pick`).
+- **The intro** (`components/Intro.tsx`) plays on boot (`startInfo().sinceBootMs`
+  under 5 minutes) and on `screenOn` with the launcher in front, never otherwise.
+  `screenOff` closes the screensaver and blacks the screen out ("wait"); the wait
+  gives up by itself after 3 s in view. Home waits for `loadApps` and Home
+  Assistant's `refresh` (at most 12 s). The Verkuijl logo is the owl from
+  `design/verkuijl-owl.png`, traced to SVG paths (`OWL`, stroke 7.5 in the PNG's
+  480 x 600 space); `FLY_ORIGIN` is the middle of its face, the opening you fly through.
+- **App rows** are `AppRow` (`layouts/parts.tsx`): apps then "All apps"; the row
+  slides by `--shift` when the seventh takes focus. Editorial's is a text line.
+- **Background shuffle**: the launcher starts `com.caelan.mptree/.ShuffleActivity`
+  (no window), which `startForegroundService`s MPTree's player with
+  `SHUFFLE_ALL`. The player shuffles the songs MPTree saved in Preferences under
+  `mptree_tv_library` (written on TVs only, 3 s after the library changes). The app
+  takes the player's queue over through `AudioPlayer.getQueue()`. Fallbacks: no
+  saved list, or an older MPTree, opens MPTree with `mptree_action=shuffle`.
+- **MPTree on the TV**: text zoom is always 100% on a TV (`SystemPlugin.setTextZoom`;
+  a bigger zoom pushed the player off screen); the player fits its 1000 px column
+  (cover 360, two songs in Up next); Settings is a panel over the player card
+  (`SettingsSheet tv`, class `tv-panel-veil`), without Size and Show tutorial;
+  the remote reaches rows scrolled out of a sheet (`tvNav.scrolledAway`).
+- **MPTree numbers**: `STATS_URL` in `homeConfig.ts` (empty), no Settings section.
+- **Classic's left side**: of the five options on `design/v5-classic.html` the user
+  picked the first, the ruled strip tidied (strip 880 px, taller, bigger figures).
 
 ## Open next
 
-1. **MPTree numbers on the TV.** The launcher already reads a `data.json` URL
-   (Settings → MPTree numbers). Missing: somewhere to host it. Recommended: have
-   `Dashboard/collect.mjs` upload `data.json` to a public Cloudflare R2 bucket
-   (`wrangler r2 object put … --remote`), run daily from Windows Task Scheduler; keys
-   stay on the PC (see `Dashboard/README.md`). Alternatives: Home Assistant `www`
-   folder, or via the MPTree account (most work). Waiting on the user's choice.
+1. **MPTree numbers on the TV.** The launcher reads `STATS_URL` in
+   `src/homeConfig.ts` (empty). Missing: somewhere to host `data.json`.
+   Recommended: have `Dashboard/collect.mjs` upload it to a public Cloudflare R2
+   bucket (`wrangler r2 object put … --remote`), run daily from Windows Task
+   Scheduler; keys stay on the PC (see `Dashboard/README.md`). Alternatives: Home
+   Assistant `www` folder, or via the MPTree account (most work). Waiting on the
+   user's choice.
 2. Merging both branches into `main` once tested on the TV. `CLAUDE.md` on `main`
-   already lists `TV/`, but the folder only exists on `tv-launcher`.
+   already lists `TV/`, but the folder only exists on `tv-launcher`. Both branches
+   are 12 commits behind `main` (MPTree 1.3.6); merge `main` into the app branch
+   first.
 3. Security: the user once pasted a Home Assistant token in chat and was told to
    revoke it. Never reuse it; tokens are only typed into the TV's Settings.

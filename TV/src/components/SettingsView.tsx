@@ -5,18 +5,13 @@ import type { Ha } from "../ha";
 import { HA } from "../homeConfig";
 import { Launcher, type TvApp } from "../launcher";
 import { clock } from "../format";
-import { ago, type MptreeStats } from "../stats";
 import { AppTile } from "./AppTile";
-import { Logo } from "./Logo";
-import { StatsCard } from "./layouts/parts";
 import { focusFirst } from "../nav";
 
 type Props = {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   ha: Ha;
-  stats: MptreeStats | null;
-  statsError: string | null;
   toast: (m: string) => void;
   /** Shows MPTree's screensaver straight away, to see what it looks like. */
   onSaverNow: () => void;
@@ -33,12 +28,11 @@ type Props = {
 /** The one command that lets the launcher see what plays on the TV (see MediaListener.java). */
 const LISTENER_CMD = "adb shell cmd notification allow_listener com.caelan.mptree.tv/com.caelan.mptree.tv.MediaListener";
 
-type Section = "look" | "apps" | "ha" | "numbers" | "tv";
+type Section = "look" | "apps" | "ha" | "tv";
 const SECTIONS: { id: Section; name: string; icon: ReactNode }[] = [
   { id: "look", name: "Look", icon: <LayoutTemplate size={34} /> },
   { id: "apps", name: "Apps on Home", icon: <Rows3 size={34} /> },
   { id: "ha", name: "Home Assistant", icon: <HouseIcon size={34} /> },
-  { id: "numbers", name: "MPTree numbers", icon: <Logo size={34} /> },
   { id: "tv", name: "This TV", icon: <Tv size={34} /> },
 ];
 
@@ -70,7 +64,6 @@ export function SettingsView(props: Props) {
         {section === "look" && <Look {...props} />}
         {section === "apps" && <AppsOnHome {...props} />}
         {section === "ha" && <HomeAssistant {...props} />}
-        {section === "numbers" && <Numbers {...props} />}
         {section === "tv" && <ThisTv {...props} />}
       </div>
     </div>
@@ -188,10 +181,7 @@ function Look({ settings: s, onChange, toast, onSaverNow }: Props) {
           <Segmented value={s.saverStyle} options={[["photos", "Photos"], ["plain", "Plain"], ["tv", "TV's own"]]} onPick={v => onChange({ saverStyle: v })} />
         </div>
       </div>
-      <div className="row2">
-        <Switch on={s.layoutDaily} title="A different layout each day" sub="The five in turn" onFlip={() => onChange({ layoutDaily: !s.layoutDaily })} />
-        <Switch on={s.cinemaAfterDark} title="Cinema after dark" sub="Whatever the layout by day" onFlip={() => onChange({ cinemaAfterDark: !s.cinemaAfterDark })} />
-      </div>
+      <Switch on={s.layoutDaily} title="A different layout each day" sub="The five in turn" onFlip={() => onChange({ layoutDaily: !s.layoutDaily })} />
       {s.saverStyle !== "tv" ? (
         <div className="swrow plain">
           <span>Screensaver starts after<span className="ss">Set Android's own screensaver later than this, or to never</span></span>
@@ -204,10 +194,6 @@ function Look({ settings: s, onChange, toast, onSaverNow }: Props) {
         </div>
       ) : (
         <div className="lead">The TV's own screensaver starts when Android's settings say. MPTree's waits.</div>
-      )}
-      {s.saverStyle !== "tv" && (
-        <Switch on={s.saverNight !== false} title="Night clock" sub="From midnight to 06:00 the screensaver is only a dim clock on black"
-          onFlip={() => onChange({ saverNight: s.saverNight === false })} />
       )}
     </>
   );
@@ -293,9 +279,6 @@ function HomeAssistant({ settings: s, onChange, ha, toast }: Props) {
     : ha.status === "unset" ? "Add the address and a token below." : ha.error ?? "";
 
   // What each part of Home uses, and whether Home Assistant has it.
-  const shuffle = ha.states[HA.shuffleScript] ? HA.shuffleScript
-    : Object.values(ha.states).find(e => e.entity_id.startsWith("script.") && /shuffle/i.test(String(e.attributes.friendly_name ?? e.entity_id)))?.entity_id ?? HA.shuffleScript;
-  const player = Object.values(ha.states).find(e => e.entity_id.startsWith("media_player.") && (e.state === "playing" || e.state === "paused"))?.entity_id;
   const uses: [string, string, boolean][] = [
     ["Sunset lights", HA.sunsetScript, !!ha.states[HA.sunsetScript]],
     ["All lights off", HA.allLights, !!ha.states[HA.allLights]],
@@ -303,8 +286,6 @@ function HomeAssistant({ settings: s, onChange, ha, toast }: Props) {
     ["Heating", HA.heating, !!ha.states[HA.heating]],
     ["Inside", HA.insideTemp, !!ha.states[HA.insideTemp]],
     [`Weather, ${HA.outsideLabel}`, HA.weather, !!ha.states[HA.weather]],
-    ["Shuffle music", shuffle, !!ha.states[shuffle]],
-    ["Now playing", player ?? "any speaker that plays", true],
   ];
 
   const on = haOn(s);
@@ -342,28 +323,6 @@ function HomeAssistant({ settings: s, onChange, ha, toast }: Props) {
           <div key={what} className="ent"><span>{what}</span><span className={found ? "" : "miss"}>{found ? id : `${id} · not found`}</span></div>
         ))}
       </div>
-    </>
-  );
-}
-
-// ── MPTree numbers ───────────────────────────────────────────────────────────
-
-function Numbers({ settings: s, onChange, stats, statsError, now }: Props) {
-  const good = !!stats;
-  const title = good ? "Numbers loaded" : !s.statsUrl ? "Not set up yet" : statsError ? "Can't read the numbers" : "Loading…";
-  const sub = good
-    ? `Collected on your PC ${stats.collectedAt ? ago(stats.collectedAt, now.getTime()) : ""}. Read again every hour.`
-    : !s.statsUrl ? "Add the address of the numbers file below." : statsError ?? "";
-  return (
-    <>
-      <h3>MPTree numbers</h3>
-      <div className="lead">Installs, rating, downloads and visitors, as collected on your PC.</div>
-      <Status good={good} title={title} sub={sub} />
-      {good && <StatsCard stats={stats} error={null} now={now} />}
-      <Field id="statsUrl" label="Numbers file" value={s.statsUrl} placeholder="http://…/data.json"
-        hint="The address of a copy of Dashboard/data.json, which node Dashboard/collect.mjs writes on your PC."
-        onSave={v => onChange({ statsUrl: v })} />
-      <div className="lead">Coming later: reading them from your MPTree account instead, the way your phone syncs, so no address is needed.</div>
     </>
   );
 }

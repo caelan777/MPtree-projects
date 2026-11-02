@@ -47,6 +47,7 @@ public class LauncherPlugin extends Plugin {
     private static final int ICON_PX = 160;
 
     private BroadcastReceiver packageReceiver;
+    private BroadcastReceiver screenReceiver;
 
     @Override
     public void load() {
@@ -64,6 +65,22 @@ public class LauncherPlugin extends Plugin {
         filter.addDataScheme("package");
         // System broadcasts still arrive with NOT_EXPORTED; nothing else can send them to us.
         ContextCompat.registerReceiver(getContext(), packageReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+
+        // The TV going to standby and coming back: the page plays the logo intro
+        // when it comes on, and never starts on the screensaver. Android only
+        // sends these to receivers registered while running, like this one.
+        screenReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String a = intent.getAction();
+                if (Intent.ACTION_SCREEN_ON.equals(a)) notifyListeners("screenOn", new JSObject());
+                else if (Intent.ACTION_SCREEN_OFF.equals(a)) notifyListeners("screenOff", new JSObject());
+            }
+        };
+        IntentFilter screen = new IntentFilter();
+        screen.addAction(Intent.ACTION_SCREEN_ON);
+        screen.addAction(Intent.ACTION_SCREEN_OFF);
+        ContextCompat.registerReceiver(getContext(), screenReceiver, screen, ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
@@ -72,6 +89,19 @@ public class LauncherPlugin extends Plugin {
             try { getContext().unregisterReceiver(packageReceiver); } catch (IllegalArgumentException ignored) { }
             packageReceiver = null;
         }
+        if (screenReceiver != null) {
+            try { getContext().unregisterReceiver(screenReceiver); } catch (IllegalArgumentException ignored) { }
+            screenReceiver = null;
+        }
+    }
+
+    /** How long ago the TV started. The launcher starting within minutes of that
+     *  is the TV turning on, and the page plays its intro. */
+    @PluginMethod
+    public void startInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("sinceBootMs", SystemClock.elapsedRealtime());
+        call.resolve(ret);
     }
 
     /** The Home button while this is already the screen in front: back to Home. */
@@ -150,6 +180,29 @@ public class LauncherPlugin extends Plugin {
         }
     }
 
+    /**
+     * Shuffle all songs in MPTree without MPTree's screen opening: its
+     * ShuffleActivity has no window, starts MPTree's player and closes again, so
+     * this screen stays in front. An MPTree from before it has no such activity:
+     * then this fails and the page opens MPTree with "shuffle" instead.
+     */
+    @PluginMethod
+    public void shuffleMptree(PluginCall call) {
+        Intent intent = new Intent()
+                .setClassName(MPTREE, MPTREE + ".ShuffleActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+        if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+            call.reject("This MPTree can't shuffle in the background");
+            return;
+        }
+        try {
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("MPTree would not shuffle", ex);
+        }
+    }
+
     @PluginMethod
     public void openSystemSettings(PluginCall call) {
         Intent intent = new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -216,20 +269,19 @@ public class LauncherPlugin extends Plugin {
         return t == null || t.isEmpty() ? null : t;
     }
 
-    /** The one to show: what plays, MPTree first; else what is paused, MPTree first. */
+    /** MPTree's session, playing or paused. Music on Home is only ever MPTree's:
+     *  another app's video or a speaker is never shown (or paused) from here. */
     private static MediaController pick(List<MediaController> list) {
         MediaController best = null;
-        int bestScore = -1;
         for (MediaController c : list) {
-            if (titleOf(c) == null) continue;
-            int score = (isPlaying(c) ? 2 : 0) + (MPTREE.equals(c.getPackageName()) ? 1 : 0);
-            if (score > bestScore) { best = c; bestScore = score; }
+            if (!MPTREE.equals(c.getPackageName()) || titleOf(c) == null) continue;
+            if (best == null || (isPlaying(c) && !isPlaying(best))) best = c;
         }
         return best;
     }
 
     /**
-     * The song playing on this TV: { allowed, package, app, title, artist, playing,
+     * The song MPTree plays on this TV: { allowed, package, app, title, artist, playing,
      * position, duration (seconds), canPrev, canNext, artKey, art }. `art` (a JPEG
      * data URL) is left out when the page already has it: it passes the artKey it has.
      */

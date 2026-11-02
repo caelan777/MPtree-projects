@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Plus } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { LayoutGrid, Plus } from "lucide-react";
 import type { TvApp } from "../launcher";
 
 /** Two letters for an app without a picture: "YouTube" → "Yt", "HBO Max" → "HM". */
@@ -57,14 +57,19 @@ export function AppTile({ app, onOpen, onLong, pinned, isDefault, ok }: Props) {
 }
 
 /** The dashed tile at the end of a row. */
-export function AddTile({ label, onOpen, ok = "Choose an app to add to Home" }: { label: string; onOpen: () => void; ok?: string }) {
+export function AddTile({ label, onOpen, ok = "Choose an app to add to Home", icon = <Plus size={30} /> }: { label: string; onOpen: () => void; ok?: string; icon?: ReactNode }) {
   return (
     <div className="tile">
       <button className="f face add" data-f="" data-ok={ok} onClick={onOpen}>
-        <span className="mk add"><Plus size={30} /></span>
+        <span className="mk add">{icon}</span>
         <span className="nm">{label}</span>
       </button>
-      <span className="label">{" "}</span>
+      <span className="label">{" "}</span>
     </div>
   );
+}
+
+/** The last tile on Home's row: every app on the TV (and from there, add one to Home). */
+export function AllAppsTile({ onOpen }: { onOpen: () => void }) {
+  return <AddTile label="All apps" onOpen={onOpen} ok="See all apps on this TV" icon={<LayoutGrid size={30} />} />;
 }

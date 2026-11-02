@@ -1,3 +1,4 @@
+import { Children, isValidElement, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Pause, Play, Shuffle, SkipBack, SkipForward, Sun, Sunset, Wind } from "lucide-react";
 import { Logo } from "../Logo";
 import type { TvApp } from "../../launcher";
@@ -20,7 +21,8 @@ export type DayProps = {
   stats: MptreeStats | null;
   dock: TvApp[];
   onOpenApp: (a: TvApp) => void;
-  onAddApp: () => void;
+  /** The Apps page: every app on the TV. Always the last thing on the row. */
+  onAllApps: () => void;
   /** The music panel: every control for what is playing. */
   onOpenMusic: () => void;
 };
@@ -131,6 +133,22 @@ export function Nums({ stats, className = "nums" }: { stats: MptreeStats | null;
       {stats.installsToday ? <span><b>+{stats.installsToday}</b> today</span> : null}
       {stats.rating ? <span><b>{stats.rating}</b> rating</span> : null}
     </span>
+  );
+}
+
+/**
+ * Home's row of apps, then "All apps". Six fit across; with six apps on Home,
+ * "All apps" waits just past the right edge, and when Right reaches it the row
+ * slides one place left (and back again when Left goes back to the first).
+ */
+export function AppRow({ className, children }: { className: string; children: ReactNode }) {
+  const [shift, setShift] = useState(0);
+  return (
+    <div className={"arow " + className} style={{ "--shift": shift } as CSSProperties}>
+      {Children.toArray(children).map((c, i) => (
+        <div key={isValidElement(c) && c.key !== null ? c.key : i} className="ar-i" onFocus={() => setShift(Math.max(0, i - 5))}>{c}</div>
+      ))}
+    </div>
   );
 }
 

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { LayoutId } from "../settings";
 import type { Ha } from "../ha";
-import type { Music } from "../music";
 import { Classic } from "./layouts/Classic";
 import { Editorial } from "./layouts/Editorial";
 import { Cinema } from "./layouts/Cinema";
@@ -19,8 +18,6 @@ type Props = DayProps & {
   side: Side;
   onSide: (s: Side) => void;
   ha: Ha;
-  /** What plays on a speaker in the house, for the House page. */
-  speaker: Music | null;
   onOpenHeating: () => void;
   onSettings: () => void;
 };
@@ -41,7 +38,7 @@ function Day({ layout, ...p }: DayProps & { layout: LayoutId }) {
  * second is the house: Right at the right edge slides over to it, Left at its left
  * edge (or Back) slides back. The page that is away can't be reached (inert).
  */
-export function HomeView({ layout, houseOn, side, onSide, ha, speaker, onOpenHeating, onSettings, ...day }: Props) {
+export function HomeView({ layout, houseOn, side, onSide, ha, onOpenHeating, onSettings, ...day }: Props) {
   const dayRef = useRef<HTMLElement>(null);
   const houseRef = useRef<HTMLElement>(null);
   const at: Side = houseOn ? side : "day";
@@ -63,7 +60,7 @@ export function HomeView({ layout, houseOn, side, onSide, ha, speaker, onOpenHea
       </section>
       {houseOn && (
         <section className="hp house" ref={houseRef} data-zone="" inert={at !== "house" || undefined}>
-          <HouseView now={day.now} ha={ha} home={day.home} speaker={speaker} onOpenHeating={onOpenHeating} onOpenMusic={day.onOpenMusic} onSettings={onSettings} />
+          <HouseView now={day.now} ha={ha} home={day.home} onOpenHeating={onOpenHeating} onSettings={onSettings} />
         </section>
       )}
     </div>

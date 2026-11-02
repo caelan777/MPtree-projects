@@ -2,22 +2,6 @@ import { CONDITION, num, type Ha, type HaExtras, type Hour } from "./ha";
 import { HA } from "./homeConfig";
 import { clock, deg, timeOf } from "./format";
 
-/** A speaker in the house that is playing (or was paused in the last half hour). */
-export type Playing = {
-  id: string; title: string; artist: string; where: string; art: string | null; playing: boolean;
-  /** Seconds into the song, and how long it is, when the speaker says. */
-  position: number | null; duration: number | null;
-  /** 0 to 1, when the speaker says. */
-  volume: number | null;
-  shuffle: boolean | null;
-  repeat: "off" | "all" | "one" | null;
-  /** What this speaker can do. */
-  can: { prev: boolean; next: boolean; volume: boolean; shuffle: boolean; repeat: boolean; seek: boolean };
-};
-
-// Home Assistant's media player features (MediaPlayerEntityFeature).
-const F = { SEEK: 2, VOLUME_SET: 4, PREVIOUS: 16, NEXT: 32, VOLUME_STEP: 1024, SHUFFLE: 32768, REPEAT: 262144 };
-
 const friendly = (e: { entity_id: string; attributes: Record<string, unknown> }) =>
   String(e.attributes.friendly_name ?? e.entity_id.split(".")[1].replace(/_/g, " "));
 
@@ -31,7 +15,7 @@ export function inTime(min: number): string {
 
 /** Everything the layouts show about the house, read from Home Assistant's
  *  states, plus the buttons. Every layout uses this, so they all behave alike. */
-export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) => void, haUrl: string, off = false) {
+export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) => void, off = false) {
   const s = ha.states;
   const weather = s[HA.weather];
   const heat = s[HA.heating];
@@ -58,51 +42,6 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
   // The next hours, from the next whole hour on.
   const hours = extras.hours.filter(h => h.at > t - 30 * 60000);
   const rainHour = hours.find(h => h.rain && h.at < t + 12 * 3_600_000) ?? null;
-
-  // What is playing in the house.
-  const players = Object.values(s).filter(e => e.entity_id.startsWith("media_player.") && e.attributes.media_title);
-  const pick = players.find(e => e.state === "playing")
-    ?? players.find(e => e.state === "paused" && t - Date.parse(String((e as { last_changed?: string }).last_changed ?? "")) < 30 * 60000);
-  const playing: Playing | null = pick ? {
-    id: pick.entity_id,
-    title: String(pick.attributes.media_title),
-    artist: String(pick.attributes.media_artist ?? pick.attributes.media_album_artist ?? ""),
-    where: friendly(pick),
-    // Home Assistant gives the cover as a path on itself, with its own access key in it.
-    art: typeof pick.attributes.entity_picture === "string"
-      ? (pick.attributes.entity_picture.startsWith("/") ? haUrl.trim().replace(/\/+$/, "") + pick.attributes.entity_picture : pick.attributes.entity_picture)
-      : null,
-    playing: pick.state === "playing",
-    ...(() => {
-      const a = pick.attributes;
-      const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-      // The position is as of media_position_updated_at; while playing it has moved on since.
-      let position = n(a.media_position);
-      const at = Date.parse(String(a.media_position_updated_at ?? ""));
-      if (position !== null && pick.state === "playing" && Number.isFinite(at)) position += Math.max(0, (t - at) / 1000);
-      const duration = n(a.media_duration);
-      if (position !== null && duration !== null) position = Math.min(position, duration);
-      const feat = n(a.supported_features);
-      const has = (f: number) => feat === null || (feat & f) !== 0;
-      const repeat = a.repeat === "off" || a.repeat === "all" || a.repeat === "one" ? a.repeat : null;
-      return {
-        position, duration,
-        volume: n(a.volume_level),
-        shuffle: typeof a.shuffle === "boolean" ? a.shuffle : null,
-        repeat,
-        can: {
-          prev: has(F.PREVIOUS), next: has(F.NEXT),
-          volume: has(F.VOLUME_SET) || has(F.VOLUME_STEP),
-          shuffle: has(F.SHUFFLE) && typeof a.shuffle === "boolean",
-          repeat: has(F.REPEAT) && repeat !== null,
-          seek: has(F.SEEK) && duration !== null,
-        },
-      };
-    })(),
-  } : null;
-
-  // The shuffle script: the configured one, or any script called something with "shuffle".
-  const shuffle = s[HA.shuffleScript] ?? Object.values(s).find(e => e.entity_id.startsWith("script.") && /shuffle/i.test(friendly(e)));
 
   // The alarm is on Wednesday and Thursday: which of those is next.
   const nextAlarmDay = (() => {
@@ -146,11 +85,6 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
     /** Every hour known, the ones already past today too (the Day line draws the whole day). */
     allHours: extras.hours,
     rainAt: rainHour ? clock(new Date(rainHour.at)) : null,
-    playing,
-    shuffleName: shuffle ? friendly(shuffle) : null as string | null,
-    /** Where Shuffle music plays: the speaker, or MPTree on this TV. */
-    shuffleWhere: HA.speakerLabel,
-
     /** The sunset script switches the sunset lights on, or off again. */
     sunset: () => ha.call("script", "turn_on", { entity_id: HA.sunsetScript })
       .then(() => toast(sunsetLightsOn === true ? "Sunset lights off" : sunsetLightsOn === false ? "Sunset lights on" : "Sunset lights switched"), fail),
@@ -160,41 +94,6 @@ export function homeOf(ha: Ha, extras: HaExtras, now: Date, toast: (m: string) =
       return ha.call("automation", alarmOn ? "turn_off" : "turn_on", { entity_id: HA.alarm })
         .then(() => toast(alarmOn ? "Alarm off" : "Alarm on"), fail);
     },
-    playPause: () => {
-      if (!playing) return Promise.resolve();
-      ha.patch(playing.id, { state: playing.playing ? "paused" : "playing" });
-      return ha.call("media_player", "media_play_pause", { entity_id: playing.id })
-        .then(() => toast(playing.playing ? "Paused" : "Playing"), fail);
-    },
-    /** Previous or next song on the playing speaker. */
-    skip: (dir: "prev" | "next") => playing
-      ? ha.call("media_player", dir === "next" ? "media_next_track" : "media_previous_track", { entity_id: playing.id }).catch(fail)
-      : Promise.resolve(),
-    /** Volume up or down by `by` (0.05 is 5%). */
-    volumeBy: (by: number) => {
-      if (!playing) return Promise.resolve();
-      const v = playing.volume;
-      if (v === null) return ha.call("media_player", by > 0 ? "volume_up" : "volume_down", { entity_id: playing.id }).catch(fail);
-      const next = Math.round(Math.min(1, Math.max(0, v + by)) * 100) / 100;
-      ha.patch(playing.id, { attributes: { volume_level: next } });
-      return ha.call("media_player", "volume_set", { entity_id: playing.id, volume_level: next }).catch(fail);
-    },
-    setShuffle: (on: boolean) => {
-      if (!playing) return Promise.resolve();
-      ha.patch(playing.id, { attributes: { shuffle: on } });
-      return ha.call("media_player", "shuffle_set", { entity_id: playing.id, shuffle: on }).then(() => toast(on ? "Shuffle on" : "Shuffle off"), fail);
-    },
-    /** Off, then all, then one, then off again. */
-    nextRepeat: () => {
-      if (!playing) return Promise.resolve();
-      const next = playing.repeat === "off" ? "all" : playing.repeat === "all" ? "one" : "off";
-      ha.patch(playing.id, { attributes: { repeat: next } });
-      return ha.call("media_player", "repeat_set", { entity_id: playing.id, repeat: next })
-        .then(() => toast(next === "off" ? "Repeat off" : next === "all" ? "Repeat all" : "Repeat this song"), fail);
-    },
-    shuffleMusic: (): Promise<unknown> => shuffle
-      ? ha.call("script", "turn_on", { entity_id: shuffle.entity_id }).then(() => toast("Shuffling all songs"), fail)
-      : Promise.resolve(),
   };
 }
 
