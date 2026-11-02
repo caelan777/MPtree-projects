@@ -192,7 +192,6 @@ export default function App() {
     return () => { alive = false; };
   }, [introRun, loaded, useHa, loadApps, haRefresh]);
   const endIntro = useCallback(() => setIntro("off"), []);
-
   // ── focus: whenever the page changes, start on its first thing ──
   // Also once the intro is over (or skipped): until then Home can't take focus.
   const ready = settings !== null && apps.length > 0 && intro === "off";

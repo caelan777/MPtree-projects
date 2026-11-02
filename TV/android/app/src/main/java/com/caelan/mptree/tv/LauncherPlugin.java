@@ -166,8 +166,15 @@ public class LauncherPlugin extends Plugin {
         }
     }
 
+    /** Drawing every banner takes seconds just after the TV starts. On its own
+     *  thread, so the plugin's other calls (startInfo above all: whether to play the
+     *  intro) are not queued behind it; they waited six seconds for it at boot. */
     @PluginMethod
     public void listApps(PluginCall call) {
+        new Thread(() -> readApps(call), "listApps").start();
+    }
+
+    private void readApps(PluginCall call) {
         PackageManager pm = getContext().getPackageManager();
         String self = getContext().getPackageName();
 
@@ -374,17 +381,58 @@ public class LauncherPlugin extends Plugin {
         ret.put("canPrev", (actions & PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0);
         ret.put("canNext", (actions & PlaybackState.ACTION_SKIP_TO_NEXT) != 0);
 
-        String key = pkg + "|" + title + "|" + (artist == null ? "" : artist) + "|" + md.getString(MediaMetadata.METADATA_KEY_ALBUM);
+        // The picture is part of the key: MPTree first sends its logo and then, once
+        // it has read it from the file, the song's cover, under the same song.
+        Bitmap art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+        if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
+        if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
+        int[] print = art == null ? null : print(art);
+        String key = pkg + "|" + title + "|" + (artist == null ? "" : artist) + "|" + md.getString(MediaMetadata.METADATA_KEY_ALBUM)
+                + "|" + (print == null ? "" : Integer.toHexString(java.util.Arrays.hashCode(print)));
         if (!key.equals(artKey)) {
-            Bitmap art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
-            if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
-            if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
-            artUrl = art == null ? null : toJpeg(art);
+            // MPTree's logo, sent when a song has no cover, is not a cover: none then.
+            artUrl = art == null || isMptreeLogo(print) ? null : toJpeg(art);
             artKey = key;
         }
         ret.put("artKey", key);
         if (!key.equals(call.getString("artKey"))) ret.put("art", artUrl);
         call.resolve(ret);
+    }
+
+    /** A picture boiled down to 12 x 12 colours: enough to tell two apart, cheap to
+     *  make on every poll. */
+    private static int[] print(Bitmap b) {
+        Bitmap s = Bitmap.createScaledBitmap(b, 12, 12, true);
+        int[] px = new int[144];
+        s.getPixels(px, 0, 12, 0, 0, 12, 12);
+        if (s != b) s.recycle();
+        return px;
+    }
+
+    private int[] logoPrint;
+    private boolean logoRead;
+
+    /** Whether a picture is MPTree's stand-in (its album_art_logo), read from MPTree
+     *  itself so a new logo there needs nothing here. Close colours, not equal ones:
+     *  the media session may have scaled it. */
+    private boolean isMptreeLogo(int[] p) {
+        if (p == null) return false;
+        if (!logoRead) {
+            logoRead = true;
+            try {
+                android.content.res.Resources r = getContext().getPackageManager().getResourcesForApplication(MPTREE);
+                int id = r.getIdentifier("album_art_logo", "drawable", MPTREE);
+                Bitmap logo = id == 0 ? null : android.graphics.BitmapFactory.decodeResource(r, id);
+                if (logo != null) logoPrint = print(logo);
+            } catch (Exception ignored) { }
+        }
+        if (logoPrint == null) return false;
+        long diff = 0;
+        for (int i = 0; i < p.length; i++) {
+            int a = p[i], b = logoPrint[i];
+            diff += Math.abs(((a >> 16) & 255) - ((b >> 16) & 255)) + Math.abs(((a >> 8) & 255) - ((b >> 8) & 255)) + Math.abs((a & 255) - (b & 255));
+        }
+        return diff / (p.length * 3) < 14;
     }
 
     /** Play, pause, toggle, next or prev on what nowPlaying shows. */

@@ -69,13 +69,14 @@ export function Cover({ m, className }: { m: Music | null; className: string }) 
 }
 
 /** The record exactly as MPTree's player draws it (MPTree-App SpinningDisc): its
- *  vinyl.webp (copied to public/) with a white label and the black mark, turning
- *  only while music plays. Only the record turns, never the mark. */
-export function Vinyl({ spinning, className }: { spinning: boolean; className: string }) {
+ *  vinyl.webp (copied to public/) with a white label, the song's cover on it when
+ *  there is one, else the black mark, turning only while music plays. Only the
+ *  record turns, never the label. */
+export function Vinyl({ spinning, art, className }: { spinning: boolean; art?: string | null; className: string }) {
   return (
     <span className={"vinyl " + className}>
       <img className={"vy-rec" + (spinning ? " on" : "")} src="/vinyl.webp" alt="" draggable={false} />
-      <span className="vy-label"><Logo size={28} color="#000" /></span>
+      <span className="vy-label">{art ? <img src={art} alt="" draggable={false} /> : <Logo size={28} color="#000" />}</span>
     </span>
   );
 }
@@ -118,7 +119,7 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   if (m) {
     return (
       <div className={"mcard playing " + className}>
-        <Vinyl spinning={m.playing} className="mc-disc" />
+        <Vinyl spinning={m.playing} art={m.art} className="mc-disc" />
         <div className="mc-body">
           <div className="mc-kick">{kicker(m)}</div>
           <h4 className="mc-title">{m.title}</h4>

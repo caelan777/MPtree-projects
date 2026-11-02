@@ -68,7 +68,9 @@
 .vy-rec { grid-area: 1 / 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; animation: vy-spin 7s linear infinite paused; will-change: transform; backface-visibility: hidden; }
 .vy-rec.on { animation-play-state: running; }
 .vy-label { grid-area: 1 / 1; z-index: 1; width: 24%; height: 24%; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
+.vy-label { overflow: hidden; }
 .vy-label svg { width: 50%; height: auto; }
+.vy-label img { width: 100%; height: 100%; object-fit: cover; display: block; }
 @keyframes vy-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .vy-rec { animation: none; } }
 .mc-body { display: grid; gap: 8px; min-width: 0; }
