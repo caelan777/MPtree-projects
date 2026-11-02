@@ -63,6 +63,14 @@
 .cl-music { right: 96px; top: 176px; width: 600px; height: 620px; }
 .mc-disc { width: 230px; height: 230px; align-self: flex-end; }
 .mc-logo { display: grid; place-items: center; }
+/* MPTree's record: the shadow stays still, only the record turns (7 s a turn) */
+.vinyl { display: grid; place-items: center; border-radius: 50%; box-shadow: 0 6px 24px rgba(0, 0, 0, .4); contain: layout paint; }
+.vy-rec { grid-area: 1 / 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; animation: vy-spin 7s linear infinite paused; will-change: transform; backface-visibility: hidden; }
+.vy-rec.on { animation-play-state: running; }
+.vy-label { grid-area: 1 / 1; z-index: 1; width: 24%; height: 24%; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
+.vy-label svg { width: 50%; height: auto; }
+@keyframes vy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .vy-rec { animation: none; } }
 .mc-body { display: grid; gap: 8px; min-width: 0; }
 .mc-kick { font-size: 20px; color: var(--cardSub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mc-title { margin: 0; font-size: 52px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

@@ -68,6 +68,18 @@ export function Cover({ m, className }: { m: Music | null; className: string }) 
   return m?.art ? <img className={className + " cover"} src={m.art} alt="" /> : <span className={className + " rec"} />;
 }
 
+/** The record exactly as MPTree's player draws it (MPTree-App SpinningDisc): its
+ *  vinyl.webp (copied to public/) with a white label and the black mark, turning
+ *  only while music plays. Only the record turns, never the mark. */
+export function Vinyl({ spinning, className }: { spinning: boolean; className: string }) {
+  return (
+    <span className={"vinyl " + className}>
+      <img className={"vy-rec" + (spinning ? " on" : "")} src="/vinyl.webp" alt="" draggable={false} />
+      <span className="vy-label"><Logo size={28} color="#000" /></span>
+    </span>
+  );
+}
+
 /** Previous, play/pause and next for what is playing. */
 export function MusicButtons({ m, className = "mb" }: { m: Music; className?: string }) {
   return (
@@ -106,7 +118,7 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   if (m) {
     return (
       <div className={"mcard playing " + className}>
-        <span className="mc-disc rec" />
+        <Vinyl spinning={m.playing} className="mc-disc" />
         <div className="mc-body">
           <div className="mc-kick">{kicker(m)}</div>
           <h4 className="mc-title">{m.title}</h4>
@@ -123,7 +135,7 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   if (!shuffle) return null;
   return (
     <div className={"mcard " + className}>
-      {starting ? <span className="mc-disc rec" /> : <span className="mc-disc mc-logo"><Logo size={230} /></span>}
+      {starting ? <Vinyl spinning className="mc-disc" /> :<span className="mc-disc mc-logo"><Logo size={230} /></span>}
       <div className="mc-body">
         <h4 className="mc-title">Shuffle music</h4>
         <p className="mc-by">All your songs · {shuffle.where}</p>

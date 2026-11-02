@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from "react";
 const FLY_ORIGIN = "39.3% 16.8%";
 /** The logo stays at least this long, so it is seen even when Home is ready at once. */
 const MIN_MS = 1800;
+/** When the TV itself starts, longer: it is the first thing seen after a cold start. */
+const BOOT_MIN_MS = 3500;
 /** Home comes anyway after this long: a Home Assistant that never answers must not
  *  keep the TV on the logo. The house page then says it can't be reached. */
 const MAX_MS = 12_000;
@@ -44,10 +46,12 @@ type Props = {
   playing: boolean;
   /** Home is ready (the apps and Home Assistant read): the logo may fly. */
   ready: boolean;
+  /** The TV itself just started (not back from standby): the logo stays longer. */
+  boot: boolean;
   onDone: () => void;
 };
 
-export function Intro({ playing, ready, onDone }: Props) {
+export function Intro({ playing, ready, boot, onDone }: Props) {
   const [phase, setPhase] = useState<"in" | "fly">("in");
   const [minPassed, setMinPassed] = useState(false);
   const [maxPassed, setMaxPassed] = useState(false);
@@ -56,10 +60,15 @@ export function Intro({ playing, ready, onDone }: Props) {
 
   useEffect(() => {
     if (!playing) return;
-    const a = window.setTimeout(() => setMinPassed(true), MIN_MS);
-    const b = window.setTimeout(() => setMaxPassed(true), MAX_MS);
-    return () => { window.clearTimeout(a); window.clearTimeout(b); };
-  }, [playing]);
+    // Counted from the logo being on screen, not from being asked to play: just
+    // after the TV starts the page can take a while to draw its first frame.
+    let a = 0, b = 0, r2 = 0;
+    const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => {
+      a = window.setTimeout(() => setMinPassed(true), boot ? BOOT_MIN_MS : MIN_MS);
+      b = window.setTimeout(() => setMaxPassed(true), MAX_MS);
+    }); });
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); window.clearTimeout(a); window.clearTimeout(b); };
+  }, [playing, boot]);
 
   // Not playing yet, and nothing comes to start it: give the screen back.
   useEffect(() => {

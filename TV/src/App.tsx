@@ -168,9 +168,16 @@ export default function App() {
   const [introReady, setIntroReady] = useState(false);
   /** Goes up by one for every intro, so each one reads the apps and the house afresh. */
   const [introRun, setIntroRun] = useState(0);
+  /** This intro is the TV starting (the logo stays longer), not the screen coming back on. */
+  const [bootIntro, setBootIntro] = useState(false);
   useEffect(() => {
     Launcher.startInfo()
-      .then(r => { if (r.sinceBootMs < BOOT_WINDOW_MS) { setIntro("play"); setIntroRun(n => n + 1); } else setIntro("off"); })
+      .then(r => {
+        // Started behind an app (a TV that opens YouTube by itself): no intro, or it
+        // would still be standing, half done, when Home is first opened.
+        if (r.sinceBootMs < BOOT_WINDOW_MS && !document.hidden) { setBootIntro(true); setIntro("play"); setIntroRun(n => n + 1); }
+        else setIntro("off");
+      })
       .catch(() => setIntro("off"));
   }, []);
   const loaded = settings !== null;
@@ -255,12 +262,16 @@ export default function App() {
   // Off: no screensaver left standing, and the screen black, ready for the intro.
   // On, with this screen in front: the intro, then Home's first page, never the
   // screensaver. On with an app in front: nothing here (no intro behind it).
+  const screenOff = useRef(false);
   useEffect(() => {
     const off = Launcher.addListener("screenOff", () => {
+      screenOff.current = true;
       setSaver(false);
       setIntro(i => (i === "off" ? "wait" : i));
     });
     const on = Launcher.addListener("screenOn", () => {
+      screenOff.current = false;
+      setBootIntro(false);
       lastKey.current = Date.now();
       setSaver(false);
       setHeatOpen(false);
@@ -280,7 +291,12 @@ export default function App() {
   // while still waiting to know which: that is black anyway.
   const [inView, setInView] = useState(!document.hidden);
   useEffect(() => {
-    const onVisible = () => setInView(!document.hidden);
+    const onVisible = () => {
+      setInView(!document.hidden);
+      // An app came in front during the intro (not the screen going off): the intro
+      // is over, so Home is there, not the logo half way, when Home is next opened.
+      if (document.hidden && !screenOff.current) setIntro(i => (i === "play" ? "off" : i));
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
@@ -370,7 +386,7 @@ export default function App() {
       {musicOpen && <MusicPanel music={music} shuffle={shuffle} onClose={closeMusic} />}
       {toastMsg && intro === "off" && <div className="toast" role="status">{toastMsg.text}</div>}
       {saver && intro === "off" && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} />}
-      {intro !== "off" && <Intro key={introRun} playing={intro === "play"} ready={introReady} onDone={endIntro} />}
+      {intro !== "off" && <Intro key={introRun} playing={intro === "play"} ready={introReady} boot={bootIntro} onDone={endIntro} />}
     </div>
   );
 }
