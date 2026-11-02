@@ -124,7 +124,6 @@ type PlayerExpandSheetProps = {
   onChangePhoto?: () => void;
   /** The small button on the record: opens the record skins. Tapping the
    *  record itself still turns it between photo and record. */
-  onSkin?: () => void;
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -144,7 +143,7 @@ export function PlayerExpandSheet({
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
-  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto, onSkin,
+  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
@@ -223,7 +222,7 @@ export function PlayerExpandSheet({
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
-    setTimeout(onClose, 240); // matches .pes-sheet-out duration
+    setTimeout(onClose, 180); // matches .pes-sheet-out duration
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -242,11 +241,11 @@ export function PlayerExpandSheet({
   };
   const openUpNext = () => {
     setUpSnap(true); setUpOpen(true); setUpPull(0);
-    setTimeout(() => setUpSnap(false), 300);
+    setTimeout(() => setUpSnap(false), 240);
   };
   const closeUpNext = () => {
     setUpSnap(true); setUpOpen(false); setUpPull(0);
-    setTimeout(() => setUpSnap(false), 300);
+    setTimeout(() => setUpSnap(false), 240);
   };
 
   // ── Drags ─────────────────────────────────────────────────────────────────
@@ -256,7 +255,7 @@ export function PlayerExpandSheet({
   // direction once, after the first few pixels, and then follows the finger.
   const [closeDragY, setCloseDragY] = useState(0);
   const [closeSnap, setCloseSnap]   = useState(false);
-  const drag = useRef<{ y: number; x: number; mode: null | "close" | "up" | "back" | "none"; on: "player" | "page"; inList: boolean } | null>(null);
+  const drag = useRef<{ y: number; x: number; t: number; mode: null | "close" | "up" | "back" | "none"; on: "player" | "page"; inList: boolean } | null>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const vh = () => window.innerHeight || 800;
 
@@ -265,7 +264,7 @@ export function PlayerExpandSheet({
     const el = e.target as HTMLElement;
     // The timeline, the lyrics and a row's handle have drags of their own.
     if (el.closest("input, [data-own-drag]")) { drag.current = null; return; }
-    drag.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, mode: null, on, inList: !!el.closest("[data-up-list]") };
+    drag.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, t: Date.now(), mode: null, on, inList: !!el.closest("[data-up-list]") };
     setCloseSnap(false);
   };
   const dragMove = (e: React.TouchEvent) => {
@@ -296,22 +295,25 @@ export function PlayerExpandSheet({
     const d = drag.current;
     drag.current = null;
     if (!d || !d.mode || d.mode === "none") return;
+    // A quick flick counts as much as a long drag.
+    const moved = d.mode === "close" ? closeDragY : upPull;
+    const flick = moved > 24 && moved / Math.max(1, Date.now() - d.t) > 0.35;
     if (d.mode === "close") {
-      if (closeDragY > vh() * 0.22) {
+      if (closeDragY > vh() * 0.12 || flick) {
         if (closingRef.current) return;
         closingRef.current = true;
         setCloseSnap(true);
         setCloseDragY(vh());         // glide the rest of the way down
-        setTimeout(onClose, 260);
+        setTimeout(onClose, 200);
       } else {
         setCloseSnap(true);
         setCloseDragY(0);            // snap back up
-        setTimeout(() => setCloseSnap(false), 280);
+        setTimeout(() => setCloseSnap(false), 220);
       }
     } else if (d.mode === "up") {
-      if (upPull > vh() * 0.15) openUpNext(); else closeUpNext();
+      if (upPull > vh() * 0.08 || flick) openUpNext(); else closeUpNext();
     } else if (d.mode === "back") {
-      if (upPull > vh() * 0.15) closeUpNext(); else openUpNext();
+      if (upPull > vh() * 0.1 || flick) closeUpNext(); else openUpNext();
     }
   };
 
@@ -472,8 +474,8 @@ export function PlayerExpandSheet({
            need "both" to hold their final state until unmount. */
         .pes-overlay-in  { animation: pesFadeIn 0.22s ease backwards; }
         .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
-        .pes-sheet-in    { animation: pesSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-        .pes-sheet-out   { animation: pesSlideDown 0.24s ease-in both; }
+        .pes-sheet-in    { animation: pesSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .pes-sheet-out   { animation: pesSlideDown 0.18s ease-in both; }
         @media (prefers-reduced-motion: reduce) {
           .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
         }
@@ -492,7 +494,7 @@ export function PlayerExpandSheet({
           borderRadius: "20px 20px 0 0",
           overflow: "hidden",
           transform: sheetTransform,
-          transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+          transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
@@ -567,17 +569,6 @@ export function PlayerExpandSheet({
                     onNoCover={onNoCover}
                     onPhoto={onChangePhoto}
                   />
-                  {onSkin && (
-                    <button aria-label={t("Records")} onClick={e => { e.stopPropagation(); onSkin(); }} style={{
-                      position: "absolute", right: -2, bottom: Math.round(discSize * 0.03), width: 46, height: 46, borderRadius: "50%",
-                      background: T.playBtnBg, border: `3px solid ${T.sheetBg}`, padding: 0, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
-                    }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.playBtnFg} strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
-                  )}
                 </div>
               )}
               <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
@@ -714,7 +705,7 @@ export function PlayerExpandSheet({
             boxShadow: upOpen || upPull > 0 ? "0 -8px 30px rgba(0,0,0,0.35)" : "none",
             display: "flex", flexDirection: "column",
             transform: upTransform,
-            transition: upMoving ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+            transition: upMoving ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
             visibility: upOpen || upPull > 0 || upSnap ? "visible" : "hidden",
           }}
         >

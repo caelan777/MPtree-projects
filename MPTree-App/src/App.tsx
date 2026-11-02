@@ -816,7 +816,6 @@ export default function App() {
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
   const [lookOpen,    setLookOpen]    = useState(false);
   // Opened from the button on the player's record: straight to Records.
-  const [lookAtRecords, setLookAtRecords] = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
@@ -1801,7 +1800,7 @@ export default function App() {
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
   // Vertical drags open the full player LIVE — the sheet follows the finger,
   // exactly like the horizontal Songs↔Playlists page swipe but vertical.
-  // On release past ~25% it springs open; below that it settles back down.
+  // On release past ~12%, or after a flick, it springs open; below that it settles back down.
   const [expandDrag, setExpandDrag]     = useState<number | null>(null); // 0..1 while dragging
   const [expandSettling, setExpandSettling] = useState(false);           // animating back down
   // Horizontal swipe feedback for the mini-player's track text: it follows the
@@ -1811,6 +1810,7 @@ export default function App() {
   const [titleDir,   setTitleDir]   = useState<1 | -1>(1);
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
   const playerAxisRef   = useRef<"h" | "v" | null>(null); // gesture axis lock
+  const playerSwipeT    = useRef(0);       // when the touch began, for a flick
 
   const onPlayerSwipeStart = (clientX: number, clientY: number) => {
     // Ignore touches that begin in the system gesture zone at the very bottom
@@ -1820,6 +1820,7 @@ export default function App() {
     if (clientY > vh - 24) { playerSwipeStartX.current = null; playerSwipeStartY.current = null; playerAxisRef.current = "h"; return; }
     playerSwipeStartX.current = clientX;
     playerSwipeStartY.current = clientY;
+    playerSwipeT.current = Date.now();
     playerAxisRef.current = null;
   };
   const onPlayerSwipeMove = (clientX: number, clientY: number) => {
@@ -1858,7 +1859,9 @@ export default function App() {
       }
     }
     if (expandDrag !== null) {
-      if (expandDrag > 0.25 || deltaY > 160) {
+      // A short flick is enough; a slow drag opens past an eighth.
+      const flick = deltaY > 24 && deltaY / Math.max(1, Date.now() - playerSwipeT.current) > 0.35;
+      if (expandDrag > 0.12 || flick) {
         // Committed: hand over to the fully-open sheet without re-animating.
         openedByDragRef.current = true;
         hapticImpact("light");
@@ -2899,7 +2902,7 @@ export default function App() {
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
       if (musicHowOpen)        { setMusicHowOpen(false); return; }
-      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); setLookAtRecords(false); return; }
+      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
@@ -3274,8 +3277,8 @@ export default function App() {
            animation hands the transform back to the drag-follow inline style. */
         @keyframes mpTitleFromR { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes mpTitleFromL { from { transform: translateX(-30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .mp-title-r { animation: mpTitleFromR 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-        .mp-title-l { animation: mpTitleFromL 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .mp-title-r { animation: mpTitleFromR 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .mp-title-l { animation: mpTitleFromL 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
         /* Bars on the album art of the track that is playing. Defined here
@@ -3384,7 +3387,7 @@ export default function App() {
               playlist's name comes in filled after a "›". */}
           {(() => {
             const inPl = page === "playlists" && !!openPlaylistName;
-            const fold = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+            const fold = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
             const seg = (on: boolean): React.CSSProperties => ({
               paddingTop: 6, paddingBottom: 6, paddingLeft: 14, paddingRight: 14, borderRadius: 17, border: "none", cursor: "pointer",
               fontSize: 13, fontWeight: 700, fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", flexShrink: 0,
@@ -4050,7 +4053,7 @@ export default function App() {
                     style={{
                       minWidth: 0,
                       transform: titleDragX ? `translateX(${titleDragX}px)` : undefined,
-                      transition: titleDragX ? "none" : "transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)",
+                      transition: titleDragX ? "none" : "transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
@@ -4272,8 +4275,7 @@ export default function App() {
             ) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
-            onClose={() => { setLookOpen(false); setLookAtRecords(false); }}
-            startOnRecords={lookAtRecords}
+            onClose={() => setLookOpen(false)}
             T={TH} />
           );
         })()}
@@ -4391,7 +4393,6 @@ export default function App() {
             <PlayerExpandSheet
               onNoCover={() => showToast(t("This song has no cover. Add one with Edit."))}
               onChangePhoto={() => { setEditFocusPhoto(true); setEditSong(currentSong); }}
-              onSkin={() => { setLookAtRecords(true); setLookOpen(true); }}
               song={currentSong}
               dispName={dispName(currentSong)}
               dispArtist={dispArtist(currentSong)}

@@ -496,6 +496,7 @@ export const NL: Record<string, string> = {
   "Saving…": "Opslaan…",
   "Saved {when}": "Opgeslagen {when}",
   "Sign out": "Uitloggen",
+  "Taking off…": "Eraf halen…",
   "Signing in…": "Inloggen…",
   "Sign in with Google": "Inloggen met Google",
   "Account & sync": "Account en synchroniseren",

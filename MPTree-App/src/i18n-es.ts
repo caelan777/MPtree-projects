@@ -496,6 +496,7 @@ export const ES: Record<string, string> = {
   "Saving…": "Guardando…",
   "Saved {when}": "Guardado {when}",
   "Sign out": "Cerrar sesión",
+  "Taking off…": "Quitando…",
   "Signing in…": "Iniciando sesión…",
   "Sign in with Google": "Iniciar sesión con Google",
   "Account & sync": "Cuenta y sincronización",

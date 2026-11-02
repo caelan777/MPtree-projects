@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LoadLine } from "./LoadLine";
 import { count } from "../counter";
 import { Capacitor } from "@capacitor/core";
 import { makeSH, pageGround, type T } from "../themes";
@@ -147,6 +148,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
     <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+        <LoadLine on={(busy !== null && busy !== "ad") || joining} T={T} />
         <div style={{ ...column, display: "flex", justifyContent: "flex-end", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 0", flexShrink: 0 }}>
           <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
         </div>

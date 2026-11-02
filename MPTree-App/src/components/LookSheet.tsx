@@ -63,8 +63,6 @@ type LookSheetProps = {
   onNeedPro: () => void;
   onToast: (msg: string) => void;
   onClose: () => void;
-  /** Open straight on Records: the button on the player's record. */
-  startOnRecords?: boolean;
   T: T;
 };
 
@@ -339,14 +337,14 @@ type Point = { x: number; y: number };
  *  page, or one kind of choice on its own. */
 type Page = "main" | "aviela" | "lantern" | "background" | "colours" | "card" | "icons" | "records";
 
-export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, startOnRecords, T }: LookSheetProps) {
+export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
   const pro = usePro();
   const look = useLook();
   const bg = useBackground();
   const dark = theme === "dark";
   // Which page is open. The phone's back button goes back a page first.
-  const [page, setPage] = useState<Page>(startOnRecords ? "records" : "main");
+  const [page, setPage] = useState<Page>("main");
   // Lantern's question, while it is being asked, and how many days Lantern is
   // still shut for after a yes.
   const [asking, setAsking] = useState(false);
