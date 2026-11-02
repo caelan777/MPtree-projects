@@ -23,6 +23,7 @@ import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { MusicHint, MusicHowSheet } from "./components/MusicHint";
+import { countDaily } from "./counter";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
@@ -665,6 +666,8 @@ export default function App() {
   // Playlist picker opened from the multi-select bar.
   const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // The anonymous counter (counter.ts): which tabs are used, once a day each.
+  useEffect(() => { countDaily(page === "songs" ? "tab-songs" : "tab-playlists"); }, [page]);
   // The tour points at the Songs page: its header, search box, a song row, the
   // shuffle button. Started from Playlists it spotlit things that were not on
   // screen, so it always goes to Songs with the header open first, and waits
@@ -1077,7 +1080,9 @@ export default function App() {
       }
     };
     initialize();
+    countDaily("open");
     const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) countDaily("open");
       // Dismiss the per-song action sheet across a background/foreground
       // transition, so returning to the app never lands on a stale menu for a
       // song you have since scrolled away from.
@@ -2688,9 +2693,14 @@ export default function App() {
   const shareSong = useCallback(async (s: Song | null) => {
     if (!s) return;
     try {
+      // A cut has no file of its own; anything else goes out as a copy that
+      // carries the name, artist and cover MPTree shows for it.
+      const copy = s.isCut ? null : await System.prepareShare({
+        path: s.uri, title: dispName(s), artist: dispArtist(s), cover: getMeta(s).customPhoto,
+      }).catch(() => null);
       await Share.share({
         title: dispName(s),
-        files: [toFileUri(s.uri)],
+        files: [toFileUri(copy?.path ?? s.uri)],
         dialogTitle: t("Share song"),
       });
     } catch (e: any) {

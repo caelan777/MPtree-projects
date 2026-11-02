@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { count } from "../counter";
 import { Capacitor } from "@capacitor/core";
 import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
@@ -42,6 +43,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
   const needSignIn = phase !== "on" && (Capacitor.getPlatform() !== "web" || import.meta.env.DEV);
   const joining = busy === "signin" || phase === "joining";
 
+  useEffect(() => { count("pro-open"); }, []);
   useEffect(() => {
     let live = true;
     proPrice().then(p => { if (live) setPrice(p); });
