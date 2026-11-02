@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { LoadLine } from "./LoadLine";
 import { Capacitor } from "@capacitor/core";
 import { makeSH, pageGround, type T } from "../themes";
 import { t, tn, fmtBytes } from "../i18n";
@@ -47,6 +48,8 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const sh = makeSH(T);
   const s = useSync();
   const [busy, setBusy] = useState(false);
+  /** The device being taken off, so its row can say so. */
+  const [removing, setRemoving] = useState<string | null>(null);
   const [confirmOut, setConfirmOut] = useState(false);
   const [removeReceived, setRemoveReceived] = useState(false);
   // One of the folded parts under the sync card, open.
@@ -69,10 +72,10 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     else if (r === "ok" && !had && hasPro()) onToast(t("MPTree Pro is on, from your account"));
   };
   const doRemove = async (d: Device) => {
-    setBusy(true);
+    setBusy(true); setRemoving(d.id);
     try { await removeDevice(d.id); onToast(t("{name} is off your account", { name: d.name })); }
     catch { onToast(t("Could not reach Google Drive. Try again in a moment.")); }
-    setBusy(false);
+    setBusy(false); setRemoving(null);
   };
   const doSignOut = async () => {
     setBusy(true);
@@ -124,7 +127,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
       <div style={{ ...card, marginTop: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{tn(MAX, "Your account is on {n} device already", "Your account is on {n} devices already")}</div>
         <div style={{ ...small, marginTop: 6 }}>{t("Take one off to use it here. Nothing is deleted from that device.")}</div>
-        <DeviceList devices={s.devices.filter(d => !d.test)} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />
+        <DeviceList devices={s.devices.filter(d => !d.test)} me={s.deviceId} onRemove={doRemove} busy={busy} removing={removing} T={T} />
       </div>
     );
     bottom = <button onClick={cancelJoin} style={link}>{t("Cancel")}</button>;
@@ -238,7 +241,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
                 </div>
                 {s.devices.length === 0 && !s.problem
                   ? <Loading T={T} />
-                  : <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} T={T} />}
+                  : <DeviceList devices={s.devices} me={s.deviceId} onRemove={doRemove} busy={busy} removing={removing} T={T} />}
               </div>
             )}
             <button onClick={() => setOpenPart(openPart === "how" ? null : "how")} style={{ ...row, borderWidth: "1px 0" }} aria-expanded={openPart === "how"}>
@@ -329,6 +332,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
     <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <LoadLine on={busy || s.phase === "joining"} T={T} />
       <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px", flexShrink: 0 }}>
         <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("Account & sync")}</span>
         <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
@@ -508,8 +512,8 @@ function Triangle({ s, flow, peer, T }: { s: SyncState; flow: "in" | "out" | "ca
 
 /** The devices on the account. A name can be changed by tapping it, so two
  *  of the same model, or a tablet and a phone, are easy to tell apart. */
-function DeviceList({ devices, me, onRemove, busy, T }: {
-  devices: Device[]; me?: string; onRemove: (d: Device) => void; busy: boolean; T: T;
+function DeviceList({ devices, me, onRemove, busy, removing, T }: {
+  devices: Device[]; me?: string; onRemove: (d: Device) => void; busy: boolean; removing: string | null; T: T;
 }) {
   const [asking, setAsking] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
@@ -541,7 +545,9 @@ function DeviceList({ devices, me, onRemove, busy, T }: {
                 : t("Last used {when}", { when: ago(d.lastActive ?? d.addedAt) })}
             </span>
           </span>
-          {d.id !== me && !d.test && (asking === d.id ? (
+          {d.id !== me && !d.test && (removing === d.id ? (
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.muted, padding: "7px 0" }}>{t("Taking off…")}</span>
+          ) : asking === d.id ? (
             <button onClick={() => { setAsking(null); onRemove(d); }} disabled={busy}
               style={{ background: T.accent, color: T.playBtnFg, border: "none", borderRadius: 9, padding: "7px 11px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               {t("Take off")}

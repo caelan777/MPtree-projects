@@ -8,6 +8,7 @@ import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
 import { floatCard, roundBtn as cardCloseBtn } from "./cardStyles";
 import { ConfirmSheet } from "./ConfirmSheet";
+import type { ToastAction } from "./Toast";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
 import type { T } from "../themes";
@@ -102,6 +103,8 @@ interface Props {
   /** The name of the playlist that is open, or null on the list. App shows
    *  it in its tabs: "Playlists › name". */
   onOpenName?:        (name: string | null) => void;
+  /** App's toast, for "Undo" after a playlist is deleted with its X. */
+  onToast?:           (msg: string, action?: ToastAction) => void;
   /** Bumped when "Playlists" is tapped in App's tabs inside a playlist:
    *  straight back to the list. */
   listSignal?:        number;
@@ -289,7 +292,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -733,6 +736,19 @@ export const PlaylistsView: React.FC<Props> = ({
     setConfirmDeleteId(null);
   }, [playlists, activeId, onPlaylistsChange]);
 
+  // The X on a row while moving: gone at once, with Undo in the toast instead
+  // of a question. Undo puts it back where it was in the list as it is then.
+  const playlistsRef = useRef(playlists);
+  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
+  const deleteWithUndo = (pl: Playlist, index: number) => {
+    onHaptic?.();
+    deletePlaylist(pl.id);
+    onToast?.(tr("Playlist deleted"), { label: tr("Undo"), onClick: () => {
+      const now = playlistsRef.current.filter(p => p.id !== pl.id);
+      onPlaylistsChange([...now.slice(0, index), pl, ...now.slice(index)]);
+    } });
+  };
+
   /** "Add to playlist" from a row's ⋮ menu. Silently ignores duplicates. */
   const addSongToPlaylist = useCallback((playlistId: string, songId: string) => {
     onPlaylistsChange(playlists.map(p =>
@@ -843,7 +859,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // whole view snapped to its new offset while the logo was still folding: that
   // was the glitchy jump. Spacers animate height, the root animates padding,
   // both on the same curve as the header itself.
-  const FOLD_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+  const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
   const insetTransition = animateInsets ? `height ${FOLD_MOTION}` : "none";
   // Scrolled down, the fold does not move the rows: the spacer changes at once
   // and the scroll position makes up for it. App is told first. That scroll is
@@ -891,9 +907,9 @@ export const PlaylistsView: React.FC<Props> = ({
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const ease = "cubic-bezier(0.22, 1, 0.36, 1)";
     if (!from) {
-      card.animate([{ opacity: 0, transform: "translateY(28px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: ease });
+      card.animate([{ opacity: 0, transform: "translateY(28px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 230, easing: ease });
       const d = card.querySelector<HTMLElement>("[data-disc]");
-      if (d) d.animate([{ transform: `translateX(-${Math.round(d.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 420, delay: 260, easing: ease, fill: "backwards" });
+      if (d) d.animate([{ transform: `translateX(-${Math.round(d.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 250, delay: 160, easing: ease, fill: "backwards" });
       return;
     }
     const c = card.getBoundingClientRect();
@@ -903,11 +919,11 @@ export const PlaylistsView: React.FC<Props> = ({
     const right = Math.max(0, c.right - from.box.right);
     card.animate(
       [{ clipPath: `inset(${top}px ${right}px ${bottom}px ${left}px round 14px)` }, { clipPath: "inset(0px 0px 0px 0px round 26px)" }],
-      { duration: 420, easing: ease },
+      { duration: 250, easing: ease },
     );
     for (const el of Array.from(card.children) as HTMLElement[]) {
       if (el.querySelector("[data-sleeve]")) continue;
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 140, easing: "ease", fill: "backwards" });
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 80, easing: "ease", fill: "backwards" });
     }
     const sleeve = card.querySelector<HTMLElement>("[data-sleeve]");
     if (sleeve && from.thumb && from.thumb.width > 0) {
@@ -916,64 +932,20 @@ export const PlaylistsView: React.FC<Props> = ({
       sleeve.animate([
         { transform: `translate(${from.thumb.left - sb.left}px, ${from.thumb.top - sb.top}px) scale(${k})`, transformOrigin: "0 0" },
         { transform: "none", transformOrigin: "0 0" },
-      ], { duration: 420, easing: ease });
+      ], { duration: 250, easing: ease });
     } else if (sleeve) {
-      sleeve.animate([{ opacity: 0, transform: "scale(0.85)" }, { opacity: 1, transform: "none" }], { duration: 360, delay: 80, easing: ease, fill: "backwards" });
+      sleeve.animate([{ opacity: 0, transform: "scale(0.85)" }, { opacity: 1, transform: "none" }], { duration: 220, delay: 50, easing: ease, fill: "backwards" });
     }
     const disc = card.querySelector<HTMLElement>("[data-disc]");
     if (disc) disc.animate(
       [{ transform: `translateX(-${Math.round(disc.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: 420, delay: 300, easing: ease, fill: "backwards" },
+      { duration: 250, delay: 180, easing: ease, fill: "backwards" },
     );
     let row = card.nextElementSibling as HTMLElement | null;
     for (let i = 0; row && i < 10; i++, row = row.nextElementSibling as HTMLElement | null) {
-      row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 340, delay: 180 + i * 35, easing: ease, fill: "backwards" });
+      row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 200, delay: 110 + i * 21, easing: ease, fill: "backwards" });
     }
   }, [view, activeId, activeSmartId]);
-
-  // ── Swiping a playlist away ───────────────────────────────────────────────
-  // In a playlist a drag to the right takes it off to the right and the list
-  // of playlists comes back from under it, the way App's page swipe goes
-  // between Songs and Playlists. While it is dragged the list is drawn behind
-  // it, still and untouchable, so there is something under the finger.
-  const [swipeX, setSwipeX] = useState(0);
-  const [swipeAnim, setSwipeAnim] = useState(false);
-  const swipeRef = useRef<{ x: number; y: number; t: number; lock: "h" | "v" | null } | null>(null);
-  const canSwipeBack = (view === "detail" || view === "smartDetail") && !selectMode && !menuSong && !renamingId && !confirmDeleteId;
-  const onSwipeStart = (e: React.TouchEvent) => {
-    if (!canSwipeBack || swipeAnim) return;
-    const p = e.touches[0];
-    swipeRef.current = { x: p.clientX, y: p.clientY, t: Date.now(), lock: null };
-  };
-  const onSwipeMove = (e: React.TouchEvent) => {
-    const g = swipeRef.current;
-    if (!g) return;
-    const p = e.touches[0];
-    const dx = p.clientX - g.x, dy = p.clientY - g.y;
-    if (!g.lock) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      g.lock = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.3 ? "h" : "v";
-      if (g.lock === "h") cancelPress();
-    }
-    if (g.lock === "h") setSwipeX(Math.max(0, dx));
-  };
-  const onSwipeEnd = () => {
-    const g = swipeRef.current;
-    swipeRef.current = null;
-    if (!g || g.lock !== "h") return;
-    const w = window.innerWidth;
-    const fast = swipeX / Math.max(1, Date.now() - g.t) > 0.5;
-    setSwipeAnim(true);
-    if (swipeX > w * 0.3 || (fast && swipeX > 40)) {
-      setSwipeX(w);
-      setTimeout(() => { leaveToList(); setSwipeX(0); setSwipeAnim(false); }, 230);
-    } else {
-      setSwipeX(0);
-      setTimeout(() => setSwipeAnim(false), 230);
-    }
-  };
-  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
-  const swipeMotion = swipeAnim ? "0.23s cubic-bezier(0.22, 1, 0.36, 1)" : "0s";
 
   // ── The playlist's card ───────────────────────────────────────────────────
   // Everything above the songs in one card: the way back, the sleeve with its
@@ -1233,6 +1205,17 @@ export const PlaylistsView: React.FC<Props> = ({
                     )}
 
                     {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
+
+                    {reordering && !ghost && (
+                      <button
+                        aria-label={tr("Delete playlist")}
+                        onTouchStart={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); deleteWithUndo(pl, i); }}
+                        style={{ background: t.accent, border: "none", width: 32, height: 32, margin: -6, boxSizing: "content-box", backgroundClip: "content-box", padding: 6, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={t.playBtnFg} strokeWidth="3.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1378,18 +1361,6 @@ export const PlaylistsView: React.FC<Props> = ({
         </div>
       )}
 
-      {/* The list, behind a playlist being swiped away. */}
-      {swipeX > 0 && (
-        <div aria-hidden="true" style={{
-          position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none",
-          transform: `translateX(${Math.round((swipeX / vw - 1) * 90)}px)`, transition: `transform ${swipeMotion}`,
-        }}>
-          <div style={{ height: topInset }} />
-          {renderList(true)}
-          <div style={{ position: "absolute", inset: 0, background: "#000", opacity: 0.35 * (1 - swipeX / vw), transition: `opacity ${swipeMotion}` }} />
-        </div>
-      )}
-
       {/* ── Scrollable content ──────────────────────────────────────────── */}
       <div
         ref={scrollBodyRef}
@@ -1399,15 +1370,9 @@ export const PlaylistsView: React.FC<Props> = ({
           if ((top > 0) !== bodyScrolled) setBodyScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        onTouchStart={onSwipeStart}
-        onTouchMove={onSwipeMove}
-        onTouchEnd={onSwipeEnd}
-        onTouchCancel={onSwipeEnd}
         style={{
           flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none",
           position: "relative", zIndex: 1,
-          ...(swipeX > 0 ? { background: t.bg, transform: `translateX(${swipeX}px)`, boxShadow: "-14px 0 32px rgba(0,0,0,0.35)" } : null),
-          transition: `transform ${swipeMotion}`,
         }}
       >
         {/* The header's height as a spacer INSIDE the scroller, so rows scroll up

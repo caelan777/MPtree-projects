@@ -45,7 +45,7 @@
 
   <section class="section-flush">
     <div class="prose">
-      <p class="prose-date">Last updated: 18 October 2026</p>
+      <p class="prose-date">Last updated: 2 November 2026</p>
 
       <h2>Who this covers</h2>
       <p>
@@ -57,13 +57,24 @@
 
       <h2>What the app collects</h2>
       <p>
-        Nothing reaches us. The app has no analytics and no tracking of any kind, and it never
-        sends us your files, your playlists, or what you listen to. The one ad there is, on
-        Android, plays only when you ask for it, and is described under
+        The app never sends us your files, your playlists, or what you listen to. The one ad
+        there is, on Android, plays only when you ask for it, and is described under
         <a href="#ads">Ads</a>. We have
         no way of knowing who you are or what you play, because none of that information is
-        ever sent to us. The one request the app makes on its own is the update check described
-        under <a href="#internet">Internet access</a> below.
+        ever sent to us. Besides the update check described under
+        <a href="#internet">Internet access</a> below, the app makes one other kind of request
+        on its own: an anonymous counter.
+      </p>
+      <p id="counter">
+        <strong>The anonymous counter.</strong> To know roughly how many people use MPTree and
+        which parts they use, the app opens an empty address on mp-tree.net at a few moments:
+        once a day when it is opened, the first time each day the Songs or Playlists tab is
+        used, and when the Pro page is opened, Pro is bought, or an ad is started or watched to
+        the end. The address only names the moment, for example "android, open". It carries no
+        id, no cookie, no account, and nothing about your songs. We store nothing ourselves;
+        our host Cloudflare counts how often each address is opened per day and per country,
+        and that total is all we look at. Like any request on the internet, it passes your IP
+        address to Cloudflare, which does not share it with us.
       </p>
       <p>
         If you sign in to an <a href="#account">MPTree account</a>, which is optional, your

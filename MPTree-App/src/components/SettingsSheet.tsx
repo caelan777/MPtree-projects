@@ -159,6 +159,7 @@ export function SettingsSheet({
   const adDay = useAdDay();
   const ownsPro = useOwnsPro();
   const sync = useSync();
+  const moving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
   // The countdown on the Pro card moves while Settings is open.
   const [, tick] = useState(0);
   useEffect(() => {
@@ -300,6 +301,18 @@ export function SettingsSheet({
               : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
             tag={!pro && <ProTag T={T} />}
           />
+          {/* While a song is on its way from or to another device. */}
+          {moving && (
+            <div style={{ padding: "10px 16px 12px", borderTop: `1px solid ${T.border}` }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
+                <span style={{ fontWeight: 700, color: T.text, flexShrink: 0 }}>{t("Syncing songs between your devices")}</span>
+                <span style={{ color: T.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{moving.name}</span>
+              </div>
+              <div style={{ height: 3, background: T.border, borderRadius: 2, marginTop: 7, overflow: "hidden" }}>
+                <div style={{ width: `${moving.total > 0 ? Math.min(100, Math.round(moving.done / moving.total * 100)) : 0}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
+              </div>
+            </div>
+          )}
         </Section>
 
         <Section T={T} title={t("Appearance")}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -22,6 +22,8 @@ import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
+import { MusicHint, MusicHowSheet } from "./components/MusicHint";
+import { countDaily } from "./counter";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
@@ -46,7 +48,7 @@ import {
 import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
 import { useBackground, loadBackground } from "./background";
-import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
+import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
 import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
@@ -190,6 +192,8 @@ export default function App() {
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
+  const themeNowRef = useRef<Theme>("dark");
+  useEffect(() => { themeNowRef.current = theme; }, [theme]);
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
   const [menuSong,       setMenuSong]      = useState<Song | null>(null);
@@ -460,6 +464,14 @@ export default function App() {
   const grantedAtStart   = useRef(false);
   // The loading screen finished before the answer above came back.
   const hiddenBeforeKnown = useRef(false);
+  // Saved data loaded (initialize below). With access already granted the
+  // scan asks nothing, so it starts right then, while the logo still plays,
+  // instead of waiting for the loading screen to finish.
+  const initDoneRef = useRef(false);
+  const scanEarly = () => {
+    if (initDoneRef.current && firstRunRef.current !== null && (!firstRunRef.current || grantedAtStart.current))
+      runLibraryScanRef.current?.();
+  };
   const [welcome, setWelcome] = useState<null | "open" | "entering">(null);
   const [musicAsked, setMusicAsked] = useState(false);
   const musicAccess: MusicAccess = !musicAsked ? "unasked"
@@ -482,12 +494,29 @@ export default function App() {
         if (granted) setMusicAsked(true); else holdScanRef.current = true;
       }
       if (hiddenBeforeKnown.current && (!due || granted)) runLibraryScanRef.current?.();
+      scanEarly();
     });
   }, []);
+  const [musicHint, setMusicHint] = useState(false);
+  const [musicHowOpen, setMusicHowOpen] = useState(false);
+  const [musicHintH, setMusicHintH] = useState(0);
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
+    // Someone new gets the card on top of Songs after the tour: where the
+    // songs come from. It stays, across restarts, until they tap OK.
+    if (firstRunRef.current) {
+      setMusicHint(true);
+      Preferences.set({ key: "mptree_music_hint", value: "show" }).catch(() => {});
+    }
   }, []);
+  useEffect(() => {
+    Preferences.get({ key: "mptree_music_hint" }).then(r => { if (r.value === "show") setMusicHint(true); }).catch(() => {});
+  }, []);
+  const musicHintDone = () => {
+    setMusicHint(false);
+    Preferences.set({ key: "mptree_music_hint", value: "done" }).catch(() => {});
+  };
 
   // ── "A newer version is on the website" ───────────────────────────────────
   // Only ever set in the build the website hands out; the Play build compiles
@@ -639,6 +668,8 @@ export default function App() {
   // Playlist picker opened from the multi-select bar.
   const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // The anonymous counter (counter.ts): which tabs are used, once a day each.
+  useEffect(() => { countDaily(page === "songs" ? "tab-songs" : "tab-playlists"); }, [page]);
   // The tour points at the Songs page: its header, search box, a song row, the
   // shuffle button. Started from Playlists it spotlit things that were not on
   // screen, so it always goes to Songs with the header open first, and waits
@@ -1044,10 +1075,14 @@ export default function App() {
         // Always clear the loading screen, even if something above threw —
         // otherwise the app would be stuck behind it forever.
         setIsInitializing(false);
+        initDoneRef.current = true;
+        scanEarly();
       }
     };
     initialize();
+    countDaily("open");
     const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) countDaily("open");
       // Dismiss the per-song action sheet across a background/foreground
       // transition, so returning to the app never lands on a stale menu for a
       // song you have since scrolled away from.
@@ -1170,55 +1205,66 @@ export default function App() {
   }, [currentSong]);
 
   // ── Sync user-picked covers to native ─────────────────────────────────────
-  // applyEdit pushes a cover to native as it is set, but that only covers edits
-  // made from now on. Photos set before this existed, or brought in by a backup
-  // restore, are unknown to native until we tell it. We keep the list of ids we
-  // have pushed so a restore is picked up too, and so a launch with nothing new
-  // does no work at all.
+  // The lock screen and the notification show the photo a song was given, so
+  // native needs every one of them, by file path (what it plays). applyEdit
+  // pushes a cover as it is set, but photos also arrive from a backup restore
+  // or from the account, and a cut has its own id over the same file. So this
+  // runs whenever the photos change, a moment after, and pushes only what is
+  // new or different. What landed is kept as path -> a short signature of the
+  // photo, so an unchanged library does no work at all.
+  const artSig = (url: string) => `${url.length}:${url.slice(-24)}`;
+  // Only the photos matter here, not plays or likes: a cheap summary of them.
+  const photoSum = useMemo(() => Object.values(meta).reduce((n, m) => n + (m?.customPhoto ? m.customPhoto.length : 0), 0), [meta]);
   useEffect(() => {
     if (isInitializing) return;
     let cancelled = false;
-    (async () => {
+    const timer = window.setTimeout(() => { void (async () => {
       try {
         const { value } = await Preferences.get({ key: "mptree_track_art_pushed" });
-        const pushed: string[] = value ? JSON.parse(value) : [];
         if (cancelled) return;
+        // Older builds kept a plain list of ids, which were the paths.
+        const parsed: unknown = value ? JSON.parse(value) : {};
+        const pushed: Record<string, string> = Array.isArray(parsed)
+          ? Object.fromEntries((parsed as string[]).map(p => [p, "?"]))
+          : (parsed as Record<string, string>);
 
-        const pushedSet = new Set(pushed);
-        const withPhoto = Object.keys(metaRef.current).filter(id => metaRef.current[id]?.customPhoto);
-        const withPhotoSet = new Set(withPhoto);
-
-        const toAdd   = withPhoto.filter(id => !pushedSet.has(id));
-        const toClear = pushed.filter(id => !withPhotoSet.has(id));
-        if (!toAdd.length && !toClear.length) return;
-
-        // Only tick off what actually landed. setTrackArt rejects while the
-        // playback service is still binding, and recording a push that never
-        // happened would leave that cover missing from the lock screen forever.
-        const landed = new Set(pushed.filter(id => withPhotoSet.has(id)));
-        for (const id of toAdd) {
-          if (cancelled) return;
-          try {
-            await AudioPlayer.setTrackArt({ path: id, dataUrl: metaRef.current[id]!.customPhoto! });
-            landed.add(id);
-          } catch { /* try again next launch */ }
+        const pathOf = new Map(songs.map(s => [s.id, s.uri]));
+        const want = new Map<string, string>();   // path -> photo
+        for (const [id, m] of Object.entries(metaRef.current)) {
+          if (!m?.customPhoto) continue;
+          const path = pathOf.get(id) ?? (id.includes("__cut__") ? id.split("__cut__")[0] : id);
+          // A whole song's own photo wins over a cut's.
+          if (!want.has(path) || id === path) want.set(path, m.customPhoto);
         }
-        for (const id of toClear) {
+
+        const landed = { ...pushed };
+        let changed = false;
+        for (const [path, url] of want) {
           if (cancelled) return;
+          if (pushed[path] === artSig(url)) continue;
           try {
-            await AudioPlayer.setTrackArt({ path: id, dataUrl: null });
-            landed.delete(id);
-          } catch { /* still ours to clear next launch */ landed.add(id); }
+            await AudioPlayer.setTrackArt({ path, dataUrl: url });
+            landed[path] = artSig(url); changed = true;
+          } catch { /* the service is still binding: next time */ }
         }
-        if (cancelled) return;
-        await Preferences.set({ key: "mptree_track_art_pushed", value: JSON.stringify([...landed]) });
+        for (const path of Object.keys(pushed)) {
+          if (cancelled) return;
+          if (want.has(path)) continue;
+          try {
+            await AudioPlayer.setTrackArt({ path, dataUrl: null });
+            delete landed[path]; changed = true;
+          } catch { /* still ours to clear next time */ }
+        }
+        if (cancelled || !changed) return;
+        await Preferences.set({ key: "mptree_track_art_pushed", value: JSON.stringify(landed) });
       } catch {
         // Nothing here is worth bothering the user about: the lock screen just
         // falls back to embedded art or the logo, exactly as it did before.
       }
-    })();
-    return () => { cancelled = true; };
-  }, [isInitializing]);
+    })(); }, 1500);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInitializing, songs.length, photoSum]);
 
   // Dominant-color extraction for the mini-player tint / expanded-player blur
   // backdrop. Mirrors the art-source logic above directly (rather than calling
@@ -1766,7 +1812,7 @@ export default function App() {
   // ── Mini-player swipe: gesture-driven expand (up) / skip (left-right) ──────
   // Vertical drags open the full player LIVE — the sheet follows the finger,
   // exactly like the horizontal Songs↔Playlists page swipe but vertical.
-  // On release past ~25% it springs open; below that it settles back down.
+  // On release past ~12%, or after a flick, it springs open; below that it settles back down.
   const [expandDrag, setExpandDrag]     = useState<number | null>(null); // 0..1 while dragging
   const [expandSettling, setExpandSettling] = useState(false);           // animating back down
   // Horizontal swipe feedback for the mini-player's track text: it follows the
@@ -1776,6 +1822,7 @@ export default function App() {
   const [titleDir,   setTitleDir]   = useState<1 | -1>(1);
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
   const playerAxisRef   = useRef<"h" | "v" | null>(null); // gesture axis lock
+  const playerSwipeT    = useRef(0);       // when the touch began, for a flick
 
   const onPlayerSwipeStart = (clientX: number, clientY: number) => {
     // Ignore touches that begin in the system gesture zone at the very bottom
@@ -1785,7 +1832,22 @@ export default function App() {
     if (clientY > vh - 24) { playerSwipeStartX.current = null; playerSwipeStartY.current = null; playerAxisRef.current = "h"; return; }
     playerSwipeStartX.current = clientX;
     playerSwipeStartY.current = clientY;
+    playerSwipeT.current = Date.now();
     playerAxisRef.current = null;
+  };
+  // Android can cancel a touch instead of ending it, most often on a very
+  // short swipe. Without this the half-drawn sheet stayed up, invisible, over
+  // everything, and nothing could be tapped. A cancel never opens the player.
+  const onPlayerSwipeCancel = () => {
+    playerSwipeStartX.current = null;
+    playerSwipeStartY.current = null;
+    playerAxisRef.current = null;
+    setTitleDragX(0);
+    if (expandDrag !== null) {
+      setExpandSettling(true);
+      setExpandDrag(0);
+      window.setTimeout(() => { setExpandSettling(false); setExpandDrag(null); }, 280);
+    }
   };
   const onPlayerSwipeMove = (clientX: number, clientY: number) => {
     if (playerSwipeStartY.current === null || playerSwipeStartX.current === null) return;
@@ -1823,7 +1885,9 @@ export default function App() {
       }
     }
     if (expandDrag !== null) {
-      if (expandDrag > 0.25 || deltaY > 160) {
+      // A short flick is enough; a slow drag opens past an eighth.
+      const flick = deltaY > 24 && deltaY / Math.max(1, Date.now() - playerSwipeT.current) > 0.35;
+      if (expandDrag > 0.12 || flick) {
         // Committed: hand over to the fully-open sheet without re-animating.
         openedByDragRef.current = true;
         hapticImpact("light");
@@ -2203,7 +2267,18 @@ export default function App() {
       if (Array.isArray(session.eqBandLevels) && session.eqBandLevels.length) setEqBandLevels(session.eqBandLevels);
       if (session.theme) setTheme(session.theme);
       const before = getLook().icon;
-      const after = (await loadLook()).icon;
+      const l = await loadLook();
+      // The icon stays with each phone, but Aviela's and Lantern's icons belong
+      // to their style: when the account brings another style, such an icon
+      // goes with it (to the new style's own, or back to the plain one).
+      const dark = (session.theme ?? themeNowRef.current) === "dark";
+      const style = !dark && l.light === "pink" && l.flowers !== "none" ? "aviela"
+        : isLanternRecord(dark ? l.vinylDark : l.vinylLight) && l.flowers === "none" ? "lantern" : null;
+      let after = l.icon;
+      if ((after === "aviela" || after === "lantern") && after !== style) {
+        after = style ?? "classic";
+        saveLook({ icon: after });
+      }
       if (after !== before) System.setAppIcon({ icon: after }).catch(() => {});
     },
   }; });
@@ -2457,7 +2532,8 @@ export default function App() {
     // notification does not keep showing the old art (or the logo).
     if (changedPhoto) {
       for (const id of ids) {
-        AudioPlayer.setTrackArt({ path: id, dataUrl: u.customPhoto ?? null }).catch(() => {});
+        const path = songsRef.current.find(s => s.id === id)?.uri ?? id;
+        AudioPlayer.setTrackArt({ path, dataUrl: u.customPhoto ?? null }).catch(() => {});
       }
     }
     showToast(tn(ids.length, "{n} song updated", "{n} songs updated"));
@@ -2658,9 +2734,14 @@ export default function App() {
   const shareSong = useCallback(async (s: Song | null) => {
     if (!s) return;
     try {
+      // A cut has no file of its own; anything else goes out as a copy that
+      // carries the name, artist and cover MPTree shows for it.
+      const copy = s.isCut ? null : await System.prepareShare({
+        path: s.uri, title: dispName(s), artist: dispArtist(s), cover: getMeta(s).customPhoto,
+      }).catch(() => null);
       await Share.share({
         title: dispName(s),
-        files: [toFileUri(s.uri)],
+        files: [toFileUri(copy?.path ?? s.uri)],
         dialogTitle: t("Share song"),
       });
     } catch (e: any) {
@@ -2858,6 +2939,7 @@ export default function App() {
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
+      if (musicHowOpen)        { setMusicHowOpen(false); return; }
       if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
@@ -3165,12 +3247,10 @@ export default function App() {
   const ROW_SUB   = widePhone ? 13.5 : 13;
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
-  // A line above the songs while one is on its way from or to another device.
-  // A fixed height, and counted with the pull-to-refresh space, so the rows
-  // drawn still match where the list is scrolled to.
-  const SYNC_BAR_H = 50;
-  const syncMoving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
-  const pullOffset = (refreshing ? 46 : pullDist) + (syncMoving ? SYNC_BAR_H : 0);
+  // Songs on their way between devices are shown in Settings, under Account
+  // & sync (SettingsSheet), not over the list.
+  const showMusicHint = musicHint && !selectMode;
+  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
@@ -3232,8 +3312,8 @@ export default function App() {
            animation hands the transform back to the drag-follow inline style. */
         @keyframes mpTitleFromR { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes mpTitleFromL { from { transform: translateX(-30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .mp-title-r { animation: mpTitleFromR 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-        .mp-title-l { animation: mpTitleFromL 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .mp-title-r { animation: mpTitleFromR 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .mp-title-l { animation: mpTitleFromL 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
         /* Bars on the album art of the track that is playing. Defined here
@@ -3342,7 +3422,7 @@ export default function App() {
               playlist's name comes in filled after a "›". */}
           {(() => {
             const inPl = page === "playlists" && !!openPlaylistName;
-            const fold = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+            const fold = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
             const seg = (on: boolean): React.CSSProperties => ({
               paddingTop: 6, paddingBottom: 6, paddingLeft: 14, paddingRight: 14, borderRadius: 17, border: "none", cursor: "pointer",
               fontSize: 13, fontWeight: 700, fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", flexShrink: 0,
@@ -3688,17 +3768,7 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
-              {syncMoving && (
-                <div style={{ height: SYNC_BAR_H, boxSizing: "border-box", padding: "4px 16px 8px 19px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
-                    <span style={{ fontWeight: 700, color: TH.text, flexShrink: 0 }}>{t("Syncing songs between your devices")}</span>
-                    <span style={{ color: TH.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{syncMoving.name}</span>
-                  </div>
-                  <div style={{ height: 3, background: TH.border, borderRadius: 2, marginTop: 7, overflow: "hidden" }}>
-                    <div style={{ width: `${syncMoving.total > 0 ? Math.min(100, Math.round(syncMoving.done / syncMoving.total * 100)) : 0}%`, height: "100%", background: TH.accent, transition: "width 0.3s" }} />
-                  </div>
-                </div>
-              )}
+              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
 
               {displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
@@ -3904,6 +3974,7 @@ export default function App() {
           >
             <PlaylistsView
               topInset={playlistsInset}
+              onToast={showToast}
               rowH={ROW_H}
               rowTitle={ROW_TITLE}
               rowSub={ROW_SUB}
@@ -3976,6 +4047,7 @@ export default function App() {
               onTouchStart={e => onPlayerSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
               onTouchMove={e => onPlayerSwipeMove(e.touches[0].clientX, e.touches[0].clientY)}
               onTouchEnd={e => onPlayerSwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
+              onTouchCancel={onPlayerSwipeCancel}
             >
               {/* Swipe-up handle: the same horizontal pill as the expanded
                   player's sheet handle, with a gentle upward "swipe me" nudge
@@ -4005,7 +4077,7 @@ export default function App() {
                     style={{
                       minWidth: 0,
                       transform: titleDragX ? `translateX(${titleDragX}px)` : undefined,
-                      transition: titleDragX ? "none" : "transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)",
+                      transition: titleDragX ? "none" : "transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
@@ -4132,6 +4204,7 @@ export default function App() {
         {editSong && <div style={{ position: "relative", zIndex: 460 }}><EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} /></div>}
         {binManyIds && <ConfirmSheet title={t("Remove {n} songs", { n: binManyIds.length })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: binManyIds.length })} confirmLabel={t("Move {n} to bin", { n: binManyIds.length })} onConfirm={() => { removeMany(binManyIds); setBinManyIds(null); }} onCancel={() => setBinManyIds(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
+        {musicHowOpen && <MusicHowSheet onClose={() => setMusicHowOpen(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
           <SettingsSheet

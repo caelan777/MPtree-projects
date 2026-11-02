@@ -156,7 +156,7 @@ export function usePageSwipe({
   })();
   const panelTransition = pageDragging
     ? "none"
-    : "transform 0.28s cubic-bezier(0.22,0.61,0.36,1)";
+    : "transform 0.2s cubic-bezier(0.22,0.61,0.36,1)";
 
   return {
     pageDragX,

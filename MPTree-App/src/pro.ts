@@ -5,6 +5,7 @@ import { Ads, Billing, System } from "./plugins";
 import { resetLook } from "./look";
 import { dropBackground } from "./background";
 import { t } from "./i18n";
+import { count } from "./counter";
 
 // ─── PRO ─────────────────────────────────────────────────────────────────────
 // MPTree Pro is one payment, once. Nothing that is free today moves behind it;
@@ -287,6 +288,7 @@ export type AdResult = "pro" | "offline" | "closed" | "none" | "consent" | "fail
 /** Shows one ad. Watched to the end, Pro is on for 24 hours from now. */
 export async function watchAdForPro(): Promise<AdResult> {
   if (!ADS_ON) return "failed";
+  count("ad-start");
   try {
     const r = await Ads.showRewarded({ adUnitId: AD_UNIT });
     if (!r.rewarded) {
@@ -296,6 +298,7 @@ export async function watchAdForPro(): Promise<AdResult> {
   } catch {
     return "failed";
   }
+  count("ad-done");
   const now = Date.now();
   const day: StoredDay = { from: now, until: now + DAY };
   storeDay(day);
@@ -371,6 +374,7 @@ export async function buyPro(email?: string): Promise<BuyResult> {
     const r = await Billing.purchase({ productId: PRODUCT_ID, accountTag: tag });
     if (r.owned) {
       setOwned(true, "play", r.tag ?? null);
+      count("pro-buy");
       // Owned already (bought before on this Google Play account): Play's
       // own record says which account it is for.
       if (!r.tag) await restorePro();
