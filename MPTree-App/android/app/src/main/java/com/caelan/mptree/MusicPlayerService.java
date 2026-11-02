@@ -44,6 +44,12 @@ public class MusicPlayerService extends Service {
     public static final String ACTION_NEXT     = "com.caelan.mptree.NEXT";
     public static final String ACTION_PREV     = "com.caelan.mptree.PREV";
     public static final String ACTION_STOP     = "com.caelan.mptree.STOP";
+    /** Shuffle every song and play, with no window: the MPTree TV launcher's
+     *  Shuffle music button, through ShuffleActivity. */
+    public static final String ACTION_SHUFFLE_ALL = "com.caelan.mptree.SHUFFLE_ALL";
+    /** Every song the app can play, as the app last saved it on a TV (path,
+     *  title, artist, and a cut's part): what ACTION_SHUFFLE_ALL shuffles. */
+    public static final String PREF_TV_LIBRARY = "mptree_tv_library";
 
     private static final int NOTIFICATION_ID   = 1;
 
@@ -223,6 +229,55 @@ public class MusicPlayerService extends Service {
         nativeQueue.clear();
         nativeQueue.addAll(queue);
         nativeQueueIndex = currentIndex;
+        queueFromShuffleAll = false;
+    }
+
+    /** The queue as it is now, for the app to take over (it may have been made
+     *  here, by ACTION_SHUFFLE_ALL, while the app was not looking). */
+    public java.util.List<Track> getQueue() { return new java.util.ArrayList<>(nativeQueue); }
+
+    /** The queue is every song, shuffled here (ACTION_SHUFFLE_ALL), not one the app sent. */
+    public boolean isQueueFromShuffleAll() { return queueFromShuffleAll; }
+    private boolean queueFromShuffleAll = false;
+
+    /** Whether the app saved its songs for ACTION_SHUFFLE_ALL. */
+    public static boolean hasTvLibrary(Context ctx) {
+        String raw = ctx.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE).getString(PREF_TV_LIBRARY, null);
+        return raw != null && raw.length() > 2;
+    }
+
+    /** Every song the app saved, shuffled, playing from the first: the whole of
+     *  "shuffle all" without the app's window. False when there is nothing saved
+     *  or the first song would not start. */
+    private boolean shuffleAllSaved() {
+        java.util.List<Track> all = new java.util.ArrayList<>();
+        try {
+            String raw = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE).getString(PREF_TV_LIBRARY, null);
+            if (raw == null) return false;
+            org.json.JSONArray arr = new org.json.JSONArray(raw);
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONObject t = arr.getJSONObject(i);
+                String path = t.optString("path", "");
+                if (path.isEmpty()) continue;
+                all.add(new Track(path, t.optString("title", "Unknown"), t.optString("artist", ""),
+                        t.optBoolean("isCut", false), t.optInt("cutFrom", 0), t.optInt("cutTo", 0)));
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        if (all.isEmpty()) return false;
+        java.util.Collections.shuffle(all);
+        nativeQueue.clear();
+        nativeQueue.addAll(all);
+        nativeQueueIndex = 0;
+        queueFromShuffleAll = true;
+        Track first = all.get(0);
+        try {
+            play(first.path, first.title, first.artist, first.cutFrom, first.cutTo);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ── Timers ────────────────────────────────────────────────────────────────
@@ -336,6 +391,13 @@ public class MusicPlayerService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_SHUFFLE_ALL.equals(intent.getAction())) {
+            // Started with startForegroundService (ShuffleActivity): Android wants
+            // the service in the foreground within seconds, so it goes now, before
+            // the first song has loaded. If nothing could start it steps back down.
+            promoteToForeground(buildNotification());
+            if (!shuffleAllSaved()) showNotification();
+        }
         return START_STICKY;
     }
 

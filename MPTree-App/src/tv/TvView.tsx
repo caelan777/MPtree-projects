@@ -174,7 +174,7 @@ export function TvView(p: Props) {
               </div>
               <span className="grow" />
               <button className="ib txt" onClick={p.onAccount}>{t("Account")}</button>
-              <button className="ib" onClick={p.onSettings} aria-label={t("Settings")}><span className="ic">{IC.Settings()}</span></button>
+              <button className="ib txt" onClick={p.onSettings}><span className="ic sm2">{IC.Settings()}</span>{t("Settings")}</button>
             </div>
             {page === "songs" && (
               <>
@@ -315,8 +315,8 @@ function Empty(p: Props & { inPlaylist: boolean }) {
 }
 
 /** The player, always open on the right: the cover, the song, the time (Left and
- *  Right on the bar jump 10 seconds), shuffle, back, play, next, repeat, and what
- *  comes next. */
+ *  Right on the bar jump 10 seconds), shuffle, back, play, next, repeat, and the
+ *  next two songs. Everything fits the 1000 px column; nothing below the screen. */
 function Player(p: Props) {
   const s = p.current;
   if (!s) {
@@ -340,7 +340,7 @@ function Player(p: Props) {
   };
   return (
     <div className="tvv-right" data-tv-group="">
-      <div className="art"><AlbumArt title={p.dispName(s)} size={430} customPhoto={p.nowPlayingPhoto(s)} songPath={s.uri} albumId={s.albumId} T={p.TH} /></div>
+      <div className="art"><AlbumArt title={p.dispName(s)} size={360} customPhoto={p.nowPlayingPhoto(s)} songPath={s.uri} albumId={s.albumId} T={p.TH} /></div>
       <div className="mp-t"><h3>{p.dispName(s)}</h3><div>{p.dispArtist(s)}</div></div>
       <div>
         <button className="prog" tabIndex={0} aria-label={t("Position")} onKeyDown={barKey} onClick={p.onToggle}>
@@ -359,7 +359,7 @@ function Player(p: Props) {
       </div>
       <div className="upn">
         <div className="lbl">{t("Up next")}</div>
-        {p.upNext.length ? p.upNext.slice(0, 3).map(n => (
+        {p.upNext.length ? p.upNext.slice(0, 2).map(n => (
           <div key={n.id} className="un"><span>{p.dispName(n)}</span><span className="d">{mmss(songMs(n))}</span></div>
         )) : <div className="un"><span className="d">{t("Nothing after this song")}</span></div>}
       </div>

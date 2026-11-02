@@ -61,6 +61,9 @@ export type AudioPlayerPlugin = {
   addListener(event: "trackComplete", handler: () => void): Promise<{ remove(): void }>;
   addListener(event: "stateChange", handler: (data: { isPlaying: boolean; path: string; index?: number }) => void): Promise<{ remove(): void }>;
   setQueue(options: { tracks: { path: string; title: string; artist: string; isCut?: boolean; cutFrom?: number; cutTo?: number }[]; currentIndex: number }): Promise<void>;
+  /** The queue the service plays. shuffledAll: it made it itself (the TV
+   *  launcher's Shuffle music), so the app takes it over. */
+  getQueue(): Promise<{ paths: string[]; index: number; shuffledAll: boolean }>;
   setPlayMode(options: { mode: string }): Promise<void>;
   setCrossfadeDuration(options: { milliseconds: number }): Promise<void>;
   setPlaybackSpeed(options: { speed: number }): Promise<void>;

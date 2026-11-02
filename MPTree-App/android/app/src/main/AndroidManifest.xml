@@ -59,6 +59,18 @@
             android:exported="true">
         </activity>
 
+        <!--  ── Shuffle all, with no window (the MPTree TV launcher) ─────  -->
+        <!-- See-through and gone at once: it only starts the player, which
+             shuffles every song. Its own empty task, so MPTree's screen stays
+             where it was and the launcher stays in front. -->
+        <activity
+            android:name=".ShuffleActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="true" />
+
         <!--  ── Launcher icons (MPTree Pro) ─────────────────────────────  -->
         <!--
             The home-screen entry is one of these aliases, not MainActivity, so

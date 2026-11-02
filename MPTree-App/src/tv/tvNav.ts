@@ -11,7 +11,9 @@ import { Capacitor } from "@capacitor/core";
 // and whatever has tabIndex 0. The arrows go to whatever is nearest in that
 // direction, by where things are on screen, so no screen needs a hand-made map.
 // Only what is actually on top counts: when a sheet is open, the screen under
-// it is out of reach, without the sheet having to say so.
+// it is out of reach, without the sheet having to say so. What a sheet has
+// further down, scrolled out of sight, counts too: moving to it scrolls it in
+// (Settings could not be scrolled down with the remote before).
 
 /** A TV: Android with no touch screen. `?tv` in the address forces it, to work
  *  on the TV screen in a browser. */
@@ -34,11 +36,29 @@ function onTop(el: HTMLElement, r: DOMRect): boolean {
   return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
 }
 
+/** The nearest box around `el` that scrolls up and down, if any. */
+function scroller(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === "auto" || oy === "scroll") && p.scrollHeight > p.clientHeight + 1) return p;
+  }
+  return null;
+}
+
+/** Scrolled out of sight inside a box that is itself on top: reachable. */
+function scrolledAway(el: HTMLElement, r: DOMRect): boolean {
+  const box = scroller(el);
+  if (!box) return false;
+  const b = box.getBoundingClientRect();
+  const outside = r.bottom <= b.top + 2 || r.top >= b.bottom - 2;
+  return outside && onTop(box, b);
+}
+
 function focusables(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>(SELECTOR)].filter(el => {
     if (el.closest("[inert], [aria-hidden='true']")) return false;
     const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && onTop(el, r);
+    return r.width > 0 && r.height > 0 && (onTop(el, r) || scrolledAway(el, r));
   });
 }
 

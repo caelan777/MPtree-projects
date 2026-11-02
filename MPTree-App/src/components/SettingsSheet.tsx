@@ -100,6 +100,9 @@ type SettingsSheetProps = {
   /** Kept open but out of sight while Personalise is up: that sheet needs the
    *  header card visible and undimmed, and closing it comes back here. */
   hidden?: boolean;
+  /** On a TV: a panel over the player card instead of a sheet from the bottom,
+   *  without Size (the TV screen is drawn to the pixel) and opened on its first row. */
+  tv?: boolean;
   // ── Pro ──
   pro: boolean;
   onOpenPro: () => void;
@@ -145,7 +148,7 @@ type SettingsSheetProps = {
 };
 
 export function SettingsSheet({
-  hidden, binCount,
+  hidden, tv, binCount,
   pro, onOpenPro, onOpenLook, onOpenAccount, onOpenCleanup, cleanupCount,
   onViewBin, onOpenAudioEffects, onShowTutorial,
   onBackup,
@@ -222,6 +225,14 @@ export function SettingsSheet({
 
   const SLEEP_PRESETS = [15, 30, 45, 60];
 
+  // On a TV the remote starts on the first row, inside the panel.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!tv) return;
+    const id = requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>("button")?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [tv]);
+
   const row = rowStyle(T);
 
   const SIZES: { id: UiSize; label: string }[] = [
@@ -236,9 +247,12 @@ export function SettingsSheet({
   return (
     // Everything opened from here opens on top of it, and closing that comes
     // back here, the same way the questions and language sheets always did.
-    <div style={{ ...sh.overlay, visibility: hidden ? "hidden" : undefined }} onClick={onClose}>
+    <div className={tv ? "tv-panel-veil" : undefined} style={tv ? { visibility: hidden ? "hidden" : undefined } : { ...sh.overlay, visibility: hidden ? "hidden" : undefined }} onClick={onClose}>
       <div
-        style={{
+        style={tv ? {
+          ...sh.sheet, paddingBottom: 0, width: "38.54vw", height: "100%", borderRadius: 20,
+          display: "flex", flexDirection: "column", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,.45)",
+        } : {
           ...sh.sheet, paddingBottom: 0, maxHeight: "75vh", display: "flex", flexDirection: "column", position: "relative",
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           transition: dragging ? "none" : "transform 0.25s ease",
@@ -253,14 +267,14 @@ export function SettingsSheet({
           onTouchCancel={onDragEnd}
           style={{ flexShrink: 0 }}
         >
-          <div style={{ ...sh.handle }} />
+          {!tv && <div style={{ ...sh.handle }} />}
           <div style={{ ...sh.hdr }}>
             <span style={{ fontSize: 16, fontWeight: "700", color: T.text }}>{t("Settings")}</span>
             <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
           </div>
         </div>
 
-        <div style={{ overflowY: "auto", flex: 1, paddingBottom: 32, WebkitOverflowScrolling: "touch" }}>
+        <div ref={scrollRef} style={{ overflowY: "auto", flex: 1, paddingBottom: 32, WebkitOverflowScrolling: "touch" }}>
 
         {/* Pro: a card of its own at the top rather than a row among forty.
             Once bought it stays, smaller, as a thank-you and a way back in. */}
@@ -315,8 +329,8 @@ export function SettingsSheet({
           />
           {/* Size: text and rows together. One control rather than two: a
               bigger font in a row that stays the same height is a row that
-              clips. */}
-          <div style={{ ...row, marginTop: 8, cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+              clips. Not on a TV, whose screen is drawn to the pixel. */}
+          {!tv && <div style={{ ...row, marginTop: 8, cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 12 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
               <TextIcon /><span>{t("Size")}</span>
             </span>
@@ -342,7 +356,7 @@ export function SettingsSheet({
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
         </Section>
 
         <Section T={T} title={t("General")}>
@@ -472,7 +486,7 @@ export function SettingsSheet({
         )}
         {sub === "about" && (
           <AboutPage
-            onShowTutorial={onShowTutorial} onFeedback={onFeedback} onRate={onRate} onPrivacy={onPrivacy}
+            onShowTutorial={tv ? undefined : onShowTutorial} onFeedback={onFeedback} onRate={onRate} onPrivacy={onPrivacy}
             adPrivacy={adPrivacy} onClose={() => setSub(null)} T={T}
           />
         )}
@@ -488,7 +502,8 @@ export function SettingsSheet({
 // inside it, so closing them comes back here.
 
 function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, onClose, T }: {
-  onShowTutorial: () => void;
+  /** Absent on a TV, which has no tutorial. */
+  onShowTutorial?: () => void;
   onFeedback: () => void;
   onRate?: () => void;
   onPrivacy: () => void;
@@ -526,8 +541,8 @@ function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, o
           </Section>
 
           <Section T={T} title={t("Help")}>
-            <Row T={T} first onClick={onShowTutorial} icon={<PlayIcon />} label={t("Show tutorial")} />
-            <Row T={T} onClick={() => setSub("faq")} icon={<HelpIcon />} label={t("Questions")} />
+            {onShowTutorial && <Row T={T} first onClick={onShowTutorial} icon={<PlayIcon />} label={t("Show tutorial")} />}
+            <Row T={T} first={!onShowTutorial} onClick={() => setSub("faq")} icon={<HelpIcon />} label={t("Questions")} />
             <Row T={T} onClick={onFeedback} icon={<MailIcon />} label={t("Send feedback")} />
             {onRate && <Row T={T} onClick={onRate} icon={<StarIcon />} label={t("Rate MPTree")} />}
           </Section>

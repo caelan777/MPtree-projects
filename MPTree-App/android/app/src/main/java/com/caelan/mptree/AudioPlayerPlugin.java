@@ -275,6 +275,27 @@ public class AudioPlayerPlugin extends Plugin {
     }
 
     /**
+     * The queue the service is playing: { paths, index, shuffledAll }. After the
+     * TV launcher's Shuffle music (MusicPlayerService.ACTION_SHUFFLE_ALL) the
+     * service made it itself, and the app takes it over from here.
+     */
+    @PluginMethod
+    public void getQueue(PluginCall call) {
+        JSObject ret = new JSObject();
+        JSArray paths = new JSArray();
+        if (bound) {
+            for (MusicPlayerService.Track t : playerService.getQueue()) paths.put(t.path);
+            ret.put("index", playerService.getQueueIndex());
+            ret.put("shuffledAll", playerService.isQueueFromShuffleAll());
+        } else {
+            ret.put("index", -1);
+            ret.put("shuffledAll", false);
+        }
+        ret.put("paths", paths);
+        call.resolve(ret);
+    }
+
+    /**
      * Tells native which play mode is active ("off" | "shuffle" | "repeat").
      * Needed so lock-screen/notification next-track and crossfade-into-
      * repeat work even if the WebView never sees the corresponding JS

@@ -931,6 +931,25 @@ export default function App() {
     playContextRef.current = own.length ? own : saved;
   };
 
+  /** The TV launcher's Shuffle music: the service shuffled every song and plays
+   *  them without the app having been asked. Take its queue over, so Up next and
+   *  Next are the shuffled songs, not the Songs list. False when it did not. */
+  const adoptNativeShuffle = async (pool: Song[]): Promise<boolean> => {
+    try {
+      const nq = await AudioPlayer.getQueue();
+      if (!nq.shuffledAll || !nq.paths.length) return false;
+      const byUri = new Map<string, Song>();
+      for (const s of pool) if (!byUri.has(s.uri) || !s.isCut) byUri.set(s.uri, s);
+      const q = nq.paths.map(p => byUri.get(p)).filter((s): s is Song => !!s);
+      if (!q.length) return false;
+      setQueue(q); setPlayMode("shuffle"); playContextRef.current = pool; setPlaySource(null);
+      return true;
+    } catch { return false; }
+  };
+  /** The same for syncToNativePath, which is made once: set further down, once
+   *  the library (songsRef) is there to take the songs from. */
+  const adoptNativeShuffleRef = useRef<() => void>(() => {});
+
   const resyncFromNative = async (scanned: Song[], session?: Awaited<ReturnType<typeof loadSession>>) => {
     try {
       const native = await AudioPlayer.getCurrentSong();
@@ -950,6 +969,8 @@ export default function App() {
       setQueue(prev => prev.some(s => s.id === match.id) ? prev
         : saved.some(s => s.id === match.id) ? saved
         : [match]);
+      // Started by the TV launcher while the app was closed: its whole shuffle.
+      if (!saved.some(s => s.id === match.id)) void adoptNativeShuffle(scanned);
       return true;
     } catch { return false; }
   };
@@ -1393,6 +1414,9 @@ export default function App() {
     // subsequent auto-advance stay consistent.
     if (!q.some(s => s.uri === path) && sourceList.length) {
       setQueue(sourceList);
+      // Unless the service shuffled everything by itself (the TV launcher's
+      // Shuffle music): then its queue is the one.
+      adoptNativeShuffleRef.current();
     }
 
     setCurrent(next);
@@ -2168,11 +2192,23 @@ export default function App() {
   useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
   const songsRef = useRef<Song[]>([]);
   useEffect(() => { songsRef.current = songs; }, [songs]);
+  useEffect(() => { adoptNativeShuffleRef.current = () => { void adoptNativeShuffle(songsRef.current); }; });
 
   // ── Opened by another app with a request ──────────────────────────────────
   // The MPTree TV launcher's "Shuffle music" opens MPTree with "shuffle": all
   // songs, shuffled. Asked for when the library is ready and whenever MPTree
   // comes back to the front (the launcher may open it while it is running).
+  // On a TV the player can shuffle every song by itself, with no window (the TV
+  // launcher's Shuffle music, MusicPlayerService.ACTION_SHUFFLE_ALL). It plays
+  // what is saved here: every song, as the player needs it, kept up to date.
+  useEffect(() => {
+    if (!isTv || !libraryReady) return;
+    const t = setTimeout(() => {
+      Preferences.set({ key: "mptree_tv_library", value: JSON.stringify(songsRef.current.map(toNativeTrack)) }).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [isTv, libraryReady, songs, meta, toNativeTrack]);
+
   const shuffleAllRef = useRef<() => void>(() => {});
   useEffect(() => {
     shuffleAllRef.current = () => {
@@ -4195,6 +4231,7 @@ export default function App() {
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
           <SettingsSheet
+            tv={isTv}
             binCount={removedSongs.length}
             pro={pro}
             hidden={lookOpen}

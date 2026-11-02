@@ -23,7 +23,8 @@
 .tvv .seg button { height: 56px; padding: 0 30px; border-radius: 28px; font-size: 26px; font-weight: 700; color: var(--muted); display: flex; align-items: center; }
 .tvv .seg button.on { background: var(--text); color: var(--bg); }
 .tvv .ib { height: 66px; min-width: 66px; border-radius: 33px; border: 2px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; }
-.tvv .ib.txt { padding: 0 26px; font-size: 24px; font-weight: 600; }
+.tvv .ib.txt { padding: 0 26px; gap: 10px; font-size: 24px; font-weight: 600; }
+.tvv .ic.sm2 svg { width: 28px; height: 28px; }
 .tvv .srow { display: flex; gap: 14px; }
 .tvv .srow .srch { flex: 1; min-width: 0; }
 .tvv .mic { width: 70px; height: 70px; border-radius: 18px; flex-shrink: 0; color: var(--text); }
@@ -57,9 +58,10 @@
 .tvv .big { justify-self: start; height: 80px; padding: 0 36px; border-radius: 40px; background: var(--surface); border: 2px solid var(--border); font-size: 28px; font-weight: 700; display: inline-flex; align-items: center; gap: 14px; }
 
 /* ── right: the player ── */
-.tvv-right { position: absolute; right: 40px; top: 40px; bottom: 40px; width: 740px; border-radius: 40px; background: var(--player); border: 2px solid var(--border); padding: 40px 44px; display: grid; grid-template-rows: auto auto auto auto 1fr; gap: 24px; }
+.tvv-right { position: absolute; right: 40px; top: 40px; bottom: 40px; width: 740px; border-radius: 40px; background: var(--player); border: 2px solid var(--border); padding: 36px 44px 32px; display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: 22px; overflow: hidden; }
 .tvv-right .art { justify-self: center; display: flex; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .35)); }
-.tvv-right .mp-t h3 { font-size: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvv-right .mp-t { min-width: 0; text-align: center; }
+.tvv-right .mp-t h3 { margin: 0; font-size: 42px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tvv-right .mp-t div { font-size: 26px; color: var(--sub); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tvv .prog { display: block; width: 100%; padding: 12px 0 !important; border-radius: 10px; }
 .tvv .prog .bar { display: block; height: 8px; background: var(--dim); border-radius: 4px; position: relative; overflow: hidden; }
@@ -77,7 +79,7 @@
 .tvv .cb.sm { width: 70px; height: 70px; background: transparent; color: var(--muted); }
 .tvv .cb.sm.on { color: var(--text); border-color: var(--text) !important; }
 .tvv .cb .one { position: absolute; right: 10px; top: 8px; font-size: 16px; font-weight: 800; }
-.tvv .upn { align-self: end; }
+.tvv .upn { align-self: end; min-height: 0; overflow: hidden; border-top: 2px solid var(--border); padding-top: 14px; }
 .tvv .upn .lbl { font-size: 19px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
 .tvv .un { display: flex; justify-content: space-between; gap: 20px; font-size: 24px; padding: 6px 0; }
 .tvv .un span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -85,6 +87,10 @@
 .tvv-right.none { grid-template-rows: auto auto auto auto; align-content: center; justify-items: center; text-align: center; }
 .tvv-right .art-none { width: 300px; height: 300px; border-radius: 28px; background: var(--card); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .tvv-right.none .big { justify-self: center; }
+
+/* Settings on a TV: a panel over the player card (SettingsSheet, tv), the songs
+   still there beside it. */
+.tv-panel-veil { position: fixed; inset: 0; z-index: 400; display: flex; justify-content: flex-end; align-items: stretch; padding: 3.7vh 2.083vw; background: rgba(0, 0, 0, .45); }
 
 /* Sheets from the phone (account, settings, Pro) opened on a TV: the highlight. */
 html.tv-mode button:focus-visible, html.tv-mode [role="button"]:focus-visible, html.tv-mode [tabindex="0"]:focus-visible, html.tv-mode input:focus-visible { outline: 4px solid currentColor; outline-offset: 3px; }

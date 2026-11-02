@@ -134,16 +134,19 @@ public class SystemPlugin extends Plugin {
         notifyListeners("searchKey", new JSObject());
     }
 
-    /** factor: 0.9, 1 or 1.15. Scales every piece of text in the app. */
+    /** factor: 0.9, 1 or 1.15. Scales every piece of text in the app. Not on a
+     *  TV: its screen (src/tv) is drawn to the pixel on a 1920×1080 stage, and
+     *  bigger text there pushed the player off the screen. A TV is always 100%. */
     @PluginMethod
     public void setTextZoom(PluginCall call) {
         Double f = call.getDouble("factor", 1.0);
         final double factor = f != null ? f : 1.0;
+        final boolean tv = isTv(getContext());
         getActivity().runOnUiThread(() -> {
             try {
                 WebSettings s = getBridge().getWebView().getSettings();
                 if (baseTextZoom < 0) baseTextZoom = s.getTextZoom();
-                s.setTextZoom((int) Math.round(baseTextZoom * factor));
+                s.setTextZoom(tv ? 100 : (int) Math.round(baseTextZoom * factor));
                 call.resolve();
             } catch (Exception e) {
                 call.reject("Could not set text size", e);
