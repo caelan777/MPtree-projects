@@ -274,6 +274,22 @@ export default function App() {
     });
     return () => { off.then(h => h.remove()); on.then(h => h.remove()); };
   }, []);
+  // The black sheet Android lays over this screen while the TV is off (else the
+  // screen comes on showing Home's last picture) comes away once this screen is in
+  // view and has drawn what comes now: the intro, or Home when there is none. Not
+  // while still waiting to know which: that is black anyway.
+  const [inView, setInView] = useState(!document.hidden);
+  useEffect(() => {
+    const onVisible = () => setInView(!document.hidden);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+  useEffect(() => {
+    if (!inView || intro === "wait") return;
+    let b = 0;
+    const a = requestAnimationFrame(() => { b = requestAnimationFrame(() => { Launcher.uncover().catch(() => {}); }); });
+    return () => { cancelAnimationFrame(a); cancelAnimationFrame(b); };
+  }, [inView, intro, introRun]);
 
   // Leaving Home and coming back starts on its first page again.
   const goPage = useCallback((p: Page) => { setPage(p); setSide("day"); }, []);

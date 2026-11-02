@@ -35,6 +35,10 @@ interface LauncherPlugin {
   shuffleMptree(): Promise<void>;
   /** How long ago the TV itself started: the launcher starting just after is the TV turning on. */
   startInfo(): Promise<{ sinceBootMs: number }>;
+  /** Takes away the black sheet Android lays over the page when the screen goes off
+   *  (so it comes on black, not on Home's last picture). Call it once the page has
+   *  drawn what comes after: the intro, or Home when there is none. */
+  uncover(): Promise<void>;
   /** The Home button was pressed while the launcher was already in front. */
   addListener(event: "home", fn: () => void): Promise<PluginListenerHandle>;
   /** An app was installed, updated or removed. */
@@ -75,6 +79,7 @@ const webLauncher: LauncherPlugin = {
   shuffleMptree: async () => { console.log("MPTree: shuffle all, in the background"); },
   // ?intro in the address plays the intro, as if the TV just turned on.
   startInfo: async () => ({ sinceBootMs: /[?&]intro\b/.test(location.search) ? 0 : 3_600_000 }),
+  uncover: async () => {},
   addListener: async () => ({ remove: async () => {} }),
 };
 

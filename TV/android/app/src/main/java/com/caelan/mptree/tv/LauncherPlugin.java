@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.MediaMetadata;
@@ -18,6 +19,9 @@ import android.media.session.PlaybackState;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Base64;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 
 import androidx.core.content.ContextCompat;
 
@@ -73,8 +77,13 @@ public class LauncherPlugin extends Plugin {
             @Override
             public void onReceive(Context context, Intent intent) {
                 String a = intent.getAction();
-                if (Intent.ACTION_SCREEN_ON.equals(a)) notifyListeners("screenOn", new JSObject());
-                else if (Intent.ACTION_SCREEN_OFF.equals(a)) notifyListeners("screenOff", new JSObject());
+                if (Intent.ACTION_SCREEN_ON.equals(a)) {
+                    uncoverLater();
+                    notifyListeners("screenOn", new JSObject());
+                } else if (Intent.ACTION_SCREEN_OFF.equals(a)) {
+                    cover();
+                    notifyListeners("screenOff", new JSObject());
+                }
             }
         };
         IntentFilter screen = new IntentFilter();
@@ -93,6 +102,50 @@ public class LauncherPlugin extends Plugin {
             try { getContext().unregisterReceiver(screenReceiver); } catch (IllegalArgumentException ignored) { }
             screenReceiver = null;
         }
+    }
+
+    // ── the black sheet while the TV is off ──
+    // The screen goes dark before the page can draw itself black, so when it comes
+    // on again the WebView first shows its last picture, Home, and only then the
+    // intro. A black view over it from the moment the screen goes off hides that;
+    // the page takes it away (uncover) once it has drawn the intro.
+
+    /** Should the page never take the sheet away, it goes by itself this long after the screen comes on. */
+    private static final long COVER_MAX_MS = 15_000;
+    private View cover;
+
+    private void cover() {
+        getActivity().runOnUiThread(() -> {
+            if (cover != null) return;
+            View v = new View(getActivity());
+            v.setBackgroundColor(Color.BLACK);
+            v.setFocusable(false);
+            ((ViewGroup) getActivity().getWindow().getDecorView())
+                    .addView(v, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            cover = v;
+        });
+    }
+
+    private void uncoverLater() {
+        getActivity().runOnUiThread(() -> {
+            final View v = cover;
+            if (v != null) v.postDelayed(() -> { if (cover == v) removeCover(); }, COVER_MAX_MS);
+        });
+    }
+
+    private void removeCover() {
+        if (cover == null) return;
+        ViewParent parent = cover.getParent();
+        if (parent instanceof ViewGroup) ((ViewGroup) parent).removeView(cover);
+        cover = null;
+    }
+
+    @PluginMethod
+    public void uncover(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            removeCover();
+            call.resolve();
+        });
     }
 
     /** How long ago the TV started. The launcher starting within minutes of that

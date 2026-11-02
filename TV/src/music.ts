@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Launcher, type TvNowPlaying } from "./launcher";
+import { Launcher, type TvApp, type TvNowPlaying } from "./launcher";
 
 // The music Home shows: what MPTree plays on this TV, read from Android's media
 // sessions. Only MPTree: never a speaker from Home Assistant, and never another
@@ -7,6 +7,12 @@ import { Launcher, type TvNowPlaying } from "./launcher";
 
 /** MPTree's package on the TV. */
 export const MPTREE = "com.caelan.mptree";
+
+/** MPTree has no TV banner of its own, so its app tiles draw one: the mark big,
+ *  white on black, like the other apps' banners, rather than a small icon and its name. */
+export function hasMark(app: TvApp): boolean {
+  return app.packageName === MPTREE && !(app.image && app.isBanner);
+}
 
 export type Music = {
   title: string;

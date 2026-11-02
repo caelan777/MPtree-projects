@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { LayoutGrid, Pause, Play, Shuffle } from "lucide-react";
 import { clock, deg } from "../../format";
+import { hasMark } from "../../music";
+import { Logo } from "../Logo";
 import { AppRow, Nums, type DayProps } from "./parts";
 
 /** Cinema: always dark. The selected app gets the stage: its name huge at the top
@@ -30,7 +32,8 @@ export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp
         {dock.map((a, i) => (
           <button key={a.packageName} className="f ci-card" data-f="" data-ok={`Open ${a.label}`} data-default={i === 0 ? "" : undefined}
             onFocus={() => setSel(i)} onClick={() => onOpenApp(a)}>
-            {a.image ? <img className={a.isBanner ? "bn" : "ic"} src={a.image} alt="" /> : <span className="glyph">{a.label.slice(0, 2)}</span>}
+            {hasMark(a) ? <span className="bn mark"><Logo size={110} /></span>
+              : a.image ? <img className={a.isBanner ? "bn" : "ic"} src={a.image} alt="" /> : <span className="glyph">{a.label.slice(0, 2)}</span>}
             <span className="nm">{a.label}</span>
           </button>
         ))}

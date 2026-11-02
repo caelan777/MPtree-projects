@@ -149,6 +149,12 @@ Asked for by the user for family use, no other limits. What changed is in
   Assistant's `refresh` (at most 12 s). The Verkuijl logo is the owl from
   `design/verkuijl-owl.png`, traced to SVG paths (`OWL`, stroke 7.5 in the PNG's
   480 x 600 space); `FLY_ORIGIN` is the middle of its face, the opening you fly through.
+  On `SCREEN_OFF` the plugin adds a black view over the WebView (else the screen
+  came on showing the WebView's stale Home frame before the intro); the page calls
+  `uncover` two frames after it is in view with the intro playing (or skipped).
+  Checked on the TV: after wake, black, then the owl, then Home. `screenrecord`
+  can't capture a wake (its encoder fails while the screen is off): use rapid raw
+  `screencap` in a device-side loop instead.
 - **App rows** are `AppRow` (`layouts/parts.tsx`): apps then "All apps"; the row
   slides by `--shift` when the seventh takes focus. Editorial's is a text line.
 - **Background shuffle**: the launcher starts `com.caelan.mptree/.ShuffleActivity`

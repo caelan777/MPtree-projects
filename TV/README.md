@@ -28,7 +28,15 @@ first, the ruled strip tidied, was picked and built). The Verkuijl logo artwork 
   gives up waiting after 12 seconds, so a Home Assistant that is down never keeps
   the TV on the logo). The logo is the line-drawn owl, traced to SVG so it stays
   sharp as it grows; you fly in between its eyes (`src/components/Intro.tsx`,
-  `OWL` and `FLY_ORIGIN`).
+  `OWL` and `FLY_ORIGIN`). The screen comes on black, not on Home's last picture:
+  Android lays a black view over the page when the screen goes off
+  (`LauncherPlugin.cover`) and the page takes it away once the intro is drawn
+  (`uncover`; by itself after 15 seconds should the page never answer).
+* **MPTree's tile** shows the MPTree mark big, white on black, like the other apps'
+  banners (MPTree has no TV banner of its own): no small icon with its name.
+* **Classic's music card**: the MPTree logo while nothing plays; Shuffle all turns
+  it into the record at once, and the record stays while the music plays (MPTree's
+  cover, or its logo when a song has none, is not shown there).
 * **No screensaver when the TV comes on**: it is closed when the screen goes off,
   and the time the TV was off (or an app was in front) no longer counts as the
   remote being left alone.

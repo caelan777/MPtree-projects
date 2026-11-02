@@ -1,6 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { LayoutGrid, Plus } from "lucide-react";
 import type { TvApp } from "../launcher";
+import { hasMark } from "../music";
+import { Logo } from "./Logo";
 
 /** Two letters for an app without a picture: "YouTube" → "Yt", "HBO Max" → "HM". */
 function initials(label: string): string {
@@ -30,11 +32,12 @@ export function AppTile({ app, onOpen, onLong, pinned, isDefault, ok }: Props) {
   }, [onLong]);
 
   const banner = app.image && app.isBanner;
+  const mark = hasMark(app);
   return (
     <div className="tile">
       <button
         ref={ref}
-        className={"f face" + (banner ? " banner" : "")}
+        className={"f face" + (banner ? " banner" : mark ? " banner mark" : "")}
         data-f=""
         data-default={isDefault ? "" : undefined}
         data-long={onLong ? "" : undefined}
@@ -44,6 +47,8 @@ export function AppTile({ app, onOpen, onLong, pinned, isDefault, ok }: Props) {
       >
         {banner ? (
           <img src={app.image!} alt="" />
+        ) : mark ? (
+          <Logo size={120} />
         ) : (
           <>
             {app.image ? <img className="icon" src={app.image} alt="" /> : <span className="mk">{initials(app.label)}</span>}
@@ -51,7 +56,7 @@ export function AppTile({ app, onOpen, onLong, pinned, isDefault, ok }: Props) {
           </>
         )}
       </button>
-      <span className="label">{banner ? app.label + (pinned ? ", on Home" : "") : pinned ? "On Home" : " "}</span>
+      <span className="label">{banner || mark ? app.label + (pinned ? ", on Home" : "") : pinned ? "On Home" : " "}</span>
     </div>
   );
 }

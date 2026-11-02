@@ -1,4 +1,4 @@
-import { Children, isValidElement, useState, type CSSProperties, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Moon, Pause, Play, Shuffle, SkipBack, SkipForward, Sun, Sunset, Wind } from "lucide-react";
 import { Logo } from "../Logo";
 import type { TvApp } from "../../launcher";
@@ -88,15 +88,25 @@ export function SongLine({ m, now, className = "songline" }: { m: Music; now: Da
 }
 
 /**
- * The music as one big card (Classic). What plays: the cover, the song, a line for
- * how far, and previous, pause, next, plus every control. Nothing playing: shuffle
- * all songs. Nothing at all when neither is there.
+ * The music as one big card (Classic). Nothing playing: the MPTree logo and shuffle
+ * all songs; pressing Shuffle all turns the logo into a record at once. What plays:
+ * the record, the song, a line for how far, and previous, pause, next, plus every
+ * control. Nothing at all when neither is there.
  */
 export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | null; shuffle: ShuffleAll; now: Date; onOpen: () => void; className: string }) {
+  // Shuffle all was pressed: the record shows while MPTree starts the music (and
+  // the logo comes back should nothing start).
+  const [starting, setStarting] = useState(false);
+  useEffect(() => {
+    if (!starting) return;
+    const t = window.setTimeout(() => setStarting(false), 12_000);
+    return () => window.clearTimeout(t);
+  }, [starting]);
+
   if (m) {
     return (
       <div className={"mcard playing " + className}>
-        <Cover m={m} className="mc-art" />
+        <span className="mc-disc rec" />
         <div className="mc-body">
           <div className="mc-kick">{kicker(m)}</div>
           <h4 className="mc-title">{m.title}</h4>
@@ -113,11 +123,11 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   if (!shuffle) return null;
   return (
     <div className={"mcard " + className}>
-      <span className="mc-rec rec" />
+      {starting ? <span className="mc-disc rec" /> : <span className="mc-disc mc-logo"><Logo size={230} /></span>}
       <div className="mc-body">
         <h4 className="mc-title">Shuffle music</h4>
         <p className="mc-by">All your songs · {shuffle.where}</p>
-        <button className="f mc-go" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}><Shuffle size={26} />Shuffle all</button>
+        <button className="f mc-go" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={() => { setStarting(true); void shuffle.run(); }}><Shuffle size={26} />Shuffle all</button>
       </div>
     </div>
   );
