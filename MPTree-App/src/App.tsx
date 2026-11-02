@@ -22,6 +22,7 @@ import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
+import { MusicHint, MusicHowSheet } from "./components/MusicHint";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
@@ -460,6 +461,14 @@ export default function App() {
   const grantedAtStart   = useRef(false);
   // The loading screen finished before the answer above came back.
   const hiddenBeforeKnown = useRef(false);
+  // Saved data loaded (initialize below). With access already granted the
+  // scan asks nothing, so it starts right then, while the logo still plays,
+  // instead of waiting for the loading screen to finish.
+  const initDoneRef = useRef(false);
+  const scanEarly = () => {
+    if (initDoneRef.current && firstRunRef.current !== null && (!firstRunRef.current || grantedAtStart.current))
+      runLibraryScanRef.current?.();
+  };
   const [welcome, setWelcome] = useState<null | "open" | "entering">(null);
   const [musicAsked, setMusicAsked] = useState(false);
   const musicAccess: MusicAccess = !musicAsked ? "unasked"
@@ -482,12 +491,29 @@ export default function App() {
         if (granted) setMusicAsked(true); else holdScanRef.current = true;
       }
       if (hiddenBeforeKnown.current && (!due || granted)) runLibraryScanRef.current?.();
+      scanEarly();
     });
   }, []);
+  const [musicHint, setMusicHint] = useState(false);
+  const [musicHowOpen, setMusicHowOpen] = useState(false);
+  const [musicHintH, setMusicHintH] = useState(0);
   const finishOnboarding = useCallback(() => {
     setShowOnboarding(false);
     Preferences.set({ key: "mptree_onboarded_v2", value: "1" }).catch(() => {});
+    // Someone new gets the card on top of Songs after the tour: where the
+    // songs come from. It stays, across restarts, until they tap OK.
+    if (firstRunRef.current) {
+      setMusicHint(true);
+      Preferences.set({ key: "mptree_music_hint", value: "show" }).catch(() => {});
+    }
   }, []);
+  useEffect(() => {
+    Preferences.get({ key: "mptree_music_hint" }).then(r => { if (r.value === "show") setMusicHint(true); }).catch(() => {});
+  }, []);
+  const musicHintDone = () => {
+    setMusicHint(false);
+    Preferences.set({ key: "mptree_music_hint", value: "done" }).catch(() => {});
+  };
 
   // ── "A newer version is on the website" ───────────────────────────────────
   // Only ever set in the build the website hands out; the Play build compiles
@@ -786,6 +812,8 @@ export default function App() {
   };
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
   const [lookOpen,    setLookOpen]    = useState(false);
+  // Opened from the button on the player's record: straight to Records.
+  const [lookAtRecords, setLookAtRecords] = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
@@ -1044,6 +1072,8 @@ export default function App() {
         // Always clear the loading screen, even if something above threw —
         // otherwise the app would be stuck behind it forever.
         setIsInitializing(false);
+        initDoneRef.current = true;
+        scanEarly();
       }
     };
     initialize();
@@ -2858,7 +2888,8 @@ export default function App() {
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
-      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
+      if (musicHowOpen)        { setMusicHowOpen(false); return; }
+      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); setLookAtRecords(false); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
@@ -3170,7 +3201,8 @@ export default function App() {
   // drawn still match where the list is scrolled to.
   const SYNC_BAR_H = 50;
   const syncMoving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
-  const pullOffset = (refreshing ? 46 : pullDist) + (syncMoving ? SYNC_BAR_H : 0);
+  const showMusicHint = musicHint && !selectMode;
+  const pullOffset = (refreshing ? 46 : pullDist) + (syncMoving ? SYNC_BAR_H : 0) + (showMusicHint ? musicHintH : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
@@ -3700,6 +3732,8 @@ export default function App() {
                 </div>
               )}
 
+              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
+
               {displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
                   <IC.Heart filled={false} size={28} />
@@ -3904,6 +3938,7 @@ export default function App() {
           >
             <PlaylistsView
               topInset={playlistsInset}
+              onToast={showToast}
               rowH={ROW_H}
               rowTitle={ROW_TITLE}
               rowSub={ROW_SUB}
@@ -4132,6 +4167,7 @@ export default function App() {
         {editSong && <div style={{ position: "relative", zIndex: 460 }}><EditSheet name={dispName(editSong)} artist={dispArtist(editSong)} currentPhoto={getMeta(editSong).customPhoto} focusPhoto={editFocusPhoto} onSave={u => applyEdit(editSong, u)} onClose={() => { setEditSong(null); setEditFocusPhoto(false); }} T={TH} /></div>}
         {binManyIds && <ConfirmSheet title={t("Remove {n} songs", { n: binManyIds.length })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: binManyIds.length })} confirmLabel={t("Move {n} to bin", { n: binManyIds.length })} onConfirm={() => { removeMany(binManyIds); setBinManyIds(null); }} onCancel={() => setBinManyIds(null)} T={TH} />}
         {removeMultiConfirm && <ConfirmSheet title={t("Remove {n} songs", { n: selected.size })} body={t("{n} songs will be moved to the bin. You can restore them from Settings.", { n: selected.size })} confirmLabel={t("Move {n} to bin", { n: selected.size })} onConfirm={multiRemove} onCancel={() => setRemoveMultiConfirm(false)} T={TH} />}
+        {musicHowOpen && <MusicHowSheet onClose={() => setMusicHowOpen(false)} T={TH} />}
         {cutSong && <CutTrackSheet song={cutSong} totalMs={cutDuration} onSave={(start, end, name) => saveCutTrack(cutSong, start, end, name)} onClose={() => setCutSong(null)} T={TH} />}
         {settingsOpen && (
           <SettingsSheet
@@ -4226,7 +4262,8 @@ export default function App() {
             ) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
-            onClose={() => setLookOpen(false)}
+            onClose={() => { setLookOpen(false); setLookAtRecords(false); }}
+            startOnRecords={lookAtRecords}
             T={TH} />
           );
         })()}
@@ -4344,6 +4381,7 @@ export default function App() {
             <PlayerExpandSheet
               onNoCover={() => showToast(t("This song has no cover. Add one with Edit."))}
               onChangePhoto={() => { setEditFocusPhoto(true); setEditSong(currentSong); }}
+              onSkin={() => { setLookAtRecords(true); setLookOpen(true); }}
               song={currentSong}
               dispName={dispName(currentSong)}
               dispArtist={dispArtist(currentSong)}

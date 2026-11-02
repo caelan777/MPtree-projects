@@ -8,6 +8,7 @@ import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
 import { floatCard, roundBtn as cardCloseBtn } from "./cardStyles";
 import { ConfirmSheet } from "./ConfirmSheet";
+import type { ToastAction } from "./Toast";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
 import type { T } from "../themes";
@@ -102,6 +103,8 @@ interface Props {
   /** The name of the playlist that is open, or null on the list. App shows
    *  it in its tabs: "Playlists › name". */
   onOpenName?:        (name: string | null) => void;
+  /** App's toast, for "Undo" after a playlist is deleted with its X. */
+  onToast?:           (msg: string, action?: ToastAction) => void;
   /** Bumped when "Playlists" is tapped in App's tabs inside a playlist:
    *  straight back to the list. */
   listSignal?:        number;
@@ -289,7 +292,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -733,6 +736,19 @@ export const PlaylistsView: React.FC<Props> = ({
     setConfirmDeleteId(null);
   }, [playlists, activeId, onPlaylistsChange]);
 
+  // The X on a row while moving: gone at once, with Undo in the toast instead
+  // of a question. Undo puts it back where it was in the list as it is then.
+  const playlistsRef = useRef(playlists);
+  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
+  const deleteWithUndo = (pl: Playlist, index: number) => {
+    onHaptic?.();
+    deletePlaylist(pl.id);
+    onToast?.(tr("Playlist deleted"), { label: tr("Undo"), onClick: () => {
+      const now = playlistsRef.current.filter(p => p.id !== pl.id);
+      onPlaylistsChange([...now.slice(0, index), pl, ...now.slice(index)]);
+    } });
+  };
+
   /** "Add to playlist" from a row's ⋮ menu. Silently ignores duplicates. */
   const addSongToPlaylist = useCallback((playlistId: string, songId: string) => {
     onPlaylistsChange(playlists.map(p =>
@@ -938,6 +954,8 @@ export const PlaylistsView: React.FC<Props> = ({
   // it, still and untouchable, so there is something under the finger.
   const [swipeX, setSwipeX] = useState(0);
   const [swipeAnim, setSwipeAnim] = useState(false);
+  /** Where the list starts its last stretch after a swipe back; 0 at rest. */
+  const [enterX, setEnterX] = useState(0);
   const swipeRef = useRef<{ x: number; y: number; t: number; lock: "h" | "v" | null } | null>(null);
   const canSwipeBack = (view === "detail" || view === "smartDetail") && !selectMode && !menuSong && !renamingId && !confirmDeleteId;
   const onSwipeStart = (e: React.TouchEvent) => {
@@ -963,11 +981,15 @@ export const PlaylistsView: React.FC<Props> = ({
     if (!g || g.lock !== "h") return;
     const w = window.innerWidth;
     const fast = swipeX / Math.max(1, Date.now() - g.t) > 0.5;
-    setSwipeAnim(true);
     if (swipeX > w * 0.3 || (fast && swipeX > 40)) {
-      setSwipeX(w);
-      setTimeout(() => { leaveToList(); setSwipeX(0); setSwipeAnim(false); }, 230);
+      // Back on the list at once, so the title changes and it takes taps
+      // straight away. The list finishes the last stretch of its slide in
+      // from where it was drawn behind the finger.
+      leaveToList(); setSwipeX(0);
+      setEnterX(Math.round((swipeX / w - 1) * 90));
+      requestAnimationFrame(() => requestAnimationFrame(() => setEnterX(0)));
     } else {
+      setSwipeAnim(true);
       setSwipeX(0);
       setTimeout(() => setSwipeAnim(false), 230);
     }
@@ -1233,6 +1255,17 @@ export const PlaylistsView: React.FC<Props> = ({
                     )}
 
                     {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
+
+                    {reordering && !ghost && (
+                      <button
+                        aria-label={tr("Delete playlist")}
+                        onTouchStart={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); deleteWithUndo(pl, i); }}
+                        style={{ background: t.accent, border: "none", width: 32, height: 32, margin: -6, boxSizing: "content-box", backgroundClip: "content-box", padding: 6, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={t.playBtnFg} strokeWidth="3.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1406,8 +1439,9 @@ export const PlaylistsView: React.FC<Props> = ({
         style={{
           flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none",
           position: "relative", zIndex: 1,
-          ...(swipeX > 0 ? { background: t.bg, transform: `translateX(${swipeX}px)`, boxShadow: "-14px 0 32px rgba(0,0,0,0.35)" } : null),
-          transition: `transform ${swipeMotion}`,
+          ...(swipeX > 0 ? { background: t.bg, transform: `translateX(${swipeX}px)`, boxShadow: "-14px 0 32px rgba(0,0,0,0.35)" }
+            : enterX ? { transform: `translateX(${enterX}px)` } : null),
+          transition: enterX ? "none" : swipeX > 0 ? `transform ${swipeMotion}` : "transform 0.23s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         {/* The header's height as a spacer INSIDE the scroller, so rows scroll up

@@ -122,6 +122,9 @@ type PlayerExpandSheetProps = {
   onNoCover?: () => void;
   /** A tap on the record: change the song's photo. */
   onChangePhoto?: () => void;
+  /** The small button on the record: opens the record skins. Tapping the
+   *  record itself still turns it between photo and record. */
+  onSkin?: () => void;
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -141,7 +144,7 @@ export function PlayerExpandSheet({
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
-  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto,
+  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto, onSkin,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
@@ -554,15 +557,28 @@ export function PlayerExpandSheet({
                   <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
                 </div>
               ) : (
-                <SpinningDisc
-                  size={discSize}
-                  spinning={isPlaying}
-                  title={dispName}
-                  customPhoto={customPhoto}
-                  tappable
-                  onNoCover={onNoCover}
-                  onPhoto={onChangePhoto}
-                />
+                <div style={{ position: "relative" }}>
+                  <SpinningDisc
+                    size={discSize}
+                    spinning={isPlaying}
+                    title={dispName}
+                    customPhoto={customPhoto}
+                    tappable
+                    onNoCover={onNoCover}
+                    onPhoto={onChangePhoto}
+                  />
+                  {onSkin && (
+                    <button aria-label={t("Records")} onClick={e => { e.stopPropagation(); onSkin(); }} style={{
+                      position: "absolute", right: -2, bottom: Math.round(discSize * 0.03), width: 46, height: 46, borderRadius: "50%",
+                      background: T.playBtnBg, border: `3px solid ${T.sheetBg}`, padding: 0, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
+                    }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.playBtnFg} strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               )}
               <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
                 <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
