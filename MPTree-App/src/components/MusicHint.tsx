@@ -10,7 +10,7 @@ import { floatCard } from "./cardStyles";
 type MusicHintProps = {
   onDone: () => void;
   onHow: () => void;
-  /** Its height, so the list's virtualization can count it like the sync bar. */
+  /** Its height, so the list's virtualization can count it. */
   onHeight: (h: number) => void;
   T: T;
 };

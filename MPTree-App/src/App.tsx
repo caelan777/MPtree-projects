@@ -48,7 +48,7 @@ import {
 import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
 import { useBackground, loadBackground } from "./background";
-import { useLook, loadLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
+import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
 import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
@@ -192,6 +192,8 @@ export default function App() {
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
+  const themeNowRef = useRef<Theme>("dark");
+  useEffect(() => { themeNowRef.current = theme; }, [theme]);
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
   const [menuSong,       setMenuSong]      = useState<Song | null>(null);
@@ -815,7 +817,6 @@ export default function App() {
   };
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
   const [lookOpen,    setLookOpen]    = useState(false);
-  // Opened from the button on the player's record: straight to Records.
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
@@ -2266,7 +2267,18 @@ export default function App() {
       if (Array.isArray(session.eqBandLevels) && session.eqBandLevels.length) setEqBandLevels(session.eqBandLevels);
       if (session.theme) setTheme(session.theme);
       const before = getLook().icon;
-      const after = (await loadLook()).icon;
+      const l = await loadLook();
+      // The icon stays with each phone, but Aviela's and Lantern's icons belong
+      // to their style: when the account brings another style, such an icon
+      // goes with it (to the new style's own, or back to the plain one).
+      const dark = (session.theme ?? themeNowRef.current) === "dark";
+      const style = !dark && l.light === "pink" && l.flowers !== "none" ? "aviela"
+        : isLanternRecord(dark ? l.vinylDark : l.vinylLight) && l.flowers === "none" ? "lantern" : null;
+      let after = l.icon;
+      if ((after === "aviela" || after === "lantern") && after !== style) {
+        after = style ?? "classic";
+        saveLook({ icon: after });
+      }
       if (after !== before) System.setAppIcon({ icon: after }).catch(() => {});
     },
   }; });
@@ -3235,13 +3247,10 @@ export default function App() {
   const ROW_SUB   = widePhone ? 13.5 : 13;
   const VIRT_BUFFER = 8;          // extra rows rendered above/below the viewport
   const VIRT_THRESHOLD = 80;      // don't bother virtualizing small lists
-  // A line above the songs while one is on its way from or to another device.
-  // A fixed height, and counted with the pull-to-refresh space, so the rows
-  // drawn still match where the list is scrolled to.
-  const SYNC_BAR_H = 50;
-  const syncMoving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
+  // Songs on their way between devices are shown in Settings, under Account
+  // & sync (SettingsSheet), not over the list.
   const showMusicHint = musicHint && !selectMode;
-  const pullOffset = (refreshing ? 46 : pullDist) + (syncMoving ? SYNC_BAR_H : 0) + (showMusicHint ? musicHintH : 0);
+  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
@@ -3758,18 +3767,6 @@ export default function App() {
               <div style={{ height: refreshing ? 46 : `${pullDist}px`, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", transition: refreshing ? "height 0.2s ease" : "none" }}>
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
-
-              {syncMoving && (
-                <div style={{ height: SYNC_BAR_H, boxSizing: "border-box", padding: "4px 16px 8px 19px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
-                    <span style={{ fontWeight: 700, color: TH.text, flexShrink: 0 }}>{t("Syncing songs between your devices")}</span>
-                    <span style={{ color: TH.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{syncMoving.name}</span>
-                  </div>
-                  <div style={{ height: 3, background: TH.border, borderRadius: 2, marginTop: 7, overflow: "hidden" }}>
-                    <div style={{ width: `${syncMoving.total > 0 ? Math.min(100, Math.round(syncMoving.done / syncMoving.total * 100)) : 0}%`, height: "100%", background: TH.accent, transition: "width 0.3s" }} />
-                  </div>
-                </div>
-              )}
 
               {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
 

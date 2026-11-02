@@ -304,7 +304,7 @@ export function PlayerExpandSheet({
         closingRef.current = true;
         setCloseSnap(true);
         setCloseDragY(vh());         // glide the rest of the way down
-        setTimeout(onClose, 200);
+        setTimeout(onClose, 230);    // just after the 0.22 s glide, never mid-way
       } else {
         setCloseSnap(true);
         setCloseDragY(0);            // snap back up
