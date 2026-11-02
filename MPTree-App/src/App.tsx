@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -1204,55 +1204,66 @@ export default function App() {
   }, [currentSong]);
 
   // ── Sync user-picked covers to native ─────────────────────────────────────
-  // applyEdit pushes a cover to native as it is set, but that only covers edits
-  // made from now on. Photos set before this existed, or brought in by a backup
-  // restore, are unknown to native until we tell it. We keep the list of ids we
-  // have pushed so a restore is picked up too, and so a launch with nothing new
-  // does no work at all.
+  // The lock screen and the notification show the photo a song was given, so
+  // native needs every one of them, by file path (what it plays). applyEdit
+  // pushes a cover as it is set, but photos also arrive from a backup restore
+  // or from the account, and a cut has its own id over the same file. So this
+  // runs whenever the photos change, a moment after, and pushes only what is
+  // new or different. What landed is kept as path -> a short signature of the
+  // photo, so an unchanged library does no work at all.
+  const artSig = (url: string) => `${url.length}:${url.slice(-24)}`;
+  // Only the photos matter here, not plays or likes: a cheap summary of them.
+  const photoSum = useMemo(() => Object.values(meta).reduce((n, m) => n + (m?.customPhoto ? m.customPhoto.length : 0), 0), [meta]);
   useEffect(() => {
     if (isInitializing) return;
     let cancelled = false;
-    (async () => {
+    const timer = window.setTimeout(() => { void (async () => {
       try {
         const { value } = await Preferences.get({ key: "mptree_track_art_pushed" });
-        const pushed: string[] = value ? JSON.parse(value) : [];
         if (cancelled) return;
+        // Older builds kept a plain list of ids, which were the paths.
+        const parsed: unknown = value ? JSON.parse(value) : {};
+        const pushed: Record<string, string> = Array.isArray(parsed)
+          ? Object.fromEntries((parsed as string[]).map(p => [p, "?"]))
+          : (parsed as Record<string, string>);
 
-        const pushedSet = new Set(pushed);
-        const withPhoto = Object.keys(metaRef.current).filter(id => metaRef.current[id]?.customPhoto);
-        const withPhotoSet = new Set(withPhoto);
-
-        const toAdd   = withPhoto.filter(id => !pushedSet.has(id));
-        const toClear = pushed.filter(id => !withPhotoSet.has(id));
-        if (!toAdd.length && !toClear.length) return;
-
-        // Only tick off what actually landed. setTrackArt rejects while the
-        // playback service is still binding, and recording a push that never
-        // happened would leave that cover missing from the lock screen forever.
-        const landed = new Set(pushed.filter(id => withPhotoSet.has(id)));
-        for (const id of toAdd) {
-          if (cancelled) return;
-          try {
-            await AudioPlayer.setTrackArt({ path: id, dataUrl: metaRef.current[id]!.customPhoto! });
-            landed.add(id);
-          } catch { /* try again next launch */ }
+        const pathOf = new Map(songs.map(s => [s.id, s.uri]));
+        const want = new Map<string, string>();   // path -> photo
+        for (const [id, m] of Object.entries(metaRef.current)) {
+          if (!m?.customPhoto) continue;
+          const path = pathOf.get(id) ?? (id.includes("__cut__") ? id.split("__cut__")[0] : id);
+          // A whole song's own photo wins over a cut's.
+          if (!want.has(path) || id === path) want.set(path, m.customPhoto);
         }
-        for (const id of toClear) {
+
+        const landed = { ...pushed };
+        let changed = false;
+        for (const [path, url] of want) {
           if (cancelled) return;
+          if (pushed[path] === artSig(url)) continue;
           try {
-            await AudioPlayer.setTrackArt({ path: id, dataUrl: null });
-            landed.delete(id);
-          } catch { /* still ours to clear next launch */ landed.add(id); }
+            await AudioPlayer.setTrackArt({ path, dataUrl: url });
+            landed[path] = artSig(url); changed = true;
+          } catch { /* the service is still binding: next time */ }
         }
-        if (cancelled) return;
-        await Preferences.set({ key: "mptree_track_art_pushed", value: JSON.stringify([...landed]) });
+        for (const path of Object.keys(pushed)) {
+          if (cancelled) return;
+          if (want.has(path)) continue;
+          try {
+            await AudioPlayer.setTrackArt({ path, dataUrl: null });
+            delete landed[path]; changed = true;
+          } catch { /* still ours to clear next time */ }
+        }
+        if (cancelled || !changed) return;
+        await Preferences.set({ key: "mptree_track_art_pushed", value: JSON.stringify(landed) });
       } catch {
         // Nothing here is worth bothering the user about: the lock screen just
         // falls back to embedded art or the logo, exactly as it did before.
       }
-    })();
-    return () => { cancelled = true; };
-  }, [isInitializing]);
+    })(); }, 1500);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInitializing, songs.length, photoSum]);
 
   // Dominant-color extraction for the mini-player tint / expanded-player blur
   // backdrop. Mirrors the art-source logic above directly (rather than calling
@@ -1822,6 +1833,20 @@ export default function App() {
     playerSwipeStartY.current = clientY;
     playerSwipeT.current = Date.now();
     playerAxisRef.current = null;
+  };
+  // Android can cancel a touch instead of ending it, most often on a very
+  // short swipe. Without this the half-drawn sheet stayed up, invisible, over
+  // everything, and nothing could be tapped. A cancel never opens the player.
+  const onPlayerSwipeCancel = () => {
+    playerSwipeStartX.current = null;
+    playerSwipeStartY.current = null;
+    playerAxisRef.current = null;
+    setTitleDragX(0);
+    if (expandDrag !== null) {
+      setExpandSettling(true);
+      setExpandDrag(0);
+      window.setTimeout(() => { setExpandSettling(false); setExpandDrag(null); }, 280);
+    }
   };
   const onPlayerSwipeMove = (clientX: number, clientY: number) => {
     if (playerSwipeStartY.current === null || playerSwipeStartX.current === null) return;
@@ -2495,7 +2520,8 @@ export default function App() {
     // notification does not keep showing the old art (or the logo).
     if (changedPhoto) {
       for (const id of ids) {
-        AudioPlayer.setTrackArt({ path: id, dataUrl: u.customPhoto ?? null }).catch(() => {});
+        const path = songsRef.current.find(s => s.id === id)?.uri ?? id;
+        AudioPlayer.setTrackArt({ path, dataUrl: u.customPhoto ?? null }).catch(() => {});
       }
     }
     showToast(tn(ids.length, "{n} song updated", "{n} songs updated"));
@@ -4024,6 +4050,7 @@ export default function App() {
               onTouchStart={e => onPlayerSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
               onTouchMove={e => onPlayerSwipeMove(e.touches[0].clientX, e.touches[0].clientY)}
               onTouchEnd={e => onPlayerSwipeEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
+              onTouchCancel={onPlayerSwipeCancel}
             >
               {/* Swipe-up handle: the same horizontal pill as the expanded
                   player's sheet handle, with a gentle upward "swipe me" nudge
