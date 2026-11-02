@@ -8,6 +8,28 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.6 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.6.aab`
+(versionCode 118, built 2026-11-02 with `npm run build:play` from `main` after merging `fixes-startup-swipe`;
+the next bundle or test build is 119). Test builds 83 to 86. **Something new to declare:** the anonymous
+counter (`src/counter.ts`, https://mp-tree.net/privacy#counter) counts app opens, tabs used and Pro and ad moments,
+without any id. Update the Data safety form in Play Console before or with this release.
+
+```
+<en-GB>
+Your songs load while the logo plays. A shared song carries its name, artist and cover. Hold a playlist and tap its X to delete it, with Undo. Tap the record to switch it with the photo, hold it to change the photo. The photo you choose shows on the lock screen. Everything moves faster, and the player opens and closes with a shorter swipe. New here? A card in Songs explains how to add music. Fixed a screen that could freeze after a very short swipe.
+</en-GB>
+<nl-NL>
+Je liedjes laden terwijl het logo speelt. Een gedeeld liedje heeft zijn naam, artiest en hoes. Houd een playlist vast en tik op het kruisje om hem te verwijderen, met Ongedaan maken. Tik op de plaat om te wisselen met de foto, houd hem vast om de foto te veranderen. Je gekozen foto staat op het vergrendelscherm. Alles gaat sneller en de speler opent en sluit met een kortere veeg. Nieuw? Een kaart bij Liedjes legt uit hoe je muziek toevoegt. Een vastloper na een korte veeg is opgelost.
+</nl-NL>
+<es-ES>
+Tus canciones cargan mientras suena el logo. Una canción compartida lleva su nombre, artista y portada. Mantén pulsada una lista y toca su X para borrarla, con Deshacer. Toca el disco para cambiar a la foto, mantenlo para cambiar la foto. La foto que elijas sale en la pantalla de bloqueo. Todo va más rápido y el reproductor se abre y cierra con un gesto más corto. ¿Eres nuevo? Una tarjeta en Canciones explica cómo añadir música. Arreglado un bloqueo tras un gesto muy corto.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.5 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`
