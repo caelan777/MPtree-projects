@@ -10,7 +10,7 @@ own notes in `docs/ios.md` on the `ios` branch.
 | Thing | Version | Where |
 |---|---|---|
 | Android on Google Play | 1.3.2, versionCode 105 (the new player, Next up, repeat all, playlists in order) | live by 26 October; Caelan says it works well on his phone. 1.3.1 (99) was skipped |
-| Android test build | 84, versionCode 115 (tap the record for record or photo, hold it to change the photo, no skin button; no swiping a playlist away; navigation and the player about 35% faster; shorter swipes and a flick for the player and Up next; a loading line on Account and Pro. 83, versionCode 114: songs load during the logo, sharing carries name, artist and cover, X with Undo on playlists, the music hint card for new users, the anonymous counter) | prerelease `v1.2.3-pro-test.84`, mp-tree.net/test, branch `fixes-startup-swipe` |
+| Android test build | 85, versionCode 116 (no stuck screen after a very short swipe up on the mini player; chosen photos reach the lock screen and notification whenever they change. 84, versionCode 115: tap the record for record or photo, hold it to change the photo, no skin button; no swiping a playlist away; navigation and the player about 35% faster; shorter swipes and a flick for the player and Up next; a loading line on Account and Pro. 83, versionCode 114: songs load during the logo, sharing carries name, artist and cover, X with Undo on playlists, the music hint card for new users, the anonymous counter) | prerelease `v1.2.3-pro-test.85`, mp-tree.net/test, branch `fixes-startup-swipe` |
 | iPhone | 1.3.1 build 5 (not on a phone yet) | branch `ios`, built by GitHub Actions, `MPTree-iPhone-5.ipa` in the repo root (not committed) |
 | Windows, Microsoft Store | 0.1.3 | Store ID 9PN3L88V4H58, live since 15 October |
 | Website | Cloudflare Pages | deploys on push to `main` |
@@ -20,7 +20,7 @@ website's Windows buttons download the Store's own installer
 (`get.microsoft.com/installer/download/9PN3L88V4H58`); `windows.html` is gone and
 `/windows` redirects there (`Website/_redirects`).
 
-Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109, test build 80 took 110, test build 81 took 111, 1.3.5 took 112, test build 82 took 113, test build 83 took 114, test build 84 took 115). Next is 116. Next Windows is 0.1.6.
+Next Android versionCode is 100 (1.2.5 took 78, 1.2.6 took 79, test build 57 took 80, 1.2.7 took 81, test builds 58 to 60 took 82 to 84, 1.2.8 took 85, test build 61 took 86, 1.2.9 took 87, test builds 62 to 65 took 88 to 91, 1.3.0 took 92, test builds 66 to 69 took 93 to 96: Get music, the + in the header, shelved on 22 October and kept on branch `get-music`, test builds 70 and 71 took 97 and 98, 1.3.1 took 99, test builds 72 to 76 took 100 to 104, 1.3.2 took 105, test builds 77 and 78 took 106 and 107, 1.3.3 took 108, test build 79 took 109, test build 80 took 110, test build 81 took 111, 1.3.5 took 112, test build 82 took 113, test build 83 took 114, test build 84 took 115, test build 85 took 116). Next is 117. Next Windows is 0.1.6.
 
 ## Branches
 
