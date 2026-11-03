@@ -107,6 +107,7 @@ Not an oversight, these have no path at all:
 | `sources/cloudflare.mjs` | Zone analytics and Pages deploys. Needs a token |
 | `sources/play.mjs` | Reviews, and installs from the reports bucket |
 | `dashboard.html` | The page itself, published as an artifact |
+| `tv-numbers.mjs` | Collects, then puts the few numbers the TV shows in a secret gist (daily, Task Scheduler "MPTree TV numbers") |
 | `secrets.env` | Credentials. Gitignored |
 | `data.json` | Output. Gitignored |
 

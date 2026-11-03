@@ -5,7 +5,7 @@ import type { TvApp } from "../../launcher";
 import { pickHours, type Home, type Hour } from "../../home";
 import { kicker, progressAt, type Music, type ShuffleAll } from "../../music";
 import { clock, deg } from "../../format";
-import { ago, short, type MptreeStats } from "../../stats";
+import { ago, figures, short, type MptreeStats } from "../../stats";
 
 /** What every layout gets. The layouts are Home's first page: the day, the music
  *  and the apps. The house (Home Assistant) is the second page, HouseView. */
@@ -152,9 +152,7 @@ export function Nums({ stats, className = "nums" }: { stats: MptreeStats | null;
   return (
     <span className={className}>
       <span className="lg"><Logo size={30} />MPTree</span>
-      <span><b>{short(stats.installs)}</b> installs</span>
-      {stats.installsToday ? <span><b>+{stats.installsToday}</b> today</span> : null}
-      {stats.rating ? <span><b>{stats.rating}</b> rating</span> : null}
+      {figures(stats).slice(0, 3).map(f => <span key={f.k}><b>{f.v}</b> {f.k}</span>)}
     </span>
   );
 }

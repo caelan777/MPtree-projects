@@ -31,7 +31,8 @@ export const HA = {
   sun: "sun.sun",
 };
 
-/** The MPTree numbers: the address of a copy of Dashboard/data.json (what
- *  `node Dashboard/collect.mjs` writes on the PC). Empty: no numbers on Home.
+/** The MPTree numbers: a secret GitHub gist holding the few numbers from
+ *  Dashboard/data.json the TV shows, updated daily on the PC by
+ *  `node Dashboard/tv-numbers.mjs` (Task Scheduler). Empty: no numbers on Home.
  *  It lives here, not in Settings: it is one address, set once. */
-export const STATS_URL = "";
+export const STATS_URL = "https://gist.githubusercontent.com/caelan777/ed8ce9b41d95f75ab8c04822360c5057/raw/tv-numbers.json";

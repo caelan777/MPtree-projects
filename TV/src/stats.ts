@@ -74,6 +74,18 @@ export function short(v: number | null): string {
   return v.toLocaleString("en-GB");
 }
 
+/** The numbers there are, most telling first: Play installs and rating once Play
+ *  is set up in the Dashboard, else (or then) website downloads and visitors.
+ *  `k` is the short label ("installs"), `label` the one for a list ("Play installs"). */
+export function figures(s: MptreeStats): { v: string; k: string; label: string }[] {
+  const out: { v: string; k: string; label: string }[] = [];
+  if (s.installs !== null) out.push({ v: short(s.installs) + (s.installsToday ? ` (+${s.installsToday})` : ""), k: "installs", label: "Play installs" });
+  if (s.rating !== null) out.push({ v: String(s.rating), k: "rating", label: "Rating" });
+  if (s.downloads !== null) out.push({ v: short(s.downloads), k: "downloads", label: "Downloads" });
+  if (s.visitors7 !== null) out.push({ v: short(s.visitors7), k: "visitors this week", label: "Site visitors, 7 days" });
+  return out;
+}
+
 /** "2 h ago", "12 min ago". */
 export function ago(iso: string | null, now: number): string {
   if (!iso) return "";
