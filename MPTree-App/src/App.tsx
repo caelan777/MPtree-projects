@@ -55,6 +55,9 @@ import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
+import { DiscoverView, DiscoverIcon } from "./components/DiscoverView";
+import { artDataUrl, type FreeTrack } from "./discover";
+import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
 import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
 import type { Playlist, SmartPlaylist } from "./types";
@@ -166,6 +169,9 @@ const SIZE_TABLE: Record<UiSize, { text: number; row: number }> = {
 const WIDE_PHONE = 390;
 /** How much taller a row is on a big phone, at every Size. */
 const WIDE_ROW_EXTRA = 10;
+
+// Discover needs the native download, which the iPhone version does not have yet.
+const HAS_DISCOVER = Capacitor.getPlatform() !== "ios";
 
 export default function App() {
   const [songs,          setSongs]         = useState<Song[]>([]);
@@ -668,6 +674,13 @@ export default function App() {
   // Playlist picker opened from the multi-select bar.
   const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // Discover: free music to download. A layer over the two pages rather than a
+  // third one, and kept mounted after the first open so a download carries on
+  // while you are back on Songs. Android only for now.
+  const [discoverOpen, setDiscoverOpen] = useState(false);
+  const [discoverMounted, setDiscoverMounted] = useState(false);
+  const discoverBackRef = useRef<(() => boolean) | null>(null);
+  const openDiscover = () => { setDiscoverMounted(true); setDiscoverOpen(true); };
   // The anonymous counter (counter.ts): which tabs are used, once a day each.
   useEffect(() => { countDaily(page === "songs" ? "tab-songs" : "tab-playlists"); }, [page]);
   // The tour points at the Songs page: its header, search box, a song row, the
@@ -2844,6 +2857,31 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A Discover download is in Music/MPTree. It goes into Songs at once, with
+  // the name, artist, genre and cover kept as MPTree's own: the file itself
+  // often has no tags, and a later scan would otherwise call it by its file name.
+  const discoverSaved = async (track: FreeTrack, path: string) => {
+    const song: Song = { id: path, uri: path, title: track.title, artist: track.artist, duration: track.duration * 1000, dateAdded: Date.now(), isCut: false };
+    setSongs(prev => prev.some(s => s.uri === path) ? prev : [song, ...prev]);
+    const photo = await artDataUrl(track.art);
+    setMeta(prev => ({ ...prev, [path]: {
+      ...prev[path],
+      customName: track.title,
+      ...(track.artist ? { customArtist: track.artist } : {}),
+      ...(track.genre ? { customGenre: track.genre } : {}),
+      ...(photo ? { customPhoto: photo } : {}),
+    } }));
+    if (photo) AudioPlayer.setTrackArt({ path, dataUrl: photo }).catch(() => {});
+    showToast(t("\"{name}\" is in your Songs", { name: track.title }), {
+      label: t("Play"),
+      onClick: () => {
+        setDiscoverOpen(false); setPage("songs");
+        const all = songsRef.current.some(s => s.uri === path) ? songsRef.current : [song, ...songsRef.current];
+        void playSong(all.find(s => s.uri === path) ?? song, all);
+      },
+    });
+  };
+
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean, source: string) => {
     if (!playlistSongs.length) return;
     openChrome();
@@ -2936,6 +2974,7 @@ export default function App() {
       if (halloween)           { if (halloween !== "scare") closeHalloween(); return; }
       if (proOpen)             { setProOpen(false); return; }
       if (showAdPrompt)        { adNotNow(); return; }
+      if (discoverOpen)        { if (!discoverBackRef.current?.()) setDiscoverOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
@@ -3447,6 +3486,17 @@ export default function App() {
                 >
                   {t("Playlists")}
                 </button>
+                {HAS_DISCOVER && (
+                  <button
+                    onClick={openDiscover}
+                    aria-label={t("Discover")}
+                    tabIndex={inPl ? -1 : 0}
+                    aria-hidden={inPl}
+                    style={{ ...seg(false), display: "flex", alignItems: "center", maxWidth: inPl ? 0 : 60, opacity: inPl ? 0 : 1, marginLeft: inPl ? 0 : 2, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : { paddingLeft: 10, paddingRight: 10 }) }}
+                  >
+                    {DiscoverIcon(CT.muted)}
+                  </button>
+                )}
                 <span aria-hidden="true" style={{ display: "flex", flexShrink: 0, overflow: "hidden", color: CT.muted, maxWidth: inPl ? 18 : 0, opacity: inPl ? 1 : 0, transition: `max-width ${fold}, opacity ${fold}` }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
                 </span>
@@ -4479,6 +4529,18 @@ export default function App() {
             T={TH} />
         )}
 
+        {discoverMounted && (
+          <DiscoverView
+            open={discoverOpen}
+            T={TH}
+            backRef={discoverBackRef}
+            onClose={() => { setDiscoverOpen(false); setPage("songs"); }}
+            onGoPlaylists={() => { setDiscoverOpen(false); setPage("playlists"); }}
+            onOpenSettings={() => { setDiscoverOpen(false); void openSettings(); }}
+            onPreview={() => { if (isPlayingRef.current) void togglePlay(); }}
+            onSaved={discoverSaved}
+          />
+        )}
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
         {!isInitializing && libraryReady && showOnboarding && !welcome && (
           <OnboardingOverlay onDone={finishOnboarding} T={TH} />

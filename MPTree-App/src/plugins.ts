@@ -162,6 +162,8 @@ export type SyncPlugin = {
   abortFile(options: { tid: string }): Promise<void>;
   driveUpload(options: { token: string; path: string; name: string; tid?: string; appProperties: Record<string, string> }): Promise<{ id: string }>;
   driveDownload(options: { token: string; fileId: string; tid: string; size?: number }): Promise<{ size: number }>;
+  /** A file a Discover source offers for download, into the temp file for tid. */
+  urlDownload(options: { url: string; tid: string }): Promise<{ size: number }>;
   addListener(event: "progress", handler: (p: { tid: string; done: number; total: number }) => void): Promise<{ remove(): void }>;
 };
 
@@ -222,6 +224,7 @@ const SyncWeb: SyncPlugin = {
   appendChunk:  unavailable,
   finishFile:   unavailable,
   abortFile:    async () => {},
+  urlDownload:  unavailable,
   driveUpload:  unavailable,
   driveDownload: unavailable,
   addListener:  async () => ({ remove() {} }),
