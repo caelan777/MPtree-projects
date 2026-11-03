@@ -18,6 +18,8 @@ export type FreeTrack = {
   /** Seconds. */
   duration: number;
   art: string | null;
+  /** Other hosts that serve the same cover, for when `art`'s host is down. */
+  mirrors: string[];
   /** What the artist put on it, e.g. "Attribution CC BY". "" when nothing. */
   license: string;
   /** The file name the artist uploaded, which says what format arrives. */
@@ -51,7 +53,7 @@ type Raw = {
   id: string; title: string; genre?: string; duration?: number; license?: string | null;
   orig_filename?: string | null; permalink?: string;
   is_downloadable?: boolean; is_download_gated?: boolean; is_delete?: boolean; is_available?: boolean;
-  artwork?: Record<string, string> | null;
+  artwork?: { mirrors?: string[] } & Record<string, unknown> | null;
   user?: { name?: string; handle?: string };
 };
 
@@ -66,7 +68,8 @@ function toTrack(r: Raw): FreeTrack | null {
     artist: (r.user?.name ?? r.user?.handle ?? "").trim(),
     genre: r.genre ?? "",
     duration: r.duration ?? 0,
-    art: r.artwork?.["480x480"] ?? r.artwork?.["150x150"] ?? null,
+    art: (r.artwork?.["480x480"] ?? r.artwork?.["150x150"] ?? null) as string | null,
+    mirrors: Array.isArray(r.artwork?.mirrors) ? r.artwork!.mirrors!.filter(m => m.startsWith("https://")) : [],
     license: (r.license ?? "").trim(),
     fileName,
     permalink: r.permalink ? "https://audius.co" + r.permalink : "https://audius.co",
@@ -99,7 +102,7 @@ export async function findFree(o: { genre?: string; query?: string; offset?: num
 
 // A shelf is kept for a day, so opening the page again costs nothing.
 const DAY = 24 * 60 * 60 * 1000;
-const shelfKey = (genre: string) => "mptree_discover2_" + genre;
+const shelfKey = (genre: string) => "mptree_discover3_" + genre;
 
 export async function loadShelf(genre: string): Promise<FreeTrack[]> {
   try {
@@ -148,18 +151,37 @@ export async function markSaved(id: string, path: string): Promise<void> {
   await Preferences.set({ key: SAVED, value: JSON.stringify(all) }).catch(() => {});
 }
 
+/** The cover on its own host, then on each mirror. */
+export function artUrls(t: FreeTrack): string[] {
+  if (!t.art) return [];
+  const path = t.art.replace(/^https:\/\/[^/]+/, "");
+  return [t.art, ...(t.mirrors ?? []).map(m => m.replace(/\/$/, "") + path)];
+}
+
+/** For an <img>: when a cover fails, the next mirror; when all fail, nothing. */
+export function nextArt(t: FreeTrack, img: HTMLImageElement): void {
+  const urls = artUrls(t);
+  const i = Number(img.dataset.try ?? 0) + 1;
+  if (i < urls.length) { img.dataset.try = String(i); img.src = urls[i]; }
+  else img.style.visibility = "hidden";
+}
+
 /** The cover as a data URL, for the song's photo in MPTree. Null when it
  *  cannot be had; the song then simply has no photo. */
-export async function artDataUrl(url: string | null): Promise<string | null> {
-  if (!url) return null;
-  try {
-    const b = await (await fetch(url)).blob();
-    if (!b.type.startsWith("image/") || b.size > 600_000) return null;
-    return await new Promise<string | null>(res => {
-      const fr = new FileReader();
-      fr.onload = () => res(typeof fr.result === "string" ? fr.result : null);
-      fr.onerror = () => res(null);
-      fr.readAsDataURL(b);
-    });
-  } catch { return null; }
+export async function artDataUrl(t: FreeTrack): Promise<string | null> {
+  for (const url of artUrls(t)) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const b = await r.blob();
+      if (!b.type.startsWith("image/") || b.size > 600_000) return null;
+      return await new Promise<string | null>(res => {
+        const fr = new FileReader();
+        fr.onload = () => res(typeof fr.result === "string" ? fr.result : null);
+        fr.onerror = () => res(null);
+        fr.readAsDataURL(b);
+      });
+    } catch { /* the next host */ }
+  }
+  return null;
 }

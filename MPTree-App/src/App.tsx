@@ -680,7 +680,8 @@ export default function App() {
   const [discoverOpen, setDiscoverOpen] = useState(false);
   const [discoverMounted, setDiscoverMounted] = useState(false);
   const discoverBackRef = useRef<(() => boolean) | null>(null);
-  const openDiscover = () => { setDiscoverMounted(true); setDiscoverOpen(true); };
+  const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
+  const openDiscover = () => { setDiscoverMounted(true); setDiscoverOpen(true); if (musicHint) musicHintDone(); };
   // The anonymous counter (counter.ts): which tabs are used, once a day each.
   useEffect(() => { countDaily(page === "songs" ? "tab-songs" : "tab-playlists"); }, [page]);
   // The tour points at the Songs page: its header, search box, a song row, the
@@ -2863,7 +2864,7 @@ export default function App() {
   const discoverSaved = async (track: FreeTrack, path: string) => {
     const song: Song = { id: path, uri: path, title: track.title, artist: track.artist, duration: track.duration * 1000, dateAdded: Date.now(), isCut: false };
     setSongs(prev => prev.some(s => s.uri === path) ? prev : [song, ...prev]);
-    const photo = await artDataUrl(track.art);
+    const photo = await artDataUrl(track);
     setMeta(prev => ({ ...prev, [path]: {
       ...prev[path],
       customName: track.title,
@@ -3470,6 +3471,26 @@ export default function App() {
               transition: `background 0.2s, color 0.2s, max-width ${fold}, padding ${fold}, opacity ${fold}`,
             });
             return (
+              <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+              {/* Discover: a round download button in front of the tabs. It
+                  folds away inside a playlist, like Songs does. */}
+              {HAS_DISCOVER && (
+                <button
+                  ref={discoverBtnRef}
+                  onClick={openDiscover}
+                  aria-label={t("Discover")}
+                  tabIndex={inPl ? -1 : 0}
+                  aria-hidden={inPl}
+                  style={{
+                    width: inPl ? 0 : 38, height: 38, marginRight: inPl ? 0 : 6, opacity: inPl ? 0 : 1, padding: 0, flexShrink: 0, overflow: "hidden",
+                    borderRadius: "50%", border: inPl ? "none" : `1px solid ${CT.border}`, background: CT.surface, color: CT.text, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: `width ${fold}, margin ${fold}, opacity ${fold}`,
+                  }}
+                >
+                  {DiscoverIcon(CT.text)}
+                </button>
+              )}
               <div style={{ display: "flex", alignItems: "center", minWidth: 0, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
                 <button
                   onClick={() => setPage("songs")}
@@ -3486,17 +3507,6 @@ export default function App() {
                 >
                   {t("Playlists")}
                 </button>
-                {HAS_DISCOVER && (
-                  <button
-                    onClick={openDiscover}
-                    aria-label={t("Discover")}
-                    tabIndex={inPl ? -1 : 0}
-                    aria-hidden={inPl}
-                    style={{ ...seg(false), display: "flex", alignItems: "center", maxWidth: inPl ? 0 : 60, opacity: inPl ? 0 : 1, marginLeft: inPl ? 0 : 2, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : { paddingLeft: 10, paddingRight: 10 }) }}
-                  >
-                    {DiscoverIcon(CT.muted)}
-                  </button>
-                )}
                 <span aria-hidden="true" style={{ display: "flex", flexShrink: 0, overflow: "hidden", color: CT.muted, maxWidth: inPl ? 18 : 0, opacity: inPl ? 1 : 0, transition: `max-width ${fold}, opacity ${fold}` }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
                 </span>
@@ -3506,6 +3516,7 @@ export default function App() {
                 >
                   {shownPlaylistName}
                 </span>
+              </div>
               </div>
             );
           })()}
@@ -3818,7 +3829,7 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
-              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
+              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
 
               {displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>

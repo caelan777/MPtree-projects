@@ -1,22 +1,39 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { floatCard } from "./cardStyles";
 
-// For someone new: the card on top of Songs that says where the songs come
-// from, and the sheet behind its second button with every way to get songs
-// onto the phone. Shown once, after the welcome page, until "OK" is tapped.
+// For someone new: on top of Songs, an arrow up to the Discover button with
+// "Download free music here". Where there is no Discover (the iPhone), the
+// card that says where the songs come from instead, and the sheet behind its
+// second button with every way to get songs onto the phone. Shown once, after
+// the welcome page, until it is answered.
 
 type MusicHintProps = {
   onDone: () => void;
   onHow: () => void;
   /** Its height, so the list's virtualization can count it. */
   onHeight: (h: number) => void;
+  /** The Discover button the arrow points at. */
+  target?: React.RefObject<HTMLElement | null>;
   T: T;
 };
 
-export function MusicHint({ onDone, onHow, onHeight, T }: MusicHintProps) {
+export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps) {
   const ref = useRef<HTMLDivElement>(null);
+  // Where the button is, across this block, so the arrow ends under it.
+  const [toX, setToX] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!target) return;
+    const measure = () => {
+      const b = target.current?.getBoundingClientRect(), me = ref.current?.getBoundingClientRect();
+      if (b && me && b.width > 0) setToX(b.left + b.width / 2 - me.left);
+    };
+    measure();
+    const id = setTimeout(measure, 400);
+    window.addEventListener("resize", measure);
+    return () => { clearTimeout(id); window.removeEventListener("resize", measure); };
+  }, [target]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -27,6 +44,22 @@ export function MusicHint({ onDone, onHow, onHeight, T }: MusicHintProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const btn = { flex: 1, minWidth: 0, minHeight: 44, padding: "10px 8px", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } as const;
+  if (target) {
+    // From above the start of the sentence, curving up to the button.
+    const x = toX ?? 60, from = 30;
+    return (
+      <div ref={ref} style={{ position: "relative", padding: "50px 16px 14px" }}>
+        <svg aria-hidden="true" width="100%" height="52" style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
+          <path d={`M ${from} 48 C ${from} 22, ${x} 34, ${x} 4`} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" />
+          <path d={`M ${x - 7} 12 L ${x} 3 L ${x + 7} 12`} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: T.text }}>{t("Download free music here")}</div>
+          <button onClick={onDone} style={{ minHeight: 40, padding: "8px 16px", borderRadius: 12, border: `1px solid ${T.border}`, background: "transparent", color: T.textSub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{t("OK")}</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div ref={ref} style={{ padding: "4px 12px 12px" }}>
       <div style={{ background: T.playBtnBg, color: T.playBtnFg, borderRadius: 20, padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>

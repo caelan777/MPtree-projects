@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
@@ -6,15 +6,17 @@ import { Logo } from "./Logo";
 import { Sync } from "../plugins";
 import {
   SHELVES, findFree, loadShelf, loadSaved, markSaved, previewUrl, downloadUrl,
-  saveName, licenceChip, type FreeTrack,
+  saveName, licenceChip, nextArt, type FreeTrack,
 } from "../discover";
 
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
-// Free music to download, as shelves of covers per genre (direction A of
-// docs/discover-directions.html). A tap on a cover plays a preview from
-// Audius; the round button on it saves the file into Music/MPTree, and from
-// then on it is a song like any other. The page stays mounted once opened, so
-// a download keeps going, and keeps its ring, while you are on Songs.
+// Free music to download, as shelves of covers per genre. Opening it, a wall
+// of covers comes down over the screen and lifts away with the page under it
+// ("the wall", direction 05 of the ten). A tap on a cover brings that song
+// forward as a card and plays a preview from Audius; its round button saves
+// the file into Music/MPTree, and the card then shrinks away into Songs. The
+// page stays mounted once opened, so a download keeps going while you are on
+// Songs.
 
 /** Progress of a download: 0..1, -1 while the size is not known, or "done". */
 type Dl = number | "done";
@@ -45,6 +47,23 @@ export function DiscoverView({
   const [preview, setPreview] = useState<null | { track: FreeTrack; playing: boolean; pos: number }>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const small = typeof window !== "undefined" && window.innerWidth < 390;
+
+  // The song that came forward. `fly` is where Songs is, once it is saved.
+  const [card, setCard] = useState<null | { track: FreeTrack; fly?: { x: number; y: number } }>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const cardIdRef = useRef<string | null>(null);
+  cardIdRef.current = card?.track.id ?? null;
+  const songsTabRef = useRef<HTMLButtonElement | null>(null);
+
+  // Opening: the wall comes down, then lifts away.
+  const [curtain, setCurtain] = useState<null | "down" | "away">(null);
+  useEffect(() => {
+    if (!open) { setCurtain(null); setCard(null); return; }
+    setCurtain("down");
+    const a = setTimeout(() => setCurtain("away"), CURTAIN_DOWN_MS);
+    const b = setTimeout(() => setCurtain(null), CURTAIN_DOWN_MS + CURTAIN_AWAY_MS);
+    return () => { clearTimeout(a); clearTimeout(b); };
+  }, [open]);
 
   // ── Shelves ───────────────────────────────────────────────────────────────
   const loadAll = useCallback(() => {
@@ -98,6 +117,26 @@ export function DiscoverView({
     setPreview({ track, playing: true, pos: 0 });
   };
 
+  const openCard = (track: FreeTrack) => {
+    setCard({ track });
+    if (!(preview?.track.id === track.id && preview.playing)) togglePreview(track);
+  };
+
+  // Saved while its card is up: the card shrinks into the Songs tab, and
+  // Songs is where you land.
+  const flyToSongs = (id: string) => {
+    const c = cardRef.current, s = songsTabRef.current;
+    if (!c || !s || cardIdRef.current !== id) return;
+    const a = c.getBoundingClientRect(), b = s.getBoundingClientRect();
+    setCard(cur => cur && { ...cur, fly: { x: b.left + b.width / 2 - (a.left + a.width / 2), y: b.top + b.height / 2 - (a.top + a.height / 2) } });
+    setTimeout(() => {
+      if (cardIdRef.current !== id) return;
+      setCard(null);
+      stopPreview();
+      onClose();
+    }, FLY_MS);
+  };
+
   // ── Download ──────────────────────────────────────────────────────────────
   const download = async (track: FreeTrack) => {
     if (dl[track.id] !== undefined && dl[track.id] !== "done") return;
@@ -114,6 +153,7 @@ export function DiscoverView({
       await markSaved(track.id, out.path);
       setSaved(s => ({ ...s, [track.id]: out.path! }));
       setDl(d => ({ ...d, [track.id]: "done" }));
+      flyToSongs(track.id);
       await onSaved(track, out.path);
     } catch (e) {
       Sync.abortFile({ tid }).catch(() => {});
@@ -150,8 +190,9 @@ export function DiscoverView({
       .catch(() => setList(l => l && { ...l, busy: false }));
   };
 
-  // Back on Android: out of the list first, then out of Discover.
+  // Back on Android: the card first, then the list, then out of Discover.
   backRef.current = () => {
+    if (card) { if (!card.fly) setCard(null); return true; }
     if (list) { setList(null); return true; }
     return false;
   };
@@ -166,7 +207,8 @@ export function DiscoverView({
   // ── Pieces ────────────────────────────────────────────────────────────────
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-  const dlButton = (track: FreeTrack, size: number) => {
+  /** inverse: on the card, which is the accent colour itself. */
+  const dlButton = (track: FreeTrack, size: number, inverse = false) => {
     const state = saved[track.id] ? "done" : dl[track.id];
     const done = state === "done";
     const busy = typeof state === "number";
@@ -180,13 +222,14 @@ export function DiscoverView({
         style={{
           width: size, height: size, borderRadius: "50%", flexShrink: 0, position: "relative", padding: 0,
           display: "flex", alignItems: "center", justifyContent: "center", cursor: done || busy ? "default" : "pointer",
-          background: done ? T.accent : T.bg, color: done ? T.playBtnFg : T.text,
-          border: busy ? "none" : `1.5px solid ${done ? T.accent : T.border}`,
+          background: inverse ? T.playBtnFg : done ? T.accent : T.bg,
+          color: inverse ? T.accent : done ? T.playBtnFg : T.text,
+          border: busy || inverse ? "none" : `1.5px solid ${done ? T.accent : T.border}`,
         }}
       >
         {busy && (
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: "absolute", inset: 0, animation: state === -1 ? "mptree-spin 1s linear infinite" : undefined }}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.dim} strokeWidth="2.5" />
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={inverse ? T.muted : T.dim} strokeWidth="2.5" />
             <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.accent} strokeWidth="2.5" strokeLinecap="round"
               strokeDasharray={c} strokeDashoffset={c * (1 - (state === -1 ? 0.25 : (state as number)))}
               transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset 0.3s" }} />
@@ -201,7 +244,7 @@ export function DiscoverView({
 
   const cover = (track: FreeTrack, size: number | string, radius: number) => (
     <div style={{ width: size, height: typeof size === "number" ? size : undefined, aspectRatio: "1", borderRadius: radius, overflow: "hidden", background: T.card, border: `1px solid ${T.border}`, flexShrink: 0, position: "relative" }}>
-      {track.art && <img src={track.art} alt="" loading="lazy" draggable={false} onError={e => { e.currentTarget.style.visibility = "hidden"; }} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+      {track.art && <img src={track.art} alt="" loading="lazy" draggable={false} onError={e => nextArt(track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
       {preview?.track.id === track.id && preview.playing && size !== 42 && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}><IC.Pause /></div>
       )}
@@ -234,7 +277,7 @@ export function DiscoverView({
         </div>
         <div style={{ display: "flex", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
           {(tracks ?? Array.from({ length: 4 }, () => null)).map((track, i) => track ? (
-            <div key={track.id} style={{ flexShrink: 0, width: tileW, cursor: "pointer" }} onClick={() => togglePreview(track)}>
+            <div key={track.id} style={{ flexShrink: 0, width: tileW, cursor: "pointer" }} onClick={() => openCard(track)}>
               <div style={{ position: "relative" }}>
                 {cover(track, tileW, 14)}
                 <div style={{ position: "absolute", right: 8, bottom: 8 }}>{dlButton(track, 32)}</div>
@@ -266,11 +309,11 @@ export function DiscoverView({
       style={{
         position: "fixed", inset: 0, zIndex: 300, background: T.bg, color: T.text, display: "flex", flexDirection: "column",
         paddingTop: "env(safe-area-inset-top, 0px)",
-        transform: open ? "translateX(0)" : "translateX(100%)", visibility: open ? "visible" : "hidden",
-        transition: open ? "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)" : "transform 0.26s ease, visibility 0s 0.26s",
+        opacity: open ? 1 : 0, visibility: open ? "visible" : "hidden",
+        transition: open ? "none" : "opacity 0.22s ease, visibility 0s 0.22s",
       }}
     >
-      <style>{"@keyframes mptree-spin { to { transform: rotate(360deg) } }"}</style>
+      <style>{KEYFRAMES}</style>
 
       {/* The same header as Songs and Playlists, with Discover filled. */}
       <div style={{ margin: "2px 12px 0", background: T.card, border: `1px solid ${T.border}`, borderRadius: 22, padding: "8px 14px 12px", flexShrink: 0 }}>
@@ -278,12 +321,14 @@ export function DiscoverView({
           <button onClick={onClose} aria-label={t("Songs")} style={{ background: "transparent", border: "none", padding: 0, display: "flex", color: T.text, cursor: "pointer", flexShrink: 0 }}>
             <Logo size={small ? 42 : 48} color={T.text} />
           </button>
-          <div style={{ display: "flex", alignItems: "center", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 20, padding: 3, gap: 2, minWidth: 0 }}>
-            <button onClick={onClose} style={seg(false)}>{t("Songs")}</button>
-            <button onClick={onGoPlaylists} style={seg(false)}>{t("Playlists")}</button>
-            <button onClick={() => setList(null)} style={{ ...seg(true), ...(small ? { padding: "6px 10px" } : null) }} aria-label={t("Discover")}>
-              {compass(T.playBtnFg)}{!small && t("Discover")}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <button onClick={() => { setList(null); setCard(null); }} aria-label={t("Discover")} style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, border: `1px solid ${T.accent}`, background: T.accent, color: T.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+              {downloadGlyph(T.playBtnFg)}
             </button>
+            <div style={{ display: "flex", alignItems: "center", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 20, padding: 3, gap: 2, minWidth: 0 }}>
+              <button ref={songsTabRef} onClick={onClose} style={seg(false)}>{t("Songs")}</button>
+              <button onClick={onGoPlaylists} style={seg(false)}>{t("Playlists")}</button>
+            </div>
           </div>
           <button onClick={onOpenSettings} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex", flexShrink: 0 }}>
             <IC.Settings />
@@ -309,7 +354,7 @@ export function DiscoverView({
               <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{list.title}</div>
             </div>
             {list.tracks.map(track => (
-              <div key={track.id} onClick={() => togglePreview(track)} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 78, padding: small ? "0 10px 0 14px" : "0 10px 0 16px", cursor: "pointer" }}>
+              <div key={track.id} onClick={() => openCard(track)} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 78, padding: small ? "0 10px 0 14px" : "0 10px 0 16px", cursor: "pointer" }}>
                 {cover(track, small ? 42 : 48, 10)}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track.title}</div>
@@ -361,17 +406,101 @@ export function DiscoverView({
           </button>
         </div>
       )}
+
+      {card && (
+        <div onClick={() => { if (!card.fly) setCard(null); }} style={{ position: "absolute", inset: 0, zIndex: 5, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease` }}>
+          {/* Outer: the flight into Songs. Inner: coming forward. Two
+              elements, so the two transforms never fight. */}
+          <div ref={cardRef} style={{
+            width: "min(306px, 80vw)",
+            transform: card.fly ? `translate(${card.fly.x}px, ${card.fly.y}px) scale(0.06)` : "none",
+            opacity: card.fly ? 0.2 : 1,
+            transition: card.fly ? `transform ${FLY_MS}ms cubic-bezier(0.55, 0, 0.75, 0.2), opacity ${FLY_MS}ms ease-in` : "none",
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: T.accent, color: T.playBtnFg, borderRadius: 20, overflow: "hidden", boxShadow: "0 30px 60px rgba(0,0,0,0.7)", animation: "mptree-card-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+              <div style={{ aspectRatio: "1", background: T.card, position: "relative" }}>
+                {card.track.art && <img src={card.track.art} alt="" draggable={false} onError={e => nextArt(card.track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+              </div>
+              <div style={{ padding: "14px 14px 14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.track.title}</div>
+                  <div style={{ fontSize: 12.5, opacity: 0.65, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {[card.track.artist, card.track.genre, licenceChip(card.track.license)].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                {dlButton(card.track, 46, true)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {curtain && <Wall phase={curtain} />}
     </div>
   );
 }
 
-function compass(c: string) {
+const CURTAIN_DOWN_MS = 560;
+const CURTAIN_AWAY_MS = 380;
+const FLY_MS = 600;
+
+const KEYFRAMES = `
+@keyframes mptree-spin { to { transform: rotate(360deg) } }
+@keyframes mptree-card-in { from { transform: translateY(24px) scale(0.86); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes mptree-wall-down { from { transform: translateY(-100%) } to { transform: translateY(0) } }
+@keyframes mptree-wall-away { from { opacity: 1; transform: none } to { opacity: 0; transform: scale(1.06) } }
+`;
+
+// Black and white sleeves, drawn rather than loaded so the wall is there at
+// once, even offline.
+const SLEEVES = [
+  "#161616",
+  "repeating-linear-gradient(45deg,#e8e8e8 0 5px,#1a1a1a 5px 10px)",
+  "#f4f4f4",
+  "radial-gradient(circle at 50% 50%,#fff 0 24%,#161616 25%)",
+  "repeating-radial-gradient(circle,#111 0 4px,#bdbdbd 4px 6px)",
+  "#2b2b2b",
+  "linear-gradient(90deg,#111 50%,#d9d9d9 50%)",
+  "radial-gradient(#fff 1.2px,transparent 1.6px) 0 0/8px 8px,#222",
+  "#bdbdbd",
+  "repeating-linear-gradient(0deg,#111 0 3px,#888 3px 10px)",
+  "conic-gradient(from 135deg at 50% 60%,#fff 0 90deg,#5b5b5b 0)",
+  "#0a0a0a",
+  "linear-gradient(#111,#111) 20% 80%/45% 45% no-repeat,#e9e9e9",
+];
+
+// The torn bottom edge of the wall.
+const TORN = "polygon(0 0, 100% 0, 100% calc(100% - 26px), 92% calc(100% - 4px), 83% calc(100% - 30px), 73% calc(100% - 6px), 64% calc(100% - 34px), 55% calc(100% - 10px), 46% calc(100% - 28px), 35% calc(100% - 2px), 26% calc(100% - 30px), 17% calc(100% - 8px), 8% calc(100% - 32px), 0 calc(100% - 12px))";
+
+function Wall({ phase }: { phase: "down" | "away" }) {
+  const cols = 6;
+  const tiles = useMemo(() => {
+    const size = window.innerWidth / cols;
+    const rows = Math.ceil((window.innerHeight + 40) / size) + 1;
+    return Array.from({ length: rows * cols }, (_, i) => SLEEVES[(i * 7 + (i >> 3)) % SLEEVES.length]);
+  }, []);
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9.5" /><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5" fill={c} />
+    <div aria-hidden="true" style={{
+      position: "fixed", left: 0, right: 0, top: 0, height: "calc(100% + 40px)", zIndex: 20, pointerEvents: "none", overflow: "hidden",
+      clipPath: TORN, background: "#000",
+      animation: phase === "down"
+        ? `mptree-wall-down ${CURTAIN_DOWN_MS}ms cubic-bezier(0.3, 0, 0.2, 1) both`
+        : `mptree-wall-away ${CURTAIN_AWAY_MS}ms ease-in both`,
+    }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {tiles.map((bg, i) => <div key={i} style={{ aspectRatio: "1", background: bg }} />)}
+      </div>
+    </div>
+  );
+}
+
+function downloadGlyph(c: string) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v12" /><polyline points="6 11 12 17 18 11" /><path d="M5 20h14" />
     </svg>
   );
 }
 
-/** The compass, for the Discover tab in the app's own header. */
-export const DiscoverIcon = compass;
+/** The download arrow, for the Discover button in the app's own header. */
+export const DiscoverIcon = downloadGlyph;
