@@ -1,6 +1,6 @@
 /**
- * The two MPTree numbers the TV launcher shows, put where the TV can read them:
- * downloads in total, and how many of those came today.
+ * The MPTree number the TV launcher shows, put where the TV can read it:
+ * downloads in total.
  *
  *   node Dashboard/tv-numbers.mjs            collect, then update the gist
  *   node Dashboard/tv-numbers.mjs --no-collect   only update the gist from data.json
@@ -8,9 +8,7 @@
  * Runs collect.mjs (keys stay on this PC) and writes the result to a secret
  * GitHub gist through the gh CLI's own login. Downloads are the website's
  * public releases (GitHub; the pro-test builds left out, since those are mostly
- * testers updating) plus Play installs once Play is set up. "Today" counts from
- * the last total seen before today, which the gist itself remembers (`dayStart`),
- * so the more often this runs, the closer it is. The TV reads the gist's raw
+ * testers updating) plus Play installs once Play is set up. The TV reads the gist's raw
  * address, STATS_URL in TV/src/homeConfig.ts (TV/src/stats.ts reads it). Windows
  * Task Scheduler runs this every hour ("MPTree TV numbers").
  */
@@ -31,8 +29,6 @@ if (!process.argv.includes("--no-collect")) {
 
 const data = JSON.parse(readFileSync(join(HERE, "data.json"), "utf8"));
 const s = data.sources ?? {};
-/** What `total` counts. A different one starts "today" afresh. */
-const BASIS = "public releases + Play";
 const site = s.github?.ok
   ? (s.github.releases ?? []).filter(r => !/pro-test/i.test(r.tag ?? ""))
     .reduce((n, r) => n + (r.assets ?? []).reduce((m, a) => m + (a.downloads ?? 0), 0), 0)
@@ -44,17 +40,8 @@ if (site === null && play === null) {
 }
 const total = (site ?? 0) + (play ?? 0);
 
-// What the gist holds now: the day it last counted from, and the total then.
-const gh = spawnSync("gh", ["api", `gists/${GIST}`, "--jq", `.files["${FILE}"].content`], { encoding: "utf8", shell: process.platform === "win32" });
-let before = {};
-try { before = JSON.parse(gh.stdout || "{}"); } catch { /* a fresh gist */ }
-const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
-const same = before.basis === BASIS;
-const dayStart = same && before.day === today && Number.isFinite(before.dayStart) ? before.dayStart
-  : same && Number.isFinite(before.total) ? before.total : total;
-
-const out = { collectedAt: data.collectedAt, basis: BASIS, total, today: Math.max(0, total - dayStart), day: today, dayStart };
+const out = { collectedAt: data.collectedAt, total };
 const body = JSON.stringify({ files: { [FILE]: { content: JSON.stringify(out, null, 2) } } });
 const r = spawnSync("gh", ["api", "-X", "PATCH", `gists/${GIST}`, "--input", "-", "--silent"], { input: body, stdio: ["pipe", "inherit", "inherit"], shell: process.platform === "win32" });
 if (r.status !== 0) process.exit(r.status ?? 1);
-console.log(`TV numbers updated: ${total} downloads, ${out.today} today`);
+console.log(`TV numbers updated: ${total} downloads`);

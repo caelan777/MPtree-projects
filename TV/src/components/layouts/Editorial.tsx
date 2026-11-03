@@ -2,7 +2,6 @@ import { HA } from "../../homeConfig";
 import { greeting, inTime } from "../../home";
 import { clock, deg } from "../../format";
 import { short } from "../../stats";
-import { Logo } from "../Logo";
 import { type DayProps } from "./parts";
 
 /** Editorial, made minimal: a hairline masthead, the greeting and the time in one
@@ -42,14 +41,8 @@ export function Editorial({ now, home: h, music: m, shuffle, stats, dock, onOpen
             <button className="f ed-act" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}>Shuffle music</button>
           </div>
         ) : null}
+        {stats && <p className="ed-dls">MPTree, downloaded <b>{short(stats.total)}</b> times.</p>}
       </div>
-
-      {stats && (
-        <p className="ed-dls">
-          <Logo size={30} />
-          <span>MPTree has been downloaded <b>{short(stats.total)}</b> times, <b>{stats.today}</b> of them today.</span>
-        </p>
-      )}
 
       <div className="ed-apps">
         {dock.map((a, i) => (

@@ -21,6 +21,8 @@ export type TvNowPlaying = {
   artKey?: string; art?: string | null;
 };
 
+export type SpeakerState = "connected" | "on" | "off" | "none";
+
 interface LauncherPlugin {
   listApps(): Promise<{ apps: TvApp[] }>;
   /** `action` is passed to apps that understand it: MPTree takes "shuffle". */
@@ -39,6 +41,13 @@ interface LauncherPlugin {
    *  (so it comes on black, not on Home's last picture). Call it once the page has
    *  drawn what comes after: the intro, or Home when there is none. */
   uncover(): Promise<void>;
+  /** The Bluetooth speaker: "connected", "on" (Bluetooth on, nothing playing on it),
+   *  "off", or "none" (no Bluetooth, or not allowed yet). */
+  speakerState(): Promise<{ state: SpeakerState }>;
+  /** Bluetooth on, then the paired speaker connected. Resolves once it plays, or
+   *  with connected false when it did not within a few seconds. */
+  connectSpeaker(): Promise<{ connected: boolean; name?: string }>;
+  openBluetoothSettings(): Promise<void>;
   /** The Home button was pressed while the launcher was already in front. */
   addListener(event: "home", fn: () => void): Promise<PluginListenerHandle>;
   /** An app was installed, updated or removed. */
@@ -57,6 +66,8 @@ const DEV_APPS: TvApp[] = [
 
 // A song "playing on the TV" in the browser, with ?song in the address.
 const devSong = { playing: true, at: Date.now(), n: 0 };
+// The speaker in the browser: Speaker connects it after a moment.
+const devSpeaker: { state: SpeakerState } = { state: "off" };
 const DEV_TITLES = ["Warning Sign", "Clocks", "The Scientist"];
 
 const webLauncher: LauncherPlugin = {
@@ -80,6 +91,13 @@ const webLauncher: LauncherPlugin = {
   // ?intro in the address plays the intro, as if the TV just turned on.
   startInfo: async () => ({ sinceBootMs: /[?&]intro\b/.test(location.search) ? 0 : 3_600_000 }),
   uncover: async () => {},
+  speakerState: async () => ({ state: devSpeaker.state }),
+  connectSpeaker: async () => {
+    await new Promise(r => setTimeout(r, 1500));
+    devSpeaker.state = "connected";
+    return { connected: true, name: "Living room speaker" };
+  },
+  openBluetoothSettings: async () => { console.log("open Bluetooth settings"); },
   addListener: async () => ({ remove: async () => {} }),
 };
 

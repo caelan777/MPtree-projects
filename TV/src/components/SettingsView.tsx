@@ -178,10 +178,10 @@ function Look({ settings: s, onChange, toast, onSaverNow }: Props) {
         </div>
         <div className="ctrl">
           <div className="tt">Screensaver</div><div className="ss">Starts when the remote is left alone</div>
-          <Segmented value={s.saverStyle} options={[["photos", "Photos"], ["plain", "Plain"], ["tv", "TV's own"]]} onPick={v => onChange({ saverStyle: v })} />
+          <Segmented value={s.saverStyle} options={[["plain", "MPTree's"], ["tv", "TV's own"]]} onPick={v => onChange({ saverStyle: v })} />
         </div>
       </div>
-      <Switch on={s.layoutDaily} title="A different layout each day" sub="The five in turn" onFlip={() => onChange({ layoutDaily: !s.layoutDaily })} />
+      <Switch on={s.layoutDaily} title="A different layout each day" sub="The four in turn" onFlip={() => onChange({ layoutDaily: !s.layoutDaily })} />
       {s.saverStyle !== "tv" ? (
         <div className="swrow plain">
           <span>Screensaver starts after<span className="ss">Set Android's own screensaver later than this, or to never</span></span>

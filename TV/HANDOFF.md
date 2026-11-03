@@ -172,6 +172,22 @@ Asked for by the user for family use, no other limits. What changed is in
 - **Classic's left side**: of the five options on `design/v5-classic.html` the user
   picked the first, the ruled strip tidied (strip 880 px, taller, bigger figures).
 
+## Round six (3 November 2026)
+
+- **MPTree downloads**: one number, `total` in a secret gist (STATS_URL), written
+  hourly by `Dashboard/tv-numbers.mjs` (Task Scheduler "MPTree TV numbers"):
+  public GitHub releases (pro-test builds left out) plus Play installs once Play
+  is set up. Shown by `Downloads` (`layouts/parts.tsx`) as one line, a sentence
+  on Editorial.
+- **Sky is gone**, and the photo screensaver: MPTree's screensaver is the clock on
+  black, or the song while MPTree plays. Old settings are moved over in `loadSettings`.
+- **Day line**: one straight line 06:00 to midnight (no arc).
+- **Speaker** (top bar, after Apps): `LauncherPlugin.connectSpeaker` switches
+  Bluetooth on (allowed to apps on Android 12, the TV's version), tries the hidden
+  A2DP `connect()` on the saved or first paired audio device, then waits 12 s for
+  Android's own reconnect. Not connected: the TV's Bluetooth screen opens. Asks
+  for BLUETOOTH_CONNECT the first time. Not yet tried on the TV.
+
 ## Open next
 
 1. **MPTree numbers on the TV.** The launcher reads `STATS_URL` in

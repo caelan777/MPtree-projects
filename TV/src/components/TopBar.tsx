@@ -1,4 +1,5 @@
-import { Image, Moon, Settings as Gear, Sun } from "lucide-react";
+import { Image, Moon, Settings as Gear, Speaker as SpeakerIcon, Sun } from "lucide-react";
+import type { Speaker } from "../speaker";
 
 export type Page = "home" | "apps" | "settings";
 
@@ -15,14 +16,17 @@ type Props = {
   onSaver: () => void;
   /** The TV's own Android settings: Wi-Fi, picture, sound. */
   onAndroidSettings: () => void;
+  /** The living-room speaker, the small button after Apps. */
+  speaker: Speaker;
   /** What OK does on the focused thing, shown in the middle. */
   hint: string | null;
 };
 
-/** Your name (MPTree TV's own settings), Home and Apps on the left; the TV's
- *  Settings, Dark (not on Cinema) and Screensaver on the right, in words. In the middle: what OK
- *  does right now. The same on every page. */
-export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver, onAndroidSettings, hint }: Props) {
+/** Your name (MPTree TV's own settings), Home, Apps and the speaker on the left;
+ *  the TV's Settings, Dark (not on Cinema) and Screensaver on the right, in words.
+ *  In the middle: what OK does right now. The same on every page. */
+export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver, onAndroidSettings, speaker, hint }: Props) {
+  const sp = speaker.busy ? "Connecting…" : speaker.state === "connected" ? "Speaker on" : "Speaker";
   return (
     <>
       <div className="top">
@@ -35,6 +39,11 @@ export function TopBar({ name, page, onPage, dark, darkOk, onToggleDark, onSaver
             <button className={"f" + (page === "home" ? " on" : "")} data-f="" data-ok="Go to Home" onClick={() => onPage("home")}>Home</button>
             <button className={"f" + (page === "apps" ? " on" : "")} data-f="" data-ok="See all apps" onClick={() => onPage("apps")}>Apps</button>
           </div>
+          <button className={"f spk" + (speaker.state === "connected" ? " on" : "")} data-f=""
+            data-ok={speaker.state === "connected" ? "The living-room speaker is connected" : "Switch on Bluetooth and connect the living-room speaker"}
+            onClick={speaker.connect}>
+            <SpeakerIcon size={24} />{sp}
+          </button>
         </div>
         <div className="grp">
           <button className="f tb" data-f="" data-ok="Open the TV's settings: Wi-Fi, picture, sound" onClick={onAndroidSettings}>

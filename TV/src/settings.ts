@@ -1,13 +1,12 @@
 import { Preferences } from "@capacitor/preferences";
 
-export type LayoutId = "classic" | "editorial" | "cinema" | "sky" | "dayline";
+export type LayoutId = "classic" | "editorial" | "cinema" | "dayline";
 
 export const LAYOUTS: { id: LayoutId; name: string; about: string }[] = [
   { id: "classic", name: "Classic", about: "A greeting with the time, the next hours, the music as a big card" },
   { id: "editorial", name: "Editorial", about: "A magazine cover: the day in one big sentence" },
   { id: "cinema", name: "Cinema", about: "Dark, the selected app fills the screen" },
-  { id: "sky", name: "Sky", about: "A window onto the weather, frosted glass" },
-  { id: "dayline", name: "Day line", about: "The whole day as one drawing" },
+  { id: "dayline", name: "Day line", about: "Today as one line, from morning to midnight" },
 ];
 
 /** Everything the launcher remembers. Kept on the TV only (Capacitor Preferences). */
@@ -27,8 +26,8 @@ export type Settings = {
   dockChosen: boolean;
   /** Minutes without a key press before the screensaver starts. 0 = never. */
   saverMinutes: number;
-  /** MPTree's with photos of places around the world, MPTree's plain one, or the TV's own. */
-  saverStyle: "photos" | "plain" | "tv";
+  /** MPTree's own (the clock on black, or the song while MPTree plays), or the TV's own. */
+  saverStyle: "plain" | "tv";
   /** The Home layout. */
   layout: LayoutId;
   /** A different layout every day, in turn. */
@@ -46,7 +45,7 @@ export const DEFAULTS: Settings = {
   dock: [],
   dockChosen: false,
   saverMinutes: 10,
-  saverStyle: "photos",
+  saverStyle: "plain",
   layout: "classic",
   layoutDaily: false,
   theme: "auto",
@@ -58,7 +57,12 @@ const KEY = "mptree_tv_settings";
 export async function loadSettings(): Promise<Settings> {
   try {
     const { value } = await Preferences.get({ key: KEY });
-    return value ? { ...DEFAULTS, ...JSON.parse(value) } : DEFAULTS;
+    if (!value) return DEFAULTS;
+    const s: Settings = { ...DEFAULTS, ...JSON.parse(value) };
+    // Sky and the photo screensaver are gone: what was set to them gets the nearest.
+    if (!LAYOUTS.some(l => l.id === s.layout)) s.layout = "classic";
+    if (s.saverStyle !== "tv") s.saverStyle = "plain";
+    return s;
   } catch {
     return DEFAULTS;
   }

@@ -10,8 +10,10 @@
 .seg button { height: 58px; padding: 0 26px; border-radius: 29px; font-weight: 600; }
 .seg button.on { background: var(--surface); color: var(--text); }
 .tb { border: none; background: var(--surface); height: 62px; padding: 0 22px 0 18px; font-size: 23px; color: var(--textSub); }
-.stage.on-sky .acc.on, .stage.on-sky .seg button.on, .stage.on-sky .tb { background: rgba(255, 255, 255, .45); }
-.stage.dark.on-sky .acc.on, .stage.dark.on-sky .seg button.on, .stage.dark.on-sky .tb { background: rgba(255, 255, 255, .08); }
+/* the living-room speaker: small and quiet after Apps; a dot when it is connected */
+.spk { height: 54px; padding: 0 20px 0 16px; border-radius: 27px; display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 600; color: var(--textSub); white-space: nowrap; }
+.spk.on { color: var(--text); }
+.spk.on::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
 .stage.on-cinema .seg button.on, .stage.on-cinema .tb { background: rgba(255, 255, 255, .07); }
 
 /* ── the two pages, side by side; Right at the edge slides over ── */
@@ -26,8 +28,6 @@
 .edge.right { right: 30px; }
 .edge.left { left: 30px; }
 .edge.left span { transform: rotate(180deg); }
-.sk ~ .edge { background: rgba(255, 255, 255, .45); color: #3c4048; }
-.stage.dark .sk ~ .edge { background: rgba(190, 205, 240, .1); color: #9aa3b4; }
 .ci ~ .edge { background: rgba(255, 255, 255, .07); }
 
 /* ── shared pieces ── */
@@ -37,15 +37,10 @@
 .cover { display: block; flex-shrink: 0; object-fit: cover; }
 .songline { display: block; height: 4px; border-radius: 2px; background: var(--border); position: relative; overflow: hidden; }
 .songline i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--text); border-radius: 2px; }
-/* MPTree's downloads: the mark and name, then two big numbers with a word under each */
-.dls { display: flex; align-items: flex-end; gap: 48px; white-space: nowrap; }
-.dls-h { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 600; padding-bottom: 6px; }
-.dls-n { display: grid; font-size: 20px; color: var(--textSub); }
-.dls-n b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; color: var(--text); font-variant-numeric: tabular-nums; }
-.dls.on-dark .dls-n { color: #a3a6ad; }
-.dls.on-dark .dls-n b, .dls.on-dark .dls-h { color: #f4f5f6; }
-.glass { background: rgba(255, 255, 255, .5); backdrop-filter: blur(28px) saturate(140%); -webkit-backdrop-filter: blur(28px) saturate(140%); border: 1.5px solid rgba(255, 255, 255, .7); border-radius: 34px; box-shadow: 0 12px 40px rgba(40, 50, 60, .08); }
-.stage.dark .glass { background: rgba(20, 22, 27, .55); border-color: rgba(255, 255, 255, .12); }
+/* MPTree's downloads: one quiet line, the mark then "133 MPTree downloads" */
+.dls { display: flex; align-items: center; gap: 14px; font-size: 28px; color: var(--textSub); white-space: nowrap; }
+.dls svg { color: var(--text); flex-shrink: 0; }
+.dls b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ── 1 Classic: a greeting with the time in it, the music as one big card ── */
 .cl-left { position: absolute; left: 96px; top: 176px; width: 1060px; display: grid; gap: 30px; align-content: start; justify-items: start; }
@@ -59,6 +54,7 @@
 .cl-hours svg { color: var(--textSub); }
 .cl-hours .rain { background: repeating-linear-gradient(135deg, transparent 0 9px, rgba(127, 127, 127, .14) 9px 11px); }
 .cl-dls { margin-top: 8px; }
+.ci-dls { font-size: 24px; }
 
 /* the music card: black on white, white on black */
 .mcard { position: absolute; border-radius: 40px; background: var(--text); color: var(--bg); padding: 40px; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; --cardSub: rgba(255, 255, 255, .62); --cardLine: rgba(255, 255, 255, .25); }
@@ -105,7 +101,7 @@
 .ed-song + .ed-acts { margin-left: 8px; }
 .ed-act { padding: 2px 14px 8px; border-radius: 14px; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 10px; text-decoration-color: var(--muted); white-space: nowrap; }
 .ed-act:focus { text-decoration: none; transform: none; }
-.ed-dls { position: absolute; left: 96px; right: 96px; bottom: 150px; margin: 0; display: flex; align-items: center; gap: 16px; font-family: var(--serif); font-size: 32px; color: var(--textSub); }
+.ed-dls { flex-shrink: 0; margin: 0 0 0 34px; font-family: var(--serif); font-size: 44px; color: var(--textSub); white-space: nowrap; }
 .ed-dls b { font-weight: 400; color: var(--text); }
 .ed-apps { position: absolute; left: 96px; right: 96px; bottom: 56px; display: flex; gap: 6px; border-top: 1px solid var(--border); padding-top: 22px; margin-left: 0; }
 .ed-app { font-size: 30px; font-weight: 500; letter-spacing: -0.01em; padding: 6px 16px; margin-right: 18px; border-radius: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -140,69 +136,6 @@
 .ci-chip { height: 66px; max-width: 1000px; padding: 0 26px; border-radius: 33px; background: rgba(255, 255, 255, .07); display: flex; align-items: center; gap: 12px; font-size: 23px; font-weight: 600; color: #e7e7e8; white-space: nowrap; min-width: 0; }
 .ci-chip .ttl { max-width: 460px; overflow: hidden; text-overflow: ellipsis; }
 .ci-chip .dim { color: var(--muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
-
-/* ── 4 Sky: a flat, poster-like picture of the sky right now ──
-   Every colour is a token on .sk: day, cloudy, dusk, and night (dark mode). Flat
-   fills only, no blur or glass: cheap for the TV to draw. */
-.sk { position: absolute; inset: 0;
-  --sky: #b7d3ea; --h3: #8fb5d3; --h2: #6b97bd; --h1: #4a7aa3; --sun: #fff8e7;
-  --skInk: #0d2338; --skSub: #33506b; --card: #fff; --cardInk: #0d2338; --cardSub: #5a6f83; --skLabel: rgba(255, 255, 255, .9); --cloud: rgba(255, 255, 255, .7); }
-.sk.cloudy { --sky: #c9d2da; --h3: #a9b5c0; --h2: #8b99a6; --h1: #6d7b89; --sun: #f6f4ee; --skInk: #18222c; --skSub: #45525f; --cardInk: #18222c; --cloud: rgba(255, 255, 255, .78); }
-.sk.dusk { --sky: #f4c3a0; --h3: #e19a7c; --h2: #bd6f63; --h1: #864a57; --sun: #fff0d4; --skInk: #3b1c1c; --skSub: #6b3a33; --cardInk: #3b1c1c; --cardSub: #7a5a55; }
-.stage.dark .sk { --sky: #0b1630; --h3: #13234a; --h2: #0d1a38; --h1: #071024; --skInk: #eef1f6; --skSub: #9fb0cc; --card: #16264a; --cardInk: #eef1f6; --cardSub: #9fb0cc; --skLabel: #9fb0cc; --cloud: rgba(255, 255, 255, .06); }
-.sk-bg { position: absolute; inset: 0; overflow: hidden; background: var(--sky); }
-.sk-bg .sun { position: absolute; width: 170px; height: 170px; margin: -85px 0 0 -85px; border-radius: 50%; background: var(--sun); box-shadow: 0 0 0 40px rgba(255, 246, 225, .22); }
-.sk-bg .cloud { position: absolute; height: 90px; border-radius: 45px; background: var(--cloud); }
-/* in the band between the words and the hills, where they hide nothing */
-.cloud.c1 { left: 960px; top: 560px; width: 340px; }
-.cloud.c2 { left: 1460px; top: 630px; width: 260px; }
-.cloud.c3 { left: 160px; top: 650px; width: 240px; height: 70px; }
-.sk-bg .hill { position: absolute; border-radius: 50%; }
-.hill.h3 { left: -300px; top: 640px; width: 1400px; height: 900px; background: var(--h3); }
-.hill.h2 { left: 820px; top: 700px; width: 1500px; height: 900px; background: var(--h2); }
-.hill.h1 { left: -400px; top: 820px; width: 2720px; height: 900px; background: var(--h1); }
-.sk-bg .stars, .sk-bg .moon { display: none; }
-.stage.dark .sk-bg .stars { display: block; position: absolute; inset: 0; fill: #f4f6ff; }
-.stage.dark .sk-bg .sun { display: none; }
-.stage.dark .sk-bg .moon { display: block; position: absolute; left: 1060px; top: 150px; width: 120px; height: 120px; border-radius: 50%; background: #f1eee2; -webkit-mask: radial-gradient(circle at 72% 32%, transparent 0 44%, #000 45%); mask: radial-gradient(circle at 72% 32%, transparent 0 44%, #000 45%); }
-
-.sk-time { position: absolute; left: 96px; top: 158px; margin-left: -0.025em; font-size: 210px; font-weight: 600; font-stretch: 80%; letter-spacing: -0.04em; line-height: .9; color: var(--skInk); font-variant-numeric: tabular-nums; }
-.sk-sub { position: absolute; left: 96px; right: 760px; top: 380px; font-size: 30px; color: var(--skSub); display: flex; flex-wrap: wrap; gap: 6px 30px; }
-.sk-sub b { color: var(--skInk); font-weight: 600; }
-.sk-hrs { position: absolute; left: 96px; top: 470px; width: 820px; }
-.sk-hrs span { font-size: 19px; color: var(--skSub); padding: 8px 0; }
-.sk-hrs b { font-size: 30px; color: var(--skInk); font-weight: 600; }
-.sk-hrs svg { color: var(--skInk); }
-.sk-hrs .rain b { text-decoration: underline dashed 2px; text-underline-offset: 6px; }
-
-.sk-side { position: absolute; right: 96px; top: 176px; width: 620px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 34px; }
-.sk-card { background: var(--card); color: var(--cardInk); border-radius: 34px; }
-.sk-np { padding: 26px 28px; display: grid; gap: 18px; }
-.sk-np .head { display: flex; gap: 20px; align-items: center; min-width: 0; }
-.sk-np .art { width: 104px; height: 104px; border-radius: 18px; }
-.sk-np .art.rec { border-radius: 50%; }
-.sk-np .tx { min-width: 0; display: grid; gap: 2px; }
-.sk-np .tx span { font-size: 19px; color: var(--cardSub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sk-np .tx b { font-size: 30px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sk-np .btns { display: flex; gap: 12px; align-items: center; }
-.sk-np .songline { background: rgba(127, 127, 127, .25); }
-.sk-np .songline i { background: var(--cardInk); }
-.gb-r { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(127, 127, 127, .14); color: var(--cardInk); flex-shrink: 0; }
-.gb-r.pl { background: var(--cardInk) !important; color: var(--card); }
-.gb-more { height: 68px; padding: 0 26px; border-radius: 34px; font-size: 22px; font-weight: 600; margin-left: auto; color: var(--cardInk); white-space: nowrap; }
-.sk .f:focus { box-shadow: 0 0 0 5px var(--skInk), 0 18px 40px rgba(0, 0, 0, .2); }
-.gb { padding: 22px 26px; display: flex; align-items: center; gap: 20px; min-width: 0; text-align: left; }
-.gb .gi { width: 64px; height: 64px; border-radius: 50%; background: var(--cardInk); color: var(--card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.gb:focus .gi { background: var(--btnFg); color: var(--accent); }
-.gb .tx { min-width: 0; font-size: 28px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gb .tx span { display: block; font-size: 19px; font-weight: 500; color: var(--cardSub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gb:focus .tx span { color: var(--focusSub); }
-.sk-dls { padding-left: 6px; }
-.sk-dls .dls-h, .sk-dls .dls-n b { color: var(--skInk); }
-.sk-dls .dls-n { color: var(--skSub); }
-/* the apps stand on the front hill: solid faces, light names */
-.sk-row .tile .face:not(.mark) { background: var(--card); border-color: transparent; color: var(--cardInk); }
-.sk-row .tile .label { color: var(--skLabel); }
 
 /* ── 5 Day line: the day as one drawing ── */
 .dl-head { position: absolute; left: 96px; right: 96px; top: 168px; display: flex; justify-content: space-between; align-items: flex-start; }

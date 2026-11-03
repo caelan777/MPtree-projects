@@ -1,23 +1,19 @@
 import { useEffect, useState } from "react";
 import { Logo } from "./Logo";
-import { Vinyl } from "./layouts/parts";
+import { Downloads, Vinyl } from "./layouts/parts";
 import { CONDITION, num, type Ha } from "../ha";
 import { HA } from "../homeConfig";
-import { short, type MptreeStats } from "../stats";
+import type { MptreeStats } from "../stats";
 import { clock, deg, longDate, mmss } from "../format";
 import { positionAt, type Music } from "../music";
-import { usePhoto } from "../photos";
 
-type Props = { now: Date; ha: Ha; stats: MptreeStats | null; photos: boolean; music: Music | null };
+type Props = { now: Date; ha: Ha; stats: MptreeStats | null; music: Music | null };
 
-/** The screensaver: a big clock, the house and the MPTree numbers, over a photo of
- *  somewhere beautiful (Wikimedia Commons) that changes every minute. Without
- *  photos (switched off, or no internet) it is the plain white one. While MPTree
- *  plays, it is the song instead. The text drifts a little every minute so
- *  nothing burns into the screen. */
-export function Saver({ now, ha, stats, photos, music }: Props) {
+/** The screensaver, on black: a big clock, the house and MPTree's downloads. While
+ *  MPTree plays, it is the song instead. The text drifts a little every minute
+ *  so nothing burns into the screen. */
+export function Saver({ now, ha, stats, music }: Props) {
   const playing = !!music?.playing;
-  const photo = usePhoto(photos && !playing);
   const s = ha.states;
   const minute = Math.floor(now.getTime() / 60000);
   const dx = ((minute * 37) % 60) - 30;
@@ -44,43 +40,19 @@ export function Saver({ now, ha, stats, photos, music }: Props) {
     </>
   );
 
-  const numbers = stats && (
-    <>
-      <div className="lh">MPTree</div>
-      <div className="li"><span>Downloads</span><span>{short(stats.total)}</span></div>
-      <div className="li"><span>Today</span><span>+{stats.today}</span></div>
-    </>
-  );
-
-  if (photo) {
-    return (
-      <div className="saver photo">
-        <img key={photo.url} className="ph-img" src={photo.url} alt="" />
-        <div className="ph-shade" />
-        <div className="ph-in" style={{ transform: `translate(${dx}px, ${dy}px)` }}>
-          <div>
-            <div className="time">{clock(now)}</div>
-            <div className="date">{longDate(now)}</div>
-          </div>
-          <div className="ph-card">{home}{numbers}</div>
-        </div>
-        <div className="ph-credit">{photo.title} · {photo.artist}{photo.licence ? ` · ${photo.licence}` : ""} · Wikimedia Commons</div>
-      </div>
-    );
-  }
-
   return (
     <div className="saver">
       <div className="in" style={{ transform: `translate(${dx}px, ${dy}px)` }}>
         <div>
           <div className="time">{clock(now)}</div>
-          <div className="date" style={{ fontSize: 40, marginTop: 18 }}>{longDate(now)}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 70, color: "var(--muted)", fontSize: 24 }}>
-            <Logo size={46} />Press any button
-          </div>
+          <div className="date">{longDate(now)}</div>
         </div>
-        <div>{home}{numbers}</div>
+        <div>
+          {home}
+          <Downloads stats={stats} className="sv-dls" />
+        </div>
       </div>
+      <div className="sv-press" style={{ transform: `translate(${dx}px, ${dy}px)` }}>Press any button</div>
     </div>
   );
 }

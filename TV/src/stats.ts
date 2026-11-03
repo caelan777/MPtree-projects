@@ -1,29 +1,22 @@
 import { useEffect, useState } from "react";
 
-// The MPTree numbers: downloads in total and today. The TV does not collect them
-// itself: the keys stay on the PC, where Dashboard/tv-numbers.mjs puts them in a
-// secret gist every hour (STATS_URL).
+// The MPTree number: downloads in total. The TV does not collect it itself: the
+// keys stay on the PC, where Dashboard/tv-numbers.mjs puts it in a secret gist
+// every hour (STATS_URL).
 
 export type MptreeStats = {
-  /** Every download: the website's (Windows app, APK) plus Play installs. */
+  /** Every download: the website's public releases (Windows app, APK) plus Play installs. */
   total: number;
-  /** How many of those came today. */
-  today: number;
   collectedAt: string | null;
 };
 
 const HOUR = 3_600_000;
 
-type Raw = { collectedAt?: string; total?: number; today?: number; day?: string };
-
-const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+type Raw = { collectedAt?: string; total?: number };
 
 export function parseStats(raw: Raw): MptreeStats {
-  const total = n(raw.total);
-  if (total === null) throw new Error("The numbers file has no downloads in it.");
-  // "Today" is only today's when the file was written today.
-  const day = new Date().toLocaleDateString("sv-SE");
-  return { total, today: raw.day === day ? n(raw.today) ?? 0 : 0, collectedAt: raw.collectedAt ?? null };
+  if (typeof raw.total !== "number" || !Number.isFinite(raw.total)) throw new Error("The numbers file has no downloads in it.");
+  return { total: raw.total, collectedAt: raw.collectedAt ?? null };
 }
 
 export function useMptreeStats(url: string) {

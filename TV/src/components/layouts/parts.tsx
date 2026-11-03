@@ -146,15 +146,14 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   );
 }
 
-/** MPTree's downloads: the mark, how many in all, and how many today. Nothing
- *  when the numbers are not there. */
+/** MPTree's downloads in one quiet line: the mark, then "133 MPTree downloads".
+ *  Nothing when the number is not there. */
 export function Downloads({ stats, className = "" }: { stats: MptreeStats | null; className?: string }) {
   if (!stats) return null;
   return (
     <div className={"dls " + className}>
-      <span className="dls-h"><Logo size={28} />MPTree</span>
-      <span className="dls-n"><b>{short(stats.total)}</b>downloads</span>
-      <span className="dls-n"><b>+{stats.today}</b>today</span>
+      <Logo size={30} />
+      <span><b>{short(stats.total)}</b> MPTree downloads</span>
     </div>
   );
 }

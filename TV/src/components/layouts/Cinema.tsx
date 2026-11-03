@@ -53,7 +53,7 @@ export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp
             <button className="f ci-chip" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}><Shuffle size={22} />Shuffle music</button>
           ) : null}
         </div>
-        <Downloads stats={stats} className="on-dark" />
+        <Downloads stats={stats} className="ci-dls" />
       </div>
     </div>
   );

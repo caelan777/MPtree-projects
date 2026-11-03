@@ -4,7 +4,6 @@ import type { Ha } from "../ha";
 import { Classic } from "./layouts/Classic";
 import { Editorial } from "./layouts/Editorial";
 import { Cinema } from "./layouts/Cinema";
-import { Sky } from "./layouts/Sky";
 import { DayLine } from "./layouts/DayLine";
 import { EdgeTab, type DayProps } from "./layouts/parts";
 import { HouseView } from "./HouseView";
@@ -26,7 +25,6 @@ function Day({ layout, ...p }: DayProps & { layout: LayoutId }) {
   switch (layout) {
     case "editorial": return <Editorial {...p} />;
     case "cinema": return <Cinema {...p} />;
-    case "sky": return <Sky {...p} />;
     case "dayline": return <DayLine {...p} />;
     default: return <Classic {...p} />;
   }

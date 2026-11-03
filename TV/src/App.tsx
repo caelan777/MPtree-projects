@@ -7,6 +7,7 @@ import { useOpenWeather } from "./weather";
 import { homeOf } from "./home";
 import { MPTREE, tvMusic, useTvMedia, type ShuffleAll } from "./music";
 import { useMptreeStats } from "./stats";
+import { useSpeaker } from "./speaker";
 import { focusEl, focusFirst, focusOne, useOkHint, useRemote } from "./nav";
 import { STAGE_H, STAGE_W, nextSunChange, sunIsDown } from "./theme";
 import { HA, STATS_URL } from "./homeConfig";
@@ -360,12 +361,13 @@ export default function App() {
   const music = tvMusic(tv.np, tv.control);
   // Shuffle all songs: only ever MPTree on this TV.
   const shuffle: ShuffleAll = hasMptree ? { where: "MPTree, on this TV", run: mptreeShuffle } : null;
+  const speaker = useSpeaker(inView && intro === "off" && !saver, toast);
 
   return (
     <div className={"stage" + (darkLook ? " dark" : "") + (page === "home" && (side === "day" || !houseOn) ? " on-" + layout : "")} style={{ transform: `scale(${scale})` }}>
       <div inert={heatOpen || musicOpen || intro !== "off" || undefined}>
       <TopBar name={s.name} page={page} onPage={goPage} dark={dark} darkOk={darkOk} onToggleDark={onCinema ? null : toggleDark} onSaver={startSaver}
-        onAndroidSettings={() => Launcher.openSystemSettings().catch(() => toast("The TV's settings would not open"))} hint={saver || heatOpen || musicOpen ? null : hint} />
+        onAndroidSettings={() => Launcher.openSystemSettings().catch(() => toast("The TV's settings would not open"))} speaker={speaker} hint={saver || heatOpen || musicOpen ? null : hint} />
       {page === "home" && (
         <HomeView
           layout={layout} now={now} name={s.name} home={home} music={music} shuffle={shuffle} stats={stats} dock={dockApps}
@@ -385,7 +387,7 @@ export default function App() {
       {heatOpen && <HeatingPanel ha={haLive} toast={toast} onClose={closeHeat} />}
       {musicOpen && <MusicPanel music={music} shuffle={shuffle} onClose={closeMusic} />}
       {toastMsg && intro === "off" && <div className="toast" role="status">{toastMsg.text}</div>}
-      {saver && intro === "off" && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} music={music} />}
+      {saver && intro === "off" && <Saver now={now} ha={ha} stats={stats} music={music} />}
       {intro !== "off" && <Intro key={introRun} playing={intro === "play"} ready={introReady} boot={bootIntro} onDone={endIntro} />}
     </div>
   );

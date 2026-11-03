@@ -1,5 +1,11 @@
 package com.caelan.mptree.tv;
 
+import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothClass;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -16,6 +22,7 @@ import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
+import android.os.Build;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Base64;
@@ -29,8 +36,11 @@ import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Collections;
@@ -43,7 +53,9 @@ import java.util.Map;
  * TV (with their TV banners), opens them, and tells the page when the Home button
  * is pressed or an app comes or goes. The page itself is src/launcher.ts.
  */
-@CapacitorPlugin(name = "Launcher")
+@CapacitorPlugin(name = "Launcher", permissions = {
+        @Permission(strings = { Manifest.permission.BLUETOOTH_CONNECT }, alias = "bluetooth")
+})
 public class LauncherPlugin extends Plugin {
 
     /** Banners are 16:9; drawn at this width, which is plenty for a tile. */
@@ -260,6 +272,130 @@ public class LauncherPlugin extends Plugin {
             call.resolve();
         } catch (Exception ex) {
             call.reject("MPTree would not shuffle", ex);
+        }
+    }
+
+    // ── the living-room speaker ──
+    // The Speaker button: Bluetooth on, then the paired speaker connected. Android
+    // has no public "connect this speaker" call, so the hidden A2DP connect() is
+    // tried; where Android refuses it, Bluetooth coming on is usually enough, since
+    // it reconnects the speaker it last played on by itself. Should neither work
+    // in time, the page opens the TV's Bluetooth screen to pick it there.
+
+    private static final String SPEAKER_PREFS = "mptree_tv_speaker";
+    private static final long SPEAKER_WAIT_MS = 12_000;
+
+    private BluetoothAdapter adapter() {
+        BluetoothManager m = (BluetoothManager) getContext().getSystemService(Context.BLUETOOTH_SERVICE);
+        return m != null ? m.getAdapter() : null;
+    }
+
+    private boolean mayUseBluetooth() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || getPermissionState("bluetooth") == PermissionState.GRANTED;
+    }
+
+    /** { state: "connected" | "off" | "on" | "none" }: "none" is no Bluetooth, or not allowed yet. */
+    @PluginMethod
+    public void speakerState(PluginCall call) {
+        BluetoothAdapter a = adapter();
+        JSObject ret = new JSObject();
+        if (a == null || !mayUseBluetooth()) ret.put("state", "none");
+        else if (!a.isEnabled()) ret.put("state", "off");
+        else ret.put("state", a.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED ? "connected" : "on");
+        call.resolve(ret);
+    }
+
+    /** Resolves { connected, name } once the speaker plays, or after SPEAKER_WAIT_MS without it. */
+    @PluginMethod
+    public void connectSpeaker(PluginCall call) {
+        if (!mayUseBluetooth()) { requestPermissionForAlias("bluetooth", call, "speakerAllowed"); return; }
+        connectNow(call);
+    }
+
+    @PermissionCallback
+    private void speakerAllowed(PluginCall call) {
+        if (mayUseBluetooth()) connectNow(call);
+        else call.reject("Bluetooth was not allowed");
+    }
+
+    @SuppressWarnings({"MissingPermission", "deprecation"})
+    private void connectNow(PluginCall call) {
+        BluetoothAdapter a = adapter();
+        if (a == null) { call.reject("This TV has no Bluetooth"); return; }
+        // Android 12 still lets an app switch Bluetooth on itself (13 and later only by asking).
+        if (!a.isEnabled() && !a.enable()) { call.reject("Bluetooth would not switch on"); return; }
+        final long until = SystemClock.elapsedRealtime() + SPEAKER_WAIT_MS;
+        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        h.post(new Runnable() {
+            boolean asked = false;
+            @Override public void run() {
+                if (!a.isEnabled()) {
+                    if (SystemClock.elapsedRealtime() < until) h.postDelayed(this, 300); else done(call, null);
+                    return;
+                }
+                if (!asked) {
+                    asked = true;
+                    a.getProfileProxy(getContext(), new BluetoothProfile.ServiceListener() {
+                        @Override public void onServiceConnected(int profile, BluetoothProfile proxy) {
+                            BluetoothDevice target = speakerOf(a);
+                            if (target != null && proxy.getConnectionState(target) != BluetoothProfile.STATE_CONNECTED) {
+                                try { proxy.getClass().getMethod("connect", BluetoothDevice.class).invoke(proxy, target); }
+                                catch (Exception refused) { /* Android's own reconnect, below */ }
+                            }
+                            waitFor(proxy, a, call, until, h);
+                        }
+                        @Override public void onServiceDisconnected(int profile) { }
+                    }, BluetoothProfile.A2DP);
+                }
+            }
+        });
+    }
+
+    @SuppressWarnings("MissingPermission")
+    private void waitFor(BluetoothProfile proxy, BluetoothAdapter a, PluginCall call, long until, android.os.Handler h) {
+        List<BluetoothDevice> on = proxy.getConnectedDevices();
+        if (!on.isEmpty()) {
+            BluetoothDevice d = on.get(0);
+            getContext().getSharedPreferences(SPEAKER_PREFS, Context.MODE_PRIVATE).edit().putString("address", d.getAddress()).apply();
+            a.closeProfileProxy(BluetoothProfile.A2DP, proxy);
+            done(call, d.getName());
+        } else if (SystemClock.elapsedRealtime() < until) {
+            h.postDelayed(() -> waitFor(proxy, a, call, until, h), 500);
+        } else {
+            a.closeProfileProxy(BluetoothProfile.A2DP, proxy);
+            done(call, null);
+        }
+    }
+
+    /** The speaker: the one that last connected through this button, else the first
+     *  paired audio device (a speaker or a soundbar, not a remote or a phone). */
+    @SuppressWarnings("MissingPermission")
+    private BluetoothDevice speakerOf(BluetoothAdapter a) {
+        String saved = getContext().getSharedPreferences(SPEAKER_PREFS, Context.MODE_PRIVATE).getString("address", null);
+        BluetoothDevice first = null;
+        for (BluetoothDevice d : a.getBondedDevices()) {
+            if (d.getAddress().equals(saved)) return d;
+            BluetoothClass c = d.getBluetoothClass();
+            if (first == null && c != null && c.getMajorDeviceClass() == BluetoothClass.Device.Major.AUDIO_VIDEO) first = d;
+        }
+        return first;
+    }
+
+    private void done(PluginCall call, String name) {
+        JSObject ret = new JSObject();
+        ret.put("connected", name != null);
+        if (name != null) ret.put("name", name);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openBluetoothSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("Cannot open Bluetooth settings", ex);
         }
     }
 
