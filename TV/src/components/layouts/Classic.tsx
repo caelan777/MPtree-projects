@@ -1,7 +1,7 @@
 import { AllAppsTile, AppTile } from "../AppTile";
 import { greeting } from "../../home";
 import { clock, deg } from "../../format";
-import { AppRow, HourStrip, MusicCard, Nums, type DayProps } from "./parts";
+import { AppRow, Downloads, HourStrip, MusicCard, type DayProps } from "./parts";
 
 /** Classic: a greeting with the time in it, the day and the weather under it, the
  *  next hours as a ruled strip, and the music as one big card. Apps below. */
@@ -17,7 +17,7 @@ export function Classic({ now, name, home: h, music, shuffle, stats, dock, onOpe
           {h.inside !== null && <span><b>{deg(h.inside)}</b> inside</span>}
         </div>
         <HourStrip hours={h.hours} now={now} n={6} className="cl-hours" />
-        <Nums stats={stats} className="nums cl-nums" />
+        <Downloads stats={stats} className="cl-dls" />
       </div>
 
       <MusicCard m={music} shuffle={shuffle} now={now} onOpen={onOpenMusic} className="cl-music" />

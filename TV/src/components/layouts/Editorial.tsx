@@ -1,13 +1,15 @@
 import { HA } from "../../homeConfig";
 import { greeting, inTime } from "../../home";
 import { clock, deg } from "../../format";
+import { short } from "../../stats";
+import { Logo } from "../Logo";
 import { type DayProps } from "./parts";
 
 /** Editorial, made minimal: a hairline masthead, the greeting and the time in one
  *  big serif, one quiet line about the weather, what plays as a few italic words,
- *  and the apps as a contents line at the foot. No columns, no numbers, a lot of
- *  white. */
-export function Editorial({ now, home: h, music: m, shuffle, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
+ *  MPTree's downloads as one sentence, and the apps as a contents line at the
+ *  foot. No columns, a lot of white. */
+export function Editorial({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, onAllApps, onOpenMusic }: DayProps) {
   const weather = [
     h.hasWeather ? `${deg(h.outside, 0)} and ${h.conditionText.toLowerCase()} in ${HA.outsideLabel}` : null,
     h.inside !== null ? `${deg(h.inside)} inside` : null,
@@ -41,6 +43,13 @@ export function Editorial({ now, home: h, music: m, shuffle, dock, onOpenApp, on
           </div>
         ) : null}
       </div>
+
+      {stats && (
+        <p className="ed-dls">
+          <Logo size={30} />
+          <span>MPTree has been downloaded <b>{short(stats.total)}</b> times, <b>{stats.today}</b> of them today.</span>
+        </p>
+      )}
 
       <div className="ed-apps">
         {dock.map((a, i) => (

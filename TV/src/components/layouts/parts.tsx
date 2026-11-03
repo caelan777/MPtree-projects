@@ -5,7 +5,7 @@ import type { TvApp } from "../../launcher";
 import { pickHours, type Home, type Hour } from "../../home";
 import { kicker, progressAt, type Music, type ShuffleAll } from "../../music";
 import { clock, deg } from "../../format";
-import { ago, figures, short, type MptreeStats } from "../../stats";
+import { short, type MptreeStats } from "../../stats";
 
 /** What every layout gets. The layouts are Home's first page: the day, the music
  *  and the apps. The house (Home Assistant) is the second page, HouseView. */
@@ -146,14 +146,16 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   );
 }
 
-/** The MPTree numbers on one line: installs, today, rating. Nothing when not set up. */
-export function Nums({ stats, className = "nums" }: { stats: MptreeStats | null; className?: string }) {
+/** MPTree's downloads: the mark, how many in all, and how many today. Nothing
+ *  when the numbers are not there. */
+export function Downloads({ stats, className = "" }: { stats: MptreeStats | null; className?: string }) {
   if (!stats) return null;
   return (
-    <span className={className}>
-      <span className="lg"><Logo size={30} />MPTree</span>
-      {figures(stats).slice(0, 3).map(f => <span key={f.k}><b>{f.v}</b> {f.k}</span>)}
-    </span>
+    <div className={"dls " + className}>
+      <span className="dls-h"><Logo size={28} />MPTree</span>
+      <span className="dls-n"><b>{short(stats.total)}</b>downloads</span>
+      <span className="dls-n"><b>+{stats.today}</b>today</span>
+    </div>
   );
 }
 
@@ -180,30 +182,6 @@ export function EdgeTab({ side, label }: { side: "left" | "right"; label: string
       {side === "left" && <ChevronLeft size={28} />}
       <span>{label}</span>
       {side === "right" && <ChevronRight size={28} />}
-    </div>
-  );
-}
-
-/** The MPTree numbers as a card (Settings, MPTree numbers). */
-export function StatsCard({ stats, error, now }: { stats: MptreeStats | null; error: string | null; now: Date }) {
-  // Never set up: no card at all, rather than a reminder.
-  if (!stats && !error) return null;
-  return (
-    <div className="mpt">
-      <div className="h">
-        <span><Logo size={36} />MPTree</span>
-        <span className="mono" style={{ fontSize: 16, color: "var(--muted)", fontWeight: 400 }}>{stats ? ago(stats.collectedAt, now.getTime()) : ""}</span>
-      </div>
-      {stats ? (
-        <>
-          <div><div className="v">{short(stats.installs)}</div><div className="k">Play installs</div></div>
-          <div><div className="v">{stats.rating ?? "–"}</div><div className="k">Rating</div></div>
-          <div><div className="v">{short(stats.downloads)}</div><div className="k">Downloads</div></div>
-          <div><div className="v">{short(stats.visitors7)}</div><div className="k">Site, 7 days</div></div>
-        </>
-      ) : (
-        <div className="empty">{error ?? "Add the address of the numbers file in Settings, MPTree numbers, to see installs, rating and downloads here."}</div>
-      )}
     </div>
   );
 }

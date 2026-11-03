@@ -3,7 +3,7 @@ import { Logo } from "./Logo";
 import { Vinyl } from "./layouts/parts";
 import { CONDITION, num, type Ha } from "../ha";
 import { HA } from "../homeConfig";
-import { figures, type MptreeStats } from "../stats";
+import { short, type MptreeStats } from "../stats";
 import { clock, deg, longDate, mmss } from "../format";
 import { positionAt, type Music } from "../music";
 import { usePhoto } from "../photos";
@@ -47,7 +47,8 @@ export function Saver({ now, ha, stats, photos, music }: Props) {
   const numbers = stats && (
     <>
       <div className="lh">MPTree</div>
-      {figures(stats).slice(0, 3).map(f => <div key={f.k} className="li"><span>{f.label}</span><span>{f.v}</span></div>)}
+      <div className="li"><span>Downloads</span><span>{short(stats.total)}</span></div>
+      <div className="li"><span>Today</span><span>+{stats.today}</span></div>
     </>
   );
 

@@ -3,7 +3,7 @@ import { LayoutGrid, Pause, Play, Shuffle } from "lucide-react";
 import { clock, deg } from "../../format";
 import { hasMark } from "../../music";
 import { Logo } from "../Logo";
-import { AppRow, Nums, type DayProps } from "./parts";
+import { AppRow, Downloads, type DayProps } from "./parts";
 
 /** Cinema: always dark. The selected app gets the stage: its name huge at the top
  *  left, with a soft light behind it; the apps stand on one line and the chosen one
@@ -53,7 +53,7 @@ export function Cinema({ now, home: h, music: m, shuffle, stats, dock, onOpenApp
             <button className="f ci-chip" data-f="" data-ok={`Shuffle all songs, ${shuffle.where}`} onClick={shuffle.run}><Shuffle size={22} />Shuffle music</button>
           ) : null}
         </div>
-        <Nums stats={stats} className="nums ci-nums" />
+        <Downloads stats={stats} className="on-dark" />
       </div>
     </div>
   );
