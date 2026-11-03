@@ -2,15 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Shuffle, SkipBack, SkipForward } from "lucide-react";
 import { focusFirst } from "../nav";
 import { kicker, positionAt, type Music, type ShuffleAll } from "../music";
+import { mmss } from "../format";
 
 type Props = { music: Music | null; shuffle: ShuffleAll; onClose: () => void };
-
-/** 3:41 */
-function mmss(s: number | null): string {
-  if (s === null) return "–:––";
-  const v = Math.max(0, Math.round(s));
-  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`;
-}
 
 /** MPTree's song, big: the cover, how far it is, and previous, play/pause and
  *  next. Back or Done closes it. When the music stops, it offers to shuffle again. */

@@ -355,7 +355,8 @@ export default function App() {
 
   // ── the house, the music ──
   const home = homeOf(ha, extras, now, toast, !useHa);
-  const tv = useTvMedia((page === "home" || page === "settings") && !saver && intro === "off");
+  // Read on behind the screensaver too: while MPTree plays, it shows the song.
+  const tv = useTvMedia((page === "home" || page === "settings" || saver) && intro === "off");
   const music = tvMusic(tv.np, tv.control);
   // Shuffle all songs: only ever MPTree on this TV.
   const shuffle: ShuffleAll = hasMptree ? { where: "MPTree, on this TV", run: mptreeShuffle } : null;
@@ -384,7 +385,7 @@ export default function App() {
       {heatOpen && <HeatingPanel ha={haLive} toast={toast} onClose={closeHeat} />}
       {musicOpen && <MusicPanel music={music} shuffle={shuffle} onClose={closeMusic} />}
       {toastMsg && intro === "off" && <div className="toast" role="status">{toastMsg.text}</div>}
-      {saver && intro === "off" && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} />}
+      {saver && intro === "off" && <Saver now={now} ha={ha} stats={stats} photos={s.saverStyle === "photos"} music={music} />}
       {intro !== "off" && <Intro key={introRun} playing={intro === "play"} ready={introReady} boot={bootIntro} onDone={endIntro} />}
     </div>
   );

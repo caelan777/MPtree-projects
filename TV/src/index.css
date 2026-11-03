@@ -178,6 +178,23 @@ button:focus, input:focus { outline: none; }
 .ph-card .lh { color: rgba(255, 255, 255, .6); margin-top: 18px; }
 .ph-card .lh:first-child { margin-top: 0; }
 .ph-card .li { border-bottom-color: rgba(255, 255, 255, .15); font-size: 25px; padding: 13px 0; }
+.saver.song { background: #000; color: #f4f5f6; }
+.sg-in { position: absolute; inset: 0; transition: transform 2s ease; }
+.sg-clock { position: absolute; top: 64px; right: 120px; display: flex; align-items: baseline; gap: 22px; }
+.sg-clock span { font-size: 26px; color: #a3a6ad; }
+.sg-clock b { font-size: 64px; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.sg-art { position: absolute; left: 120px; top: 190px; width: 960px; height: 700px; }
+.sg-disc { position: absolute; left: 260px; top: 0; width: 700px; height: 700px; }
+.sg-cover { position: absolute; left: 0; top: 50px; width: 600px; height: 600px; object-fit: cover; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
+.sg-art.bare .sg-disc { left: 130px; }
+.sg-t { position: absolute; left: 1160px; right: 120px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 22px; }
+.sg-kick { display: flex; align-items: center; gap: 14px; font-size: 22px; letter-spacing: .08em; text-transform: uppercase; color: #a3a6ad; }
+.sg-t h2 { margin: 0; font-size: 76px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.04; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sg-t p { margin: 0; font-size: 36px; color: #c4c6cb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-prog { margin-top: 40px; }
+.sg-prog .bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .18); overflow: hidden; }
+.sg-prog .bar i { display: block; height: 100%; background: #f4f5f6; transition: width 1s linear; }
+.sg-prog .times { display: flex; justify-content: space-between; margin-top: 12px; font-family: var(--mono); font-size: 20px; color: #a3a6ad; }
 .ph-credit { position: absolute; right: 120px; top: 50px; max-width: 900px; font-size: 18px; color: rgba(255, 255, 255, .75); text-align: right; text-shadow: 0 1px 8px rgba(0, 0, 0, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ══ Round three: every screen explains itself ══════════════════════════════ */
