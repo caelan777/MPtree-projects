@@ -7,7 +7,8 @@
  *
  * Runs collect.mjs (keys stay on this PC) and writes the result to a secret
  * GitHub gist through the gh CLI's own login. Downloads are the website's
- * (GitHub releases) plus Play installs once Play is set up. "Today" counts from
+ * public releases (GitHub; the pro-test builds left out, since those are mostly
+ * testers updating) plus Play installs once Play is set up. "Today" counts from
  * the last total seen before today, which the gist itself remembers (`dayStart`),
  * so the more often this runs, the closer it is. The TV reads the gist's raw
  * address, STATS_URL in TV/src/homeConfig.ts (TV/src/stats.ts reads it). Windows
@@ -30,7 +31,12 @@ if (!process.argv.includes("--no-collect")) {
 
 const data = JSON.parse(readFileSync(join(HERE, "data.json"), "utf8"));
 const s = data.sources ?? {};
-const site = s.github?.ok ? s.github.total : null;
+/** What `total` counts. A different one starts "today" afresh. */
+const BASIS = "public releases + Play";
+const site = s.github?.ok
+  ? (s.github.releases ?? []).filter(r => !/pro-test/i.test(r.tag ?? ""))
+    .reduce((n, r) => n + (r.assets ?? []).reduce((m, a) => m + (a.downloads ?? 0), 0), 0)
+  : null;
 const play = s.play?.ok ? s.play.installs?.totalUsers ?? null : null;
 if (site === null && play === null) {
   console.error("No download numbers this time; the gist is left as it was.");
@@ -43,10 +49,11 @@ const gh = spawnSync("gh", ["api", `gists/${GIST}`, "--jq", `.files["${FILE}"].c
 let before = {};
 try { before = JSON.parse(gh.stdout || "{}"); } catch { /* a fresh gist */ }
 const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
-const dayStart = before.day === today && Number.isFinite(before.dayStart) ? before.dayStart
-  : Number.isFinite(before.total) ? before.total : total;
+const same = before.basis === BASIS;
+const dayStart = same && before.day === today && Number.isFinite(before.dayStart) ? before.dayStart
+  : same && Number.isFinite(before.total) ? before.total : total;
 
-const out = { collectedAt: data.collectedAt, total, today: Math.max(0, total - dayStart), day: today, dayStart };
+const out = { collectedAt: data.collectedAt, basis: BASIS, total, today: Math.max(0, total - dayStart), day: today, dayStart };
 const body = JSON.stringify({ files: { [FILE]: { content: JSON.stringify(out, null, 2) } } });
 const r = spawnSync("gh", ["api", "-X", "PATCH", `gists/${GIST}`, "--input", "-", "--silent"], { input: body, stdio: ["pipe", "inherit", "inherit"], shell: process.platform === "win32" });
 if (r.status !== 0) process.exit(r.status ?? 1);
