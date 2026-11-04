@@ -331,6 +331,7 @@ export default function App() {
   // a single "previous offset" would read the jump between them as a drag.
   const lastScrollTopRef         = useRef(0);
   const lastPlaylistScrollTopRef = useRef(0);
+  const lastDiscoverScrollTopRef = useRef(0);
   // A brief "tap the logo to bring them back" pill, shown the first few times
   // the chrome folds itself away. Without it the header and player simply
   // vanish and nothing says the round logo is now a button.
@@ -3139,14 +3140,15 @@ export default function App() {
   // Deliberately NOT memoised: both call sites are inline arrows re-created on
   // every render anyway, so there is nothing to save, and closing over `page`
   // directly beats mirroring it into yet another ref.
-  const handleChromeScroll = (top: number, lastRef: React.MutableRefObject<number>, from: "songs" | "playlists") => {
+  const handleChromeScroll = (top: number, lastRef: React.MutableRefObject<number>, from: "songs" | "playlists" | "discover") => {
     // Both pages stay mounted, one sliding over the other, so BOTH scrollers
     // keep firing. Folding the chrome changes the top inset, which relays out
     // the page underneath, and a relayout on a scroller can emit a scroll event
     // of its own — which would land in the "back at the top, show the chrome
     // again" branch and undo the fold. Only the page you are looking at gets a
     // say in whether the header is folded.
-    if (from !== page) return;
+    // Discover lies over Songs while it is open: then it is the one in charge.
+    if (from !== (discoverOpen ? "discover" : page)) return;
     const prev = lastRef.current;
     lastRef.current = top;
     if (insetJumpRef.current) { insetJumpRef.current = false; return; }
@@ -3175,7 +3177,7 @@ export default function App() {
     // A downward drag folds the header away; the player stays. Far enough
     // down that the rows can stay exactly where they are while the card
     // folds: the list scrolls back by what the card gives up.
-    if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
+    if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from === "discover" ? "songs" : from) + 8)) {
       // Only hint on the transition, not on every scroll event while folded.
       if (chromeOpen) showCollapseHint();
       setPlayerFolded(false);
@@ -3621,7 +3623,7 @@ export default function App() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: discoverOpen ? 1 : undefined }}>
-                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: discoverOpen ? 1 : 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{discoverOpen ? t("Popular free songs") : tn(displayList.length, "{n} song", "{n} songs")}</span>
+                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: discoverOpen ? 1 : 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
@@ -4155,6 +4157,9 @@ export default function App() {
               onPreview={() => { if (isPlayingRef.current) void togglePlay(); }}
               onSaved={discoverSaved}
               onActiveChange={setDiscoverActive}
+              onBodyScroll={top => handleChromeScroll(top, lastDiscoverScrollTopRef, "discover")}
+              onInsetJump={markInsetJump}
+              animateInsets={chromeAnimate}
             />
           )}
         </div>

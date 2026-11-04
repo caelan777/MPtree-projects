@@ -53,7 +53,7 @@ function canScrollLeftward(el: HTMLElement): boolean {
 
 export function DiscoverView({
   open, warm, panelRef, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
-  T, backRef, onClose, onPreview, onSaved, onActiveChange,
+  T, backRef, onClose, onPreview, onSaved, onActiveChange, onBodyScroll, onInsetJump, animateInsets = true,
 }: {
   open: boolean;
   /** A swipe on Songs has started to pull this page in: time to load. */
@@ -82,6 +82,12 @@ export function DiscoverView({
   onSaved: (track: FreeTrack, path: string) => Promise<void>;
   /** Whether this page has its own small player up, so the app hides its own. */
   onActiveChange: (active: boolean) => void;
+  /** Scrolling, for the header to fold and unfold as on Songs. */
+  onBodyScroll?: (top: number) => void;
+  /** Called before the page moves its own scroll to make up for the fold, so
+   *  App does not take that scroll for the finger's. */
+  onInsetJump?: () => void;
+  animateInsets?: boolean;
 }) {
   const [shelves, setShelves] = useState<Record<string, FreeTrack[] | "error">>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
@@ -339,6 +345,18 @@ export function DiscoverView({
   // A search typed while another still loads: the older answer is dropped,
   // or it would fill the newer list.
   const listToken = useRef(0);
+  const [scrolled, setScrolled] = useState(false);
+  const prevInset = useRef(topInset);
+  useLayoutEffect(() => {
+    const el = rootScrollRef.current;
+    const delta = topInset - prevInset.current;
+    prevInset.current = topInset;
+    if (!el || !delta || el.scrollTop <= 0) return;
+    onInsetJump?.();
+    el.scrollTop += delta;
+  }, [topInset, onInsetJump]);
+  const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
+
   // Where the home was, to go back there when the list closes.
   const homeTop = useRef(0);
   const openList = (o: ListOf) => {
@@ -559,10 +577,15 @@ export function DiscoverView({
   );
 
   /** A site in the browser. */
-  const openSite = (url: string) => { Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener")); };
+  const opening = useRef(0);
+  const openSite = (url: string) => {
+    if (Date.now() - opening.current < 1500) return;
+    opening.current = Date.now();
+    Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener"));
+  };
   /** A card that opens a site: its mark, and what you find there. */
   const siteCard = (label: string, url: string, mark: React.ReactNode) => (
-    <button onClick={() => openSite(url)} style={{ flex: 1, minWidth: 0, height: 118, padding: 14, borderRadius: 16, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontFamily: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "stretch", textAlign: "left" }}>
+    <button className="mp-press" onClick={() => openSite(url)} style={{ flex: 1, minWidth: 0, height: 104, padding: 14, borderRadius: 16, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontFamily: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "stretch", textAlign: "left" }}>
       <span style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <span style={{ width: 40, height: 40, borderRadius: 11, background: T.text, color: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>{mark}</span>
         <span style={{ color: T.muted, display: "flex" }}>{ARROW}</span>
@@ -597,7 +620,15 @@ export function DiscoverView({
     >
       <style>{KEYFRAMES}</style>
 
-      <div ref={rootScrollRef} style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: "padding-top 0.3s ease" }}>
+      <div
+        ref={rootScrollRef}
+        onScroll={e => {
+          const top = e.currentTarget.scrollTop;
+          if ((top > 0) !== scrolled) setScrolled(top > 0);
+          onBodyScroll?.(top);
+        }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: animateInsets && !scrolled ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
+      >
         {list ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
@@ -625,7 +656,7 @@ export function DiscoverView({
                   // The search page itself, without the words: what is on the
                   // Archive is not all free to share, so MPTree does not search it for you.
                   : <button onClick={() => openSite("https://archive.org/search")} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 12, padding: "9px 14px 9px 16px", fontSize: 14, fontWeight: 700, background: T.dim, color: T.text, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                      {t("More on Internet Archive")}{ARROW}
+                      {t("More music on Internet Archive")}{ARROW}
                     </button>}
               </div>
             )}
@@ -636,14 +667,14 @@ export function DiscoverView({
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
           </div>
         ) : (
-          <div style={{ marginTop: -18 }}>
-            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
+          <div>
             {/* More music elsewhere: the sites themselves, never a search on
                 them, so nothing here points at a song without a licence. */}
-            <div style={{ display: "flex", gap: 10, padding: "32px 16px 0" }}>
-              {siteCard(t("More on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
-              {siteCard(t("Buy on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
+            <div style={{ display: "flex", gap: 10, padding: "4px 16px 0" }}>
+              {siteCard(t("More music on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
+              {siteCard(t("Buy music on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
             </div>
+            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
           </div>
         )}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
@@ -764,6 +795,8 @@ const BANDCAMP_MARK = (
 
 const KEYFRAMES = `
 @keyframes mptree-spin { to { transform: rotate(360deg) } }
+.mp-press { transition: transform 0.12s ease, opacity 0.12s ease; -webkit-tap-highlight-color: transparent; }
+.mp-press:active { transform: scale(0.97); opacity: 0.8; }
 @keyframes mptree-fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes mptree-card-in { from { transform: translateY(24px) scale(0.86); opacity: 0 } to { transform: none; opacity: 1 } }
 @keyframes mptree-bar { 0%, 100% { transform: scaleY(0.35) } 50% { transform: scaleY(1) } }

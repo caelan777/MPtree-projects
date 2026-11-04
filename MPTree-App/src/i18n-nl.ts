@@ -789,6 +789,8 @@ export const NL: Record<string, string> = {
   "More on Internet Archive": "Meer op Internet Archive",
   "Buy on Bandcamp": "Kopen op Bandcamp",
   "Popular free songs": "Populaire gratis nummers",
+  "More music on Internet Archive": "Meer muziek op Internet Archive",
+  "Buy music on Bandcamp": "Muziek kopen op Bandcamp",
   "Download free music here": "Hier download je gratis muziek",
   "Discover": "Ontdekken",
   "Search free music": "Zoek gratis muziek",

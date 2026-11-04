@@ -789,6 +789,8 @@ export const ES: Record<string, string> = {
   "More on Internet Archive": "Más en Internet Archive",
   "Buy on Bandcamp": "Comprar en Bandcamp",
   "Popular free songs": "Canciones gratis populares",
+  "More music on Internet Archive": "Más música en Internet Archive",
+  "Buy music on Bandcamp": "Comprar música en Bandcamp",
   "Download free music here": "Descarga música gratis aquí",
   "Discover": "Descubrir",
   "Search free music": "Busca música gratis",
