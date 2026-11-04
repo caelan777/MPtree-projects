@@ -786,6 +786,8 @@ export const NL: Record<string, string> = {
   "Free music from Audius and the Internet Archive": "Gratis muziek van Audius en het Internet Archive",
   "Popular songs": "Populaire nummers",
   "Popular artists": "Populaire artiesten",
+  "More on Internet Archive": "Meer op Internet Archive",
+  "Buy on Bandcamp": "Kopen op Bandcamp",
   "Download free music here": "Hier download je gratis muziek",
   "Discover": "Ontdekken",
   "Search free music": "Zoek gratis muziek",

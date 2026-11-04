@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Browser } from "@capacitor/browser";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
@@ -541,6 +542,14 @@ export function DiscoverView({
     </div>
   );
 
+  /** A button that opens a site in the browser. */
+  const outLink = (label: string, url: string) => (
+    <button onClick={() => { Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener")); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", height: 52, padding: "0 16px", borderRadius: 14, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+      <span>{label}</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><polyline points="8 7 17 7 17 16"/></svg>
+    </button>
+  );
+
   const allFailed = [POPULAR, ...SHELVES].every(s => shelves[s.key] === "error");
   const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
 
@@ -600,7 +609,15 @@ export function DiscoverView({
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
           </div>
         ) : (
-          <div style={{ marginTop: -18 }}>{popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}</div>
+          <div style={{ marginTop: -18 }}>
+            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
+            {/* More music elsewhere: the sites themselves, never a search on
+                them, so nothing here points at a song without a licence. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "32px 16px 0" }}>
+              {outLink(t("More on Internet Archive"), "https://archive.org/details/audio")}
+              {outLink(t("Buy on Bandcamp"), "https://bandcamp.com")}
+            </div>
+          </div>
         )}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}

@@ -786,6 +786,8 @@ export const ES: Record<string, string> = {
   "Free music from Audius and the Internet Archive": "Música gratis de Audius y del Internet Archive",
   "Popular songs": "Canciones populares",
   "Popular artists": "Artistas populares",
+  "More on Internet Archive": "Más en Internet Archive",
+  "Buy on Bandcamp": "Comprar en Bandcamp",
   "Download free music here": "Descarga música gratis aquí",
   "Discover": "Descubrir",
   "Search free music": "Busca música gratis",
