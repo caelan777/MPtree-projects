@@ -298,6 +298,22 @@ function DiscoverViewInner({
   }, [topInset]); // eslint-disable-line react-hooks/exhaustive-deps
   const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
 
+  // ── The wall ──────────────────────────────────────────────────────────────
+  // Opening the page, a wall of black and white sleeves (build 88) flows down
+  // from the top. Until it covers the screen you still see Songs; then the
+  // page is put in behind it, and the wall goes on down and out at the
+  // bottom, uncovering it. Not with reduced motion.
+  const [wall, setWall] = useState(false);
+  const [behind, setBehind] = useState(false);
+  useEffect(() => {
+    if (!open) { setWall(false); setBehind(false); return; }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    setWall(true); setBehind(true);
+    const a = setTimeout(() => setBehind(false), WALL_MS / 2);
+    const b = setTimeout(() => setWall(false), WALL_MS);
+    return () => { clearTimeout(a); clearTimeout(b); };
+  }, [open]);
+
   // Where the home was, to go back there when the list closes.
   const homeTop = useRef(0);
   const openList = (o: ListOf) => {
@@ -599,11 +615,12 @@ function DiscoverViewInner({
       ref={setRoot}
       aria-hidden={!open}
       style={{
-        position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
+        position: "absolute", inset: 0, zIndex: 15, background: behind ? "transparent" : T.bg, color: T.text,
         visibility: open ? "visible" : "hidden",
         transform: open ? OPEN : CLOSED,
-        boxShadow: open ? SHADOW : "none",
-        transition: panelTransition(open),
+        boxShadow: open && !wall ? SHADOW : "none",
+        // In at once, under the wall; out sliding to the left.
+        transition: open && wall ? "none" : panelTransition(open),
         willChange: "transform",
       }}
     >
@@ -616,7 +633,7 @@ function DiscoverViewInner({
           if ((top > 0) !== scrolled) setScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
+        style={{ visibility: behind ? "hidden" : undefined, position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
         <div style={{ transform: `translateY(${topInset - pad}px)`, transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
         {list ? listView : allFailed ? (
@@ -630,6 +647,8 @@ function DiscoverViewInner({
         </div>
         </div>
       </div>
+
+      {wall && <Wall />}
 
       {failNote && (
         <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? "calc(92px + env(safe-area-inset-bottom, 0px))" : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
@@ -740,6 +759,49 @@ export const DiscoverView = React.memo(DiscoverViewInner, (a, b) => {
 });
 
 const FLY_MS = 600;
+const WALL_MS = 900;
+
+// Black and white sleeves, drawn rather than loaded so the wall is there at
+// once, even offline.
+const SLEEVES = [
+  "#161616",
+  "repeating-linear-gradient(45deg,#e8e8e8 0 5px,#1a1a1a 5px 10px)",
+  "#f4f4f4",
+  "radial-gradient(circle at 50% 50%,#fff 0 24%,#161616 25%)",
+  "repeating-radial-gradient(circle,#111 0 4px,#bdbdbd 4px 6px)",
+  "#2b2b2b",
+  "linear-gradient(90deg,#111 50%,#d9d9d9 50%)",
+  "radial-gradient(#fff 1.2px,transparent 1.6px) 0 0/8px 8px,#222",
+  "#bdbdbd",
+  "repeating-linear-gradient(0deg,#111 0 3px,#888 3px 10px)",
+  "conic-gradient(from 135deg at 50% 60%,#fff 0 90deg,#5b5b5b 0)",
+  "#0a0a0a",
+  "linear-gradient(#111,#111) 20% 80%/45% 45% no-repeat,#e9e9e9",
+];
+
+// Torn at both ends: the bottom edge comes in first, the top one goes out last.
+const TORN = "polygon(0 12px, 9% 34px, 18% 4px, 27% 30px, 36% 8px, 45% 32px, 54% 2px, 63% 28px, 72% 6px, 82% 34px, 91% 10px, 100% 26px, 100% calc(100% - 26px), 92% calc(100% - 4px), 83% calc(100% - 30px), 73% calc(100% - 6px), 64% calc(100% - 34px), 55% calc(100% - 10px), 46% calc(100% - 28px), 35% calc(100% - 2px), 26% calc(100% - 30px), 17% calc(100% - 8px), 8% calc(100% - 32px), 0 calc(100% - 12px))";
+
+/** Flows from above the screen to below it in one go: covering it halfway. */
+function Wall() {
+  const cols = 6;
+  const tiles = useMemo(() => {
+    const size = window.innerWidth / cols;
+    const rows = Math.ceil((window.innerHeight + 80) / size) + 1;
+    return Array.from({ length: rows * cols }, (_, i) => SLEEVES[(i * 7 + (i >> 3)) % SLEEVES.length]);
+  }, []);
+  return (
+    <div aria-hidden="true" style={{
+      position: "absolute", left: 0, right: 0, top: -40, height: "calc(100% + 80px)", zIndex: 30, pointerEvents: "none", overflow: "hidden",
+      clipPath: TORN, background: "#000", willChange: "transform",
+      animation: `mptree-wall-flow ${WALL_MS}ms cubic-bezier(0.45, 0, 0.55, 1) both`,
+    }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {tiles.map((bg, i) => <div key={i} style={{ aspectRatio: "1", background: bg }} />)}
+      </div>
+    </div>
+  );
+}
 
 const ARROW = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><polyline points="8 7 17 7 17 16"/></svg>;
 // The sites' marks, drawn in one colour to fit the page: the Archive's
@@ -757,6 +819,7 @@ const BANDCAMP_MARK = (
 
 const KEYFRAMES = `
 @keyframes mptree-spin { to { transform: rotate(360deg) } }
+@keyframes mptree-wall-flow { from { transform: translateY(-100%) } to { transform: translateY(100%) } }
 .mp-press { transition: transform 0.12s ease, opacity 0.12s ease; -webkit-tap-highlight-color: transparent; }
 .mp-press:active { transform: scale(0.97); opacity: 0.8; }
 @keyframes mptree-fade-in { from { opacity: 0 } to { opacity: 1 } }

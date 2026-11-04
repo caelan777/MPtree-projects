@@ -3205,9 +3205,13 @@ export default function App() {
     // folds: the list scrolls back by what the card gives up.
     if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from === "discover" ? "songs" : from) + 8)) {
       // Only hint on the transition, not on every scroll event while folded.
-      if (chromeOpen) showCollapseHint();
-      setPlayerFolded(false);
-      setChromeOpen(false);
+      // Only on the fold itself: once folded (by the logo too, which folds
+      // the player as well), scrolling on leaves the player as it is.
+      if (chromeOpen) {
+        showCollapseHint();
+        setPlayerFolded(false);
+        setChromeOpen(false);
+      }
     }
   };
 
@@ -3599,24 +3603,26 @@ export default function App() {
                   {shownPlaylistName}
                 </span>
               </div>
+              {/* Discover: its own round button, right after the tabs. Filled
+                  while the page is open. Folds away inside a playlist. */}
+              {HAS_DISCOVER && (
+                <button
+                  ref={discoverBtnRef}
+                  onClick={() => { if (discoverOpen) { leaveDiscover(); setPage("songs"); } else openDiscover(); }}
+                  aria-label={t("Discover")}
+                  aria-pressed={discoverOpen}
+                  tabIndex={inPl ? -1 : 0}
+                  aria-hidden={inPl}
+                  style={{ width: inPl ? 0 : 36, height: 36, marginLeft: inPl ? 0 : 6, opacity: inPl ? 0 : 1, overflow: "hidden", borderRadius: 18, border: discoverOpen ? `1px solid ${CT.accent}` : `1px solid ${CT.border}`, background: discoverOpen ? CT.accent : CT.surface, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0, transition: `background 0.2s, border-color 0.2s, width ${fold}, margin ${fold}, opacity ${fold}` }}
+                >
+                  {DiscoverIcon(discoverOpen ? CT.playBtnFg : CT.text)}
+                </button>
+              )}
               </div>
             );
           })()}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            {/* Discover: its own round button, apart from the tabs. Filled
-                while the page is open. Gone inside a playlist. */}
-            {HAS_DISCOVER && !(page === "playlists" && openPlaylistName) && (
-              <button
-                ref={discoverBtnRef}
-                onClick={() => { if (discoverOpen) { leaveDiscover(); setPage("songs"); } else openDiscover(); }}
-                aria-label={t("Discover")}
-                aria-pressed={discoverOpen}
-                style={{ width: 36, height: 36, borderRadius: 18, border: discoverOpen ? "none" : `1px solid ${CT.border}`, background: discoverOpen ? CT.accent : CT.surface, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0, transition: "background 0.2s" }}
-              >
-                {DiscoverIcon(discoverOpen ? CT.playBtnFg : CT.text)}
-              </button>
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <button data-tour="settings" onClick={() => { void openSettings(); }} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>
