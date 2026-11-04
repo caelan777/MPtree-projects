@@ -788,6 +788,7 @@ export const ES: Record<string, string> = {
   "Popular artists": "Artistas populares",
   "More on Internet Archive": "Más en Internet Archive",
   "Buy on Bandcamp": "Comprar en Bandcamp",
+  "Popular free songs": "Canciones gratis populares",
   "Download free music here": "Descarga música gratis aquí",
   "Discover": "Descubrir",
   "Search free music": "Busca música gratis",

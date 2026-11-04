@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Browser } from "@capacitor/browser";
 import type { T } from "../themes";
@@ -100,7 +100,8 @@ export function DiscoverView({
   cardIdRef.current = card?.track.id ?? null;
   const [flyers, setFlyers] = useState<Flyer[]>([]);
 
-  useEffect(() => { if (!open) setCard(null); }, [open]);
+  // Leaving the page: next time it opens on its home, not on an old list.
+  useEffect(() => { if (!open) { setCard(null); setList(null); } }, [open]);
   useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Swipe left: back to Songs ─────────────────────────────────────────────
@@ -115,13 +116,14 @@ export function DiscoverView({
   const setRoot = useCallback((el: HTMLDivElement | null) => { rootRef.current = el; panelRef.current = el; }, [panelRef]);
   const sw = useRef<null | { x: number; y: number; axis: null | "h" | "v"; shelf: HTMLElement | null; lastX: number; lastT: number; v: number }>(null);
   const cardUp = !!card;
+  const listUp = !!list;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
     const start = (e: TouchEvent) => {
-      if (cardUp || e.touches.length > 1) { sw.current = null; return; }
+      if (cardUp || listUp || e.touches.length > 1) { sw.current = null; return; }
       const shelf = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-hscroll]") ?? null;
       const x = e.touches[0].clientX;
       sw.current = { x, y: e.touches[0].clientY, axis: null, shelf, lastX: x, lastT: e.timeStamp, v: 0 };
@@ -164,7 +166,7 @@ export function DiscoverView({
       el.removeEventListener("touchend", end);
       el.removeEventListener("touchcancel", end);
     };
-  }, [cardUp]);
+  }, [cardUp, listUp]);
 
   // ── Shelves ───────────────────────────────────────────────────────────────
   const loadAll = useCallback(() => {
@@ -334,28 +336,42 @@ export function DiscoverView({
     return [...theirs, ...mine.filter(x => !have.has(x.id))];
   };
   const offsetRef = useRef(0);
+  // A search typed while another still loads: the older answer is dropped,
+  // or it would fill the newer list.
+  const listToken = useRef(0);
+  // Where the home was, to go back there when the list closes.
+  const homeTop = useRef(0);
   const openList = (o: ListOf) => {
+    const sc = rootScrollRef.current;
+    if (!list && sc) homeTop.current = sc.scrollTop;
+    const token = ++listToken.current;
     setList({ ...o, tracks: [], more: false, busy: true });
     offsetRef.current = 1;
-    rootScrollRef.current?.scrollTo({ top: 0 });
+    sc?.scrollTo({ top: 0 });
     fetchList(o, 0)
-      .then(tracks => setList(l => l && { ...l, tracks, more: tracks.length > 0 && !o.artist, busy: false }))
-      .catch(() => setList(l => l && { ...l, busy: false, error: true }));
+      .then(tracks => { if (token === listToken.current) setList(l => l && { ...l, tracks, more: tracks.length > 0 && !o.artist, busy: false }); })
+      .catch(() => { if (token === listToken.current) setList(l => l && { ...l, busy: false, error: true }); });
   };
   const loadMore = () => {
     if (!list || list.busy) return;
+    const token = listToken.current;
     const page = offsetRef.current;
     offsetRef.current += 1;
     setList({ ...list, busy: true });
     fetchList(list, page)
-      .then(more => setList(l => {
+      .then(more => { if (token === listToken.current) setList(l => {
         if (!l) return l;
         const have = new Set(l.tracks.map(x => x.id));
         const fresh = more.filter(x => !have.has(x.id));
         return { ...l, tracks: [...l.tracks, ...fresh], more: fresh.length > 0, busy: false };
-      }))
-      .catch(() => setList(l => l && { ...l, busy: false }));
+      }); })
+      .catch(() => { if (token === listToken.current) setList(l => l && { ...l, busy: false }); });
   };
+  const closeList = () => { listToken.current++; setList(null); };
+  // Back on the home: where it was, before it is drawn.
+  useLayoutEffect(() => {
+    if (!listUp && rootScrollRef.current) rootScrollRef.current.scrollTop = homeTop.current;
+  }, [listUp]);
 
   // The header's search box: Enter searches, the X (an empty box) goes back.
   const firstSignal = useRef(searchSignal);
@@ -363,14 +379,14 @@ export function DiscoverView({
     if (searchSignal === firstSignal.current) return;
     const q = query.trim();
     if (q) { setCard(null); openList({ title: q, query: q }); }
-    else setList(l => (l?.query ? null : l));
+    else if (list?.query) closeList();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchSignal]);
 
   // Back on Android: the card first, then the list, then out of Discover.
   backRef.current = () => {
     if (card) { closeCard(); return true; }
-    if (list) { setList(null); return true; }
+    if (list) { closeList(); return true; }
     return false;
   };
 
@@ -542,11 +558,16 @@ export function DiscoverView({
     </div>
   );
 
-  /** A button that opens a site in the browser. */
-  const outLink = (label: string, url: string) => (
-    <button onClick={() => { Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener")); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", height: 52, padding: "0 16px", borderRadius: 14, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
-      <span>{label}</span>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><polyline points="8 7 17 7 17 16"/></svg>
+  /** A site in the browser. */
+  const openSite = (url: string) => { Browser.open({ url }).catch(() => window.open(url, "_blank", "noopener")); };
+  /** A card that opens a site: its mark, and what you find there. */
+  const siteCard = (label: string, url: string, mark: React.ReactNode) => (
+    <button onClick={() => openSite(url)} style={{ flex: 1, minWidth: 0, height: 118, padding: 14, borderRadius: 16, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontFamily: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", justifyContent: "space-between", alignItems: "stretch", textAlign: "left" }}>
+      <span style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <span style={{ width: 40, height: 40, borderRadius: 11, background: T.text, color: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>{mark}</span>
+        <span style={{ color: T.muted, display: "flex" }}>{ARROW}</span>
+      </span>
+      <span style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.25 }}>{label}</span>
     </button>
   );
 
@@ -580,7 +601,7 @@ export function DiscoverView({
         {list ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
-              <button onClick={() => setList(null)} aria-label={t("Back")} style={{ background: "none", border: "none", color: T.text, padding: 8, display: "flex", cursor: "pointer" }}>
+              <button onClick={closeList} aria-label={t("Back")} style={{ background: "none", border: "none", color: T.text, padding: 8, display: "flex", cursor: "pointer" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               {list.artist && artistPic(list.artist, 40)}
@@ -597,9 +618,15 @@ export function DiscoverView({
             {list.busy && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: 24 }}>{t("Loading…")}</div>}
             {!list.busy && list.error && <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "40px 24px" }}>{t("No connection. Check your internet and try again.")}</div>}
             {!list.busy && !list.error && list.tracks.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "40px 24px" }}>{t("Nothing found")}</div>}
-            {!list.busy && list.more && (
+            {!list.busy && !list.error && (list.more || list.query) && (
               <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
-                <button onClick={loadMore} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.dim, color: T.text, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Load more")}</button>
+                {list.more
+                  ? <button onClick={loadMore} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.dim, color: T.text, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Load more")}</button>
+                  // The search page itself, without the words: what is on the
+                  // Archive is not all free to share, so MPTree does not search it for you.
+                  : <button onClick={() => openSite("https://archive.org/search")} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 12, padding: "9px 14px 9px 16px", fontSize: 14, fontWeight: 700, background: T.dim, color: T.text, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                      {t("More on Internet Archive")}{ARROW}
+                    </button>}
               </div>
             )}
           </div>
@@ -613,9 +640,9 @@ export function DiscoverView({
             {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
             {/* More music elsewhere: the sites themselves, never a search on
                 them, so nothing here points at a song without a licence. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "32px 16px 0" }}>
-              {outLink(t("More on Internet Archive"), "https://archive.org/details/audio")}
-              {outLink(t("Buy on Bandcamp"), "https://bandcamp.com")}
+            <div style={{ display: "flex", gap: 10, padding: "32px 16px 0" }}>
+              {siteCard(t("More on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
+              {siteCard(t("Buy on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
             </div>
           </div>
         )}
@@ -720,6 +747,20 @@ export function DiscoverView({
 }
 
 const FLY_MS = 600;
+
+const ARROW = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><polyline points="8 7 17 7 17 16"/></svg>;
+// The sites' marks, drawn in one colour to fit the page: the Archive's
+// building, Bandcamp's slanted block.
+const ARCHIVE_MARK = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 2.5 2.5 7.5h19z"/><rect x="3" y="8.6" width="18" height="2"/>
+    <rect x="4.5" y="11.6" width="2" height="6.8"/><rect x="9" y="11.6" width="2" height="6.8"/><rect x="13" y="11.6" width="2" height="6.8"/><rect x="17.5" y="11.6" width="2" height="6.8"/>
+    <rect x="2.5" y="19.4" width="19" height="2.1"/>
+  </svg>
+);
+const BANDCAMP_MARK = (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M1 18 7.6 6H23l-6.6 12z"/></svg>
+);
 
 const KEYFRAMES = `
 @keyframes mptree-spin { to { transform: rotate(360deg) } }
