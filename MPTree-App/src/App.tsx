@@ -3620,8 +3620,8 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: discoverOpen ? 1 : undefined }}>
+                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: discoverOpen ? 1 : 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
@@ -3640,7 +3640,7 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
-                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
               </div>

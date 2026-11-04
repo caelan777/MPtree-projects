@@ -784,6 +784,8 @@ export const ES: Record<string, string> = {
   "Classical, public domain": "Clásica, de dominio público",
   "Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.": "Música de Audius y del Internet Archive. Solo canciones que se pueden compartir libremente, con el nombre del artista.",
   "Free music from Audius and the Internet Archive": "Música gratis de Audius y del Internet Archive",
+  "Popular songs": "Canciones populares",
+  "Popular artists": "Artistas populares",
   "Download free music here": "Descarga música gratis aquí",
   "Discover": "Descubrir",
   "Search free music": "Busca música gratis",

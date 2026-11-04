@@ -784,6 +784,8 @@ export const NL: Record<string, string> = {
   "Classical, public domain": "Klassiek, vrij van rechten",
   "Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.": "Muziek van Audius en het Internet Archive. Alleen nummers die vrij gedeeld mogen worden, met de naam van de artiest erbij.",
   "Free music from Audius and the Internet Archive": "Gratis muziek van Audius en het Internet Archive",
+  "Popular songs": "Populaire nummers",
+  "Popular artists": "Populaire artiesten",
   "Download free music here": "Hier download je gratis muziek",
   "Discover": "Ontdekken",
   "Search free music": "Zoek gratis muziek",

@@ -5,16 +5,17 @@ import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Sync } from "../plugins";
 import {
-  SHELVES, findFree, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
+  SHELVES, POPULAR, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
   saveName, licenceChip, nextArt, baseName, onSavedChange, type FreeTrack,
+  searchAll, artistsOf, artistTracks, type Artist,
 } from "../discover";
 
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
 // Free music to download, as shelves of covers per genre, from Audius and the
-// Internet Archive. It is the first page,
+// Internet Archive, under Popular songs and Popular artists. It is the first page,
 // left of Songs, under the same header card: the download arrow in the tabs,
 // or a swipe to the right on Songs, slides it in; a swipe to the left takes
-// you back. The header's search box searches Audius while you are here.
+// you back. The header's search box searches both sources while you are here.
 //
 // A tap on a cover brings that song forward as a card (the big player) and
 // plays the whole song from Audius, with a timeline to seek. Closing the card
@@ -22,6 +23,9 @@ import {
 // Every download button saves the file into Music/MPTree, and what was tapped
 // then flies into the Songs tab, which gets a "+1". You stay here. The page
 // stays mounted once opened, so a download keeps going while you are on Songs.
+
+/** What a full list shows: a row, a search, or an artist's songs. */
+type ListOf = { title: string; shelf?: Shelf; query?: string; artist?: Artist };
 
 /** Progress of a download: 0..1, -1 while the size is not known, or "done". */
 type Dl = number | "done";
@@ -81,7 +85,7 @@ export function DiscoverView({
   const [shelves, setShelves] = useState<Record<string, FreeTrack[] | "error">>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [dl, setDl] = useState<Record<string, Dl>>({});
-  const [list, setList] = useState<null | { title: string; shelf?: Shelf; query?: string; tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
+  const [list, setList] = useState<null | ListOf & { tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
   const [failNote, setFailNote] = useState<string | null>(null);
   // `loading`: asked to play, no sound yet (starting, or buffering).
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -106,6 +110,7 @@ export function DiscoverView({
   // only takes the page along when that row cannot scroll that way any more.
   // Not with the card up.
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const rootScrollRef = useRef<HTMLDivElement | null>(null);
   const setRoot = useCallback((el: HTMLDivElement | null) => { rootRef.current = el; panelRef.current = el; }, [panelRef]);
   const sw = useRef<null | { x: number; y: number; axis: null | "h" | "v"; shelf: HTMLElement | null; lastX: number; lastT: number; v: number }>(null);
   const cardUp = !!card;
@@ -163,7 +168,7 @@ export function DiscoverView({
   // ── Shelves ───────────────────────────────────────────────────────────────
   const loadAll = useCallback(() => {
     setShelves({});
-    SHELVES.forEach(s => {
+    [POPULAR, ...SHELVES].forEach(s => {
       loadShelf(s)
         .then(tracks => setShelves(prev => ({ ...prev, [s.key]: tracks })))
         .catch(() => setShelves(prev => ({ ...prev, [s.key]: "error" })));
@@ -314,24 +319,34 @@ export function DiscoverView({
   };
   useEffect(() => { if (!failNote) return; const id = setTimeout(() => setFailNote(null), 3000); return () => clearTimeout(id); }, [failNote]);
 
-  // ── A full list: one row, or a search (Audius) ────────────────────────────
-  const fetchList = (o: { shelf?: Shelf; query?: string }, offset: number) =>
-    o.shelf ? listShelf(o.shelf, offset) : findFree({ query: o.query, limit: 60, offset });
-  const step = (o: { shelf?: Shelf }) => (o.shelf ? pageSize(o.shelf) : 60);
+  // ── A full list: one row, a search (both sources), or an artist ───────────
+  // `page` counts from 0. An artist is one page: Audius gives all at once.
+  const known = (): FreeTrack[] => Object.values(shelves).flatMap(v => (Array.isArray(v) ? v : []));
+  const fetchList = async (o: ListOf, page: number): Promise<FreeTrack[]> => {
+    if (o.shelf) return listShelf(o.shelf, page * pageSize(o.shelf));
+    if (o.query) return searchAll(o.query, page);
+    if (!o.artist || page > 0) return [];
+    const id = o.artist.id;
+    const mine = known().filter(x => x.artistId === id);
+    const theirs = await artistTracks(id).catch(() => (mine.length ? [] : Promise.reject(new Error("offline"))));
+    const have = new Set(theirs.map(x => x.id));
+    return [...theirs, ...mine.filter(x => !have.has(x.id))];
+  };
   const offsetRef = useRef(0);
-  const openList = (o: { title: string; shelf?: Shelf; query?: string }) => {
+  const openList = (o: ListOf) => {
     setList({ ...o, tracks: [], more: false, busy: true });
-    offsetRef.current = step(o);
+    offsetRef.current = 1;
+    rootScrollRef.current?.scrollTo({ top: 0 });
     fetchList(o, 0)
-      .then(tracks => setList(l => l && { ...l, tracks, more: tracks.length > 0, busy: false }))
+      .then(tracks => setList(l => l && { ...l, tracks, more: tracks.length > 0 && !o.artist, busy: false }))
       .catch(() => setList(l => l && { ...l, busy: false, error: true }));
   };
   const loadMore = () => {
     if (!list || list.busy) return;
-    const offset = offsetRef.current;
-    offsetRef.current += step(list);
+    const page = offsetRef.current;
+    offsetRef.current += 1;
     setList({ ...list, busy: true });
-    fetchList(list, offset)
+    fetchList(list, page)
       .then(more => setList(l => {
         if (!l) return l;
         const have = new Set(l.tracks.map(x => x.id));
@@ -424,14 +439,7 @@ export function DiscoverView({
     if (tracks === "error" || (Array.isArray(tracks) && tracks.length === 0)) return null;
     return (
       <div key={key}>
-        <div style={{ fontSize: 11, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: "18px 16px 8px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <span>{t(label)}</span>
-          {tracks && (
-            <button onClick={() => openList({ title: t(label), shelf: s })} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", letterSpacing: 0, textTransform: "none", fontSize: 12, color: T.textSub, fontFamily: "inherit" }}>
-              {t("See all")}
-            </button>
-          )}
-        </div>
+        {sectionTitle(t(label), tracks ? () => openList({ title: t(label), shelf: s }) : undefined)}
         {/* Right to left: a row starts at its right end, so a swipe to the
             left on it is free to take the page back to Songs. You scroll a
             row by pulling to the right. */}
@@ -456,7 +464,84 @@ export function DiscoverView({
     );
   };
 
-  const allFailed = SHELVES.every(s => shelves[s.key] === "error");
+  /** A heading on the home, with See all when there is more. */
+  const sectionTitle = (label: string, onAll?: () => void) => (
+    <div style={{ margin: "26px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+      <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: T.text }}>{label}</span>
+      {onAll && (
+        <button onClick={onAll} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: T.textSub, fontFamily: "inherit", flexShrink: 0 }}>
+          {t("See all")}
+        </button>
+      )}
+    </div>
+  );
+
+  /** One song as a row: in lists, and in Popular songs (with its place). */
+  const row = (track: FreeTrack, rank?: number) => (
+    <div key={track.id} data-fly="" onClick={() => openCard(track)} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 74, padding: rank ? "0 4px 0 0" : small ? "0 10px 0 14px" : "0 10px 0 16px", cursor: "pointer", minWidth: 0 }}>
+      {rank !== undefined && <span style={{ width: 22, textAlign: "center", fontSize: 15, fontWeight: 800, color: T.muted, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{rank}</span>}
+      {cover(track, small ? 42 : 48, 10)}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track.title}</div>
+        <div style={{ fontSize: 12.5, color: T.textSub, marginTop: 3, display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>{sub(track, rank ? undefined : fmt(track.duration))}</div>
+      </div>
+      {dlButton(track, 38)}
+    </div>
+  );
+
+  // Popular songs: columns of four, numbered, a column at a time.
+  const popular = shelves[POPULAR.key];
+  const popularSection = () => {
+    if (popular === "error" || (Array.isArray(popular) && popular.length === 0)) return null;
+    const cols: (FreeTrack | null)[][] = [];
+    const items = popular ?? Array.from({ length: 8 }, () => null);
+    for (let i = 0; i < items.length; i += 4) cols.push(items.slice(i, i + 4));
+    return (
+      <div>
+        {sectionTitle(t("Popular songs"), popular ? () => openList({ title: t("Popular songs"), shelf: POPULAR }) : undefined)}
+        <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x mandatory", scrollPaddingInline: 16 }}>
+          {cols.map((col, c) => (
+            <div key={c} style={{ flex: "0 0 calc(100% - 28px)", minWidth: 0, scrollSnapAlign: "end" }}>
+              {col.map((track, i) => track ? row(track, c * 4 + i + 1) : (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 74 }}>
+                  <span style={{ width: 22 }} />
+                  <div style={{ width: 48, height: 48, borderRadius: 10, background: T.card, border: `1px solid ${T.border}` }} />
+                  <div style={{ height: 12, width: "50%", borderRadius: 4, background: T.card }} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Popular artists: the people behind the songs on the page, most followed first.
+  const artists = artistsOf(known());
+  const artistPic = (a: Artist, size: number) => (
+    <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", background: T.card, border: `1px solid ${T.border}`, flexShrink: 0 }}>
+      {a.pic && <img src={a.pic} alt="" loading="lazy" draggable={false} onError={e => {
+        const img = e.currentTarget, i = Number(img.dataset.try ?? -1) + 1;
+        if (i < a.mirrors.length) { img.dataset.try = String(i); img.src = a.mirrors[i]; } else img.style.visibility = "hidden";
+      }} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+    </div>
+  );
+  const artistW = small ? 92 : 104;
+  const artistsSection = () => artists.length < 3 ? null : (
+    <div>
+      {sectionTitle(t("Popular artists"))}
+      <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 14, padding: "0 14px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain" }}>
+        {artists.map(a => (
+          <div key={a.id} onClick={() => openList({ title: a.name, artist: a })} style={{ flexShrink: 0, width: artistW, cursor: "pointer", textAlign: "center" }}>
+            {artistPic(a, artistW)}
+            <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: T.text }}>{a.name}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const allFailed = [POPULAR, ...SHELVES].every(s => shelves[s.key] === "error");
   const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
 
   // Closing the card: it and its shade fade out rather than vanish.
@@ -482,24 +567,23 @@ export function DiscoverView({
     >
       <style>{KEYFRAMES}</style>
 
-      <div style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: "padding-top 0.3s ease" }}>
+      <div ref={rootScrollRef} style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: "padding-top 0.3s ease" }}>
         {list ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
               <button onClick={() => setList(null)} aria-label={t("Back")} style={{ background: "none", border: "none", color: T.text, padding: 8, display: "flex", cursor: "pointer" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
+              {list.artist && artistPic(list.artist, 40)}
               <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{list.title}</div>
             </div>
-            {list.tracks.map(track => (
-              <div key={track.id} data-fly="" onClick={() => openCard(track)} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 78, padding: small ? "0 10px 0 14px" : "0 10px 0 16px", cursor: "pointer" }}>
-                {cover(track, small ? 42 : 48, 10)}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track.title}</div>
-                  <div style={{ fontSize: 12.5, color: T.textSub, marginTop: 3, display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>{sub(track, fmt(track.duration))}</div>
-                </div>
-                {dlButton(track, 40)}
-              </div>
+            {list.tracks.map((track, i) => (
+              <React.Fragment key={track.id}>
+                {list.query && track.source === "archive" && list.tracks[i - 1]?.source !== "archive" && (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.textSub, padding: "18px 16px 4px" }}>Internet Archive</div>
+                )}
+                {row(track)}
+              </React.Fragment>
             ))}
             {list.busy && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: 24 }}>{t("Loading…")}</div>}
             {!list.busy && list.error && <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "40px 24px" }}>{t("No connection. Check your internet and try again.")}</div>}
@@ -516,7 +600,7 @@ export function DiscoverView({
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
           </div>
         ) : (
-          <div style={{ marginTop: -12 }}>{SHELVES.map(s => shelf(s))}</div>
+          <div style={{ marginTop: -18 }}>{popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}</div>
         )}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}

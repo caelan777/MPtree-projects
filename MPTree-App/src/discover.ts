@@ -43,7 +43,13 @@ export type FreeTrack = {
   /** What plays, and what is saved. */
   stream: string;
   file: string;
+  /** Audius only: the artist's account, picture and followers, for Popular artists. */
+  artistId?: string;
+  artistPic?: string | null;
+  followers?: number;
 };
+
+export type Artist = { id: string; name: string; pic: string | null; mirrors: string[]; followers: number };
 
 export type Shelf = {
   key: string;
@@ -87,7 +93,7 @@ type Raw = {
   orig_filename?: string | null; permalink?: string;
   is_downloadable?: boolean; is_download_gated?: boolean; is_delete?: boolean; is_available?: boolean;
   artwork?: { mirrors?: string[] } & Record<string, unknown> | null;
-  user?: { name?: string; handle?: string };
+  user?: { id?: string; name?: string; handle?: string; follower_count?: number; profile_picture?: { mirrors?: string[] } & Record<string, unknown> | null };
 };
 
 function toTrack(r: Raw): FreeTrack | null {
@@ -110,6 +116,9 @@ function toTrack(r: Raw): FreeTrack | null {
     permalink: r.permalink ? "https://audius.co" + r.permalink : "https://audius.co",
     stream: `${API}/tracks/${id}/stream?app_name=${APP}`,
     file: `${API}/tracks/${id}/download?app_name=${APP}`,
+    artistId: r.user?.id,
+    artistPic: (r.user?.profile_picture?.["480x480"] ?? r.user?.profile_picture?.["150x150"] ?? null) as string | null,
+    followers: r.user?.follower_count ?? 0,
   };
 }
 
@@ -232,6 +241,32 @@ async function iaTracks(item: string, genre: string, max: number): Promise<FreeT
   return out;
 }
 
+/** The Archive's part of a search: songs from the albums that match, the
+ *  ones whose own title or artist matches first. Only the two collections on
+ *  the page, so the licence and the kind of music stay the same. */
+const IA_MUSIC = "(collection:netlabels OR collection:musopen OR subject:musopen)";
+export async function iaFind(query: string, page: number): Promise<FreeTrack[]> {
+  // Words only: the Archive's search has its own syntax, which a title can trip.
+  const words = query.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean).slice(0, 6);
+  if (!words.length) return [];
+  const q = `(${words.map(w => `"${w}"`).join(" AND ")}) AND ${IA_MUSIC}`;
+  const ids = await iaSearch(q, page * 8, 8);
+  const lists = await Promise.all(ids.map(id => iaTracks(id, "", 8).catch(() => [])));
+  const all = lists.flat();
+  const hit = (t: FreeTrack) => words.every(w => (t.title + " " + t.artist).toLowerCase().includes(w));
+  return [...all.filter(hit), ...all.filter(t => !hit(t))];
+}
+
+/** A search over both sources: Audius first, then the Archive. `page` from 0. */
+export async function searchAll(query: string, page: number): Promise<FreeTrack[]> {
+  const [a, b] = await Promise.all([
+    findFree({ query, limit: 60, offset: page * 60 }).catch(() => null),
+    iaFind(query, page).catch(() => null),
+  ]);
+  if (!a && !b) throw new Error("offline");
+  return [...(a ?? []), ...(b ?? [])];
+}
+
 /** Songs from the Archive: `perAlbum` from each of the most downloaded items. */
 async function iaShelf(shelf: Shelf, offset: number, albums: number, perAlbum: number): Promise<FreeTrack[]> {
   const ids = await iaSearch(shelf.ia!, offset, albums);
@@ -252,7 +287,7 @@ export const pageSize = (shelf: Shelf) => (shelf.source === "archive" ? 12 : 60)
 
 // A shelf is kept for a day, so opening the page again costs nothing.
 const DAY = 24 * 60 * 60 * 1000;
-const shelfKey = (key: string) => "mptree_discover4_" + key;
+const shelfKey = (key: string) => "mptree_discover5_" + key;
 
 export async function loadShelf(shelf: Shelf): Promise<FreeTrack[]> {
   try {
@@ -269,6 +304,27 @@ export async function loadShelf(shelf: Shelf): Promise<FreeTrack[]> {
     : (await findFree({ genre: shelf.genre, limit: 80 })).slice(0, 20);
   Preferences.set({ key: shelfKey(shelf.key), value: JSON.stringify({ at: Date.now(), tracks }) }).catch(() => {});
   return tracks;
+}
+
+/** Popular songs: the most played free songs on Audius, all genres. */
+export const POPULAR: Shelf = { key: "popular", label: "Popular songs", source: "audius" };
+
+/** The artists behind the songs on the page, most followed first. */
+export function artistsOf(tracks: FreeTrack[], max = 16): Artist[] {
+  const by = new Map<string, Artist>();
+  for (const t of tracks) {
+    if (!t.artistId || !t.artistPic || by.has(t.artistId)) continue;
+    const path = t.artistPic.replace(/^https:\/\/[^/]+/, "");
+    by.set(t.artistId, { id: t.artistId, name: t.artist, pic: t.artistPic, mirrors: t.mirrors.map(m => m.replace(/\/$/, "") + path), followers: t.followers ?? 0 });
+  }
+  return [...by.values()].sort((a, b) => b.followers - a.followers).slice(0, max);
+}
+
+/** An artist's free songs on Audius, most played first. */
+export async function artistTracks(id: string): Promise<FreeTrack[]> {
+  const raw = await get(`/users/${encodeURIComponent(id)}/tracks`, { sort_method: "plays", limit: 100 });
+  const seen = new Set<string>();
+  return raw.map(toTrack).filter((t): t is FreeTrack => !!t && !seen.has(t.id) && !!seen.add(t.id));
 }
 
 /** "Artist - Title.mp3", in the format the artist uploaded. */

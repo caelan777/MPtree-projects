@@ -54,6 +54,11 @@ export function usePageSwipe({
   const [pageDragX,    setPageDragX]    = useState(0);
   const [discoverDragging, setDiscoverDragging] = useState(false);
   const discoverX = useRef(0);
+  // Whether a finger is pulling Discover in, known at once. The state is only
+  // for drawing: a quick flick can end before React has drawn it, and the end
+  // of the swipe then has to know anyway, or the page stays half way.
+  const discoverOn = useRef(false);
+  const pageDraggingRef = useRef(false);
   const hasDiscoverRef = useRef(!!discover);
   hasDiscoverRef.current = !!discover;
   const [pageDragging, setPageDragging] = useState(false);
@@ -109,6 +114,15 @@ export function usePageSwipe({
     pageSwipeLastX.current    = x;
     pageSwipeLastTime.current = e.timeStamp;
     pageSwipeVelocity.current = 0;
+    // A swipe that was never let go of (no touchend reached us): let go now.
+    if (discoverOn.current) letGoOfDiscover(false);
+  };
+
+  const letGoOfDiscover = (open: boolean) => {
+    discoverOn.current = false;
+    discoverX.current = 0;
+    setDiscoverDragging(false);
+    discover?.release(open);
   };
 
   const onPageTouchMove = (e: React.TouchEvent) => {
@@ -132,41 +146,46 @@ export function usePageSwipe({
     pageSwipeLastX.current    = e.touches[0].clientX;
     pageSwipeLastTime.current = e.timeStamp;
 
+    // Back past where it started: Discover goes back out of sight first.
+    if (dx <= 0 && discoverOn.current) {
+      discoverX.current = 0;
+      discover?.drag(0);
+    }
     if (page === "songs" && dx < 0) {
+      pageDraggingRef.current = true;
       setPageDragging(true);
       setPageDragX(Math.max(dx, -window.innerWidth));
     } else if (page === "playlists" && dx > 0) {
+      pageDraggingRef.current = true;
       setPageDragging(true);
       setPageDragX(Math.min(dx, window.innerWidth));
     } else if (page === "songs" && dx > 0 && discover) {
-      if (!discoverDragging) setDiscoverDragging(true);
+      if (!discoverOn.current) { discoverOn.current = true; setDiscoverDragging(true); }
       discoverX.current = Math.min(dx, window.innerWidth);
       discover.drag(discoverX.current);
-    } else if (discoverX.current) {
-      discoverX.current = 0;
-      discover?.drag(0);
     }
   };
 
   const onPageTouchEnd = () => {
-    if (pageSwipeLocked.current === "horizontal" && pageDragging) {
+    if (pageSwipeLocked.current === "horizontal" && pageDraggingRef.current) {
+      const dragX   = pageSwipeLastX.current - (pageSwipeStartX.current ?? pageSwipeLastX.current);
       const v       = pageSwipeVelocity.current;
-      const isFlick = Math.abs(v) >= PAGE_SWIPE_VELOCITY && Math.abs(pageDragX) >= PAGE_SWIPE_MIN_DIST;
+      const isFlick = Math.abs(v) >= PAGE_SWIPE_VELOCITY && Math.abs(dragX) >= PAGE_SWIPE_MIN_DIST;
 
-      const shouldGoNext = page === "songs"     && (pageDragX < -PAGE_SWIPE_THRESHOLD || (isFlick && v < 0));
-      const shouldGoPrev = page === "playlists" && (pageDragX >  PAGE_SWIPE_THRESHOLD || (isFlick && v > 0));
+      const shouldGoNext = page === "songs"     && (dragX < -PAGE_SWIPE_THRESHOLD || (isFlick && v < 0));
+      const shouldGoPrev = page === "playlists" && (dragX >  PAGE_SWIPE_THRESHOLD || (isFlick && v > 0));
 
       if (shouldGoNext) setPage("playlists");
       else if (shouldGoPrev) setPage("songs");
     }
-    if (discoverDragging) {
+    if (discoverOn.current) {
       const x = discoverX.current;
       const v = pageSwipeVelocity.current;
       const isFlick = v >= PAGE_SWIPE_VELOCITY && x >= PAGE_SWIPE_MIN_DIST;
-      discover?.release(pageSwipeLocked.current === "horizontal" && (x > PAGE_SWIPE_THRESHOLD || isFlick));
+      letGoOfDiscover(pageSwipeLocked.current === "horizontal" && (x > PAGE_SWIPE_THRESHOLD || isFlick));
     }
     discoverX.current = 0;
-    if (discoverDragging) setDiscoverDragging(false);
+    pageDraggingRef.current = false;
     pageSwipeStartX.current   = null;
     pageSwipeStartY.current   = null;
     pageSwipeLocked.current   = null;
