@@ -98,7 +98,40 @@ function DiscoverViewInner({
   const [flyers, setFlyers] = useState<Flyer[]>([]);
 
   // Leaving the page: next time it opens on its home, not on an old list.
-  useEffect(() => { if (!open) { setCard(null); setList(null); } }, [open]);
+  // ── The wall ──────────────────────────────────────────────────────────────
+  // A wall of black and white sleeves (build 88) passes over the screen.
+  // Opening, it flows down from the top: until it covers the screen you still
+  // see what was there, then this page is put in behind it, and the wall goes
+  // on down and out at the bottom. Leaving, the same from the bottom up, and
+  // this page is taken away behind it. Not with reduced motion.
+  const [wall, setWall] = useState<null | "down" | "up">(null);
+  // Hidden while the wall still has to cover what is under it.
+  const [behind, setBehind] = useState(false);
+  // Still on screen: stays true while the wall carries the page away.
+  const [shown, setShown] = useState(open);
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const was = wasOpen.current;
+    wasOpen.current = open;
+    const still = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (open) {
+      setShown(true);
+      if (still) { setWall(null); setBehind(false); return; }
+      setWall("down"); setBehind(true);
+      const a = setTimeout(() => setBehind(false), WALL_MS / 2);
+      const b = setTimeout(() => setWall(null), WALL_MS);
+      return () => { clearTimeout(a); clearTimeout(b); };
+    }
+    if (!was) return;
+    if (still) { setWall(null); setBehind(false); setShown(false); return; }
+    setWall("up"); setBehind(false);
+    const a = setTimeout(() => setBehind(true), WALL_MS / 2);
+    const b = setTimeout(() => { setWall(null); setBehind(false); setShown(false); }, WALL_MS);
+    return () => { clearTimeout(a); clearTimeout(b); };
+  }, [open]);
+
+  // Gone from the screen: next time it opens on its home, not on an old list.
+  useEffect(() => { if (!shown) { setCard(null); setList(null); } }, [shown]);
   useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -277,42 +310,36 @@ function DiscoverViewInner({
   // A search typed while another still loads: the older answer is dropped,
   // or it would fill the newer list.
   const listToken = useRef(0);
-  // The fold, the same as on Songs. At the top of the page the content moves
-  // with the header, over the same time and curve. Scrolled down, it changes
-  // at once and the scroll position makes up for it, so what is on screen
-  // stays put while the header folds over or out. The page keeps one top
-  // padding, the open header's, and moves its content by a transform, so the
-  // fold never lays out the ~2900 elements on it again.
-  const padRef = useRef(topInset);
-  if (topInset > padRef.current) padRef.current = topInset;
-  const pad = padRef.current;
-  const [scrolled, setScrolled] = useState(false);
+  // The fold, the same as on Songs. Scrolled down, the top padding changes at
+  // once and the scroll position by the same amount, so what is on screen
+  // stays put while the header folds over or out (moving it by a transform
+  // there instead made the page flicker on the phone). At the top of the page
+  // the padding stays and the content moves with the header by a transform,
+  // over the same time and curve, so that fold does not lay out the ~2900
+  // elements on the page on every frame.
+  const baseRef = useRef(topInset);
   const prevInset = useRef(topInset);
+  const jumpRef = useRef(0);
+  if (topInset !== prevInset.current) {
+    const el = rootScrollRef.current;
+    if (el && el.scrollTop > 0) {
+      jumpRef.current += topInset - prevInset.current;
+      baseRef.current = topInset;
+    }
+    prevInset.current = topInset;
+  }
+  const pad = baseRef.current;
+  const shift = topInset - pad;
+  const [scrolled, setScrolled] = useState(false);
   useLayoutEffect(() => {
     const el = rootScrollRef.current;
-    const delta = topInset - prevInset.current;
-    prevInset.current = topInset;
-    if (!el || !delta || el.scrollTop <= 0) return;
+    const d = jumpRef.current;
+    jumpRef.current = 0;
+    if (!el || !d) return;
     onInsetJump?.();
-    el.scrollTop += delta;
+    el.scrollTop += d;
   }, [topInset]); // eslint-disable-line react-hooks/exhaustive-deps
   const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
-
-  // ── The wall ──────────────────────────────────────────────────────────────
-  // Opening the page, a wall of black and white sleeves (build 88) flows down
-  // from the top. Until it covers the screen you still see Songs; then the
-  // page is put in behind it, and the wall goes on down and out at the
-  // bottom, uncovering it. Not with reduced motion.
-  const [wall, setWall] = useState(false);
-  const [behind, setBehind] = useState(false);
-  useEffect(() => {
-    if (!open) { setWall(false); setBehind(false); return; }
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    setWall(true); setBehind(true);
-    const a = setTimeout(() => setBehind(false), WALL_MS / 2);
-    const b = setTimeout(() => setWall(false), WALL_MS);
-    return () => { clearTimeout(a); clearTimeout(b); };
-  }, [open]);
 
   // Where the home was, to go back there when the list closes.
   const homeTop = useRef(0);
@@ -615,12 +642,14 @@ function DiscoverViewInner({
       ref={setRoot}
       aria-hidden={!open}
       style={{
-        position: "absolute", inset: 0, zIndex: 15, background: behind ? "transparent" : T.bg, color: T.text,
-        visibility: open ? "visible" : "hidden",
-        transform: open ? OPEN : CLOSED,
-        boxShadow: open && !wall ? SHADOW : "none",
-        // In at once, under the wall; out sliding to the left.
-        transition: open && wall ? "none" : panelTransition(open),
+        position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
+        // Hidden, the wall in it still shows (it says visible itself).
+        visibility: shown && !behind ? "visible" : "hidden",
+        pointerEvents: open ? undefined : "none",
+        transform: shown ? OPEN : CLOSED,
+        boxShadow: shown && !wall ? SHADOW : "none",
+        // Under the wall it does not move; without one it slides.
+        transition: wall ? "none" : panelTransition(shown),
         willChange: "transform",
       }}
     >
@@ -633,9 +662,9 @@ function DiscoverViewInner({
           if ((top > 0) !== scrolled) setScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        style={{ visibility: behind ? "hidden" : undefined, position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
-        <div style={{ transform: `translateY(${topInset - pad}px)`, transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
+        <div style={{ transform: shift || !scrolled ? `translateY(${shift}px)` : "none", transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
         {list ? listView : allFailed ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             {t("No connection. Check your internet and try again.")}
@@ -648,7 +677,7 @@ function DiscoverViewInner({
         </div>
       </div>
 
-      {wall && <Wall />}
+      {wall && <Wall up={wall === "up"} />}
 
       {failNote && (
         <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? "calc(92px + env(safe-area-inset-bottom, 0px))" : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
@@ -759,7 +788,7 @@ export const DiscoverView = React.memo(DiscoverViewInner, (a, b) => {
 });
 
 const FLY_MS = 600;
-const WALL_MS = 900;
+export const WALL_MS = 900;
 
 // Black and white sleeves, drawn rather than loaded so the wall is there at
 // once, even offline.
@@ -782,8 +811,9 @@ const SLEEVES = [
 // Torn at both ends: the bottom edge comes in first, the top one goes out last.
 const TORN = "polygon(0 12px, 9% 34px, 18% 4px, 27% 30px, 36% 8px, 45% 32px, 54% 2px, 63% 28px, 72% 6px, 82% 34px, 91% 10px, 100% 26px, 100% calc(100% - 26px), 92% calc(100% - 4px), 83% calc(100% - 30px), 73% calc(100% - 6px), 64% calc(100% - 34px), 55% calc(100% - 10px), 46% calc(100% - 28px), 35% calc(100% - 2px), 26% calc(100% - 30px), 17% calc(100% - 8px), 8% calc(100% - 32px), 0 calc(100% - 12px))";
 
-/** Flows from above the screen to below it in one go: covering it halfway. */
-function Wall() {
+/** Flows from above the screen to below it in one go (or the other way up),
+ *  covering it halfway. */
+function Wall({ up }: { up: boolean }) {
   const cols = 6;
   const tiles = useMemo(() => {
     const size = window.innerWidth / cols;
@@ -793,8 +823,8 @@ function Wall() {
   return (
     <div aria-hidden="true" style={{
       position: "absolute", left: 0, right: 0, top: -40, height: "calc(100% + 80px)", zIndex: 30, pointerEvents: "none", overflow: "hidden",
-      clipPath: TORN, background: "#000", willChange: "transform",
-      animation: `mptree-wall-flow ${WALL_MS}ms cubic-bezier(0.45, 0, 0.55, 1) both`,
+      clipPath: TORN, background: "#000", willChange: "transform", visibility: "visible",
+      animation: `mptree-wall-flow ${WALL_MS}ms cubic-bezier(0.45, 0, 0.55, 1) ${up ? "reverse" : "normal"} both`,
     }}>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {tiles.map((bg, i) => <div key={i} style={{ aspectRatio: "1", background: bg }} />)}

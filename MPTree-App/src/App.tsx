@@ -55,7 +55,7 @@ import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
-import { DiscoverView, DiscoverIcon, NewBadge } from "./components/DiscoverView";
+import { DiscoverView, DiscoverIcon, NewBadge, WALL_MS } from "./components/DiscoverView";
 import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
@@ -697,7 +697,14 @@ export default function App() {
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
   const discoverPanelRef = useRef<HTMLDivElement | null>(null);
   const openDiscover = () => {
-    setDiscoverOpen(true); setPage("songs"); openChrome();
+    setDiscoverOpen(true); openChrome();
+    // Discover lies over Songs. From Playlists, the switch to Songs waits
+    // until the wall covers the screen, so you never see Songs on the way.
+    if (page !== "songs") {
+      const still = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (still) setPage("songs");
+      else window.setTimeout(() => { if (discoverOpenRef.current) setPage("songs"); }, WALL_MS / 2);
+    }
     if (musicHint) musicHintDone();
   };
   const leaveDiscover = () => { setDiscoverOpen(false); setDq(""); setDqSignal(n => n + 1); };
@@ -3589,7 +3596,7 @@ export default function App() {
                 <button
                   data-tour="playlists"
                   onClick={() => { leaveDiscover(); if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
-                  style={{ ...seg(page === "playlists" && !inPl), ...(inPl ? { paddingLeft: 12, paddingRight: 2 } : null) }}
+                  style={{ ...seg(page === "playlists" && !inPl && !discoverOpen), ...(inPl ? { paddingLeft: 12, paddingRight: 2 } : null) }}
                 >
                   {t("Playlists")}
                 </button>
