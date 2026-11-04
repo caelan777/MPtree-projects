@@ -1,53 +1,70 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
-import { Logo } from "./Logo";
 import { Sync } from "../plugins";
 import {
   SHELVES, findFree, loadShelf, loadSaved, markSaved, previewUrl, downloadUrl,
-  saveName, licenceChip, nextArt, type FreeTrack,
+  saveName, licenceChip, nextArt, baseName, onSavedChange, type FreeTrack,
 } from "../discover";
 
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
-// Free music to download, as shelves of covers per genre. It is the first tab,
-// left of Songs: the download arrow in the tabs, or a swipe to the right on
-// Songs, slides it in; a swipe to the left takes you back. A tap on a cover
-// brings that song forward as a card and plays it from Audius, the whole song;
-// its round button saves the file into Music/MPTree, and the card then shrinks
-// away into the Songs tab, which gets a "+1". You stay here. The page stays
-// mounted once opened, so a download keeps going while you are on Songs.
+// Free music to download, as shelves of covers per genre. It is the first page,
+// left of Songs, under the same header card: the download arrow in the tabs,
+// or a swipe to the right on Songs, slides it in; a swipe to the left takes
+// you back. The header's search box searches Audius while you are here.
+//
+// A tap on a cover brings that song forward as a card (the big player) and
+// plays the whole song from Audius, with a timeline to seek. Closing the card
+// leaves the small player at the bottom; a tap on it brings the card back.
+// Every download button saves the file into Music/MPTree, and what was tapped
+// then flies into the Songs tab, which gets a "+1". You stay here. The page
+// stays mounted once opened, so a download keeps going while you are on Songs.
 
 /** Progress of a download: 0..1, -1 while the size is not known, or "done". */
 type Dl = number | "done";
 
+type Preview = { track: FreeTrack; playing: boolean; loading: boolean; pos: number };
+type Flyer = { key: number; art: string | null; x: number; y: number; w: number; h: number; dx: number; dy: number; go: boolean };
+
 export function DiscoverView({
-  open, dragIn, newSongs, T, backRef, onClose, onGoPlaylists, onOpenSettings, onPreview, onSaved,
+  open, dragIn, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
+  T, backRef, onClose, onPreview, onSaved, onActiveChange,
 }: {
   open: boolean;
   /** How far a swipe on Songs has pulled this page in, in px. */
   dragIn: number;
-  /** Songs saved here since Songs was last looked at. */
-  newSongs: number;
-  /** Android's Back: true when the page handled it (left a list). */
+  /** Where the header card ends, and the room the app's own player takes. */
+  topInset: number;
+  bottomInset: number;
+  /** The Songs tab in the header: where a download flies to. */
+  songsTabRef: React.RefObject<HTMLElement | null>;
+  /** The header's search box, and a count that goes up on Enter or clear. */
+  query: string;
+  searchSignal: number;
+  /** File names of every song MPTree has (in Songs or the bin). Null while the
+   *  library is still loading. A saved track no longer among them was deleted
+   *  for good, and can be downloaded again. */
+  libraryNames: Set<string> | null;
+  /** Android's Back: true when the page handled it (closed the card, left a list). */
   backRef: React.MutableRefObject<(() => boolean) | null>;
   T: T;
   onClose: () => void;
-  onGoPlaylists: () => void;
-  onOpenSettings: () => void;
-  /** A preview starts: MPTree's own playback should pause. */
+  /** Playing here starts: MPTree's own playback should pause. */
   onPreview: () => void;
   /** The file is in Music/MPTree. Resolves when the song is in Songs. */
   onSaved: (track: FreeTrack, path: string) => Promise<void>;
+  /** Whether this page has its own small player up, so the app hides its own. */
+  onActiveChange: (active: boolean) => void;
 }) {
   const [shelves, setShelves] = useState<Record<string, FreeTrack[] | "error">>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [dl, setDl] = useState<Record<string, Dl>>({});
   const [list, setList] = useState<null | { title: string; genre?: string; query?: string; tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
-  const [query, setQuery] = useState("");
   const [failNote, setFailNote] = useState<string | null>(null);
   // `loading`: asked to play, no sound yet (starting, or buffering).
-  const [preview, setPreview] = useState<null | { track: FreeTrack; playing: boolean; loading: boolean; pos: number }>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const small = typeof window !== "undefined" && window.innerWidth < 390;
 
@@ -56,15 +73,17 @@ export function DiscoverView({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const cardIdRef = useRef<string | null>(null);
   cardIdRef.current = card?.track.id ?? null;
-  const songsTabRef = useRef<HTMLButtonElement | null>(null);
+  const [flyers, setFlyers] = useState<Flyer[]>([]);
 
   useEffect(() => { if (!open) setCard(null); }, [open]);
+  useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Swipe left: back to Songs ─────────────────────────────────────────────
-  // Not from a shelf, which scrolls sideways itself, and not with a card up.
+  // A shelf scrolls sideways itself, so a swipe that starts on one only takes
+  // the page along once that shelf is at its end. Not with the card up.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [dragOut, setDragOut] = useState(0);
-  const sw = useRef<null | { x: number; y: number; t: number; axis: null | "h" | "v" }>(null);
+  const sw = useRef<null | { x: number; y: number; t: number; axis: null | "h" | "v"; shelf: HTMLElement | null }>(null);
   const cardUp = !!card;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -72,30 +91,33 @@ export function DiscoverView({
     const el = rootRef.current;
     if (!el) return;
     const start = (e: TouchEvent) => {
-      const tg = e.target as HTMLElement | null;
-      if (cardUp || tg?.closest("[data-hscroll]")) { sw.current = null; return; }
-      sw.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp, axis: null };
+      if (cardUp || e.touches.length > 1) { sw.current = null; return; }
+      const shelf = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-hscroll]") ?? null;
+      sw.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp, axis: null, shelf };
     };
     const move = (e: TouchEvent) => {
       const g = sw.current;
       if (!g) return;
       const dx = e.touches[0].clientX - g.x, dy = e.touches[0].clientY - g.y;
       if (!g.axis) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        g.axis = Math.abs(dx) > Math.abs(dy) * 1.3 && dx < 0 ? "h" : "v";
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        const sideways = Math.abs(dx) > Math.abs(dy) * 1.2 && dx < 0;
+        const shelfAtEnd = !g.shelf || g.shelf.scrollLeft + g.shelf.clientWidth >= g.shelf.scrollWidth - 2;
+        g.axis = sideways && shelfAtEnd ? "h" : "v";
+        if (g.axis === "h") g.x = e.touches[0].clientX; // no jump: follow from here
       }
       if (g.axis !== "h") return;
       if (e.cancelable) e.preventDefault();
-      setDragOut(Math.min(0, dx));
+      setDragOut(Math.min(0, e.touches[0].clientX - g.x));
     };
     const end = (e: TouchEvent) => {
       const g = sw.current;
       sw.current = null;
       if (!g || g.axis !== "h") return;
       const dx = (e.changedTouches[0]?.clientX ?? g.x) - g.x;
-      const fast = dx < -20 && -dx / Math.max(1, e.timeStamp - g.t) > 0.3;
+      const fast = dx < -24 && -dx / Math.max(1, e.timeStamp - g.t) > 0.25;
       setDragOut(0);
-      if (dx < -55 || fast) closeRef.current();
+      if (dx < -window.innerWidth * 0.22 || fast) closeRef.current();
     };
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", move, { passive: false });
@@ -127,6 +149,21 @@ export function DiscoverView({
     loadAll();
   }, [open, dragIn, loadAll]);
 
+  // A song deleted for good: forget it here too.
+  useEffect(() => onSavedChange(() => {
+    loadSaved().then(all => {
+      setSaved(all);
+      setDl(d => {
+        const n = { ...d };
+        for (const id of Object.keys(n)) if (n[id] === "done" && !all[id]) delete n[id];
+        return n;
+      });
+    });
+  }), []);
+
+  const isSaved = (id: string) =>
+    dl[id] === "done" || (!!saved[id] && (!libraryNames || libraryNames.has(baseName(saved[id]))));
+
   // ── Playing (the whole song, streamed from Audius) ────────────────────────
   const stopPreview = useCallback(() => {
     const a = audioRef.current;
@@ -136,18 +173,24 @@ export function DiscoverView({
 
   useEffect(() => { if (!open) stopPreview(); }, [open, stopPreview]);
 
-  const togglePreview = (track: FreeTrack) => {
+  const audio = () => {
     let a = audioRef.current;
-    if (!a) {
-      a = new Audio();
-      a.preload = "none";
-      a.ontimeupdate = () => { const pos = a!.currentTime; setPreview(p => p && { ...p, pos }); };
-      a.onwaiting = () => setPreview(p => p && p.playing ? { ...p, loading: true } : p);
-      a.onplaying = () => setPreview(p => p && { ...p, loading: false });
-      a.onended = () => setPreview(p => p && { ...p, playing: false, loading: false, pos: 0 });
-      a.onerror = () => { if (!a!.getAttribute("src")) return; setPreview(null); setFailNote(t("This song does not play right now. Try another one.")); };
-      audioRef.current = a;
-    }
+    if (a) return a;
+    a = new Audio();
+    a.preload = "none";
+    a.ontimeupdate = () => { const pos = a!.currentTime; setPreview(p => p && { ...p, pos }); };
+    a.onwaiting = () => setPreview(p => p && p.playing ? { ...p, loading: true } : p);
+    a.onseeking = () => setPreview(p => p && p.playing ? { ...p, loading: true } : p);
+    a.onplaying = () => setPreview(p => p && { ...p, loading: false });
+    a.onseeked = () => setPreview(p => p && { ...p, loading: false });
+    a.onended = () => setPreview(p => p && { ...p, playing: false, loading: false, pos: 0 });
+    a.onerror = () => { if (!a!.getAttribute("src")) return; setPreview(null); setFailNote(t("This song does not play right now. Try another one.")); };
+    audioRef.current = a;
+    return a;
+  };
+
+  const togglePreview = (track: FreeTrack) => {
+    const a = audio();
     if (preview?.track.id === track.id) {
       if (preview.playing) { a.pause(); setPreview({ ...preview, playing: false, loading: false }); }
       else { onPreview(); void a.play().catch(() => setPreview(null)); setPreview({ ...preview, playing: true, loading: a.readyState < 3 }); }
@@ -159,28 +202,64 @@ export function DiscoverView({
     setPreview({ track, playing: true, loading: true, pos: 0 });
   };
 
+  /** To a point in the song, in seconds. Starts it when it is not the one playing. */
+  const seek = (track: FreeTrack, sec: number) => {
+    const a = audio();
+    if (preview?.track.id !== track.id) {
+      onPreview();
+      a.src = previewUrl(track.id);
+      setPreview({ track, playing: true, loading: true, pos: sec });
+      const go = () => { a.currentTime = sec; a.removeEventListener("loadedmetadata", go); };
+      a.addEventListener("loadedmetadata", go);
+      void a.play().catch(() => setPreview(null));
+      return;
+    }
+    a.currentTime = sec;
+    setPreview(p => p && { ...p, pos: sec });
+    if (!preview.playing) { onPreview(); void a.play().catch(() => {}); setPreview(p => p && { ...p, playing: true, loading: true }); }
+  };
+
   const openCard = (track: FreeTrack) => {
     setCard({ track });
     if (!(preview?.track.id === track.id && preview.playing)) togglePreview(track);
   };
 
-  // Saved while its card is up: the card shrinks into the Songs tab. You stay
-  // here; the tab gets its "+1", and the song keeps playing.
-  const flyToSongs = (id: string) => {
-    const c = cardRef.current, s = songsTabRef.current;
-    if (!c || !s || cardIdRef.current !== id) return;
-    const a = c.getBoundingClientRect(), b = s.getBoundingClientRect();
-    setCard(cur => cur && { ...cur, fly: { x: b.left + b.width / 2 - (a.left + a.width / 2), y: b.top + b.height / 2 - (a.top + a.height / 2) } });
-    setTimeout(() => {
-      if (cardIdRef.current !== id) return;
-      setCard(null);
-    }, FLY_MS);
+  // ── Into Songs ────────────────────────────────────────────────────────────
+  // Saved while its card is up: the card itself shrinks into the Songs tab.
+  // Saved from anywhere else (a tile, a row, the small player): its cover
+  // flies there. You stay here, and the song keeps playing.
+  const target = () => {
+    const s = songsTabRef.current?.getBoundingClientRect();
+    return s && s.width > 0 ? { x: s.left + s.width / 2, y: s.top + s.height / 2 } : null;
+  };
+
+  const flyCard = (id: string) => {
+    const c = cardRef.current, to = target();
+    if (!c || !to || cardIdRef.current !== id) return false;
+    const a = c.getBoundingClientRect();
+    setCard(cur => cur && { ...cur, fly: { x: to.x - (a.left + a.width / 2), y: to.y - (a.top + a.height / 2) } });
+    setTimeout(() => { if (cardIdRef.current === id) setCard(null); }, FLY_MS);
+    return true;
+  };
+
+  const flyKey = useRef(0);
+  const flyCover = (track: FreeTrack, from: HTMLElement | null) => {
+    const to = target();
+    const el = from?.closest("[data-fly]")?.querySelector<HTMLElement>("[data-cover]") ?? from;
+    if (!to || !el || !el.isConnected) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) return;
+    const key = ++flyKey.current;
+    const f: Flyer = { key, art: track.art, x: r.left, y: r.top, w: r.width, h: r.height, dx: to.x - (r.left + r.width / 2), dy: to.y - (r.top + r.height / 2), go: false };
+    setFlyers(fs => [...fs, f]);
+    requestAnimationFrame(() => requestAnimationFrame(() => setFlyers(fs => fs.map(x => x.key === key ? { ...x, go: true } : x))));
+    setTimeout(() => setFlyers(fs => fs.filter(x => x.key !== key)), FLY_MS + 60);
   };
 
   // ── Download ──────────────────────────────────────────────────────────────
-  const download = async (track: FreeTrack) => {
-    if (dl[track.id] !== undefined && dl[track.id] !== "done") return;
-    if (saved[track.id]) return;
+  const download = async (track: FreeTrack, from: HTMLElement | null) => {
+    if (typeof dl[track.id] === "number") return;
+    if (isSaved(track.id)) return;
     const tid = "discover-" + track.id;
     setDl(d => ({ ...d, [track.id]: -1 }));
     const sub = await Sync.addListener("progress", p => {
@@ -193,7 +272,7 @@ export function DiscoverView({
       await markSaved(track.id, out.path);
       setSaved(s => ({ ...s, [track.id]: out.path! }));
       setDl(d => ({ ...d, [track.id]: "done" }));
-      flyToSongs(track.id);
+      if (!flyCard(track.id)) flyCover(track, from);
       await onSaved(track, out.path);
     } catch (e) {
       Sync.abortFile({ tid }).catch(() => {});
@@ -230,6 +309,16 @@ export function DiscoverView({
       .catch(() => setList(l => l && { ...l, busy: false }));
   };
 
+  // The header's search box: Enter searches, the X (an empty box) goes back.
+  const firstSignal = useRef(searchSignal);
+  useEffect(() => {
+    if (searchSignal === firstSignal.current) return;
+    const q = query.trim();
+    if (q) { setCard(null); openList({ title: q, query: q }); }
+    else setList(l => (l?.query ? null : l));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchSignal]);
+
   // Back on Android: the card first, then the list, then out of Discover.
   backRef.current = () => {
     if (card) { if (!card.fly) setCard(null); return true; }
@@ -237,26 +326,19 @@ export function DiscoverView({
     return false;
   };
 
-  const submitSearch = () => {
-    const q = query.trim();
-    if (!q) return;
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    openList({ title: q, query: q });
-  };
-
   // ── Pieces ────────────────────────────────────────────────────────────────
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
   /** inverse: on the card, which is the accent colour itself. */
   const dlButton = (track: FreeTrack, size: number, inverse = false) => {
-    const state = saved[track.id] ? "done" : dl[track.id];
-    const done = state === "done";
+    const done = isSaved(track.id);
+    const state = done ? "done" : dl[track.id];
     const busy = typeof state === "number";
     const r = size / 2 - 1.5;
     const c = 2 * Math.PI * r;
     return (
       <button
-        onClick={e => { e.stopPropagation(); void download(track); }}
+        onClick={e => { e.stopPropagation(); void download(track, e.currentTarget); }}
         aria-label={done ? t("In your Songs") : t("Download")}
         disabled={done || busy}
         style={{
@@ -283,7 +365,7 @@ export function DiscoverView({
   };
 
   const cover = (track: FreeTrack, size: number | string, radius: number) => (
-    <div style={{ width: size, height: typeof size === "number" ? size : undefined, aspectRatio: "1", borderRadius: radius, overflow: "hidden", background: T.card, border: `1px solid ${T.border}`, flexShrink: 0, position: "relative" }}>
+    <div data-cover="" style={{ width: size, height: typeof size === "number" ? size : undefined, aspectRatio: "1", borderRadius: radius, overflow: "hidden", background: T.card, border: `1px solid ${T.border}`, flexShrink: 0, position: "relative" }}>
       {track.art && <img src={track.art} alt="" loading="lazy" draggable={false} onError={e => nextArt(track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
       {preview?.track.id === track.id && preview.playing && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
@@ -299,7 +381,7 @@ export function DiscoverView({
     </span>
   );
 
-  const sub = (track: FreeTrack, extra?: string) => saved[track.id]
+  const sub = (track: FreeTrack, extra?: string) => isSaved(track.id)
     ? <span>{t("In your Songs")}</span>
     : <><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{track.artist}</span>{chip(track)}{extra && <span style={{ flexShrink: 0 }}>{extra}</span>}</>;
 
@@ -317,9 +399,9 @@ export function DiscoverView({
             </button>
           )}
         </div>
-        <div data-hscroll="" style={{ display: "flex", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+        <div data-hscroll="" style={{ display: "flex", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
           {(tracks ?? Array.from({ length: 4 }, () => null)).map((track, i) => track ? (
-            <div key={track.id} style={{ flexShrink: 0, width: tileW, cursor: "pointer" }} onClick={() => openCard(track)}>
+            <div key={track.id} data-fly="" style={{ flexShrink: 0, width: tileW, cursor: "pointer" }} onClick={() => openCard(track)}>
               <div style={{ position: "relative" }}>
                 {cover(track, tileW, 14)}
                 <div style={{ position: "absolute", right: 8, bottom: 8 }}>{dlButton(track, 32)}</div>
@@ -339,69 +421,35 @@ export function DiscoverView({
   };
 
   const allFailed = SHELVES.every(s => shelves[s.genre] === "error");
-  const seg = (on: boolean): React.CSSProperties => ({
-    padding: "6px 14px", borderRadius: 17, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-    whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5,
-    background: on ? T.accent : "transparent", color: on ? T.playBtnFg : T.muted,
-  });
+  const shown = open || dragIn > 0;
+  const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
 
   return (
     <div
       ref={rootRef}
       aria-hidden={!open}
       style={{
-        position: "fixed", inset: 0, zIndex: 300, background: T.bg, color: T.text, display: "flex", flexDirection: "column",
-        paddingTop: "env(safe-area-inset-top, 0px)",
-        visibility: open || dragIn > 0 ? "visible" : "hidden",
+        position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
+        visibility: shown ? "visible" : "hidden",
         transform: open ? `translateX(${dragOut}px)` : `translateX(calc(-100% + ${dragIn}px))`,
-        boxShadow: open || dragIn > 0 ? "8px 0 24px rgba(0,0,0,0.25)" : "none",
-        transition: dragIn > 0 || dragOut < 0 ? "none" : `transform 0.22s cubic-bezier(0.22,0.61,0.36,1), visibility 0s ${open ? "0s" : "0.22s"}`,
+        boxShadow: shown ? "8px 0 24px rgba(0,0,0,0.25)" : "none",
+        transition: dragIn > 0 || dragOut < 0 ? "none" : `transform 0.2s cubic-bezier(0.22,0.61,0.36,1), visibility 0s ${open ? "0s" : "0.2s"}`,
         willChange: "transform",
       }}
     >
       <style>{KEYFRAMES}</style>
 
-      {/* The same header as Songs and Playlists, with Discover filled. */}
-      <div style={{ margin: "2px 12px 0", background: T.card, border: `1px solid ${T.border}`, borderRadius: 22, padding: "8px 14px 12px", flexShrink: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-          <button onClick={onClose} aria-label={t("Songs")} style={{ background: "transparent", border: "none", padding: 0, display: "flex", color: T.text, cursor: "pointer", flexShrink: 0 }}>
-            <Logo size={small ? 42 : 48} color={T.text} />
-          </button>
-          <div style={{ display: "flex", alignItems: "center", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 20, padding: 3, gap: 2, minWidth: 0 }}>
-            <button onClick={() => { setList(null); setCard(null); }} aria-label={t("Discover")} style={{ ...seg(true), paddingLeft: 11, paddingRight: 11 }}>
-              {downloadGlyph(T.playBtnFg)}
-            </button>
-            <span style={{ position: "relative", display: "flex" }}>
-              <button ref={songsTabRef} onClick={onClose} style={seg(false)}>{t("Songs")}</button>
-              {newSongs > 0 && <NewBadge n={newSongs} T={T} />}
-            </span>
-            <button onClick={onGoPlaylists} style={seg(false)}>{t("Playlists")}</button>
-          </div>
-          <button onClick={onOpenSettings} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex", flexShrink: 0 }}>
-            <IC.Settings />
-          </button>
-        </div>
-        <form onSubmit={e => { e.preventDefault(); submitSearch(); }} style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 12px", borderRadius: 10, background: T.surface, border: `1px solid ${T.border}` }}>
-          {IC.Search(T.muted)}
-          <input
-            value={query} onChange={e => setQuery(e.target.value)} enterKeyHint="search" tabIndex={open ? undefined : -1}
-            placeholder={t("Search free music")}
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: T.text, fontSize: 15, minWidth: 0, fontFamily: "inherit" }}
-          />
-        </form>
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: preview ? 96 : 24 }}>
+      <div style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: "padding-top 0.3s ease" }}>
         {list ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "14px 8px 6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
               <button onClick={() => setList(null)} aria-label={t("Back")} style={{ background: "none", border: "none", color: T.text, padding: 8, display: "flex", cursor: "pointer" }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{list.title}</div>
             </div>
             {list.tracks.map(track => (
-              <div key={track.id} onClick={() => openCard(track)} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 78, padding: small ? "0 10px 0 14px" : "0 10px 0 16px", cursor: "pointer" }}>
+              <div key={track.id} data-fly="" onClick={() => openCard(track)} style={{ display: "flex", alignItems: "center", gap: 12, height: small ? 68 : 78, padding: small ? "0 10px 0 14px" : "0 10px 0 16px", cursor: "pointer" }}>
                 {cover(track, small ? 42 : 48, 10)}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track.title}</div>
@@ -425,7 +473,7 @@ export function DiscoverView({
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
           </div>
         ) : (
-          SHELVES.map(s => shelf(s.genre, s.label))
+          <div style={{ marginTop: -12 }}>{SHELVES.map(s => shelf(s.genre, s.label))}</div>
         )}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius. Only songs the artist offers as a free download, with their name kept on them.")}
@@ -433,13 +481,20 @@ export function DiscoverView({
       </div>
 
       {failNote && (
-        <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? 88 : 16, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
+        <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? 92 : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
           {failNote}
         </div>
       )}
 
+      {/* The small player. A tap on it brings the card back. */}
       {preview && (
-        <div style={{ position: "absolute", left: 12, right: 12, bottom: "calc(14px + env(safe-area-inset-bottom, 0px))", height: 62, borderRadius: 22, background: T.playerBg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12, padding: "0 10px", overflow: "hidden" }}>
+        <div
+          data-fly=""
+          onClick={() => setCard({ track: preview.track })}
+          role="button"
+          aria-label={t("Open")}
+          style={{ position: "absolute", left: 12, right: 12, bottom: "calc(14px + env(safe-area-inset-bottom, 0px))", height: 62, borderRadius: 22, background: T.playerBg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12, padding: "0 10px", overflow: "hidden", cursor: "pointer", boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}
+        >
           <div aria-hidden="true" style={{ position: "absolute", left: 0, bottom: 0, height: 2, background: T.text, width: `${preview.track.duration ? Math.min(100, (preview.pos / preview.track.duration) * 100) : 0}%`, transition: "width 0.25s linear" }} />
           {cover(preview.track, 42, 10)}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -449,56 +504,73 @@ export function DiscoverView({
             </div>
           </div>
           {dlButton(preview.track, 40)}
-          <button onClick={() => togglePreview(preview.track)} aria-label={preview.playing ? t("Pause") : t("Play")} style={{ width: 40, height: 40, borderRadius: "50%", background: T.accent, color: T.playBtnFg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+          <button onClick={e => { e.stopPropagation(); togglePreview(preview.track); }} aria-label={preview.playing ? t("Pause") : t("Play")} style={{ width: 40, height: 40, borderRadius: "50%", background: T.accent, color: T.playBtnFg, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
             {preview.playing && preview.loading ? <Spinner size={18} /> : preview.playing ? <IC.Pause /> : <IC.Play />}
           </button>
         </div>
       )}
 
-      {card && (
-        <div onClick={() => { if (!card.fly) setCard(null); }} style={{ position: "absolute", inset: 0, zIndex: 5, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease` }}>
-          {/* Outer: the flight into Songs. Inner: coming forward. Two
-              elements, so the two transforms never fight. */}
-          <div ref={cardRef} style={{
-            width: "min(306px, 80vw)",
-            transform: card.fly ? `translate(${card.fly.x}px, ${card.fly.y}px) scale(0.06)` : "none",
-            opacity: card.fly ? 0.2 : 1,
-            transition: card.fly ? `transform ${FLY_MS}ms cubic-bezier(0.55, 0, 0.75, 0.2), opacity ${FLY_MS}ms ease-in` : "none",
-          }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: T.accent, color: T.playBtnFg, borderRadius: 20, overflow: "hidden", boxShadow: "0 30px 60px rgba(0,0,0,0.7)", animation: "mptree-card-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
-              <div onClick={() => togglePreview(card.track)} style={{ aspectRatio: "1", background: T.card, position: "relative", cursor: "pointer" }}>
-                {card.track.art && <img src={card.track.art} alt="" draggable={false} onError={e => nextArt(card.track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
-                {(() => {
-                  const mine = preview?.track.id === card.track.id ? preview : null;
-                  const pct = mine && card.track.duration ? Math.min(100, (mine.pos / card.track.duration) * 100) : 0;
-                  return (
-                    <>
-                      <div style={{ position: "absolute", left: 12, bottom: 12, height: 30, borderRadius: 15, padding: "0 12px 0 10px", background: "rgba(0,0,0,0.62)", color: "#fff", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                        {mine?.playing && mine.loading ? <><Spinner size={14} />{t("Loading…")}</>
-                          : mine?.playing ? <><Bars size={14} />{fmt(mine.pos)} / {fmt(card.track.duration)}</>
-                          : <><IC.Play />{fmt(card.track.duration)}</>}
+      {/* The card and the flying covers go over everything, header included:
+          they fly into its Songs tab. */}
+      {createPortal(
+        <>
+          {card && (
+            <div onClick={() => { if (!card.fly) setCard(null); }} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease`, color: T.text }}>
+              <style>{KEYFRAMES}</style>
+              {/* Outer: the flight into Songs. Inner: coming forward. Two
+                  elements, so the two transforms never fight. */}
+              <div ref={cardRef} style={{
+                width: "min(306px, 80vw)",
+                transform: card.fly ? `translate(${card.fly.x}px, ${card.fly.y}px) scale(0.06)` : "none",
+                opacity: card.fly ? 0.2 : 1,
+                transition: card.fly ? `transform ${FLY_MS}ms cubic-bezier(0.55, 0, 0.75, 0.2), opacity ${FLY_MS}ms ease-in` : "none",
+              }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: T.accent, color: T.playBtnFg, borderRadius: 20, overflow: "hidden", boxShadow: "0 30px 60px rgba(0,0,0,0.7)", animation: "mptree-card-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both" }}>
+                  <div onClick={() => togglePreview(card.track)} style={{ aspectRatio: "1", background: T.card, position: "relative", cursor: "pointer" }}>
+                    {card.track.art && <img src={card.track.art} alt="" draggable={false} onError={e => nextArt(card.track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+                    {(!cardPreview?.playing || cardPreview.loading) && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(0,0,0,0.6)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {cardPreview?.playing ? <Spinner size={30} /> : <IC.Play />}
+                        </div>
                       </div>
-                      <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, background: "rgba(255,255,255,0.2)" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: "#fff", transition: "width 0.25s linear" }} />
+                    )}
+                  </div>
+                  <div style={{ padding: "14px 14px 4px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.track.title}</div>
+                      <div style={{ fontSize: 12.5, opacity: 0.65, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {[card.track.artist, card.track.genre, licenceChip(card.track.license)].filter(Boolean).join(" · ")}
                       </div>
-                    </>
-                  );
-                })()}
-              </div>
-              <div style={{ padding: "14px 14px 14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.track.title}</div>
-                  <div style={{ fontSize: 12.5, opacity: 0.65, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {[card.track.artist, card.track.genre, licenceChip(card.track.license)].filter(Boolean).join(" · ")}
+                    </div>
+                    {dlButton(card.track, 46, true)}
+                  </div>
+                  <div style={{ padding: "4px 16px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <button onClick={() => togglePreview(card.track)} aria-label={cardPreview?.playing ? t("Pause") : t("Play")} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "transparent", color: T.playBtnFg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                      {cardPreview?.playing && cardPreview.loading ? <Spinner size={18} /> : cardPreview?.playing ? <IC.Pause /> : <IC.Play />}
+                    </button>
+                    <span style={{ fontSize: 11.5, fontVariantNumeric: "tabular-nums", opacity: 0.7, width: 34, textAlign: "right", flexShrink: 0 }}>{fmt(cardPreview?.pos ?? 0)}</span>
+                    <Seek pos={cardPreview?.pos ?? 0} dur={card.track.duration} color={T.playBtnFg} onSeek={sec => seek(card.track, sec)} />
+                    <span style={{ fontSize: 11.5, fontVariantNumeric: "tabular-nums", opacity: 0.7, width: 34, flexShrink: 0 }}>{fmt(card.track.duration)}</span>
                   </div>
                 </div>
-                {dlButton(card.track, 46, true)}
               </div>
             </div>
-          </div>
-        </div>
+          )}
+          {flyers.map(f => (
+            <div key={f.key} aria-hidden="true" style={{
+              position: "fixed", left: f.x, top: f.y, width: f.w, height: f.h, zIndex: 390, pointerEvents: "none",
+              borderRadius: 12, overflow: "hidden", background: T.card, boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              transform: f.go ? `translate(${f.dx}px, ${f.dy}px) scale(${Math.min(0.5, 24 / Math.max(1, f.w))})` : "none",
+              opacity: f.go ? 0.3 : 1,
+              transition: `transform ${FLY_MS}ms cubic-bezier(0.55, 0, 0.75, 0.2), opacity ${FLY_MS}ms ease-in`,
+            }}>
+              {f.art && <img src={f.art} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+            </div>
+          ))}
+        </>,
+        document.body,
       )}
-
     </div>
   );
 }
@@ -511,6 +583,35 @@ const KEYFRAMES = `
 @keyframes mptree-bar { 0%, 100% { transform: scaleY(0.35) } 50% { transform: scaleY(1) } }
 @keyframes mptree-badge-in { from { transform: translate(50%, 6px) scale(0.4); opacity: 0 } to { transform: translate(50%, 0) scale(1); opacity: 1 } }
 `;
+
+/** The timeline on the card: drag or tap to go to a point in the song. */
+function Seek({ pos, dur, color, onSeek }: { pos: number; dur: number; color: string; onSeek: (sec: number) => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const at = (clientX: number) => {
+    const r = ref.current!.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - r.left) / Math.max(1, r.width)));
+  };
+  const frac = drag ?? (dur ? Math.min(1, pos / dur) : 0);
+  return (
+    <div
+      ref={ref}
+      role="slider"
+      aria-label={t("Position")}
+      aria-valuemin={0} aria-valuemax={Math.round(dur)} aria-valuenow={Math.round(frac * dur)}
+      onPointerDown={e => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setDrag(at(e.clientX)); }}
+      onPointerMove={e => { if (drag !== null) setDrag(at(e.clientX)); }}
+      onPointerUp={e => { if (drag === null) return; const f = at(e.clientX); setDrag(null); if (dur) onSeek(f * dur); }}
+      onPointerCancel={() => setDrag(null)}
+      onClick={e => e.stopPropagation()}
+      style={{ flex: 1, height: 28, display: "flex", alignItems: "center", cursor: "pointer", touchAction: "none", position: "relative" }}
+    >
+      <div style={{ position: "absolute", left: 0, right: 0, height: 4, borderRadius: 2, background: color, opacity: 0.25 }} />
+      <div style={{ position: "absolute", left: 0, width: `${frac * 100}%`, height: 4, borderRadius: 2, background: color }} />
+      <div style={{ position: "absolute", left: `calc(${frac * 100}% - ${drag !== null ? 8 : 6}px)`, width: drag !== null ? 16 : 12, height: drag !== null ? 16 : 12, borderRadius: "50%", background: color, transition: "width 0.1s, height 0.1s" }} />
+    </div>
+  );
+}
 
 /** Asked to play, no sound yet. */
 function Spinner({ size }: { size: number }) {
@@ -556,5 +657,5 @@ function downloadGlyph(c: string) {
   );
 }
 
-/** The download arrow, for the Discover button in the app's own header. */
+/** The download arrow, for the Discover tab in the app's header. */
 export const DiscoverIcon = downloadGlyph;

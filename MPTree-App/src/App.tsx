@@ -56,7 +56,7 @@ import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { DiscoverView, DiscoverIcon, NewBadge } from "./components/DiscoverView";
-import { artDataUrl, type FreeTrack } from "./discover";
+import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
 import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
@@ -681,7 +681,17 @@ export default function App() {
   const [discoverMounted, setDiscoverMounted] = useState(false);
   const discoverBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
-  const openDiscover = () => { setDiscoverMounted(true); setDiscoverOpen(true); if (musicHint) musicHintDone(); };
+  const openDiscover = () => {
+    setDiscoverMounted(true); setDiscoverOpen(true); setPage("songs"); openChrome();
+    if (musicHint) musicHintDone();
+  };
+  const leaveDiscover = () => { setDiscoverOpen(false); setDq(""); setDqSignal(n => n + 1); };
+  // The header's search box searches Audius while Discover is open.
+  const [dq, setDq] = useState("");
+  const [dqSignal, setDqSignal] = useState(0);
+  // Discover's own small player is up: the app's one makes way.
+  const [discoverActive, setDiscoverActive] = useState(false);
+  const songsTabRef = useRef<HTMLButtonElement | null>(null);
   // Songs saved from Discover since you last looked at Songs: the "+1" above
   // the Songs tab.
   const [newSongs, setNewSongs] = useState(0);
@@ -2260,6 +2270,7 @@ export default function App() {
     // with cut tracks made from them.
     deleteFiles: async paths => {
       const gone = await deleteFilesAtUris(paths);
+      void forgetSaved([...gone]);
       if (!gone.size) return 0;
       const keep = (x: Song) => !gone.has(x.uri);
       const nextSongs = songsRef.current.filter(keep);
@@ -2661,6 +2672,7 @@ export default function App() {
       showToast(t("Delete cancelled"));
       return;
     }
+    if (!s.isCut) void forgetSaved([s.uri]);
     setRemovedSongs(prev => {
       const updated = prev.filter(x => x.id !== s.id);
       saveRemovedTracksToStorage(updated);
@@ -2683,6 +2695,7 @@ export default function App() {
     // The cuts that are two markers on their source go from the bin and
     // nothing else: see handleDeleteForever.
     const gone = await deleteFilesAtUris(toDelete.filter(s => !s.isCut).map(s => s.uri));
+    void forgetSaved([...gone]);
     const deletedIds = new Set(toDelete.filter(s => s.isCut || gone.has(s.uri)).map(s => s.id));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
@@ -2892,6 +2905,14 @@ export default function App() {
     });
   };
 
+  const libraryNames = useMemo(() => {
+    if (!libraryReady || isInitializing) return null;
+    const n = new Set<string>();
+    for (const x of songs) n.add(baseName(x.uri));
+    for (const x of removedSongs) n.add(baseName(x.uri));
+    return n;
+  }, [songs, removedSongs, libraryReady, isInitializing]);
+
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean, source: string) => {
     if (!playlistSongs.length) return;
     openChrome();
@@ -2984,7 +3005,6 @@ export default function App() {
       if (halloween)           { if (halloween !== "scare") closeHalloween(); return; }
       if (proOpen)             { setProOpen(false); return; }
       if (showAdPrompt)        { adNotNow(); return; }
-      if (discoverOpen)        { if (!discoverBackRef.current?.()) setDiscoverOpen(false); return; }
       if (accountOpen)         { setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
@@ -3005,6 +3025,7 @@ export default function App() {
       if (menuSong)            { setMenuSong(null); return; }
       if (multiAddOpen)        { setMultiAddOpen(false); return; }
       if (selectMode)          { exitSelectMode(); return; }
+      if (discoverOpen)        { if (!discoverBackRef.current?.()) leaveDiscover(); return; }
       if (page === "playlists") {
         // PlaylistsView owns its own nested navigation, so hand Back to it and
         // let it pop one level. It reports back through onDetailChange when it
@@ -3491,17 +3512,18 @@ export default function App() {
                     aria-label={t("Discover")}
                     tabIndex={inPl ? -1 : 0}
                     aria-hidden={inPl}
-                    style={{ ...seg(false), color: CT.text, display: "flex", alignItems: "center", maxWidth: inPl ? 0 : 60, opacity: inPl ? 0 : 1, paddingLeft: inPl ? 0 : 11, paddingRight: inPl ? 0 : 11, marginRight: inPl ? 0 : 2 }}
+                    style={{ ...seg(discoverOpen), display: "flex", alignItems: "center", maxWidth: inPl ? 0 : 60, opacity: inPl ? 0 : 1, paddingLeft: inPl ? 0 : 11, paddingRight: inPl ? 0 : 11, marginRight: inPl ? 0 : 2 }}
                   >
-                    {DiscoverIcon(CT.text)}
+                    {DiscoverIcon(discoverOpen ? CT.playBtnFg : CT.text)}
                   </button>
                 )}
                 <span style={{ position: "relative", display: "flex", flexShrink: 0 }}>
                 <button
-                  onClick={() => setPage("songs")}
+                  ref={songsTabRef}
+                  onClick={() => { leaveDiscover(); setPage("songs"); }}
                   tabIndex={inPl ? -1 : 0}
                   aria-hidden={inPl}
-                  style={{ ...seg(page === "songs"), maxWidth: inPl ? 0 : 140, opacity: inPl ? 0 : 1, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : null), marginRight: inPl ? 0 : 2 }}
+                  style={{ ...seg(page === "songs" && !discoverOpen), maxWidth: inPl ? 0 : 140, opacity: inPl ? 0 : 1, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : null), marginRight: inPl ? 0 : 2 }}
                 >
                   {t("Songs")}
                 </button>
@@ -3509,7 +3531,7 @@ export default function App() {
                 </span>
                 <button
                   data-tour="playlists"
-                  onClick={() => { if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
+                  onClick={() => { leaveDiscover(); if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
                   style={{ ...seg(page === "playlists" && !inPl), ...(inPl ? { paddingLeft: 12, paddingRight: 2 } : null) }}
                 >
                   {t("Playlists")}
@@ -3562,10 +3584,16 @@ export default function App() {
                     ran out of the card. */}
                 <div data-tour="search" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: CT.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${CT.border}` }}>
                   {IC.Search(CT.muted)}
+                  {discoverOpen ? (
+                    <form onSubmit={e => { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur?.(); setDqSignal(n => n + 1); }} style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                      <input value={dq} onChange={e => setDq(e.target.value)} enterKeyHint="search" placeholder={t("Search free music")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: CT.text, fontSize: 15, minWidth: 0 }} />
+                    </form>
+                  ) : (
                   <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: CT.text, fontSize: 15, minWidth: 0 }} />
-                  {search.length > 0 && (
+                  )}
+                  {(discoverOpen ? dq.length > 0 : search.length > 0) && (
                     <button
-                      onClick={() => { setSearch(""); hapticImpact("light"); }}
+                      onClick={() => { if (discoverOpen) { setDq(""); setDqSignal(n => n + 1); } else setSearch(""); hapticImpact("light"); }}
                       aria-label={t("Clear search")}
                       tabIndex={page === "songs" ? undefined : -1}
                       style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0, color: CT.muted }}>
@@ -3576,11 +3604,11 @@ export default function App() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{tn(displayList.length, "{n} song", "{n} songs")}</span>
+                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{discoverOpen ? t("Free music from Audius") : tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
-                  {activeArtist && (
+                  {activeArtist && !discoverOpen && (
                     <button
                       onClick={() => setArtistFilter(null)}
                       aria-label={t("Show all artists, currently showing {artist}", { artist: activeArtist })}
@@ -3595,7 +3623,7 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
-                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" ? undefined : -1} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
               </div>
@@ -3720,7 +3748,7 @@ export default function App() {
             an absolutely-positioned dropdown inside it was clipped along with
             everything else — the menu opened and was simply invisible. Anchored
             here to `cardBottom`, which already tracks the card's bottom edge. */}
-        {filterOpen && page === "songs" && !chromeCollapsed && !selecting && (
+        {filterOpen && page === "songs" && !discoverOpen && !chromeCollapsed && !selecting && (
           <>
             <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
             <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
@@ -3961,7 +3989,7 @@ export default function App() {
                 the player with a fixed gap; when nothing is playing it sits
                 near the bottom edge instead. */}
             <div
-              className={page === "songs" && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
+              className={page === "songs" && !discoverOpen && discoverDragX === 0 && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
               style={{
                 position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90,
                 // The .stt class animates the show/hide; `bottom` is added here
@@ -4004,7 +4032,7 @@ export default function App() {
                 fade so it leaves smoothly during the swipe. */}
             {!selectMode && (
               <div
-                className={page === "songs" ? "fabw fabw-show" : "fabw fabw-hide"}
+                className={page === "songs" && !discoverOpen && discoverDragX === 0 ? "fabw fabw-show" : "fabw fabw-hide"}
                 style={{
                   position: "absolute", right: 18, bottom: playerH + 10, zIndex: 90,
                   // As above: .fabw owns the page-swipe fade, `bottom` is added
@@ -4090,10 +4118,31 @@ export default function App() {
               T={TH}
             />
           </div>
+
+          {/* ── DISCOVER ──────────────────────────────────────────────────
+              Left of Songs, under the same header card. */}
+          {discoverMounted && (
+            <DiscoverView
+              open={discoverOpen}
+              dragIn={discoverDragX}
+              topInset={songsInset}
+              bottomInset={bottomH}
+              songsTabRef={songsTabRef}
+              query={dq}
+              searchSignal={dqSignal}
+              libraryNames={libraryNames}
+              T={TH}
+              backRef={discoverBackRef}
+              onClose={() => { leaveDiscover(); setPage("songs"); }}
+              onPreview={() => { if (isPlayingRef.current) void togglePlay(); }}
+              onSaved={discoverSaved}
+              onActiveChange={setDiscoverActive}
+            />
+          )}
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selecting && (() => {
+        {currentSong && !selecting && !(discoverOpen && discoverActive) && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -4549,20 +4598,6 @@ export default function App() {
             T={TH} />
         )}
 
-        {discoverMounted && (
-          <DiscoverView
-            open={discoverOpen}
-            dragIn={discoverDragX}
-            newSongs={newSongs}
-            T={TH}
-            backRef={discoverBackRef}
-            onClose={() => { setDiscoverOpen(false); setPage("songs"); }}
-            onGoPlaylists={() => { setDiscoverOpen(false); setPage("playlists"); }}
-            onOpenSettings={() => { setDiscoverOpen(false); void openSettings(); }}
-            onPreview={() => { if (isPlayingRef.current) void togglePlay(); }}
-            onSaved={discoverSaved}
-          />
-        )}
         {toast && <Toast msg={toast.msg} action={toast.action} onDone={() => setToast(null)} T={TH} />}
         {!isInitializing && libraryReady && showOnboarding && !welcome && (
           <OnboardingOverlay onDone={finishOnboarding} T={TH} />

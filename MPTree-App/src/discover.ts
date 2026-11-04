@@ -151,6 +151,30 @@ export async function markSaved(id: string, path: string): Promise<void> {
   await Preferences.set({ key: SAVED, value: JSON.stringify(all) }).catch(() => {});
 }
 
+/** The file name at the end of a path, which is what a scan and a save agree on. */
+export const baseName = (p: string) => p.split("/").pop() ?? p;
+
+const savedListeners = new Set<() => void>();
+/** Called when songs are forgotten, so an open Discover page can reload. */
+export function onSavedChange(cb: () => void): () => void {
+  savedListeners.add(cb);
+  return () => { savedListeners.delete(cb); };
+}
+
+/** Files that were deleted for good: their tracks can be downloaded again. */
+export async function forgetSaved(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const names = new Set(paths.map(baseName));
+  const all = await loadSaved();
+  let changed = false;
+  for (const [id, p] of Object.entries(all)) {
+    if (names.has(baseName(p))) { delete all[id]; changed = true; }
+  }
+  if (!changed) return;
+  await Preferences.set({ key: SAVED, value: JSON.stringify(all) }).catch(() => {});
+  savedListeners.forEach(cb => cb());
+}
+
 /** The cover on its own host, then on each mirror. */
 export function artUrls(t: FreeTrack): string[] {
   if (!t.art) return [];
