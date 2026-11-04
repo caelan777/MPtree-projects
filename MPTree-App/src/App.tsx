@@ -2930,6 +2930,18 @@ export default function App() {
     for (const x of removedSongs) n.add(baseName(x.uri));
     return n;
   }, [songs, removedSongs, libraryReady, isInitializing]);
+  // Discover's callbacks, the same functions on every render: with new ones
+  // each time, its memo never held and the whole page was drawn again on any
+  // render of App (a fold of the header, a tab, the playing song's clock).
+  const discoverLatest = useRef({
+    close: () => {}, preview: () => {}, saved: (_t: FreeTrack, _p: string) => Promise.resolve(), scroll: (_top: number) => {},
+  });
+  const discoverCalls = useMemo(() => ({
+    onClose: () => discoverLatest.current.close(),
+    onPreview: () => discoverLatest.current.preview(),
+    onSaved: (t: FreeTrack, p: string) => discoverLatest.current.saved(t, p),
+    onBodyScroll: (top: number) => discoverLatest.current.scroll(top),
+  }), []);
 
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean, source: string) => {
     if (!playlistSongs.length) return;
@@ -3183,6 +3195,14 @@ export default function App() {
       setPlayerFolded(false);
       setChromeOpen(false);
     }
+  };
+
+  // What Discover's steady callbacks call: always this render's functions.
+  discoverLatest.current = {
+    close: () => { leaveDiscover(); setPage("songs"); },
+    preview: () => { if (isPlayingRef.current) void togglePlay(); },
+    saved: discoverSaved,
+    scroll: top => handleChromeScroll(top, lastDiscoverScrollTopRef, "discover"),
   };
 
   const toggleChrome = () => {
@@ -4153,11 +4173,11 @@ export default function App() {
               libraryNames={libraryNames}
               T={TH}
               backRef={discoverBackRef}
-              onClose={() => { leaveDiscover(); setPage("songs"); }}
-              onPreview={() => { if (isPlayingRef.current) void togglePlay(); }}
-              onSaved={discoverSaved}
+              onClose={discoverCalls.onClose}
+              onPreview={discoverCalls.onPreview}
+              onSaved={discoverCalls.onSaved}
               onActiveChange={setDiscoverActive}
-              onBodyScroll={top => handleChromeScroll(top, lastDiscoverScrollTopRef, "discover")}
+              onBodyScroll={discoverCalls.onBodyScroll}
               onInsetJump={markInsetJump}
               animateInsets={chromeAnimate}
             />

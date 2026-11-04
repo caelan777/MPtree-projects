@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Browser } from "@capacitor/browser";
 import type { T } from "../themes";
@@ -51,7 +51,7 @@ function canScrollLeftward(el: HTMLElement): boolean {
   return reversed ? el.scrollLeft < -1 : el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
 }
 
-export function DiscoverView({
+function DiscoverViewInner({
   open, warm, panelRef, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
   T, backRef, onClose, onPreview, onSaved, onActiveChange, onBodyScroll, onInsetJump, animateInsets = true,
 }: {
@@ -448,7 +448,7 @@ export function DiscoverView({
 
   const cover = (track: FreeTrack, size: number | string, radius: number) => (
     <div data-cover="" style={{ width: size, height: typeof size === "number" ? size : undefined, aspectRatio: "1", borderRadius: radius, overflow: "hidden", background: T.card, border: `1px solid ${T.border}`, flexShrink: 0, position: "relative" }}>
-      {track.art && <img src={track.art} alt="" loading="lazy" draggable={false} onError={e => nextArt(track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
+      {track.art && <img src={track.art} alt="" loading="lazy" decoding="async" draggable={false} onError={e => nextArt(track, e.currentTarget)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
       {preview?.track.id === track.id && preview.playing && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
           {preview.loading ? <Spinner size={typeof size === "number" && size < 60 ? 18 : 28} /> : <Bars size={typeof size === "number" && size < 60 ? 16 : 24} />}
@@ -473,7 +473,7 @@ export function DiscoverView({
     const tracks = shelves[key];
     if (tracks === "error" || (Array.isArray(tracks) && tracks.length === 0)) return null;
     return (
-      <div key={key}>
+      <div key={key} style={{ contentVisibility: "auto", containIntrinsicSize: "auto 262px" }}>
         {sectionTitle(t(label), tracks ? () => openList({ title: t(label), shelf: s }) : undefined)}
         {/* Right to left: a row starts at its right end, so a swipe to the
             left on it is free to take the page back to Songs. You scroll a
@@ -534,7 +534,7 @@ export function DiscoverView({
     return (
       <div>
         {sectionTitle(t("Popular songs"), popular ? () => openList({ title: t("Popular songs"), shelf: POPULAR }) : undefined)}
-        <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x mandatory", scrollPaddingInline: 16 }}>
+        <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x proximity", scrollPaddingInline: 16 }}>
           {cols.map((col, c) => (
             <div key={c} style={{ flex: "0 0 calc(100% - 28px)", minWidth: 0, scrollSnapAlign: "end" }}>
               {col.map((track, i) => track ? row(track, c * 4 + i + 1) : (
@@ -605,31 +605,23 @@ export function DiscoverView({
     setTimeout(() => { setCard(null); setCardOut(false); }, 160);
   };
 
-  return (
-    <div
-      ref={setRoot}
-      aria-hidden={!open}
-      style={{
-        position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
-        visibility: open ? "visible" : "hidden",
-        transform: open ? OPEN : CLOSED,
-        boxShadow: open ? SHADOW : "none",
-        transition: panelTransition(open),
-        willChange: "transform",
-      }}
-    >
-      <style>{KEYFRAMES}</style>
 
-      <div
-        ref={rootScrollRef}
-        onScroll={e => {
-          const top = e.currentTarget.scrollTop;
-          if ((top > 0) !== scrolled) setScrolled(top > 0);
-          onBodyScroll?.(top);
-        }}
-        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: animateInsets && !scrolled ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
-      >
-        {list ? (
+  // Drawn again only when something on it changes: not on every render of
+  // App, and not on each tick of the playing song's clock.
+  const previewKey = preview ? `${preview.track.id}|${preview.playing}|${preview.loading}` : "";
+  const homeView = useMemo(() => (
+          <div>
+            {/* More music elsewhere: the sites themselves, never a search on
+                them, so nothing here points at a song without a licence. */}
+            <div style={{ display: "flex", gap: 10, padding: "4px 16px 0" }}>
+              {siteCard(t("More music on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
+              {siteCard(t("Buy music on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
+            </div>
+            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
+          </div>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [shelves, saved, dl, libraryNames, previewKey, small, T]);
+  const listView = useMemo(() => !list ? null : (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
               <button onClick={closeList} aria-label={t("Back")} style={{ background: "none", border: "none", color: T.text, padding: 8, display: "flex", cursor: "pointer" }}>
@@ -661,22 +653,39 @@ export function DiscoverView({
               </div>
             )}
           </div>
-        ) : allFailed ? (
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [list, saved, dl, libraryNames, previewKey, small, T]);
+
+  return (
+    <div
+      ref={setRoot}
+      aria-hidden={!open}
+      style={{
+        position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
+        visibility: open ? "visible" : "hidden",
+        transform: open ? OPEN : CLOSED,
+        boxShadow: open ? SHADOW : "none",
+        transition: panelTransition(open),
+        willChange: "transform",
+      }}
+    >
+      <style>{KEYFRAMES}</style>
+
+      <div
+        ref={rootScrollRef}
+        onScroll={e => {
+          const top = e.currentTarget.scrollTop;
+          if ((top > 0) !== scrolled) setScrolled(top > 0);
+          onBodyScroll?.(top);
+        }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: animateInsets && !scrolled ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
+      >
+        {list ? listView : allFailed ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             {t("No connection. Check your internet and try again.")}
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
           </div>
-        ) : (
-          <div>
-            {/* More music elsewhere: the sites themselves, never a search on
-                them, so nothing here points at a song without a licence. */}
-            <div style={{ display: "flex", gap: 10, padding: "4px 16px 0" }}>
-              {siteCard(t("More music on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
-              {siteCard(t("Buy music on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
-            </div>
-            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
-          </div>
-        )}
+        ) : homeView}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}
         </div>
@@ -776,6 +785,19 @@ export function DiscoverView({
     </div>
   );
 }
+
+/** Drawn again only when a prop really changed. App builds its theme object
+ *  afresh on each render, so that one is compared by value. */
+export const DiscoverView = React.memo(DiscoverViewInner, (a, b) => {
+  for (const k of Object.keys(b) as (keyof typeof b)[]) {
+    if (k === "T") {
+      const x = a.T as unknown as Record<string, unknown>, y = b.T as unknown as Record<string, unknown>;
+      const ks = Object.keys(y);
+      if (ks.length !== Object.keys(x).length || ks.some(key => x[key] !== y[key])) return false;
+    } else if (a[k] !== b[k]) return false;
+  }
+  return true;
+});
 
 const FLY_MS = 600;
 
