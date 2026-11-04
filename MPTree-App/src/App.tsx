@@ -55,7 +55,7 @@ import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
-import { DiscoverView, DiscoverIcon, NewBadge, OPEN as DISCOVER_OPEN, CLOSED as DISCOVER_CLOSED, SHADOW as DISCOVER_SHADOW, panelTransition as discoverTransition } from "./components/DiscoverView";
+import { DiscoverView, DiscoverIcon, NewBadge } from "./components/DiscoverView";
 import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
@@ -88,15 +88,17 @@ function makeDateTag(): string {
 
 // MusicScanner returns raw absolute paths (no scheme). Filesystem and Share
 // both require a `file://` URI, so normalize once and reuse everywhere.
-/** Songs to the share sheet. On Android through MPTree's own, which sends them
- *  as files so WhatsApp keeps their names; elsewhere Capacitor's. */
-async function shareSongFiles(paths: string[], title: string, dialogTitle: string): Promise<void> {
+/** Songs to the share sheet, as music, with their names as text beside them:
+ *  WhatsApp turns a song into an audio message, which shows no name. On
+ *  Android through MPTree's own share; elsewhere Capacitor's. */
+async function shareSongFiles(paths: string[], title: string, dialogTitle: string, text: string): Promise<void> {
   try {
-    await System.shareFiles({ paths, title, dialogTitle });
+    await System.shareFiles({ paths, title, dialogTitle, text });
   } catch {
-    await Share.share({ title, files: paths.map(toFileUri), dialogTitle });
+    await Share.share({ title, text, files: paths.map(toFileUri), dialogTitle });
   }
 }
+const songLine = (artist: string, title: string) => (artist ? artist + " - " + title : title);
 
 function toFileUri(uri: string): string {
   return uri.startsWith("file://") ? uri : `file://${uri}`;
@@ -2445,26 +2447,6 @@ export default function App() {
     // the Songs page — the user is one level deeper and expects the back arrow.
     swipeDisabled: playlistDetailOpen,
     areaRef: pageAreaRef,
-    discover: HAS_DISCOVER ? {
-      // Moved by hand while the finger is down; see DiscoverView's own swipe.
-      drag: x => {
-        const el = discoverPanelRef.current;
-        if (!el) return;
-        el.style.transition = "none";
-        el.style.visibility = "visible";
-        el.style.boxShadow = DISCOVER_SHADOW;
-        el.style.transform = `translateX(calc(-100% + ${x}px))`;
-      },
-      release: open => {
-        const el = discoverPanelRef.current;
-        if (!el) return;
-        el.style.transition = discoverTransition(open);
-        el.style.transform = open ? DISCOVER_OPEN : DISCOVER_CLOSED;
-        if (open) { openDiscover(); return; }
-        // Slides back out of sight, then is hidden, unless it was opened since.
-        setTimeout(() => { if (el.style.transform === DISCOVER_CLOSED) { el.style.boxShadow = "none"; el.style.visibility = "hidden"; } }, 220);
-      },
-    } : undefined,
   });
 
   const {
@@ -2817,7 +2799,7 @@ export default function App() {
       const copy = s.isCut ? null : await System.prepareShare({
         path: s.uri, title: dispName(s), artist: dispArtist(s), cover: getMeta(s).customPhoto,
       }).catch(() => null);
-      await shareSongFiles([copy?.path ?? s.uri], dispName(s), t("Share song"));
+      await shareSongFiles([copy?.path ?? s.uri], dispName(s), t("Share song"), songLine(dispArtist(s), dispName(s)));
     } catch (e: any) {
       const msg = String(e?.message ?? e);
       if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg); // negeer een simpele annulering
@@ -2837,16 +2819,20 @@ export default function App() {
     try {
       // One after another into the share folder, the first emptying it.
       const paths: string[] = [];
+      const lines: string[] = [];
       for (const s of files) {
         // From the ref: this callback is made once, so meta in it would be the first one.
         const m = metaRef.current[s.id] || {};
+        const name = m.customName || s.title;
+        const artist = m.customArtist || (!isMissingArtist(s.artist) ? s.artist : "");
         const copy = await System.prepareShare({
-          path: s.uri, title: m.customName || s.title, artist: m.customArtist || (!isMissingArtist(s.artist) ? s.artist : ""),
-          cover: m.customPhoto, clear: paths.length === 0,
+          path: s.uri, title: name, artist, cover: m.customPhoto, clear: paths.length === 0,
         }).catch(() => null);
         paths.push(copy?.path ?? s.uri);
+        lines.push(songLine(artist, name));
       }
-      await shareSongFiles(paths, title ?? tn(files.length, "{n} song", "{n} songs"), title ? t("Share playlist") : t("Share songs"));
+      const text = (title ? title + "\n" : "") + lines.join("\n");
+      await shareSongFiles(paths, title ?? tn(files.length, "{n} song", "{n} songs"), title ? t("Share playlist") : t("Share songs"), text);
       if (skipped) showToast(tn(skipped, "{n} cut kept in MPTree only was left out.", "{n} cuts kept in MPTree only were left out."));
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
@@ -3584,20 +3570,6 @@ export default function App() {
             return (
               <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", minWidth: 0, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
-                {/* Discover: the first tab, a download arrow, left of Songs.
-                    It folds away inside a playlist, like Songs does. */}
-                {HAS_DISCOVER && (
-                  <button
-                    ref={discoverBtnRef}
-                    onClick={openDiscover}
-                    aria-label={t("Discover")}
-                    tabIndex={inPl ? -1 : 0}
-                    aria-hidden={inPl}
-                    style={{ ...seg(discoverOpen), display: "flex", alignItems: "center", maxWidth: inPl ? 0 : 60, opacity: inPl ? 0 : 1, paddingLeft: inPl ? 0 : 11, paddingRight: inPl ? 0 : 11, marginRight: inPl ? 0 : 2 }}
-                  >
-                    {DiscoverIcon(discoverOpen ? CT.playBtnFg : CT.text)}
-                  </button>
-                )}
                 <span style={{ position: "relative", display: "flex", flexShrink: 0 }}>
                 <button
                   ref={songsTabRef}
@@ -3631,7 +3603,20 @@ export default function App() {
             );
           })()}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            {/* Discover: its own round button, apart from the tabs. Filled
+                while the page is open. Gone inside a playlist. */}
+            {HAS_DISCOVER && !(page === "playlists" && openPlaylistName) && (
+              <button
+                ref={discoverBtnRef}
+                onClick={() => { if (discoverOpen) { leaveDiscover(); setPage("songs"); } else openDiscover(); }}
+                aria-label={t("Discover")}
+                aria-pressed={discoverOpen}
+                style={{ width: 36, height: 36, borderRadius: 18, border: discoverOpen ? "none" : `1px solid ${CT.border}`, background: discoverOpen ? CT.accent : CT.surface, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0, transition: "background 0.2s" }}
+              >
+                {DiscoverIcon(discoverOpen ? CT.playBtnFg : CT.text)}
+              </button>
+            )}
             <button data-tour="settings" onClick={() => { void openSettings(); }} style={{ background: "transparent", border: "none", color: CT.muted, cursor: "pointer", padding: 8, display: "flex", alignItems: "center", borderRadius: 8 }}>
               <IC.Settings />
             </button>

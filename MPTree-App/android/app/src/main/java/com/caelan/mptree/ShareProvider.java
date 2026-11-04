@@ -1,22 +1,12 @@
 package com.caelan.mptree;
 
-import android.net.Uri;
-
 import androidx.core.content.FileProvider;
 
 /**
- * Hands shared songs to other apps as plain files.
- *
- * WhatsApp does not go by the type on the share intent: it asks the provider
- * what the file is. FileProvider answers from the extension, "audio/mpeg" for
- * an .mp3, and WhatsApp then sends an audio message, which has no name: it
- * arrives as "audiofile". Answered "application/octet-stream", WhatsApp sends
- * a document, which keeps its name ("Artist - Title.mp3"). The file itself is
- * the same; a tap on it still opens a music player.
+ * Hands shared songs to other apps. It answers their real type again, as
+ * FileProvider does ("audio/mpeg" for an .mp3): answered "a file" (build 100),
+ * WhatsApp kept the name but nobody could open the song. Kept as its own class
+ * so the authority in the manifest stays the same.
  */
 public class ShareProvider extends FileProvider {
-    @Override
-    public String getType(Uri uri) {
-        return "application/octet-stream";
-    }
 }

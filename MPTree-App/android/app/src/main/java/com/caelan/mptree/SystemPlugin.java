@@ -339,24 +339,32 @@ public class SystemPlugin extends Plugin {
     }
 
     // ── The share sheet, for songs ──────────────────────────────────────────
-    // Sent with the type of an audio file, WhatsApp turns a song into an audio
-    // message and drops its name: it arrives as "audiofile". Sent as a plain
-    // file (application/octet-stream) it goes as a document and keeps
-    // "Artist - Title.mp3". Other apps take it the same way, as a file.
+    // Songs go out as what they are, audio, so whoever gets them can play
+    // them. WhatsApp makes an audio message of a song, which shows no name, so
+    // the names go along as text ("Artist - Title", one per line). Sent as a
+    // plain file instead (build 100) it kept its name but could not be opened.
     @PluginMethod
     public void shareFiles(PluginCall call) {
         JSArray list = call.getArray("paths");
         String title = call.getString("title", "");
         String dialogTitle = call.getString("dialogTitle", "");
+        String text = call.getString("text", "");
         try {
             ArrayList<Uri> uris = new ArrayList<>();
-            // ShareProvider: it says "a file" where FileProvider says "audio".
+            ArrayList<String> types = new ArrayList<>();
             String authority = getContext().getPackageName() + ".shareprovider";
             for (int i = 0; list != null && i < list.length(); i++) {
                 String p = list.getString(i);
-                if (p.startsWith("content://")) { uris.add(Uri.parse(p)); continue; }
+                if (p.startsWith("content://")) {
+                    Uri u = Uri.parse(p);
+                    uris.add(u);
+                    types.add(getContext().getContentResolver().getType(u));
+                    continue;
+                }
                 if (p.startsWith("file://")) p = Uri.parse(p).getPath();
                 uris.add(FileProvider.getUriForFile(getContext(), authority, new File(p)));
+                int dot = p.lastIndexOf('.');
+                types.add(dot < 0 ? null : android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(p.substring(dot + 1).toLowerCase(Locale.ROOT)));
             }
             if (uris.isEmpty()) { call.reject("nothing to share"); return; }
             Intent send;
@@ -367,8 +375,15 @@ public class SystemPlugin extends Plugin {
                 send = new Intent(Intent.ACTION_SEND_MULTIPLE);
                 send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
             }
-            send.setType("application/octet-stream");
+            // One type for all: the same one, else "audio/*", else anything.
+            String type = types.get(0);
+            for (String ty : types) {
+                if (type == null || ty == null) { type = null; break; }
+                if (!type.equals(ty)) type = type.startsWith("audio/") && ty.startsWith("audio/") ? "audio/*" : "*/*";
+            }
+            send.setType(type == null ? "audio/*" : type);
             if (!title.isEmpty()) send.putExtra(Intent.EXTRA_TITLE, title);
+            if (!text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
             ClipData clip = ClipData.newRawUri(title, uris.get(0));
             for (int i = 1; i < uris.size(); i++) clip.addItem(new ClipData.Item(uris.get(i)));
             send.setClipData(clip);

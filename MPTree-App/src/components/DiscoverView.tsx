@@ -14,9 +14,9 @@ import {
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
 // Free music to download, as shelves of covers per genre, from Audius and the
 // Internet Archive, under Popular songs and Popular artists. It is the first page,
-// left of Songs, under the same header card: the download arrow in the tabs,
-// or a swipe to the right on Songs, slides it in; a swipe to the left takes
-// you back. The header's search box searches both sources while you are here.
+// left of Songs, under the same header card: the download button in the card
+// slides it in, and Back or a tab takes you back. It is not swiped, so the
+// rows of covers can scroll sideways freely. The header's search box searches both sources while you are here.
 //
 // A tap on a cover brings that song forward as a card (the big player) and
 // plays the whole song from Audius, with a timeline to seek. Closing the card
@@ -39,21 +39,11 @@ export const OPEN = "translateX(0px)";
 export const CLOSED = "translateX(-100%)";
 export const panelTransition = (open: boolean) =>
   `transform 0.2s cubic-bezier(0.22,0.61,0.36,1), visibility 0s linear ${open ? "0s" : "0.2s"}`;
-// Like the Songs/Playlists swipe (usePageSwipe).
-export const SWIPE_PX = 55, SWIPE_V = 0.3, SWIPE_MIN = 20;
 export const SHADOW = "8px 0 24px rgba(0,0,0,0.25)";
-
-/** A row runs right to left (row-reverse): scrollLeft is 0 at its start, on
- *  the right, and negative further along. Can it still scroll for a finger
- *  moving to the left, i.e. back towards its start? */
-function canScrollLeftward(el: HTMLElement): boolean {
-  const reversed = getComputedStyle(el).flexDirection === "row-reverse";
-  return reversed ? el.scrollLeft < -1 : el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
-}
 
 function DiscoverViewInner({
   open, warm, panelRef, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
-  T, backRef, onClose, onPreview, onSaved, onActiveChange, onBodyScroll, animateInsets = true,
+  T, backRef, onPreview, onSaved, onActiveChange, onBodyScroll, onInsetJump, animateInsets = true,
 }: {
   open: boolean;
   /** A swipe on Songs has started to pull this page in: time to load. */
@@ -75,7 +65,8 @@ function DiscoverViewInner({
   /** Android's Back: true when the page handled it (closed the card, left a list). */
   backRef: React.MutableRefObject<(() => boolean) | null>;
   T: T;
-  onClose: () => void;
+  /** Not called from here any more (the page is not swiped away); kept for App. */
+  onClose?: () => void;
   /** Playing here starts: MPTree's own playback should pause. */
   onPreview: () => void;
   /** The file is in Music/MPTree. Resolves when the song is in Songs. */
@@ -110,69 +101,10 @@ function DiscoverViewInner({
   useEffect(() => { if (!open) { setCard(null); setList(null); } }, [open]);
   useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Swipe left: back to Songs ─────────────────────────────────────────────
-  // The same feel as Playlists: it follows the finger from the first pixels,
-  // and 55px or a flick is enough. The page is moved by hand while the finger
-  // is down, not through React, so nothing on it has to draw again per move.
-  // A row of covers scrolls sideways itself, so a swipe that starts on one
-  // only takes the page along when that row cannot scroll that way any more.
-  // Not with the card up.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const rootScrollRef = useRef<HTMLDivElement | null>(null);
   const setRoot = useCallback((el: HTMLDivElement | null) => { rootRef.current = el; panelRef.current = el; }, [panelRef]);
-  const sw = useRef<null | { x: number; y: number; axis: null | "h" | "v"; shelf: HTMLElement | null; lastX: number; lastT: number; v: number }>(null);
-  const cardUp = !!card;
   const listUp = !!list;
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const start = (e: TouchEvent) => {
-      if (cardUp || listUp || e.touches.length > 1) { sw.current = null; return; }
-      const shelf = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-hscroll]") ?? null;
-      const x = e.touches[0].clientX;
-      sw.current = { x, y: e.touches[0].clientY, axis: null, shelf, lastX: x, lastT: e.timeStamp, v: 0 };
-    };
-    const move = (e: TouchEvent) => {
-      const g = sw.current;
-      if (!g) return;
-      const x = e.touches[0].clientX;
-      const dx = x - g.x, dy = e.touches[0].clientY - g.y;
-      if (!g.axis) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        const sideways = Math.abs(dx) > Math.abs(dy) * 1.3 && dx < 0;
-        g.axis = sideways && !(g.shelf && canScrollLeftward(g.shelf)) ? "h" : "v";
-      }
-      if (g.axis !== "h") return;
-      if (e.cancelable) e.preventDefault();
-      const dt = e.timeStamp - g.lastT;
-      if (dt > 0) g.v = g.v * 0.6 + ((x - g.lastX) / dt) * 0.4;
-      g.lastX = x; g.lastT = e.timeStamp;
-      el.style.transition = "none";
-      el.style.transform = `translateX(${Math.min(0, dx)}px)`;
-    };
-    const end = () => {
-      const g = sw.current;
-      sw.current = null;
-      if (!g || g.axis !== "h") return;
-      const dx = g.lastX - g.x;
-      const leave = dx < -SWIPE_PX || (g.v <= -SWIPE_V && dx <= -SWIPE_MIN);
-      el.style.transition = panelTransition(true);
-      el.style.transform = leave ? CLOSED : OPEN;
-      if (leave) closeRef.current();
-    };
-    el.addEventListener("touchstart", start, { passive: true });
-    el.addEventListener("touchmove", move, { passive: false });
-    el.addEventListener("touchend", end);
-    el.addEventListener("touchcancel", end);
-    return () => {
-      el.removeEventListener("touchstart", start);
-      el.removeEventListener("touchmove", move);
-      el.removeEventListener("touchend", end);
-      el.removeEventListener("touchcancel", end);
-    };
-  }, [cardUp, listUp]);
 
   // ── Shelves ───────────────────────────────────────────────────────────────
   const loadAll = useCallback(() => {
@@ -345,19 +277,25 @@ function DiscoverViewInner({
   // A search typed while another still loads: the older answer is dropped,
   // or it would fill the newer list.
   const listToken = useRef(0);
-  // The fold. The page keeps one top padding, the open header's, so the fold
-  // never lays it out again (that is ~2900 elements, every frame of the fold,
-  // and it is what made it stutter). At the top of the page the content moves
-  // up and down with the header by a transform instead, which the GPU does.
-  // Scrolled down it stays where it is: the header folds over it, as on Songs.
+  // The fold, the same as on Songs. At the top of the page the content moves
+  // with the header, over the same time and curve. Scrolled down, it changes
+  // at once and the scroll position makes up for it, so what is on screen
+  // stays put while the header folds over or out. The page keeps one top
+  // padding, the open header's, and moves its content by a transform, so the
+  // fold never lays out the ~2900 elements on it again.
   const padRef = useRef(topInset);
   if (topInset > padRef.current) padRef.current = topInset;
   const pad = padRef.current;
-  const [shownInset, setShownInset] = useState(topInset);
+  const [scrolled, setScrolled] = useState(false);
+  const prevInset = useRef(topInset);
   useLayoutEffect(() => {
     const el = rootScrollRef.current;
-    if (!el || el.scrollTop <= 0) setShownInset(topInset);
-  }, [topInset]);
+    const delta = topInset - prevInset.current;
+    prevInset.current = topInset;
+    if (!el || !delta || el.scrollTop <= 0) return;
+    onInsetJump?.();
+    el.scrollTop += delta;
+  }, [topInset]); // eslint-disable-line react-hooks/exhaustive-deps
   const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
 
   // Where the home was, to go back there when the list closes.
@@ -478,10 +416,7 @@ function DiscoverViewInner({
     return (
       <div key={key} style={{ contain: "layout paint" }}>
         {sectionTitle(t(label), tracks ? () => openList({ title: t(label), shelf: s }) : undefined)}
-        {/* Right to left: a row starts at its right end, so a swipe to the
-            left on it is free to take the page back to Songs. You scroll a
-            row by pulling to the right. */}
-        <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
+        <div data-hscroll="" style={{ display: "flex", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
           {(tracks ?? Array.from({ length: 4 }, () => null)).map((track, i) => track ? (
             <div key={track.id} data-fly="" style={{ flexShrink: 0, width: tileW, cursor: "pointer" }} onClick={() => openCard(track)}>
               <div style={{ position: "relative" }}>
@@ -537,7 +472,7 @@ function DiscoverViewInner({
     return (
       <div>
         {sectionTitle(t("Popular songs"), popular ? () => openList({ title: t("Popular songs"), shelf: POPULAR }) : undefined)}
-        <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x proximity", scrollPaddingInline: 16 }}>
+        <div data-hscroll="" style={{ display: "flex", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x proximity", scrollPaddingInline: 16 }}>
           {cols.map((col, c) => (
             <div key={c} style={{ flex: "0 0 calc(100% - 28px)", minWidth: 0, scrollSnapAlign: "end" }}>
               {col.map((track, i) => track ? row(track, c * 4 + i + 1) : (
@@ -568,7 +503,7 @@ function DiscoverViewInner({
   const artistsSection = () => artists.length < 3 ? null : (
     <div>
       {sectionTitle(t("Popular artists"))}
-      <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 14, padding: "0 14px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain" }}>
+      <div data-hscroll="" style={{ display: "flex", gap: 14, padding: "0 14px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain" }}>
         {artists.map(a => (
           <div key={a.id} onClick={() => openList({ title: a.name, artist: a })} style={{ flexShrink: 0, width: artistW, cursor: "pointer", textAlign: "center" }}>
             {artistPic(a, artistW)}
@@ -678,13 +613,12 @@ function DiscoverViewInner({
         ref={rootScrollRef}
         onScroll={e => {
           const top = e.currentTarget.scrollTop;
-          // Back at the top: the page catches up with the header.
-          if (top <= 0 && shownInset !== topInset) setShownInset(topInset);
+          if ((top > 0) !== scrolled) setScrolled(top > 0);
           onBodyScroll?.(top);
         }}
         style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
-        <div style={{ transform: shownInset < pad ? `translateY(${shownInset - pad}px)` : "translateY(0px)", transition: animateInsets ? `transform ${FOLD_MOTION}` : "none" }}>
+        <div style={{ transform: `translateY(${topInset - pad}px)`, transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
         {list ? listView : allFailed ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             {t("No connection. Check your internet and try again.")}

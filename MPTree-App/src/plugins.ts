@@ -87,7 +87,7 @@ export type SystemPlugin = {
   prepareShare(options: { path: string; title: string; artist: string; cover?: string; clear?: boolean }): Promise<{ path: string }>;
   /** The share sheet with these files, sent as files (documents), so apps
    *  like WhatsApp keep their names. Android only. */
-  shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string }): Promise<void>;
+  shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;
   /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
   setNavBar(options: { light: boolean; color?: string }): Promise<void>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
