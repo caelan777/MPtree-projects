@@ -3621,7 +3621,7 @@ export default function App() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{discoverOpen ? t("Free music from Audius") : tn(displayList.length, "{n} song", "{n} songs")}</span>
+                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}

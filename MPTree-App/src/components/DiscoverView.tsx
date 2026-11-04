@@ -5,12 +5,13 @@ import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Sync } from "../plugins";
 import {
-  SHELVES, findFree, loadShelf, loadSaved, markSaved, previewUrl, downloadUrl,
+  SHELVES, findFree, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
   saveName, licenceChip, nextArt, baseName, onSavedChange, type FreeTrack,
 } from "../discover";
 
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
-// Free music to download, as shelves of covers per genre. It is the first page,
+// Free music to download, as shelves of covers per genre, from Audius and the
+// Internet Archive. It is the first page,
 // left of Songs, under the same header card: the download arrow in the tabs,
 // or a swipe to the right on Songs, slides it in; a swipe to the left takes
 // you back. The header's search box searches Audius while you are here.
@@ -80,7 +81,7 @@ export function DiscoverView({
   const [shelves, setShelves] = useState<Record<string, FreeTrack[] | "error">>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [dl, setDl] = useState<Record<string, Dl>>({});
-  const [list, setList] = useState<null | { title: string; genre?: string; query?: string; tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
+  const [list, setList] = useState<null | { title: string; shelf?: Shelf; query?: string; tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
   const [failNote, setFailNote] = useState<string | null>(null);
   // `loading`: asked to play, no sound yet (starting, or buffering).
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -163,9 +164,9 @@ export function DiscoverView({
   const loadAll = useCallback(() => {
     setShelves({});
     SHELVES.forEach(s => {
-      loadShelf(s.genre)
-        .then(tracks => setShelves(prev => ({ ...prev, [s.genre]: tracks })))
-        .catch(() => setShelves(prev => ({ ...prev, [s.genre]: "error" })));
+      loadShelf(s)
+        .then(tracks => setShelves(prev => ({ ...prev, [s.key]: tracks })))
+        .catch(() => setShelves(prev => ({ ...prev, [s.key]: "error" })));
     });
   }, []);
 
@@ -225,7 +226,7 @@ export function DiscoverView({
       return;
     }
     onPreview();
-    a.src = previewUrl(track.id);
+    a.src = track.stream;
     void a.play().catch(() => setPreview(null));
     setPreview({ track, playing: true, loading: true, pos: 0 });
   };
@@ -235,7 +236,7 @@ export function DiscoverView({
     const a = audio();
     if (preview?.track.id !== track.id) {
       onPreview();
-      a.src = previewUrl(track.id);
+      a.src = track.stream;
       setPreview({ track, playing: true, loading: true, pos: sec });
       const go = () => { a.currentTime = sec; a.removeEventListener("loadedmetadata", go); };
       a.addEventListener("loadedmetadata", go);
@@ -294,7 +295,7 @@ export function DiscoverView({
       if (p.tid === tid) setDl(d => ({ ...d, [track.id]: p.total > 0 ? Math.min(0.99, p.done / p.total) : -1 }));
     }).catch(() => null);
     try {
-      await Sync.urlDownload({ url: downloadUrl(track.id), tid });
+      await Sync.urlDownload({ url: track.file, tid });
       const out = await Sync.finishFile({ tid, name: saveName(track) });
       if (!out.path) throw new Error("not saved");
       await markSaved(track.id, out.path);
@@ -313,21 +314,24 @@ export function DiscoverView({
   };
   useEffect(() => { if (!failNote) return; const id = setTimeout(() => setFailNote(null), 3000); return () => clearTimeout(id); }, [failNote]);
 
-  // ── A full list: one genre, or a search ───────────────────────────────────
-  const openList = (o: { title: string; genre?: string; query?: string }) => {
+  // ── A full list: one row, or a search (Audius) ────────────────────────────
+  const fetchList = (o: { shelf?: Shelf; query?: string }, offset: number) =>
+    o.shelf ? listShelf(o.shelf, offset) : findFree({ query: o.query, limit: 60, offset });
+  const step = (o: { shelf?: Shelf }) => (o.shelf ? pageSize(o.shelf) : 60);
+  const offsetRef = useRef(0);
+  const openList = (o: { title: string; shelf?: Shelf; query?: string }) => {
     setList({ ...o, tracks: [], more: false, busy: true });
-    findFree({ genre: o.genre, query: o.query, limit: 60 })
+    offsetRef.current = step(o);
+    fetchList(o, 0)
       .then(tracks => setList(l => l && { ...l, tracks, more: tracks.length > 0, busy: false }))
       .catch(() => setList(l => l && { ...l, busy: false, error: true }));
   };
-  const offsetRef = useRef(0);
-  useEffect(() => { offsetRef.current = 60; }, [list?.title]);
   const loadMore = () => {
     if (!list || list.busy) return;
     const offset = offsetRef.current;
-    offsetRef.current += 60;
+    offsetRef.current += step(list);
     setList({ ...list, busy: true });
-    findFree({ genre: list.genre, query: list.query, limit: 60, offset })
+    fetchList(list, offset)
       .then(more => setList(l => {
         if (!l) return l;
         const have = new Set(l.tracks.map(x => x.id));
@@ -414,15 +418,16 @@ export function DiscoverView({
     : <><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{track.artist}</span>{chip(track)}{extra && <span style={{ flexShrink: 0 }}>{extra}</span>}</>;
 
   const tileW = small ? 132 : 150;
-  const shelf = (genre: string, label: string) => {
-    const tracks = shelves[genre];
+  const shelf = (s: Shelf) => {
+    const { key, label } = s;
+    const tracks = shelves[key];
     if (tracks === "error" || (Array.isArray(tracks) && tracks.length === 0)) return null;
     return (
-      <div key={genre}>
+      <div key={key}>
         <div style={{ fontSize: 11, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase", margin: "18px 16px 8px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <span>{t(label)}</span>
           {tracks && (
-            <button onClick={() => openList({ title: t(label), genre })} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", letterSpacing: 0, textTransform: "none", fontSize: 12, color: T.textSub, fontFamily: "inherit" }}>
+            <button onClick={() => openList({ title: t(label), shelf: s })} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", letterSpacing: 0, textTransform: "none", fontSize: 12, color: T.textSub, fontFamily: "inherit" }}>
               {t("See all")}
             </button>
           )}
@@ -451,7 +456,7 @@ export function DiscoverView({
     );
   };
 
-  const allFailed = SHELVES.every(s => shelves[s.genre] === "error");
+  const allFailed = SHELVES.every(s => shelves[s.key] === "error");
   const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
 
   // Closing the card: it and its shade fade out rather than vanish.
@@ -511,10 +516,10 @@ export function DiscoverView({
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
           </div>
         ) : (
-          <div style={{ marginTop: -12 }}>{SHELVES.map(s => shelf(s.genre, s.label))}</div>
+          <div style={{ marginTop: -12 }}>{SHELVES.map(s => shelf(s))}</div>
         )}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
-          {t("Music from Audius. Only songs the artist offers as a free download, with their name kept on them.")}
+          {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}
         </div>
       </div>
 
@@ -578,7 +583,7 @@ export function DiscoverView({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.track.title}</div>
                       <div style={{ fontSize: 12.5, opacity: 0.65, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {[card.track.artist, card.track.genre, licenceChip(card.track.license)].filter(Boolean).join(" · ")}
+                        {[card.track.artist, card.track.genre, licenceChip(card.track.license), card.track.source === "archive" ? "Internet Archive" : "Audius"].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                     {dlButton(card.track, 46, true)}
