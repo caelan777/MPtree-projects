@@ -3922,7 +3922,8 @@ export default function App() {
                 // transition start time and stay locked together.
                 // Scrolled down, the top is not animated: it changes at once and
                 // the scroll position makes up for it, so the rows stay put.
-                transition: listScrolled ? move("padding-bottom") : move("padding-top", "padding-bottom"),
+                // Under Discover nobody sees it: no animation to lay out per frame.
+                transition: discoverOpen ? "none" : listScrolled ? move("padding-bottom") : move("padding-top", "padding-bottom"),
                 overflowAnchor: "none",
               }}
               data-tour="songs"
@@ -4195,7 +4196,7 @@ export default function App() {
               onInsetJump={markInsetJump}
               onOpenName={onOpenPlaylistName}
               listSignal={playlistListSignal}
-              animateInsets={chromeAnimate}
+              animateInsets={chromeAnimate && !discoverOpen}
               onClose={() => setPage("songs")}
               T={TH}
             />

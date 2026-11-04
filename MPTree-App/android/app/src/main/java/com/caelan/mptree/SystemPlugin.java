@@ -350,7 +350,8 @@ public class SystemPlugin extends Plugin {
         String dialogTitle = call.getString("dialogTitle", "");
         try {
             ArrayList<Uri> uris = new ArrayList<>();
-            String authority = getContext().getPackageName() + ".fileprovider";
+            // ShareProvider: it says "a file" where FileProvider says "audio".
+            String authority = getContext().getPackageName() + ".shareprovider";
             for (int i = 0; list != null && i < list.length(); i++) {
                 String p = list.getString(i);
                 if (p.startsWith("content://")) { uris.add(Uri.parse(p)); continue; }

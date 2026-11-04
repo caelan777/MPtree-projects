@@ -345,10 +345,18 @@ function DiscoverViewInner({
   // A search typed while another still loads: the older answer is dropped,
   // or it would fill the newer list.
   const listToken = useRef(0);
-  const [padTop, setPadTop] = useState(topInset);
+  // The fold. The page keeps one top padding, the open header's, so the fold
+  // never lays it out again (that is ~2900 elements, every frame of the fold,
+  // and it is what made it stutter). At the top of the page the content moves
+  // up and down with the header by a transform instead, which the GPU does.
+  // Scrolled down it stays where it is: the header folds over it, as on Songs.
+  const padRef = useRef(topInset);
+  if (topInset > padRef.current) padRef.current = topInset;
+  const pad = padRef.current;
+  const [shownInset, setShownInset] = useState(topInset);
   useLayoutEffect(() => {
     const el = rootScrollRef.current;
-    if (!el || el.scrollTop <= 0) setPadTop(topInset);
+    if (!el || el.scrollTop <= 0) setShownInset(topInset);
   }, [topInset]);
   const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
 
@@ -670,12 +678,13 @@ function DiscoverViewInner({
         ref={rootScrollRef}
         onScroll={e => {
           const top = e.currentTarget.scrollTop;
-          // Back at the top: the padding catches up with the header.
-          if (top <= 0 && padTop !== topInset) setPadTop(topInset);
+          // Back at the top: the page catches up with the header.
+          if (top <= 0 && shownInset !== topInset) setShownInset(topInset);
           onBodyScroll?.(top);
         }}
-        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: padTop, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", transition: animateInsets ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
+        <div style={{ transform: shownInset < pad ? `translateY(${shownInset - pad}px)` : "translateY(0px)", transition: animateInsets ? `transform ${FOLD_MOTION}` : "none" }}>
         {list ? listView : allFailed ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             {t("No connection. Check your internet and try again.")}
@@ -684,6 +693,7 @@ function DiscoverViewInner({
         ) : homeView}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}
+        </div>
         </div>
       </div>
 
