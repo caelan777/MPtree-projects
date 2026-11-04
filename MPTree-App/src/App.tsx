@@ -22,7 +22,7 @@ import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
-import { MusicHint, MusicHowSheet } from "./components/MusicHint";
+import { MusicHint, MusicHowSheet, HintArrow } from "./components/MusicHint";
 import { countDaily } from "./counter";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
@@ -55,7 +55,7 @@ import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
-import { DiscoverView, DiscoverIcon } from "./components/DiscoverView";
+import { DiscoverView, DiscoverIcon, NewBadge } from "./components/DiscoverView";
 import { artDataUrl, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
@@ -682,6 +682,10 @@ export default function App() {
   const discoverBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
   const openDiscover = () => { setDiscoverMounted(true); setDiscoverOpen(true); if (musicHint) musicHintDone(); };
+  // Songs saved from Discover since you last looked at Songs: the "+1" above
+  // the Songs tab.
+  const [newSongs, setNewSongs] = useState(0);
+  useEffect(() => { if (page === "songs" && !discoverOpen) setNewSongs(0); }, [page, discoverOpen]);
   // The anonymous counter (counter.ts): which tabs are used, once a day each.
   useEffect(() => { countDaily(page === "songs" ? "tab-songs" : "tab-playlists"); }, [page]);
   // The tour points at the Songs page: its header, search box, a song row, the
@@ -2390,6 +2394,7 @@ export default function App() {
     panelTransform,
     panelTransition,
     pageSwipeLocked,
+    discoverDragX,
     onPageTouchStart,
     onPageTouchMove,
     onPageTouchEnd,
@@ -2403,7 +2408,10 @@ export default function App() {
     // the Songs page — the user is one level deeper and expects the back arrow.
     swipeDisabled: playlistDetailOpen,
     areaRef: pageAreaRef,
+    onSwipeToDiscover: HAS_DISCOVER ? openDiscover : undefined,
   });
+  // Discover is pulled in by a swipe before it is opened, so it has to be there.
+  useEffect(() => { if (discoverDragX > 0) setDiscoverMounted(true); }, [discoverDragX]);
 
   const {
     pullDist,
@@ -2873,6 +2881,7 @@ export default function App() {
       ...(photo ? { customPhoto: photo } : {}),
     } }));
     if (photo) AudioPlayer.setTrackArt({ path, dataUrl: photo }).catch(() => {});
+    setNewSongs(n => n + 1);
     showToast(t("\"{name}\" is in your Songs", { name: track.title }), {
       label: t("Play"),
       onClick: () => {
@@ -3472,26 +3481,22 @@ export default function App() {
             });
             return (
               <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
-              {/* Discover: a round download button in front of the tabs. It
-                  folds away inside a playlist, like Songs does. */}
-              {HAS_DISCOVER && (
-                <button
-                  ref={discoverBtnRef}
-                  onClick={openDiscover}
-                  aria-label={t("Discover")}
-                  tabIndex={inPl ? -1 : 0}
-                  aria-hidden={inPl}
-                  style={{
-                    width: inPl ? 0 : 38, height: 38, marginRight: inPl ? 0 : 6, opacity: inPl ? 0 : 1, padding: 0, flexShrink: 0, overflow: "hidden",
-                    borderRadius: "50%", border: inPl ? "none" : `1px solid ${CT.border}`, background: CT.surface, color: CT.text, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: `width ${fold}, margin ${fold}, opacity ${fold}`,
-                  }}
-                >
-                  {DiscoverIcon(CT.text)}
-                </button>
-              )}
               <div style={{ display: "flex", alignItems: "center", minWidth: 0, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
+                {/* Discover: the first tab, a download arrow, left of Songs.
+                    It folds away inside a playlist, like Songs does. */}
+                {HAS_DISCOVER && (
+                  <button
+                    ref={discoverBtnRef}
+                    onClick={openDiscover}
+                    aria-label={t("Discover")}
+                    tabIndex={inPl ? -1 : 0}
+                    aria-hidden={inPl}
+                    style={{ ...seg(false), color: CT.text, display: "flex", alignItems: "center", maxWidth: inPl ? 0 : 60, opacity: inPl ? 0 : 1, paddingLeft: inPl ? 0 : 11, paddingRight: inPl ? 0 : 11, marginRight: inPl ? 0 : 2 }}
+                  >
+                    {DiscoverIcon(CT.text)}
+                  </button>
+                )}
+                <span style={{ position: "relative", display: "flex", flexShrink: 0 }}>
                 <button
                   onClick={() => setPage("songs")}
                   tabIndex={inPl ? -1 : 0}
@@ -3500,6 +3505,8 @@ export default function App() {
                 >
                   {t("Songs")}
                 </button>
+                {newSongs > 0 && !inPl && <NewBadge n={newSongs} T={CT} />}
+                </span>
                 <button
                   data-tour="playlists"
                   onClick={() => { if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
@@ -3634,6 +3641,8 @@ export default function App() {
             this the header and player just disappear on a scroll and nothing
             suggests the little round logo is the way back. Shown three times
             total (counted in Preferences), then never again. */}
+        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && discoverDragX === 0 && <HintArrow target={discoverBtnRef} T={TH} />}
+
         {chromeCollapsed && collapseHint && (
           <div
             className="mp-hint"
@@ -4543,6 +4552,8 @@ export default function App() {
         {discoverMounted && (
           <DiscoverView
             open={discoverOpen}
+            dragIn={discoverDragX}
+            newSongs={newSongs}
             T={TH}
             backRef={discoverBackRef}
             onClose={() => { setDiscoverOpen(false); setPage("songs"); }}

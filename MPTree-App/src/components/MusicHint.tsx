@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { floatCard } from "./cardStyles";
@@ -21,19 +21,6 @@ type MusicHintProps = {
 
 export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps) {
   const ref = useRef<HTMLDivElement>(null);
-  // Where the button is, across this block, so the arrow ends under it.
-  const [toX, setToX] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    if (!target) return;
-    const measure = () => {
-      const b = target.current?.getBoundingClientRect(), me = ref.current?.getBoundingClientRect();
-      if (b && me && b.width > 0) setToX(b.left + b.width / 2 - me.left);
-    };
-    measure();
-    const id = setTimeout(measure, 400);
-    window.addEventListener("resize", measure);
-    return () => { clearTimeout(id); window.removeEventListener("resize", measure); };
-  }, [target]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -45,14 +32,10 @@ export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps
   }, []);
   const btn = { flex: 1, minWidth: 0, minHeight: 44, padding: "10px 8px", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } as const;
   if (target) {
-    // From above the start of the sentence, curving up to the button.
-    const x = toX ?? 60, from = 30;
+    // The arrow itself is drawn by HintArrow, over the header, since this
+    // block sits under the header card and could not reach the button.
     return (
-      <div ref={ref} style={{ position: "relative", padding: "50px 16px 14px" }}>
-        <svg aria-hidden="true" width="100%" height="52" style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
-          <path d={`M ${from} 48 C ${from} 22, ${x} 34, ${x} 4`} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" />
-          <path d={`M ${x - 7} 12 L ${x} 3 L ${x + 7} 12`} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+      <div ref={ref} data-hint-text="" style={{ position: "relative", padding: "22px 16px 14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: T.text }}>{t("Download free music here")}</div>
           <button onClick={onDone} style={{ minHeight: 40, padding: "8px 16px", borderRadius: 12, border: `1px solid ${T.border}`, background: "transparent", color: T.textSub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{t("OK")}</button>
@@ -73,6 +56,46 @@ export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps
         </div>
       </div>
     </div>
+  );
+}
+
+/** The arrow from the hint up to the Discover button. Fixed on the screen and
+ *  drawn over the header card, so it really ends at the button. It follows
+ *  both ends every frame (the list scrolls, the header folds), and hides when
+ *  the button is folded away or the hint has scrolled under the header. */
+export function HintArrow({ target, T }: { target: React.RefObject<HTMLElement | null>; T: T }) {
+  const [pts, setPts] = useState<null | { x1: number; y1: number; x2: number; y2: number }>(null);
+  useEffect(() => {
+    let raf = 0;
+    let last = "";
+    const tick = () => {
+      const b = target.current?.getBoundingClientRect();
+      const h = document.querySelector("[data-hint-text]")?.getBoundingClientRect();
+      let next: typeof pts = null;
+      if (b && h && b.width > 20 && h.height > 0) {
+        const x2 = b.left + b.width / 2, y2 = b.bottom + 4;
+        const x1 = h.left + 34, y1 = h.top + 18;
+        if (y1 - y2 > 30) next = { x1, y1, x2, y2 };
+      }
+      const key = next ? `${Math.round(next.x1)},${Math.round(next.y1)},${Math.round(next.x2)},${Math.round(next.y2)}` : "";
+      if (key !== last) { last = key; setPts(next); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  if (!pts) return null;
+  const { x1, y1, x2, y2 } = pts;
+  const d = `M ${x1} ${y1} C ${x1} ${y1 - (y1 - y2) * 0.55}, ${x2} ${y2 + (y1 - y2) * 0.45}, ${x2} ${y2}`;
+  const head = `M ${x2 - 7} ${y2 + 9} L ${x2} ${y2} L ${x2 + 7} ${y2 + 9}`;
+  return (
+    <svg aria-hidden="true" style={{ position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", pointerEvents: "none", zIndex: 62, overflow: "visible" }}>
+      {/* A rim in the page colour, so the line stays readable over the search box. */}
+      <path d={d} fill="none" stroke={T.bg} strokeWidth="7" strokeLinecap="round" />
+      <path d={head} fill="none" stroke={T.bg} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" />
+      <path d={head} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

@@ -15,6 +15,9 @@ export interface PageSwipeDeps {
   /** The element both pages sit in. A page swipe stops the lists in it from
    *  scrolling (see the touchmove listener below). */
   areaRef:     React.RefObject<HTMLDivElement | null>;
+  /** Discover sits left of Songs: a swipe to the right on Songs pulls it in.
+   *  Left out where there is no Discover. */
+  onSwipeToDiscover?: () => void;
 }
 
 export interface PageSwipeReturn {
@@ -23,6 +26,8 @@ export interface PageSwipeReturn {
   panelTransform:     string;
   panelTransition:    string;
   pageSwipeLocked:    React.MutableRefObject<"horizontal" | "vertical" | null>;
+  /** How far Discover has been pulled in from the left, in px. 0 when not. */
+  discoverDragX:      number;
   onPageTouchStart:   (e: React.TouchEvent) => void;
   onPageTouchMove:    (e: React.TouchEvent) => void;
   onPageTouchEnd:     () => void;
@@ -42,8 +47,12 @@ export function usePageSwipe({
   filterOpen,
   swipeDisabled = false,
   areaRef,
+  onSwipeToDiscover,
 }: PageSwipeDeps): PageSwipeReturn {
   const [pageDragX,    setPageDragX]    = useState(0);
+  const [discoverDragX, setDiscoverDragX] = useState(0);
+  const hasDiscoverRef = useRef(!!onSwipeToDiscover);
+  hasDiscoverRef.current = !!onSwipeToDiscover;
   const [pageDragging, setPageDragging] = useState(false);
 
   const pageSwipeStartX   = useRef<number | null>(null);
@@ -81,7 +90,7 @@ export function usePageSwipe({
         pageSwipeLocked.current = Math.abs(dx) > Math.abs(dy) * 1.3 ? "horizontal" : "vertical";
       }
       if (pageSwipeLocked.current !== "horizontal") return;
-      const towardOther = pageRef.current === "songs" ? dx < 0 : dx > 0;
+      const towardOther = pageRef.current === "songs" ? dx < 0 || hasDiscoverRef.current : dx > 0;
       if (towardOther) e.preventDefault();
     };
     el.addEventListener("touchmove", onMove, { passive: false });
@@ -126,6 +135,10 @@ export function usePageSwipe({
     } else if (page === "playlists" && dx > 0) {
       setPageDragging(true);
       setPageDragX(Math.min(dx, window.innerWidth));
+    } else if (page === "songs" && dx > 0 && onSwipeToDiscover) {
+      setDiscoverDragX(Math.min(dx, window.innerWidth));
+    } else if (discoverDragX) {
+      setDiscoverDragX(0);
     }
   };
 
@@ -140,6 +153,12 @@ export function usePageSwipe({
       if (shouldGoNext) setPage("playlists");
       else if (shouldGoPrev) setPage("songs");
     }
+    if (pageSwipeLocked.current === "horizontal" && discoverDragX > 0) {
+      const v = pageSwipeVelocity.current;
+      const isFlick = v >= PAGE_SWIPE_VELOCITY && discoverDragX >= PAGE_SWIPE_MIN_DIST;
+      if (discoverDragX > PAGE_SWIPE_THRESHOLD || isFlick) onSwipeToDiscover?.();
+    }
+    setDiscoverDragX(0);
     pageSwipeStartX.current   = null;
     pageSwipeStartY.current   = null;
     pageSwipeLocked.current   = null;
@@ -164,6 +183,7 @@ export function usePageSwipe({
     panelTransform,
     panelTransition,
     pageSwipeLocked,
+    discoverDragX,
     onPageTouchStart,
     onPageTouchMove,
     onPageTouchEnd,

@@ -774,6 +774,9 @@ export const ES: Record<string, string> = {
   "Remove photo?": "¿Quitar la foto?",
   "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" vuelve a tener la portada normal. La foto sigue en tu teléfono.",
   // Discover
+  "Playing": "Sonando",
+  "{n} new": "{n} nuevas",
+  "This song does not play right now. Try another one.": "Esta canción no suena ahora. Prueba otra.",
   "Download free music here": "Descarga música gratis aquí",
   "Discover": "Descubrir",
   "Search free music": "Busca música gratis",

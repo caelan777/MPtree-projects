@@ -774,6 +774,9 @@ export const NL: Record<string, string> = {
   "Remove photo?": "Foto weghalen?",
   "\"{name}\" gets its plain cover back. The photo itself stays on your phone.": "\"{name}\" krijgt weer de gewone hoes. De foto zelf blijft gewoon op je telefoon staan.",
   // Discover
+  "Playing": "Speelt",
+  "{n} new": "{n} nieuw",
+  "This song does not play right now. Try another one.": "Dit nummer speelt nu niet. Probeer een ander.",
   "Download free music here": "Hier download je gratis muziek",
   "Discover": "Ontdekken",
   "Search free music": "Zoek gratis muziek",
