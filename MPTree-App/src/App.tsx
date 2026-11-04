@@ -88,6 +88,16 @@ function makeDateTag(): string {
 
 // MusicScanner returns raw absolute paths (no scheme). Filesystem and Share
 // both require a `file://` URI, so normalize once and reuse everywhere.
+/** Songs to the share sheet. On Android through MPTree's own, which sends them
+ *  as files so WhatsApp keeps their names; elsewhere Capacitor's. */
+async function shareSongFiles(paths: string[], title: string, dialogTitle: string): Promise<void> {
+  try {
+    await System.shareFiles({ paths, title, dialogTitle });
+  } catch {
+    await Share.share({ title, files: paths.map(toFileUri), dialogTitle });
+  }
+}
+
 function toFileUri(uri: string): string {
   return uri.startsWith("file://") ? uri : `file://${uri}`;
 }
@@ -2807,11 +2817,7 @@ export default function App() {
       const copy = s.isCut ? null : await System.prepareShare({
         path: s.uri, title: dispName(s), artist: dispArtist(s), cover: getMeta(s).customPhoto,
       }).catch(() => null);
-      await Share.share({
-        title: dispName(s),
-        files: [toFileUri(copy?.path ?? s.uri)],
-        dialogTitle: t("Share song"),
-      });
+      await shareSongFiles([copy?.path ?? s.uri], dispName(s), t("Share song"));
     } catch (e: any) {
       const msg = String(e?.message ?? e);
       if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg); // negeer een simpele annulering
@@ -2840,11 +2846,7 @@ export default function App() {
         }).catch(() => null);
         paths.push(copy?.path ?? s.uri);
       }
-      await Share.share({
-        title: title ?? tn(files.length, "{n} song", "{n} songs"),
-        files: paths.map(toFileUri),
-        dialogTitle: title ? t("Share playlist") : t("Share songs"),
-      });
+      await shareSongFiles(paths, title ?? tn(files.length, "{n} song", "{n} songs"), title ? t("Share playlist") : t("Share songs"));
       if (skipped) showToast(tn(skipped, "{n} cut kept in MPTree only was left out.", "{n} cuts kept in MPTree only were left out."));
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);

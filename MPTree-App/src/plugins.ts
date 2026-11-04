@@ -85,6 +85,9 @@ export type SystemPlugin = {
   /** A copy of a song to share, named "Artist - Title" and, for an mp3, with
    *  the title, artist and cover written in. Resolves its path. */
   prepareShare(options: { path: string; title: string; artist: string; cover?: string; clear?: boolean }): Promise<{ path: string }>;
+  /** The share sheet with these files, sent as files (documents), so apps
+   *  like WhatsApp keep their names. Android only. */
+  shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string }): Promise<void>;
   /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
   setNavBar(options: { light: boolean; color?: string }): Promise<void>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
@@ -175,6 +178,7 @@ export type SyncPlugin = {
 const SystemWeb: SystemPlugin = {
   prepareShare:  async ({ path }) => ({ path }),
   setNavBar:     async () => {},
+  shareFiles:    async () => { throw new Error("unavailable"); },
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },

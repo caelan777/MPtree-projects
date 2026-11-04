@@ -11,6 +11,10 @@ import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
 import android.content.Intent;
+import android.content.ClipData;
+import androidx.core.content.FileProvider;
+import com.getcapacitor.JSArray;
+import java.util.ArrayList;
 import android.net.Uri;
 import android.os.Build;
 import android.webkit.WebSettings;
@@ -332,6 +336,49 @@ public class SystemPlugin extends Plugin {
                 call.reject("nav bar: " + e.getMessage());
             }
         });
+    }
+
+    // ── The share sheet, for songs ──────────────────────────────────────────
+    // Sent with the type of an audio file, WhatsApp turns a song into an audio
+    // message and drops its name: it arrives as "audiofile". Sent as a plain
+    // file (application/octet-stream) it goes as a document and keeps
+    // "Artist - Title.mp3". Other apps take it the same way, as a file.
+    @PluginMethod
+    public void shareFiles(PluginCall call) {
+        JSArray list = call.getArray("paths");
+        String title = call.getString("title", "");
+        String dialogTitle = call.getString("dialogTitle", "");
+        try {
+            ArrayList<Uri> uris = new ArrayList<>();
+            String authority = getContext().getPackageName() + ".fileprovider";
+            for (int i = 0; list != null && i < list.length(); i++) {
+                String p = list.getString(i);
+                if (p.startsWith("content://")) { uris.add(Uri.parse(p)); continue; }
+                if (p.startsWith("file://")) p = Uri.parse(p).getPath();
+                uris.add(FileProvider.getUriForFile(getContext(), authority, new File(p)));
+            }
+            if (uris.isEmpty()) { call.reject("nothing to share"); return; }
+            Intent send;
+            if (uris.size() == 1) {
+                send = new Intent(Intent.ACTION_SEND);
+                send.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+            } else {
+                send = new Intent(Intent.ACTION_SEND_MULTIPLE);
+                send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+            }
+            send.setType("application/octet-stream");
+            if (!title.isEmpty()) send.putExtra(Intent.EXTRA_TITLE, title);
+            ClipData clip = ClipData.newRawUri(title, uris.get(0));
+            for (int i = 1; i < uris.size(); i++) clip.addItem(new ClipData.Item(uris.get(i)));
+            send.setClipData(clip);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, dialogTitle.isEmpty() ? null : dialogTitle);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("share failed: " + e.getMessage());
+        }
     }
 
     @PluginMethod

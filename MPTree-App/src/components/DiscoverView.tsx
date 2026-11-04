@@ -53,7 +53,7 @@ function canScrollLeftward(el: HTMLElement): boolean {
 
 function DiscoverViewInner({
   open, warm, panelRef, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
-  T, backRef, onClose, onPreview, onSaved, onActiveChange, onBodyScroll, onInsetJump, animateInsets = true,
+  T, backRef, onClose, onPreview, onSaved, onActiveChange, onBodyScroll, animateInsets = true,
 }: {
   open: boolean;
   /** A swipe on Songs has started to pull this page in: time to load. */
@@ -345,16 +345,11 @@ function DiscoverViewInner({
   // A search typed while another still loads: the older answer is dropped,
   // or it would fill the newer list.
   const listToken = useRef(0);
-  const [scrolled, setScrolled] = useState(false);
-  const prevInset = useRef(topInset);
+  const [padTop, setPadTop] = useState(topInset);
   useLayoutEffect(() => {
     const el = rootScrollRef.current;
-    const delta = topInset - prevInset.current;
-    prevInset.current = topInset;
-    if (!el || !delta || el.scrollTop <= 0) return;
-    onInsetJump?.();
-    el.scrollTop += delta;
-  }, [topInset, onInsetJump]);
+    if (!el || el.scrollTop <= 0) setPadTop(topInset);
+  }, [topInset]);
   const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
 
   // Where the home was, to go back there when the list closes.
@@ -473,7 +468,7 @@ function DiscoverViewInner({
     const tracks = shelves[key];
     if (tracks === "error" || (Array.isArray(tracks) && tracks.length === 0)) return null;
     return (
-      <div key={key} style={{ contentVisibility: "auto", containIntrinsicSize: "auto 262px" }}>
+      <div key={key} style={{ contain: "layout paint" }}>
         {sectionTitle(t(label), tracks ? () => openList({ title: t(label), shelf: s }) : undefined)}
         {/* Right to left: a row starts at its right end, so a swipe to the
             left on it is free to take the page back to Songs. You scroll a
@@ -675,10 +670,11 @@ function DiscoverViewInner({
         ref={rootScrollRef}
         onScroll={e => {
           const top = e.currentTarget.scrollTop;
-          if ((top > 0) !== scrolled) setScrolled(top > 0);
+          // Back at the top: the padding catches up with the header.
+          if (top <= 0 && padTop !== topInset) setPadTop(topInset);
           onBodyScroll?.(top);
         }}
-        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", transition: animateInsets && !scrolled ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: padTop, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", transition: animateInsets ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
       >
         {list ? listView : allFailed ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
