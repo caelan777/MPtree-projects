@@ -11,7 +11,7 @@ import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
-import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette } from "./themes";
+import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, DARK } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
@@ -899,6 +899,9 @@ export default function App() {
     return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
   };
   const TH = tinted(paletteFor(theme, look.dark, look.light));
+  // Discover's palette: the dark one, on pure black. A dark theme keeps its
+  // own shade for the rest (Lantern's green), a light one takes the plain dark.
+  const discoverTH = { ...(isDarkPalette(TH) ? TH : { ...TH, ...DARK }), bg: "#000000" };
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
   const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
@@ -908,8 +911,12 @@ export default function App() {
     StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
     StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
     StatusBar.setBackgroundColor({ color: statusBarColor }).catch(() => {});
-    System.setNavBar({ light: !dark, color: statusBarColor }).catch(() => {});
   }, [theme, statusBarColor]);
+  // The navigation bar: the theme's, and black under Discover's black page.
+  useEffect(() => {
+    const dark = theme === "dark" || discoverOpen;
+    System.setNavBar({ light: !dark, color: discoverOpen ? "#000000" : statusBarColor }).catch(() => {});
+  }, [theme, statusBarColor, discoverOpen]);
 
   // What Clean up would offer. Counted even without Pro, for the Settings row.
   const cleanupSuspects = React.useMemo(() => findSuspects(songs), [songs]);
@@ -3330,7 +3337,12 @@ export default function App() {
     ro.observe(el, { box: "border-box" });
     playerObserver.current = ro;
   }, []);
-  const playerH    = currentSong && !selecting && !playerHidden ? 18 + playerCardH : 0;
+  // Where the player sits above the bottom edge: just clear of the
+  // navigation bar. Three buttons (a tall bar, 32px or more): 6px above it.
+  // Gestures (a thin strip with a handle in the middle): into the strip, just
+  // above the handle. No bar at all: 12px.
+  const playerBottom = safeB === 0 ? 12 : safeB >= 32 ? safeB + 6 : Math.max(6, safeB - 6);
+  const playerH    = currentSong && !selecting && !playerHidden ? playerBottom - safeB + playerCardH : 0;
   // The selection bar, on either tab: the Playlists tab pads its songs by this
   // too, or the last ones sat under the bar.
   const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
@@ -4209,11 +4221,12 @@ export default function App() {
               panelRef={discoverPanelRef}
               topInset={songsInset}
               bottomInset={bottomH}
+              playerBottom={playerBottom}
               songsTabRef={songsTabRef}
               query={dq}
               searchSignal={dqSignal}
               libraryNames={libraryNames}
-              T={TH}
+              T={discoverTH}
               backRef={discoverBackRef}
               onClose={discoverCalls.onClose}
               onPreview={discoverCalls.onPreview}
@@ -4236,12 +4249,12 @@ export default function App() {
             <div
               ref={playerCardRef}
               style={{
-                position: "fixed", bottom: 18 + safeB, left: 12, right: 12, background: miniPlayerBg,
+                position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
                 zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: playerHidden ? `translateY(calc(100% + ${26 + safeB}px))` : "translateY(0)",
+                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : "translateY(0)",
                 opacity: playerHidden ? 0 : 1,
                 pointerEvents: playerHidden ? "none" : "auto",
                 transition: chromeAnimate

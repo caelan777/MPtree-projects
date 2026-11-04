@@ -34,15 +34,9 @@ type Dl = number | "done";
 type Preview = { track: FreeTrack; playing: boolean; loading: boolean; pos: number };
 type Flyer = { key: number; art: string | null; x: number; y: number; w: number; h: number; dx: number; dy: number; go: boolean };
 
-// Moving the page. Shared with App, which pulls it in from Songs by hand.
-export const OPEN = "translateX(0px)";
-export const CLOSED = "translateX(-100%)";
-export const panelTransition = (open: boolean) =>
-  `transform 0.2s cubic-bezier(0.22,0.61,0.36,1), visibility 0s linear ${open ? "0s" : "0.2s"}`;
-export const SHADOW = "8px 0 24px rgba(0,0,0,0.25)";
 
 function DiscoverViewInner({
-  open, warm, panelRef, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
+  open, warm, panelRef, topInset, bottomInset, playerBottom, songsTabRef, query, searchSignal, libraryNames,
   T, backRef, onPreview, onSaved, onActiveChange, onBodyScroll, onInsetJump, animateInsets = true,
 }: {
   open: boolean;
@@ -53,6 +47,8 @@ function DiscoverViewInner({
   /** Where the header card ends, and the room the app's own player takes. */
   topInset: number;
   bottomInset: number;
+  /** Where the app puts its small player above the bottom edge; this page's own goes there too. */
+  playerBottom: number;
   /** The Songs tab in the header: where a download flies to. */
   songsTabRef: React.RefObject<HTMLElement | null>;
   /** The header's search box, and a count that goes up on Enter or clear. */
@@ -100,34 +96,31 @@ function DiscoverViewInner({
   // Leaving the page: next time it opens on its home, not on an old list.
   // ── The wall ──────────────────────────────────────────────────────────────
   // A wall of black and white sleeves (build 88) passes over the screen.
-  // Opening, it flows down from the top: until it covers the screen you still
-  // see what was there, then this page is put in behind it, and the wall goes
-  // on down and out at the bottom. Leaving, the same from the bottom up, and
-  // this page is taken away behind it. Not with reduced motion.
-  const [wall, setWall] = useState<null | "down" | "up">(null);
-  // Hidden while the wall still has to cover what is under it.
-  const [behind, setBehind] = useState(false);
-  // Still on screen: stays true while the wall carries the page away.
+  // Opening, it flows down from the top; leaving, from the bottom up. The
+  // moment it covers the screen, the page is put in or taken away behind it,
+  // and the wall goes on and out at the other end. Nothing else moves.
+  // Tapping fast: a pass that has not covered the screen yet just shows what
+  // is wanted by the time it does. Once a pass has covered it, the next tap
+  // sends a new one in from its own end, and the old one carries on out. So
+  // there is always a wall to cover the change. Not with reduced motion.
+  const [passes, setPasses] = useState<{ id: number; up: boolean }[]>([]);
+  // The page is on screen (it changes only behind a wall).
   const [shown, setShown] = useState(open);
+  const openRef = useRef(open);
+  openRef.current = open;
   const wasOpen = useRef(open);
+  const coverAt = useRef(0);
+  const passId = useRef(0);
   useEffect(() => {
-    const was = wasOpen.current;
+    if (wasOpen.current === open) return;
     wasOpen.current = open;
-    const still = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (open) {
-      setShown(true);
-      if (still) { setWall(null); setBehind(false); return; }
-      setWall("down"); setBehind(true);
-      const a = setTimeout(() => setBehind(false), WALL_MS / 2);
-      const b = setTimeout(() => setWall(null), WALL_MS);
-      return () => { clearTimeout(a); clearTimeout(b); };
-    }
-    if (!was) return;
-    if (still) { setWall(null); setBehind(false); setShown(false); return; }
-    setWall("up"); setBehind(false);
-    const a = setTimeout(() => setBehind(true), WALL_MS / 2);
-    const b = setTimeout(() => { setWall(null); setBehind(false); setShown(false); }, WALL_MS);
-    return () => { clearTimeout(a); clearTimeout(b); };
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setShown(open); return; }
+    if (performance.now() < coverAt.current) return;
+    const id = ++passId.current;
+    coverAt.current = performance.now() + WALL_MS / 2;
+    setPasses(p => [...p, { id, up: !open }]);
+    window.setTimeout(() => setShown(openRef.current), WALL_MS / 2);
+    window.setTimeout(() => setPasses(p => p.filter(x => x.id !== id)), WALL_MS);
   }, [open]);
 
   // Gone from the screen: next time it opens on its home, not on an old list.
@@ -643,14 +636,9 @@ function DiscoverViewInner({
       aria-hidden={!open}
       style={{
         position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
-        // Hidden, the wall in it still shows (it says visible itself).
-        visibility: shown && !behind ? "visible" : "hidden",
-        pointerEvents: open ? undefined : "none",
-        transform: shown ? OPEN : CLOSED,
-        boxShadow: shown && !wall ? SHADOW : "none",
-        // Under the wall it does not move; without one it slides.
-        transition: wall ? "none" : panelTransition(shown),
-        willChange: "transform",
+        // Hidden, the walls in it still show (they say visible themselves).
+        visibility: shown ? "visible" : "hidden",
+        pointerEvents: open && shown ? undefined : "none",
       }}
     >
       <style>{KEYFRAMES}</style>
@@ -662,7 +650,7 @@ function DiscoverViewInner({
           if ((top > 0) !== scrolled) setScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? playerBottom + 62 + 24 : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
         <div style={{ transform: shift || !scrolled ? `translateY(${shift}px)` : "none", transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
         {list ? listView : allFailed ? (
@@ -677,10 +665,10 @@ function DiscoverViewInner({
         </div>
       </div>
 
-      {wall && <Wall up={wall === "up"} />}
+      {passes.map(p => <Wall key={p.id} up={p.up} />)}
 
       {failNote && (
-        <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? "calc(92px + env(safe-area-inset-bottom, 0px))" : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
+        <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? playerBottom + 62 + 16 : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
           {failNote}
         </div>
       )}
@@ -692,7 +680,7 @@ function DiscoverViewInner({
           onClick={() => setCard({ track: preview.track })}
           role="button"
           aria-label={t("Open")}
-          style={{ position: "absolute", left: 12, right: 12, bottom: "calc(14px + env(safe-area-inset-bottom, 0px))", height: 62, borderRadius: 22, background: T.playerBg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12, padding: "0 10px", overflow: "hidden", cursor: "pointer", boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}
+          style={{ position: "absolute", left: 12, right: 12, bottom: playerBottom, height: 62, borderRadius: 22, background: T.playerBg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12, padding: "0 10px", overflow: "hidden", cursor: "pointer", boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}
         >
           <div aria-hidden="true" style={{ position: "absolute", left: 0, bottom: 0, height: 2, background: T.text, width: `${preview.track.duration ? Math.min(100, (preview.pos / preview.track.duration) * 100) : 0}%`, transition: "width 0.25s linear" }} />
           {cover(preview.track, 42, 10)}
