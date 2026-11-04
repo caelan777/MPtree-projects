@@ -14,6 +14,10 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.webkit.WebSettings;
+import android.graphics.Color;
+import android.view.Window;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -308,9 +312,33 @@ public class SystemPlugin extends Plugin {
     // cache named "Artist - Title.ext" and, for an mp3, with the title, artist
     // and cover written into its ID3 tag; the other tags in it are kept. Other
     // formats get the name only. The cache folder is emptied each time.
+    /** The navigation bar: its colour (older Android; newer ones draw the page
+     *  behind it) and dark or light buttons, to suit the theme. */
+    @PluginMethod
+    public void setNavBar(PluginCall call) {
+        boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
+        String color = call.getString("color");
+        getActivity().runOnUiThread(() -> {
+            try {
+                Window w = getActivity().getWindow();
+                if (color != null) {
+                    try { w.setNavigationBarColor(Color.parseColor(color)); } catch (IllegalArgumentException ignored) { }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) w.setNavigationBarContrastEnforced(false);
+                WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                c.setAppearanceLightNavigationBars(light);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("nav bar: " + e.getMessage());
+            }
+        });
+    }
+
     @PluginMethod
     public void prepareShare(PluginCall call) {
         String path = call.getString("path");
+        // Several songs at once: the first call empties the folder, the others add.
+        boolean clear = !Boolean.FALSE.equals(call.getBoolean("clear", true));
         String title = call.getString("title", "");
         String artist = call.getString("artist", "");
         String cover = call.getString("cover");
@@ -319,8 +347,10 @@ public class SystemPlugin extends Plugin {
             try {
                 File src = new File(path);
                 File dir = new File(getContext().getCacheDir(), "share");
-                File[] old = dir.listFiles();
-                if (old != null) for (File f : old) f.delete();
+                if (clear) {
+                    File[] old = dir.listFiles();
+                    if (old != null) for (File f : old) f.delete();
+                }
                 dir.mkdirs();
                 String name = src.getName();
                 int dot = name.lastIndexOf('.');
@@ -329,6 +359,8 @@ public class SystemPlugin extends Plugin {
                 if (base.isEmpty()) base = dot >= 0 ? name.substring(0, dot) : name;
                 if (base.length() > 120) base = base.substring(0, 120).trim();
                 File out = new File(dir, base + ext);
+                // Two songs with the same name: "Name (2)".
+                for (int n = 2; out.exists(); n++) out = new File(dir, base + " (" + n + ")" + ext);
                 boolean tagged = ext.equals(".mp3") && writeMp3(src, out, title, artist, decodeCover(cover));
                 if (!tagged) { out.delete(); appendRange(src, out, 0, src.length()); }
                 JSObject ret = new JSObject();

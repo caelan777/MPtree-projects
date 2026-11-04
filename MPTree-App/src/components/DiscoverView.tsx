@@ -678,7 +678,7 @@ function DiscoverViewInner({
           if ((top > 0) !== scrolled) setScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? 100 : bottomInset + 12, boxSizing: "border-box", transition: animateInsets && !scrolled ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
+        style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: topInset, paddingBottom: preview ? "calc(100px + env(safe-area-inset-bottom, 0px))" : bottomInset + 12, boxSizing: "border-box", transition: animateInsets && !scrolled ? `padding-top ${FOLD_MOTION}` : "none", overflowAnchor: "none" }}
       >
         {list ? listView : allFailed ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
@@ -692,7 +692,7 @@ function DiscoverViewInner({
       </div>
 
       {failNote && (
-        <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? 92 : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
+        <div style={{ position: "absolute", left: 12, right: 12, bottom: preview ? "calc(92px + env(safe-area-inset-bottom, 0px))" : bottomInset + 8, background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 18, padding: "12px 16px", fontSize: 14, fontWeight: 600, boxShadow: "0 10px 36px rgba(0,0,0,0.35)" }}>
           {failNote}
         </div>
       )}

@@ -84,7 +84,9 @@ export type AudioPlayerPlugin = {
 export type SystemPlugin = {
   /** A copy of a song to share, named "Artist - Title" and, for an mp3, with
    *  the title, artist and cover written in. Resolves its path. */
-  prepareShare(options: { path: string; title: string; artist: string; cover?: string }): Promise<{ path: string }>;
+  prepareShare(options: { path: string; title: string; artist: string; cover?: string; clear?: boolean }): Promise<{ path: string }>;
+  /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
+  setNavBar(options: { light: boolean; color?: string }): Promise<void>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
@@ -172,6 +174,7 @@ export type SyncPlugin = {
 // code paths.
 const SystemWeb: SystemPlugin = {
   prepareShare:  async ({ path }) => ({ path }),
+  setNavBar:     async () => {},
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },

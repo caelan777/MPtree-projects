@@ -699,6 +699,7 @@ export const ES: Record<string, string> = {
   "Repeat": "Repetir",
   // 1.3.0: Personalise, sharing several songs, one backup row.
   "These songs are cuts kept in MPTree only, so they cannot be shared.": "Son recortes guardados solo en MPTree, así que no se pueden compartir.",
+  "Share playlist": "Compartir playlist",
   "Share songs": "Compartir canciones",
   "Share at most {n} song at a time.": "Comparte como mucho {n} canción a la vez.",
   "Share at most {n} songs at a time.": "Comparte como mucho {n} canciones a la vez.",

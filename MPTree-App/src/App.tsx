@@ -679,6 +679,8 @@ export default function App() {
   // third one, and kept mounted after the first open so a download carries on
   // while you are back on Songs. Android only for now.
   const [discoverOpen, setDiscoverOpen] = useState(false);
+  const discoverOpenRef = useRef(false);
+  discoverOpenRef.current = discoverOpen;
   const discoverBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
   const discoverPanelRef = useRef<HTMLDivElement | null>(null);
@@ -846,6 +848,18 @@ export default function App() {
   };
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
   const [lookOpen,    setLookOpen]    = useState(false);
+  // Personalize shows the app behind it, changing as you choose. Discover is
+  // left out of that (it flickered there): it steps aside while Personalize
+  // is open and comes back when it closes.
+  const lookFromDiscover = useRef(false);
+  const openLook = () => {
+    if (discoverOpenRef.current) { lookFromDiscover.current = true; setDiscoverOpen(false); }
+    setLookOpen(true);
+  };
+  const closeLook = () => {
+    setLookOpen(false);
+    if (lookFromDiscover.current) { lookFromDiscover.current = false; setDiscoverOpen(true); }
+  };
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
@@ -875,6 +889,7 @@ export default function App() {
     StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
     StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
     StatusBar.setBackgroundColor({ color: statusBarColor }).catch(() => {});
+    System.setNavBar({ light: !dark, color: statusBarColor }).catch(() => {});
   }, [theme, statusBarColor]);
 
   // What Clean up would offer. Counted even without Pro, for the Settings row.
@@ -2807,17 +2822,28 @@ export default function App() {
   /** Several songs in one go, from multi-select. A cut kept in MPTree only is
    *  a stretch of another file, so it has no file of its own to send. */
   const SHARE_MAX = 50;
-  const shareSongs = useCallback(async (ids: string[]) => {
+  const shareSongs = useCallback(async (ids: string[], title?: string) => {
     const picked = ids.map(id => songsRef.current.find(s => s.id === id)).filter((s): s is Song => !!s);
     const files = picked.filter(s => !s.isCut);
     const skipped = picked.length - files.length;
     if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
     if (files.length > SHARE_MAX) { showToast(tn(SHARE_MAX, "Share at most {n} song at a time.", "Share at most {n} songs at a time.")); return; }
     try {
+      // One after another into the share folder, the first emptying it.
+      const paths: string[] = [];
+      for (const s of files) {
+        // From the ref: this callback is made once, so meta in it would be the first one.
+        const m = metaRef.current[s.id] || {};
+        const copy = await System.prepareShare({
+          path: s.uri, title: m.customName || s.title, artist: m.customArtist || (!isMissingArtist(s.artist) ? s.artist : ""),
+          cover: m.customPhoto, clear: paths.length === 0,
+        }).catch(() => null);
+        paths.push(copy?.path ?? s.uri);
+      }
       await Share.share({
-        title: tn(files.length, "{n} song", "{n} songs"),
-        files: files.map(s => toFileUri(s.uri)),
-        dialogTitle: t("Share songs"),
+        title: title ?? tn(files.length, "{n} song", "{n} songs"),
+        files: paths.map(toFileUri),
+        dialogTitle: title ? t("Share playlist") : t("Share songs"),
       });
       if (skipped) showToast(tn(skipped, "{n} cut kept in MPTree only was left out.", "{n} cuts kept in MPTree only were left out."));
     } catch (e) {
@@ -3039,7 +3065,7 @@ export default function App() {
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
       if (musicHowOpen)        { setMusicHowOpen(false); return; }
-      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
+      if (lookOpen)            { if (lookBack()) return; endPreview(); closeLook(); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
@@ -3282,6 +3308,20 @@ export default function App() {
   // Picking songs in a playlist hides it as well: the selection bar takes its
   // place, and the player used to show half above that bar.
   const [playerCardH, setPlayerCardH] = useState(95);
+  // How much of the bottom Android's navigation bar takes (0 where the page
+  // already ends above it). The player and the buttons sit that much higher.
+  const [safeB, setSafeB] = useState(0);
+  useEffect(() => {
+    const el = document.createElement("div");
+    el.style.cssText = "position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom, 0px);visibility:hidden;pointer-events:none";
+    document.body.appendChild(el);
+    const read = () => setSafeB(Math.round(el.getBoundingClientRect().height));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    window.addEventListener("resize", read);
+    return () => { ro.disconnect(); window.removeEventListener("resize", read); el.remove(); };
+  }, []);
   const playerObserver = useRef<ResizeObserver | null>(null);
   const playerCardRef = useCallback((el: HTMLDivElement | null) => {
     playerObserver.current?.disconnect();
@@ -3295,7 +3335,7 @@ export default function App() {
   // The selection bar, on either tab: the Playlists tab pads its songs by this
   // too, or the last ones sat under the bar.
   const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
-  const bottomH    = playerH + selectBarH;
+  const bottomH    = playerH + selectBarH + safeB;
   // Repeat first: with both on, the button shows repeat, and a tap ends it.
   const anyRepeat  = repeatOn || repeatAll;
   const modeBg     = anyRepeat ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
@@ -4073,7 +4113,7 @@ export default function App() {
               <div
                 className={page === "songs" && !discoverOpen && !discoverDragging ? "fabw fabw-show" : "fabw fabw-hide"}
                 style={{
-                  position: "absolute", right: 18, bottom: playerH + 10, zIndex: 90,
+                  position: "absolute", right: 18, bottom: playerH + safeB + 10, zIndex: 90,
                   // As above: .fabw owns the page-swipe fade, `bottom` is added
                   // so the button tracks the folding player.
                   transition: chromeAnimate
@@ -4138,6 +4178,7 @@ export default function App() {
               onShuffleMany={shuffleMany}
               onPlayManyNext={handlePlayManyNext}
               onShareMany={ids => { void shareSongs(ids); }}
+              onSharePlaylist={(name, ids) => { void shareSongs(ids, name); }}
               onSelectingChange={setPlaylistSelecting}
               onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
               onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
@@ -4194,12 +4235,12 @@ export default function App() {
             <div
               ref={playerCardRef}
               style={{
-                position: "fixed", bottom: 18, left: 12, right: 12, background: miniPlayerBg,
+                position: "fixed", bottom: 18 + safeB, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
                 zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: playerHidden ? "translateY(calc(100% + 26px))" : "translateY(0)",
+                transform: playerHidden ? `translateY(calc(100% + ${26 + safeB}px))` : "translateY(0)",
                 opacity: playerHidden ? 0 : 1,
                 pointerEvents: playerHidden ? "none" : "auto",
                 transition: chromeAnimate
@@ -4374,7 +4415,7 @@ export default function App() {
             pro={pro}
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
-            onOpenLook={() => setLookOpen(true)}
+            onOpenLook={openLook}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
@@ -4461,7 +4502,7 @@ export default function App() {
             ) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
-            onClose={() => setLookOpen(false)}
+            onClose={closeLook}
             T={TH} />
           );
         })()}

@@ -699,6 +699,7 @@ export const NL: Record<string, string> = {
   "Repeat": "Herhalen",
   // 1.3.0: Personalise, sharing several songs, one backup row.
   "These songs are cuts kept in MPTree only, so they cannot be shared.": "Dit zijn knipsels die alleen in MPTree staan, dus ze kunnen niet gedeeld worden.",
+  "Share playlist": "Playlist delen",
   "Share songs": "Nummers delen",
   "Share at most {n} song at a time.": "Deel maximaal {n} nummer tegelijk.",
   "Share at most {n} songs at a time.": "Deel maximaal {n} nummers tegelijk.",
