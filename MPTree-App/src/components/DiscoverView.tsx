@@ -28,13 +28,32 @@ type Dl = number | "done";
 type Preview = { track: FreeTrack; playing: boolean; loading: boolean; pos: number };
 type Flyer = { key: number; art: string | null; x: number; y: number; w: number; h: number; dx: number; dy: number; go: boolean };
 
+// Moving the page. Shared with App, which pulls it in from Songs by hand.
+export const OPEN = "translateX(0px)";
+export const CLOSED = "translateX(-100%)";
+export const panelTransition = (open: boolean) =>
+  `transform 0.2s cubic-bezier(0.22,0.61,0.36,1), visibility 0s linear ${open ? "0s" : "0.2s"}`;
+// Like the Songs/Playlists swipe (usePageSwipe).
+export const SWIPE_PX = 55, SWIPE_V = 0.3, SWIPE_MIN = 20;
+export const SHADOW = "8px 0 24px rgba(0,0,0,0.25)";
+
+/** A row runs right to left (row-reverse): scrollLeft is 0 at its start, on
+ *  the right, and negative further along. Can it still scroll for a finger
+ *  moving to the left, i.e. back towards its start? */
+function canScrollLeftward(el: HTMLElement): boolean {
+  const reversed = getComputedStyle(el).flexDirection === "row-reverse";
+  return reversed ? el.scrollLeft < -1 : el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+}
+
 export function DiscoverView({
-  open, dragIn, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
+  open, warm, panelRef, topInset, bottomInset, songsTabRef, query, searchSignal, libraryNames,
   T, backRef, onClose, onPreview, onSaved, onActiveChange,
 }: {
   open: boolean;
-  /** How far a swipe on Songs has pulled this page in, in px. */
-  dragIn: number;
+  /** A swipe on Songs has started to pull this page in: time to load. */
+  warm: boolean;
+  /** The page itself, for App to move while a finger pulls it in. */
+  panelRef: React.MutableRefObject<HTMLDivElement | null>;
   /** Where the header card ends, and the room the app's own player takes. */
   topInset: number;
   bottomInset: number;
@@ -79,11 +98,15 @@ export function DiscoverView({
   useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Swipe left: back to Songs ─────────────────────────────────────────────
-  // A shelf scrolls sideways itself, so a swipe that starts on one only takes
-  // the page along once that shelf is at its end. Not with the card up.
+  // The same feel as Playlists: it follows the finger from the first pixels,
+  // and 55px or a flick is enough. The page is moved by hand while the finger
+  // is down, not through React, so nothing on it has to draw again per move.
+  // A row of covers scrolls sideways itself, so a swipe that starts on one
+  // only takes the page along when that row cannot scroll that way any more.
+  // Not with the card up.
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [dragOut, setDragOut] = useState(0);
-  const sw = useRef<null | { x: number; y: number; t: number; axis: null | "h" | "v"; shelf: HTMLElement | null }>(null);
+  const setRoot = useCallback((el: HTMLDivElement | null) => { rootRef.current = el; panelRef.current = el; }, [panelRef]);
+  const sw = useRef<null | { x: number; y: number; axis: null | "h" | "v"; shelf: HTMLElement | null; lastX: number; lastT: number; v: number }>(null);
   const cardUp = !!card;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -93,31 +116,36 @@ export function DiscoverView({
     const start = (e: TouchEvent) => {
       if (cardUp || e.touches.length > 1) { sw.current = null; return; }
       const shelf = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-hscroll]") ?? null;
-      sw.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.timeStamp, axis: null, shelf };
+      const x = e.touches[0].clientX;
+      sw.current = { x, y: e.touches[0].clientY, axis: null, shelf, lastX: x, lastT: e.timeStamp, v: 0 };
     };
     const move = (e: TouchEvent) => {
       const g = sw.current;
       if (!g) return;
-      const dx = e.touches[0].clientX - g.x, dy = e.touches[0].clientY - g.y;
+      const x = e.touches[0].clientX;
+      const dx = x - g.x, dy = e.touches[0].clientY - g.y;
       if (!g.axis) {
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-        const sideways = Math.abs(dx) > Math.abs(dy) * 1.2 && dx < 0;
-        const shelfAtEnd = !g.shelf || g.shelf.scrollLeft + g.shelf.clientWidth >= g.shelf.scrollWidth - 2;
-        g.axis = sideways && shelfAtEnd ? "h" : "v";
-        if (g.axis === "h") g.x = e.touches[0].clientX; // no jump: follow from here
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        const sideways = Math.abs(dx) > Math.abs(dy) * 1.3 && dx < 0;
+        g.axis = sideways && !(g.shelf && canScrollLeftward(g.shelf)) ? "h" : "v";
       }
       if (g.axis !== "h") return;
       if (e.cancelable) e.preventDefault();
-      setDragOut(Math.min(0, e.touches[0].clientX - g.x));
+      const dt = e.timeStamp - g.lastT;
+      if (dt > 0) g.v = g.v * 0.6 + ((x - g.lastX) / dt) * 0.4;
+      g.lastX = x; g.lastT = e.timeStamp;
+      el.style.transition = "none";
+      el.style.transform = `translateX(${Math.min(0, dx)}px)`;
     };
-    const end = (e: TouchEvent) => {
+    const end = () => {
       const g = sw.current;
       sw.current = null;
       if (!g || g.axis !== "h") return;
-      const dx = (e.changedTouches[0]?.clientX ?? g.x) - g.x;
-      const fast = dx < -24 && -dx / Math.max(1, e.timeStamp - g.t) > 0.25;
-      setDragOut(0);
-      if (dx < -window.innerWidth * 0.22 || fast) closeRef.current();
+      const dx = g.lastX - g.x;
+      const leave = dx < -SWIPE_PX || (g.v <= -SWIPE_V && dx <= -SWIPE_MIN);
+      el.style.transition = panelTransition(true);
+      el.style.transform = leave ? CLOSED : OPEN;
+      if (leave) closeRef.current();
     };
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", move, { passive: false });
@@ -143,11 +171,11 @@ export function DiscoverView({
 
   const started = useRef(false);
   useEffect(() => {
-    if (!(open || dragIn > 0) || started.current) return;
+    if (!(open || warm) || started.current) return;
     started.current = true;
     loadSaved().then(setSaved);
     loadAll();
-  }, [open, dragIn, loadAll]);
+  }, [open, warm, loadAll]);
 
   // A song deleted for good: forget it here too.
   useEffect(() => onSavedChange(() => {
@@ -321,7 +349,7 @@ export function DiscoverView({
 
   // Back on Android: the card first, then the list, then out of Discover.
   backRef.current = () => {
-    if (card) { if (!card.fly) setCard(null); return true; }
+    if (card) { closeCard(); return true; }
     if (list) { setList(null); return true; }
     return false;
   };
@@ -399,7 +427,10 @@ export function DiscoverView({
             </button>
           )}
         </div>
-        <div data-hscroll="" style={{ display: "flex", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
+        {/* Right to left: a row starts at its right end, so a swipe to the
+            left on it is free to take the page back to Songs. You scroll a
+            row by pulling to the right. */}
+        <div data-hscroll="" style={{ display: "flex", flexDirection: "row-reverse", gap: 12, padding: "0 12px", overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}>
           {(tracks ?? Array.from({ length: 4 }, () => null)).map((track, i) => track ? (
             <div key={track.id} data-fly="" style={{ flexShrink: 0, width: tileW, cursor: "pointer" }} onClick={() => openCard(track)}>
               <div style={{ position: "relative" }}>
@@ -421,19 +452,26 @@ export function DiscoverView({
   };
 
   const allFailed = SHELVES.every(s => shelves[s.genre] === "error");
-  const shown = open || dragIn > 0;
   const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
+
+  // Closing the card: it and its shade fade out rather than vanish.
+  const [cardOut, setCardOut] = useState(false);
+  const closeCard = () => {
+    if (!card || card.fly || cardOut) return;
+    setCardOut(true);
+    setTimeout(() => { setCard(null); setCardOut(false); }, 160);
+  };
 
   return (
     <div
-      ref={rootRef}
+      ref={setRoot}
       aria-hidden={!open}
       style={{
         position: "absolute", inset: 0, zIndex: 15, background: T.bg, color: T.text,
-        visibility: shown ? "visible" : "hidden",
-        transform: open ? `translateX(${dragOut}px)` : `translateX(calc(-100% + ${dragIn}px))`,
-        boxShadow: shown ? "8px 0 24px rgba(0,0,0,0.25)" : "none",
-        transition: dragIn > 0 || dragOut < 0 ? "none" : `transform 0.2s cubic-bezier(0.22,0.61,0.36,1), visibility 0s ${open ? "0s" : "0.2s"}`,
+        visibility: open ? "visible" : "hidden",
+        transform: open ? OPEN : CLOSED,
+        boxShadow: open ? SHADOW : "none",
+        transition: panelTransition(open),
         willChange: "transform",
       }}
     >
@@ -515,7 +553,7 @@ export function DiscoverView({
       {createPortal(
         <>
           {card && (
-            <div onClick={() => { if (!card.fly) setCard(null); }} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease`, color: T.text }}>
+            <div onClick={closeCard} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease, opacity 0.16s ease`, opacity: cardOut ? 0 : 1, animation: "mptree-fade-in 0.22s ease backwards", color: T.text }}>
               <style>{KEYFRAMES}</style>
               {/* Outer: the flight into Songs. Inner: coming forward. Two
                   elements, so the two transforms never fight. */}
@@ -579,6 +617,7 @@ const FLY_MS = 600;
 
 const KEYFRAMES = `
 @keyframes mptree-spin { to { transform: rotate(360deg) } }
+@keyframes mptree-fade-in { from { opacity: 0 } to { opacity: 1 } }
 @keyframes mptree-card-in { from { transform: translateY(24px) scale(0.86); opacity: 0 } to { transform: none; opacity: 1 } }
 @keyframes mptree-bar { 0%, 100% { transform: scaleY(0.35) } 50% { transform: scaleY(1) } }
 @keyframes mptree-badge-in { from { transform: translate(50%, 6px) scale(0.4); opacity: 0 } to { transform: translate(50%, 0) scale(1); opacity: 1 } }

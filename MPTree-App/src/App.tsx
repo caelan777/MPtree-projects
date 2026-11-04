@@ -55,7 +55,7 @@ import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
-import { DiscoverView, DiscoverIcon, NewBadge } from "./components/DiscoverView";
+import { DiscoverView, DiscoverIcon, NewBadge, OPEN as DISCOVER_OPEN, CLOSED as DISCOVER_CLOSED, SHADOW as DISCOVER_SHADOW, panelTransition as discoverTransition } from "./components/DiscoverView";
 import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
@@ -678,11 +678,11 @@ export default function App() {
   // third one, and kept mounted after the first open so a download carries on
   // while you are back on Songs. Android only for now.
   const [discoverOpen, setDiscoverOpen] = useState(false);
-  const [discoverMounted, setDiscoverMounted] = useState(false);
   const discoverBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
+  const discoverPanelRef = useRef<HTMLDivElement | null>(null);
   const openDiscover = () => {
-    setDiscoverMounted(true); setDiscoverOpen(true); setPage("songs"); openChrome();
+    setDiscoverOpen(true); setPage("songs"); openChrome();
     if (musicHint) musicHintDone();
   };
   const leaveDiscover = () => { setDiscoverOpen(false); setDq(""); setDqSignal(n => n + 1); };
@@ -2405,7 +2405,7 @@ export default function App() {
     panelTransform,
     panelTransition,
     pageSwipeLocked,
-    discoverDragX,
+    discoverDragging,
     onPageTouchStart,
     onPageTouchMove,
     onPageTouchEnd,
@@ -2419,10 +2419,27 @@ export default function App() {
     // the Songs page — the user is one level deeper and expects the back arrow.
     swipeDisabled: playlistDetailOpen,
     areaRef: pageAreaRef,
-    onSwipeToDiscover: HAS_DISCOVER ? openDiscover : undefined,
+    discover: HAS_DISCOVER ? {
+      // Moved by hand while the finger is down; see DiscoverView's own swipe.
+      drag: x => {
+        const el = discoverPanelRef.current;
+        if (!el) return;
+        el.style.transition = "none";
+        el.style.visibility = "visible";
+        el.style.boxShadow = DISCOVER_SHADOW;
+        el.style.transform = `translateX(calc(-100% + ${x}px))`;
+      },
+      release: open => {
+        const el = discoverPanelRef.current;
+        if (!el) return;
+        el.style.transition = discoverTransition(open);
+        el.style.transform = open ? DISCOVER_OPEN : DISCOVER_CLOSED;
+        if (open) { openDiscover(); return; }
+        // Slides back out of sight, then is hidden, unless it was opened since.
+        setTimeout(() => { if (el.style.transform === DISCOVER_CLOSED) { el.style.boxShadow = "none"; el.style.visibility = "hidden"; } }, 220);
+      },
+    } : undefined,
   });
-  // Discover is pulled in by a swipe before it is opened, so it has to be there.
-  useEffect(() => { if (discoverDragX > 0) setDiscoverMounted(true); }, [discoverDragX]);
 
   const {
     pullDist,
@@ -3669,7 +3686,7 @@ export default function App() {
             this the header and player just disappear on a scroll and nothing
             suggests the little round logo is the way back. Shown three times
             total (counted in Preferences), then never again. */}
-        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && discoverDragX === 0 && <HintArrow target={discoverBtnRef} T={TH} />}
+        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && !discoverDragging && <HintArrow target={discoverBtnRef} T={TH} />}
 
         {chromeCollapsed && collapseHint && (
           <div
@@ -3989,7 +4006,7 @@ export default function App() {
                 the player with a fixed gap; when nothing is playing it sits
                 near the bottom edge instead. */}
             <div
-              className={page === "songs" && !discoverOpen && discoverDragX === 0 && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
+              className={page === "songs" && !discoverOpen && !discoverDragging && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
               style={{
                 position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90,
                 // The .stt class animates the show/hide; `bottom` is added here
@@ -4032,7 +4049,7 @@ export default function App() {
                 fade so it leaves smoothly during the swipe. */}
             {!selectMode && (
               <div
-                className={page === "songs" && !discoverOpen && discoverDragX === 0 ? "fabw fabw-show" : "fabw fabw-hide"}
+                className={page === "songs" && !discoverOpen && !discoverDragging ? "fabw fabw-show" : "fabw fabw-hide"}
                 style={{
                   position: "absolute", right: 18, bottom: playerH + 10, zIndex: 90,
                   // As above: .fabw owns the page-swipe fade, `bottom` is added
@@ -4121,10 +4138,11 @@ export default function App() {
 
           {/* ── DISCOVER ──────────────────────────────────────────────────
               Left of Songs, under the same header card. */}
-          {discoverMounted && (
+          {HAS_DISCOVER && (
             <DiscoverView
               open={discoverOpen}
-              dragIn={discoverDragX}
+              warm={discoverDragging}
+              panelRef={discoverPanelRef}
               topInset={songsInset}
               bottomInset={bottomH}
               songsTabRef={songsTabRef}

@@ -16,8 +16,10 @@ export interface PageSwipeDeps {
    *  scrolling (see the touchmove listener below). */
   areaRef:     React.RefObject<HTMLDivElement | null>;
   /** Discover sits left of Songs: a swipe to the right on Songs pulls it in.
-   *  Left out where there is no Discover. */
-  onSwipeToDiscover?: () => void;
+   *  `drag` is called with how far, on every move, and should move the page
+   *  by hand (no React render per move, which is what made it feel slow);
+   *  `release` says whether it opens. Left out where there is no Discover. */
+  discover?: { drag: (x: number) => void; release: (open: boolean) => void };
 }
 
 export interface PageSwipeReturn {
@@ -26,8 +28,8 @@ export interface PageSwipeReturn {
   panelTransform:     string;
   panelTransition:    string;
   pageSwipeLocked:    React.MutableRefObject<"horizontal" | "vertical" | null>;
-  /** How far Discover has been pulled in from the left, in px. 0 when not. */
-  discoverDragX:      number;
+  /** A finger is pulling Discover in. */
+  discoverDragging:   boolean;
   onPageTouchStart:   (e: React.TouchEvent) => void;
   onPageTouchMove:    (e: React.TouchEvent) => void;
   onPageTouchEnd:     () => void;
@@ -47,12 +49,13 @@ export function usePageSwipe({
   filterOpen,
   swipeDisabled = false,
   areaRef,
-  onSwipeToDiscover,
+  discover,
 }: PageSwipeDeps): PageSwipeReturn {
   const [pageDragX,    setPageDragX]    = useState(0);
-  const [discoverDragX, setDiscoverDragX] = useState(0);
-  const hasDiscoverRef = useRef(!!onSwipeToDiscover);
-  hasDiscoverRef.current = !!onSwipeToDiscover;
+  const [discoverDragging, setDiscoverDragging] = useState(false);
+  const discoverX = useRef(0);
+  const hasDiscoverRef = useRef(!!discover);
+  hasDiscoverRef.current = !!discover;
   const [pageDragging, setPageDragging] = useState(false);
 
   const pageSwipeStartX   = useRef<number | null>(null);
@@ -135,10 +138,13 @@ export function usePageSwipe({
     } else if (page === "playlists" && dx > 0) {
       setPageDragging(true);
       setPageDragX(Math.min(dx, window.innerWidth));
-    } else if (page === "songs" && dx > 0 && onSwipeToDiscover) {
-      setDiscoverDragX(Math.min(dx, window.innerWidth));
-    } else if (discoverDragX) {
-      setDiscoverDragX(0);
+    } else if (page === "songs" && dx > 0 && discover) {
+      if (!discoverDragging) setDiscoverDragging(true);
+      discoverX.current = Math.min(dx, window.innerWidth);
+      discover.drag(discoverX.current);
+    } else if (discoverX.current) {
+      discoverX.current = 0;
+      discover?.drag(0);
     }
   };
 
@@ -153,12 +159,14 @@ export function usePageSwipe({
       if (shouldGoNext) setPage("playlists");
       else if (shouldGoPrev) setPage("songs");
     }
-    if (pageSwipeLocked.current === "horizontal" && discoverDragX > 0) {
+    if (discoverDragging) {
+      const x = discoverX.current;
       const v = pageSwipeVelocity.current;
-      const isFlick = v >= PAGE_SWIPE_VELOCITY && discoverDragX >= PAGE_SWIPE_MIN_DIST;
-      if (discoverDragX > PAGE_SWIPE_THRESHOLD || isFlick) onSwipeToDiscover?.();
+      const isFlick = v >= PAGE_SWIPE_VELOCITY && x >= PAGE_SWIPE_MIN_DIST;
+      discover?.release(pageSwipeLocked.current === "horizontal" && (x > PAGE_SWIPE_THRESHOLD || isFlick));
     }
-    setDiscoverDragX(0);
+    discoverX.current = 0;
+    if (discoverDragging) setDiscoverDragging(false);
     pageSwipeStartX.current   = null;
     pageSwipeStartY.current   = null;
     pageSwipeLocked.current   = null;
@@ -183,7 +191,7 @@ export function usePageSwipe({
     panelTransform,
     panelTransition,
     pageSwipeLocked,
-    discoverDragX,
+    discoverDragging,
     onPageTouchStart,
     onPageTouchMove,
     onPageTouchEnd,
