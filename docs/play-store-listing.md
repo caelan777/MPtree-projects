@@ -8,6 +8,29 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.7 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.7.aab`
+(versionCode 137, built 2026-11-05 with `npm run build:play` from `main` after merging `discover`;
+the next bundle or test build is 138). Test builds 87 to 104. **Something new to declare:** Discover sends
+search words to Audius and the Internet Archive and streams and downloads songs from them
+(https://mp-tree.net/privacy#discover). In the Data safety form: App activity, In-app search history,
+collected, not shared, for app functionality, encrypted in transit. Ontdekken is hidden on the iPhone.
+
+```
+<en-GB>
+New: Discover. Tap the download button next to Playlists for music that its makers allow you to share, from Audius and the Internet Archive. Browse popular songs, artists and genres, play a whole song first, and download it straight into your Songs. Search both sources from the header. You can now share a whole playlist, the navigation bar stays visible with the player just above it, and a player you fold away stays folded.
+</en-GB>
+<nl-NL>
+Nieuw: Ontdekken. Tik op de downloadknop naast Playlists voor muziek die de makers laten delen, van Audius en het Internet Archive. Blader door populaire nummers, artiesten en genres, luister eerst een heel nummer en download het meteen naar je Liedjes. Zoek in beide bronnen vanuit de kop. Je kunt nu ook een hele playlist delen, de navigatiebalk blijft zichtbaar met de speler er net boven, en een ingeklapte speler blijft ingeklapt.
+</nl-NL>
+<es-ES>
+Nuevo: Descubrir. Toca el botón de descarga junto a Listas para ver música que sus autores dejan compartir, de Audius y el Internet Archive. Explora canciones, artistas y géneros populares, escucha una canción entera antes y descárgala directamente a tus Canciones. Busca en ambas fuentes desde la cabecera. Ahora también puedes compartir una lista entera, la barra de navegación se queda visible con el reproductor justo encima y un reproductor plegado se queda plegado.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.6 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.6.aab`
