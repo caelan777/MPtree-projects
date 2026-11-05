@@ -11,7 +11,7 @@ import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
-import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette } from "./themes";
+import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, DARK } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { Toast, type ToastAction } from "./components/Toast";
@@ -22,7 +22,7 @@ import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
-import { MusicHint, MusicHowSheet } from "./components/MusicHint";
+import { MusicHint, MusicHowSheet, HintArrow } from "./components/MusicHint";
 import { countDaily } from "./counter";
 import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
@@ -55,6 +55,9 @@ import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
+import { DiscoverView, DiscoverIcon, NewBadge, WALL_MS } from "./components/DiscoverView";
+import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
+import { Capacitor } from "@capacitor/core";
 import { BackupSheet }      from "./components/BackupSheet";
 import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
 import type { Playlist, SmartPlaylist } from "./types";
@@ -85,6 +88,18 @@ function makeDateTag(): string {
 
 // MusicScanner returns raw absolute paths (no scheme). Filesystem and Share
 // both require a `file://` URI, so normalize once and reuse everywhere.
+/** Songs to the share sheet, as music, with their names as text beside them:
+ *  WhatsApp turns a song into an audio message, which shows no name. On
+ *  Android through MPTree's own share; elsewhere Capacitor's. */
+async function shareSongFiles(paths: string[], title: string, dialogTitle: string, text: string): Promise<void> {
+  try {
+    await System.shareFiles({ paths, title, dialogTitle, text });
+  } catch {
+    await Share.share({ title, text, files: paths.map(toFileUri), dialogTitle });
+  }
+}
+const songLine = (artist: string, title: string) => (artist ? artist + " - " + title : title);
+
 function toFileUri(uri: string): string {
   return uri.startsWith("file://") ? uri : `file://${uri}`;
 }
@@ -166,6 +181,9 @@ const SIZE_TABLE: Record<UiSize, { text: number; row: number }> = {
 const WIDE_PHONE = 390;
 /** How much taller a row is on a big phone, at every Size. */
 const WIDE_ROW_EXTRA = 10;
+
+// Discover needs the native download, which the iPhone version does not have yet.
+const HAS_DISCOVER = Capacitor.getPlatform() !== "ios";
 
 export default function App() {
   const [songs,          setSongs]         = useState<Song[]>([]);
@@ -325,6 +343,7 @@ export default function App() {
   // a single "previous offset" would read the jump between them as a drag.
   const lastScrollTopRef         = useRef(0);
   const lastPlaylistScrollTopRef = useRef(0);
+  const lastDiscoverScrollTopRef = useRef(0);
   // A brief "tap the logo to bring them back" pill, shown the first few times
   // the chrome folds itself away. Without it the header and player simply
   // vanish and nothing says the round logo is now a button.
@@ -668,6 +687,37 @@ export default function App() {
   // Playlist picker opened from the multi-select bar.
   const [multiAddOpen,  setMultiAddOpen]  = useState(false);
   const [page, setPage] = useState<"songs" | "playlists">("songs");
+  // Discover: free music to download. A layer over the two pages rather than a
+  // third one, and kept mounted after the first open so a download carries on
+  // while you are back on Songs. Android only for now.
+  const [discoverOpen, setDiscoverOpen] = useState(false);
+  const discoverOpenRef = useRef(false);
+  discoverOpenRef.current = discoverOpen;
+  const discoverBackRef = useRef<(() => boolean) | null>(null);
+  const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
+  const discoverPanelRef = useRef<HTMLDivElement | null>(null);
+  const openDiscover = () => {
+    setDiscoverOpen(true); openChrome();
+    // Discover lies over Songs. From Playlists, the switch to Songs waits
+    // until the wall covers the screen, so you never see Songs on the way.
+    if (page !== "songs") {
+      const still = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (still) setPage("songs");
+      else window.setTimeout(() => { if (discoverOpenRef.current) setPage("songs"); }, WALL_MS / 2);
+    }
+    if (musicHint) musicHintDone();
+  };
+  const leaveDiscover = () => { setDiscoverOpen(false); setDq(""); setDqSignal(n => n + 1); };
+  // The header's search box searches Audius while Discover is open.
+  const [dq, setDq] = useState("");
+  const [dqSignal, setDqSignal] = useState(0);
+  // Discover's own small player is up: the app's one makes way.
+  const [discoverActive, setDiscoverActive] = useState(false);
+  const songsTabRef = useRef<HTMLButtonElement | null>(null);
+  // Songs saved from Discover since you last looked at Songs: the "+1" above
+  // the Songs tab.
+  const [newSongs, setNewSongs] = useState(0);
+  useEffect(() => { if (page === "songs" && !discoverOpen) setNewSongs(0); }, [page, discoverOpen]);
   // The anonymous counter (counter.ts): which tabs are used, once a day each.
   useEffect(() => { countDaily(page === "songs" ? "tab-songs" : "tab-playlists"); }, [page]);
   // The tour points at the Songs page: its header, search box, a song row, the
@@ -817,6 +867,18 @@ export default function App() {
   };
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
   const [lookOpen,    setLookOpen]    = useState(false);
+  // Personalize shows the app behind it, changing as you choose. Discover is
+  // left out of that (it flickered there): it steps aside while Personalize
+  // is open and comes back when it closes.
+  const lookFromDiscover = useRef(false);
+  const openLook = () => {
+    if (discoverOpenRef.current) { lookFromDiscover.current = true; setDiscoverOpen(false); }
+    setLookOpen(true);
+  };
+  const closeLook = () => {
+    setLookOpen(false);
+    if (lookFromDiscover.current) { lookFromDiscover.current = false; setDiscoverOpen(true); }
+  };
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
@@ -837,6 +899,9 @@ export default function App() {
     return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
   };
   const TH = tinted(paletteFor(theme, look.dark, look.light));
+  // Discover's palette: the dark one, on pure black. A dark theme keeps its
+  // own shade for the rest (Lantern's green), a light one takes the plain dark.
+  const discoverTH = { ...(isDarkPalette(TH) ? TH : { ...TH, ...DARK }), bg: "#000000" };
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
   const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
@@ -847,6 +912,11 @@ export default function App() {
     StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
     StatusBar.setBackgroundColor({ color: statusBarColor }).catch(() => {});
   }, [theme, statusBarColor]);
+  // The navigation bar: the theme's, and black under Discover's black page.
+  useEffect(() => {
+    const dark = theme === "dark" || discoverOpen;
+    System.setNavBar({ light: !dark, color: discoverOpen ? "#000000" : statusBarColor }).catch(() => {});
+  }, [theme, statusBarColor, discoverOpen]);
 
   // What Clean up would offer. Counted even without Pro, for the Settings row.
   const cleanupSuspects = React.useMemo(() => findSuspects(songs), [songs]);
@@ -2242,6 +2312,7 @@ export default function App() {
     // with cut tracks made from them.
     deleteFiles: async paths => {
       const gone = await deleteFilesAtUris(paths);
+      void forgetSaved([...gone]);
       if (!gone.size) return 0;
       const keep = (x: Song) => !gone.has(x.uri);
       const nextSongs = songsRef.current.filter(keep);
@@ -2376,6 +2447,7 @@ export default function App() {
     panelTransform,
     panelTransition,
     pageSwipeLocked,
+    discoverDragging,
     onPageTouchStart,
     onPageTouchMove,
     onPageTouchEnd,
@@ -2639,6 +2711,7 @@ export default function App() {
       showToast(t("Delete cancelled"));
       return;
     }
+    if (!s.isCut) void forgetSaved([s.uri]);
     setRemovedSongs(prev => {
       const updated = prev.filter(x => x.id !== s.id);
       saveRemovedTracksToStorage(updated);
@@ -2661,6 +2734,7 @@ export default function App() {
     // The cuts that are two markers on their source go from the bin and
     // nothing else: see handleDeleteForever.
     const gone = await deleteFilesAtUris(toDelete.filter(s => !s.isCut).map(s => s.uri));
+    void forgetSaved([...gone]);
     const deletedIds = new Set(toDelete.filter(s => s.isCut || gone.has(s.uri)).map(s => s.id));
     const remaining = toDelete.filter(s => !deletedIds.has(s.id));
 
@@ -2739,11 +2813,7 @@ export default function App() {
       const copy = s.isCut ? null : await System.prepareShare({
         path: s.uri, title: dispName(s), artist: dispArtist(s), cover: getMeta(s).customPhoto,
       }).catch(() => null);
-      await Share.share({
-        title: dispName(s),
-        files: [toFileUri(copy?.path ?? s.uri)],
-        dialogTitle: t("Share song"),
-      });
+      await shareSongFiles([copy?.path ?? s.uri], dispName(s), t("Share song"), songLine(dispArtist(s), dispName(s)));
     } catch (e: any) {
       const msg = String(e?.message ?? e);
       if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg); // negeer een simpele annulering
@@ -2754,18 +2824,29 @@ export default function App() {
   /** Several songs in one go, from multi-select. A cut kept in MPTree only is
    *  a stretch of another file, so it has no file of its own to send. */
   const SHARE_MAX = 50;
-  const shareSongs = useCallback(async (ids: string[]) => {
+  const shareSongs = useCallback(async (ids: string[], title?: string) => {
     const picked = ids.map(id => songsRef.current.find(s => s.id === id)).filter((s): s is Song => !!s);
     const files = picked.filter(s => !s.isCut);
     const skipped = picked.length - files.length;
     if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
     if (files.length > SHARE_MAX) { showToast(tn(SHARE_MAX, "Share at most {n} song at a time.", "Share at most {n} songs at a time.")); return; }
     try {
-      await Share.share({
-        title: tn(files.length, "{n} song", "{n} songs"),
-        files: files.map(s => toFileUri(s.uri)),
-        dialogTitle: t("Share songs"),
-      });
+      // One after another into the share folder, the first emptying it.
+      const paths: string[] = [];
+      const lines: string[] = [];
+      for (const s of files) {
+        // From the ref: this callback is made once, so meta in it would be the first one.
+        const m = metaRef.current[s.id] || {};
+        const name = m.customName || s.title;
+        const artist = m.customArtist || (!isMissingArtist(s.artist) ? s.artist : "");
+        const copy = await System.prepareShare({
+          path: s.uri, title: name, artist, cover: m.customPhoto, clear: paths.length === 0,
+        }).catch(() => null);
+        paths.push(copy?.path ?? s.uri);
+        lines.push(songLine(artist, name));
+      }
+      const text = (title ? title + "\n" : "") + lines.join("\n");
+      await shareSongFiles(paths, title ?? tn(files.length, "{n} song", "{n} songs"), title ? t("Share playlist") : t("Share songs"), text);
       if (skipped) showToast(tn(skipped, "{n} cut kept in MPTree only was left out.", "{n} cuts kept in MPTree only were left out."));
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
@@ -2843,6 +2924,52 @@ export default function App() {
     setMenuSong(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A Discover download is in Music/MPTree. It goes into Songs at once, with
+  // the name, artist, genre and cover kept as MPTree's own: the file itself
+  // often has no tags, and a later scan would otherwise call it by its file name.
+  const discoverSaved = async (track: FreeTrack, path: string) => {
+    const song: Song = { id: path, uri: path, title: track.title, artist: track.artist, duration: track.duration * 1000, dateAdded: Date.now(), isCut: false };
+    setSongs(prev => prev.some(s => s.uri === path) ? prev : [song, ...prev]);
+    const photo = await artDataUrl(track);
+    setMeta(prev => ({ ...prev, [path]: {
+      ...prev[path],
+      customName: track.title,
+      ...(track.artist ? { customArtist: track.artist } : {}),
+      ...(track.genre ? { customGenre: track.genre } : {}),
+      ...(photo ? { customPhoto: photo } : {}),
+    } }));
+    if (photo) AudioPlayer.setTrackArt({ path, dataUrl: photo }).catch(() => {});
+    setNewSongs(n => n + 1);
+    showToast(t("\"{name}\" is in your Songs", { name: track.title }), {
+      label: t("Play"),
+      onClick: () => {
+        setDiscoverOpen(false); setPage("songs");
+        const all = songsRef.current.some(s => s.uri === path) ? songsRef.current : [song, ...songsRef.current];
+        void playSong(all.find(s => s.uri === path) ?? song, all);
+      },
+    });
+  };
+
+  const libraryNames = useMemo(() => {
+    if (!libraryReady || isInitializing) return null;
+    const n = new Set<string>();
+    for (const x of songs) n.add(baseName(x.uri));
+    for (const x of removedSongs) n.add(baseName(x.uri));
+    return n;
+  }, [songs, removedSongs, libraryReady, isInitializing]);
+  // Discover's callbacks, the same functions on every render: with new ones
+  // each time, its memo never held and the whole page was drawn again on any
+  // render of App (a fold of the header, a tab, the playing song's clock).
+  const discoverLatest = useRef({
+    close: () => {}, preview: () => {}, saved: (_t: FreeTrack, _p: string) => Promise.resolve(), scroll: (_top: number) => {},
+  });
+  const discoverCalls = useMemo(() => ({
+    onClose: () => discoverLatest.current.close(),
+    onPreview: () => discoverLatest.current.preview(),
+    onSaved: (t: FreeTrack, p: string) => discoverLatest.current.saved(t, p),
+    onBodyScroll: (top: number) => discoverLatest.current.scroll(top),
+  }), []);
 
   const handlePlayPlaylist = useCallback((playlistSongs: Song[], shuffle: boolean, source: string) => {
     if (!playlistSongs.length) return;
@@ -2940,7 +3067,7 @@ export default function App() {
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
       if (musicHowOpen)        { setMusicHowOpen(false); return; }
-      if (lookOpen)            { if (lookBack()) return; endPreview(); setLookOpen(false); return; }
+      if (lookOpen)            { if (lookBack()) return; endPreview(); closeLook(); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
       if (settingsOpen)        { setSettingsOpen(false); return; }
@@ -2956,6 +3083,7 @@ export default function App() {
       if (menuSong)            { setMenuSong(null); return; }
       if (multiAddOpen)        { setMultiAddOpen(false); return; }
       if (selectMode)          { exitSelectMode(); return; }
+      if (discoverOpen)        { if (!discoverBackRef.current?.()) leaveDiscover(); return; }
       if (page === "playlists") {
         // PlaylistsView owns its own nested navigation, so hand Back to it and
         // let it pop one level. It reports back through onDetailChange when it
@@ -3052,14 +3180,15 @@ export default function App() {
   // Deliberately NOT memoised: both call sites are inline arrows re-created on
   // every render anyway, so there is nothing to save, and closing over `page`
   // directly beats mirroring it into yet another ref.
-  const handleChromeScroll = (top: number, lastRef: React.MutableRefObject<number>, from: "songs" | "playlists") => {
+  const handleChromeScroll = (top: number, lastRef: React.MutableRefObject<number>, from: "songs" | "playlists" | "discover") => {
     // Both pages stay mounted, one sliding over the other, so BOTH scrollers
     // keep firing. Folding the chrome changes the top inset, which relays out
     // the page underneath, and a relayout on a scroller can emit a scroll event
     // of its own — which would land in the "back at the top, show the chrome
     // again" branch and undo the fold. Only the page you are looking at gets a
     // say in whether the header is folded.
-    if (from !== page) return;
+    // Discover lies over Songs while it is open: then it is the one in charge.
+    if (from !== (discoverOpen ? "discover" : page)) return;
     const prev = lastRef.current;
     lastRef.current = top;
     if (insetJumpRef.current) { insetJumpRef.current = false; return; }
@@ -3088,12 +3217,24 @@ export default function App() {
     // A downward drag folds the header away; the player stays. Far enough
     // down that the rows can stay exactly where they are while the card
     // folds: the list scrolls back by what the card gives up.
-    if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from) + 8)) {
+    if (scrollTravelRef.current > 24 && top > Math.max(CHROME_COLLAPSE_AT, foldGap(from === "discover" ? "songs" : from) + 8)) {
       // Only hint on the transition, not on every scroll event while folded.
-      if (chromeOpen) showCollapseHint();
-      setPlayerFolded(false);
-      setChromeOpen(false);
+      // Only on the fold itself: once folded (by the logo too, which folds
+      // the player as well), scrolling on leaves the player as it is.
+      if (chromeOpen) {
+        showCollapseHint();
+        setPlayerFolded(false);
+        setChromeOpen(false);
+      }
     }
+  };
+
+  // What Discover's steady callbacks call: always this render's functions.
+  discoverLatest.current = {
+    close: () => { leaveDiscover(); setPage("songs"); },
+    preview: () => { if (isPlayingRef.current) void togglePlay(); },
+    saved: discoverSaved,
+    scroll: top => handleChromeScroll(top, lastDiscoverScrollTopRef, "discover"),
   };
 
   const toggleChrome = () => {
@@ -3173,6 +3314,20 @@ export default function App() {
   // Picking songs in a playlist hides it as well: the selection bar takes its
   // place, and the player used to show half above that bar.
   const [playerCardH, setPlayerCardH] = useState(95);
+  // How much of the bottom Android's navigation bar takes (0 where the page
+  // already ends above it). The player and the buttons sit that much higher.
+  const [safeB, setSafeB] = useState(0);
+  useEffect(() => {
+    const el = document.createElement("div");
+    el.style.cssText = "position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom, 0px);visibility:hidden;pointer-events:none";
+    document.body.appendChild(el);
+    const read = () => setSafeB(Math.round(el.getBoundingClientRect().height));
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    window.addEventListener("resize", read);
+    return () => { ro.disconnect(); window.removeEventListener("resize", read); el.remove(); };
+  }, []);
   const playerObserver = useRef<ResizeObserver | null>(null);
   const playerCardRef = useCallback((el: HTMLDivElement | null) => {
     playerObserver.current?.disconnect();
@@ -3182,11 +3337,16 @@ export default function App() {
     ro.observe(el, { box: "border-box" });
     playerObserver.current = ro;
   }, []);
-  const playerH    = currentSong && !selecting && !playerHidden ? 18 + playerCardH : 0;
+  // Where the player sits above the bottom edge: just clear of the
+  // navigation bar. Three buttons (a tall bar, 32px or more): 6px above it.
+  // Gestures (a thin strip with a handle in the middle): into the strip, just
+  // above the handle. No bar at all: 12px.
+  const playerBottom = safeB === 0 ? 12 : safeB >= 32 ? safeB + 6 : Math.max(6, safeB - 6);
+  const playerH    = currentSong && !selecting && !playerHidden ? playerBottom - safeB + playerCardH : 0;
   // The selection bar, on either tab: the Playlists tab pads its songs by this
   // too, or the last ones sat under the bar.
   const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
-  const bottomH    = playerH + selectBarH;
+  const bottomH    = playerH + selectBarH + safeB;
   // Repeat first: with both on, the button shows repeat, and a tap ends it.
   const anyRepeat  = repeatOn || repeatAll;
   const modeBg     = anyRepeat ? TH.repeat : playMode === "shuffle" ? TH.violet : TH.dim;
@@ -3431,19 +3591,24 @@ export default function App() {
               transition: `background 0.2s, color 0.2s, max-width ${fold}, padding ${fold}, opacity ${fold}`,
             });
             return (
+              <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", minWidth: 0, background: CT.surface, borderRadius: 20, padding: 3, border: `1px solid ${CT.border}` }}>
+                <span style={{ position: "relative", display: "flex", flexShrink: 0 }}>
                 <button
-                  onClick={() => setPage("songs")}
+                  ref={songsTabRef}
+                  onClick={() => { leaveDiscover(); setPage("songs"); }}
                   tabIndex={inPl ? -1 : 0}
                   aria-hidden={inPl}
-                  style={{ ...seg(page === "songs"), maxWidth: inPl ? 0 : 140, opacity: inPl ? 0 : 1, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : null), marginRight: inPl ? 0 : 2 }}
+                  style={{ ...seg(page === "songs" && !discoverOpen), maxWidth: inPl ? 0 : 140, opacity: inPl ? 0 : 1, ...(inPl ? { paddingLeft: 0, paddingRight: 0 } : null), marginRight: inPl ? 0 : 2 }}
                 >
                   {t("Songs")}
                 </button>
+                {newSongs > 0 && !inPl && <NewBadge n={newSongs} T={CT} />}
+                </span>
                 <button
                   data-tour="playlists"
-                  onClick={() => { if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
-                  style={{ ...seg(page === "playlists" && !inPl), ...(inPl ? { paddingLeft: 12, paddingRight: 2 } : null) }}
+                  onClick={() => { leaveDiscover(); if (inPl) setPlaylistListSignal(n => n + 1); else setPage("playlists"); }}
+                  style={{ ...seg(page === "playlists" && !inPl && !discoverOpen), ...(inPl ? { paddingLeft: 12, paddingRight: 2 } : null) }}
                 >
                   {t("Playlists")}
                 </button>
@@ -3456,6 +3621,22 @@ export default function App() {
                 >
                   {shownPlaylistName}
                 </span>
+              </div>
+              {/* Discover: its own round button, right after the tabs. Filled
+                  while the page is open. Folds away inside a playlist. */}
+              {HAS_DISCOVER && (
+                <button
+                  ref={discoverBtnRef}
+                  onClick={() => { if (discoverOpen) { leaveDiscover(); setPage("songs"); } else openDiscover(); }}
+                  aria-label={t("Discover")}
+                  aria-pressed={discoverOpen}
+                  tabIndex={inPl ? -1 : 0}
+                  aria-hidden={inPl}
+                  style={{ width: inPl ? 0 : 36, height: 36, marginLeft: inPl ? 0 : 6, opacity: inPl ? 0 : 1, overflow: "hidden", borderRadius: 18, border: discoverOpen ? `1px solid ${CT.accent}` : `1px solid ${CT.border}`, background: discoverOpen ? CT.accent : CT.surface, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0, transition: `background 0.2s, border-color 0.2s, width ${fold}, margin ${fold}, opacity ${fold}` }}
+                >
+                  {DiscoverIcon(discoverOpen ? CT.playBtnFg : CT.text)}
+                </button>
+              )}
               </div>
             );
           })()}
@@ -3494,10 +3675,16 @@ export default function App() {
                     ran out of the card. */}
                 <div data-tour="search" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", background: CT.surface, borderRadius: 10, padding: "0 12px", height: 40, gap: 8, border: `1px solid ${CT.border}` }}>
                   {IC.Search(CT.muted)}
+                  {discoverOpen ? (
+                    <form onSubmit={e => { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur?.(); setDqSignal(n => n + 1); }} style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                      <input value={dq} onChange={e => setDq(e.target.value)} enterKeyHint="search" placeholder={t("Search free music")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: CT.text, fontSize: 15, minWidth: 0 }} />
+                    </form>
+                  ) : (
                   <input ref={searchInputRef} tabIndex={page === "songs" ? undefined : -1} value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Search songs or artists…")} style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: CT.text, fontSize: 15, minWidth: 0 }} />
-                  {search.length > 0 && (
+                  )}
+                  {(discoverOpen ? dq.length > 0 : search.length > 0) && (
                     <button
-                      onClick={() => { setSearch(""); hapticImpact("light"); }}
+                      onClick={() => { if (discoverOpen) { setDq(""); setDqSignal(n => n + 1); } else setSearch(""); hapticImpact("light"); }}
                       aria-label={t("Clear search")}
                       tabIndex={page === "songs" ? undefined : -1}
                       style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0, color: CT.muted }}>
@@ -3507,12 +3694,12 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: 0 }}>{tn(displayList.length, "{n} song", "{n} songs")}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: discoverOpen ? 1 : undefined }}>
+                  <span style={{ fontSize: 12, color: CT.muted, flexShrink: discoverOpen ? 1 : 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
-                  {activeArtist && (
+                  {activeArtist && !discoverOpen && (
                     <button
                       onClick={() => setArtistFilter(null)}
                       aria-label={t("Show all artists, currently showing {artist}", { artist: activeArtist })}
@@ -3527,7 +3714,7 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
-                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" ? undefined : -1} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
               </div>
@@ -3573,6 +3760,8 @@ export default function App() {
             this the header and player just disappear on a scroll and nothing
             suggests the little round logo is the way back. Shown three times
             total (counted in Preferences), then never again. */}
+        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && !discoverDragging && <HintArrow target={discoverBtnRef} T={TH} />}
+
         {chromeCollapsed && collapseHint && (
           <div
             className="mp-hint"
@@ -3650,7 +3839,7 @@ export default function App() {
             an absolutely-positioned dropdown inside it was clipped along with
             everything else — the menu opened and was simply invisible. Anchored
             here to `cardBottom`, which already tracks the card's bottom edge. */}
-        {filterOpen && page === "songs" && !chromeCollapsed && !selecting && (
+        {filterOpen && page === "songs" && !discoverOpen && !chromeCollapsed && !selecting && (
           <>
             <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setFilterOpen(false)} />
             <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, maxWidth: 280, maxHeight: "60vh", overflowY: "auto", zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)" }}>
@@ -3743,7 +3932,8 @@ export default function App() {
                 // transition start time and stay locked together.
                 // Scrolled down, the top is not animated: it changes at once and
                 // the scroll position makes up for it, so the rows stay put.
-                transition: listScrolled ? move("padding-bottom") : move("padding-top", "padding-bottom"),
+                // Under Discover nobody sees it: no animation to lay out per frame.
+                transition: discoverOpen ? "none" : listScrolled ? move("padding-bottom") : move("padding-top", "padding-bottom"),
                 overflowAnchor: "none",
               }}
               data-tour="songs"
@@ -3768,7 +3958,7 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
-              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
+              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
 
               {displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
@@ -3891,7 +4081,7 @@ export default function App() {
                 the player with a fixed gap; when nothing is playing it sits
                 near the bottom edge instead. */}
             <div
-              className={page === "songs" && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
+              className={page === "songs" && !discoverOpen && !discoverDragging && !selectMode && displayList.length > 0 && listScrollTop > songsInset ? "stt stt-show" : "stt stt-hide"}
               style={{
                 position: "absolute", left: "50%", bottom: bottomH + 10, zIndex: 90,
                 // The .stt class animates the show/hide; `bottom` is added here
@@ -3934,9 +4124,9 @@ export default function App() {
                 fade so it leaves smoothly during the swipe. */}
             {!selectMode && (
               <div
-                className={page === "songs" ? "fabw fabw-show" : "fabw fabw-hide"}
+                className={page === "songs" && !discoverOpen && !discoverDragging ? "fabw fabw-show" : "fabw fabw-hide"}
                 style={{
-                  position: "absolute", right: 18, bottom: playerH + 10, zIndex: 90,
+                  position: "absolute", right: 18, bottom: playerH + safeB + 10, zIndex: 90,
                   // As above: .fabw owns the page-swipe fade, `bottom` is added
                   // so the button tracks the folding player.
                   transition: chromeAnimate
@@ -4001,6 +4191,7 @@ export default function App() {
               onShuffleMany={shuffleMany}
               onPlayManyNext={handlePlayManyNext}
               onShareMany={ids => { void shareSongs(ids); }}
+              onSharePlaylist={(name, ids) => { void shareSongs(ids, name); }}
               onSelectingChange={setPlaylistSelecting}
               onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
               onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
@@ -4015,15 +4206,41 @@ export default function App() {
               onInsetJump={markInsetJump}
               onOpenName={onOpenPlaylistName}
               listSignal={playlistListSignal}
-              animateInsets={chromeAnimate}
+              animateInsets={chromeAnimate && !discoverOpen}
               onClose={() => setPage("songs")}
               T={TH}
             />
           </div>
+
+          {/* ── DISCOVER ──────────────────────────────────────────────────
+              Left of Songs, under the same header card. */}
+          {HAS_DISCOVER && (
+            <DiscoverView
+              open={discoverOpen}
+              warm={discoverDragging}
+              panelRef={discoverPanelRef}
+              topInset={songsInset}
+              bottomInset={bottomH}
+              playerBottom={playerBottom}
+              songsTabRef={songsTabRef}
+              query={dq}
+              searchSignal={dqSignal}
+              libraryNames={libraryNames}
+              T={discoverTH}
+              backRef={discoverBackRef}
+              onClose={discoverCalls.onClose}
+              onPreview={discoverCalls.onPreview}
+              onSaved={discoverCalls.onSaved}
+              onActiveChange={setDiscoverActive}
+              onBodyScroll={discoverCalls.onBodyScroll}
+              onInsetJump={markInsetJump}
+              animateInsets={chromeAnimate}
+            />
+          )}
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selecting && (() => {
+        {currentSong && !selecting && !(discoverOpen && discoverActive) && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -4032,12 +4249,12 @@ export default function App() {
             <div
               ref={playerCardRef}
               style={{
-                position: "fixed", bottom: 18, left: 12, right: 12, background: miniPlayerBg,
+                position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
                 zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: playerHidden ? "translateY(calc(100% + 26px))" : "translateY(0)",
+                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : "translateY(0)",
                 opacity: playerHidden ? 0 : 1,
                 pointerEvents: playerHidden ? "none" : "auto",
                 transition: chromeAnimate
@@ -4212,7 +4429,7 @@ export default function App() {
             pro={pro}
             hidden={lookOpen}
             onOpenPro={() => setProOpen(true)}
-            onOpenLook={() => setLookOpen(true)}
+            onOpenLook={openLook}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
             cleanupCount={cleanupSuspects.length}
@@ -4299,7 +4516,7 @@ export default function App() {
             ) : undefined}
             onNeedPro={() => setProOpen(true)}
             onToast={showToast}
-            onClose={() => setLookOpen(false)}
+            onClose={closeLook}
             T={TH} />
           );
         })()}

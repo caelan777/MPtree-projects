@@ -1,21 +1,25 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { floatCard } from "./cardStyles";
 
-// For someone new: the card on top of Songs that says where the songs come
-// from, and the sheet behind its second button with every way to get songs
-// onto the phone. Shown once, after the welcome page, until "OK" is tapped.
+// For someone new: on top of Songs, an arrow up to the Discover button with
+// "Download free music here". Where there is no Discover (the iPhone), the
+// card that says where the songs come from instead, and the sheet behind its
+// second button with every way to get songs onto the phone. Shown once, after
+// the welcome page, until it is answered.
 
 type MusicHintProps = {
   onDone: () => void;
   onHow: () => void;
   /** Its height, so the list's virtualization can count it. */
   onHeight: (h: number) => void;
+  /** The Discover button the arrow points at. */
+  target?: React.RefObject<HTMLElement | null>;
   T: T;
 };
 
-export function MusicHint({ onDone, onHow, onHeight, T }: MusicHintProps) {
+export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -27,6 +31,18 @@ export function MusicHint({ onDone, onHow, onHeight, T }: MusicHintProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const btn = { flex: 1, minWidth: 0, minHeight: 44, padding: "10px 8px", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } as const;
+  if (target) {
+    // The arrow itself is drawn by HintArrow, over the header, since this
+    // block sits under the header card and could not reach the button.
+    return (
+      <div ref={ref} data-hint-text="" style={{ position: "relative", padding: "22px 16px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: T.text }}>{t("Download free music here")}</div>
+          <button onClick={onDone} style={{ minHeight: 40, padding: "8px 16px", borderRadius: 12, border: `1px solid ${T.border}`, background: "transparent", color: T.textSub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{t("OK")}</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div ref={ref} style={{ padding: "4px 12px 12px" }}>
       <div style={{ background: T.playBtnBg, color: T.playBtnFg, borderRadius: 20, padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -40,6 +56,46 @@ export function MusicHint({ onDone, onHow, onHeight, T }: MusicHintProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** The arrow from the hint up to the Discover button. Fixed on the screen and
+ *  drawn over the header card, so it really ends at the button. It follows
+ *  both ends every frame (the list scrolls, the header folds), and hides when
+ *  the button is folded away or the hint has scrolled under the header. */
+export function HintArrow({ target, T }: { target: React.RefObject<HTMLElement | null>; T: T }) {
+  const [pts, setPts] = useState<null | { x1: number; y1: number; x2: number; y2: number }>(null);
+  useEffect(() => {
+    let raf = 0;
+    let last = "";
+    const tick = () => {
+      const b = target.current?.getBoundingClientRect();
+      const h = document.querySelector("[data-hint-text]")?.getBoundingClientRect();
+      let next: typeof pts = null;
+      if (b && h && b.width > 20 && h.height > 0) {
+        const x2 = b.left + b.width / 2, y2 = b.bottom + 4;
+        const x1 = h.left + 34, y1 = h.top + 18;
+        if (y1 - y2 > 30) next = { x1, y1, x2, y2 };
+      }
+      const key = next ? `${Math.round(next.x1)},${Math.round(next.y1)},${Math.round(next.x2)},${Math.round(next.y2)}` : "";
+      if (key !== last) { last = key; setPts(next); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  if (!pts) return null;
+  const { x1, y1, x2, y2 } = pts;
+  const d = `M ${x1} ${y1} C ${x1} ${y1 - (y1 - y2) * 0.55}, ${x2} ${y2 + (y1 - y2) * 0.45}, ${x2} ${y2}`;
+  const head = `M ${x2 - 7} ${y2 + 9} L ${x2} ${y2} L ${x2 + 7} ${y2 + 9}`;
+  return (
+    <svg aria-hidden="true" style={{ position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", pointerEvents: "none", zIndex: 62, overflow: "visible" }}>
+      {/* A rim in the page colour, so the line stays readable over the search box. */}
+      <path d={d} fill="none" stroke={T.bg} strokeWidth="7" strokeLinecap="round" />
+      <path d={head} fill="none" stroke={T.bg} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" />
+      <path d={head} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

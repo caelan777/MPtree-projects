@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What ShareProvider may hand out: the copies made for sharing (cache/share),
+     and a song itself when no copy could be made. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="share" path="share/" />
+    <external-path name="music" path="." />
+</paths>

@@ -84,7 +84,12 @@ export type AudioPlayerPlugin = {
 export type SystemPlugin = {
   /** A copy of a song to share, named "Artist - Title" and, for an mp3, with
    *  the title, artist and cover written in. Resolves its path. */
-  prepareShare(options: { path: string; title: string; artist: string; cover?: string }): Promise<{ path: string }>;
+  prepareShare(options: { path: string; title: string; artist: string; cover?: string; clear?: boolean }): Promise<{ path: string }>;
+  /** The share sheet with these files, sent as files (documents), so apps
+   *  like WhatsApp keep their names. Android only. */
+  shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;
+  /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
+  setNavBar(options: { light: boolean; color?: string }): Promise<void>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
@@ -162,6 +167,8 @@ export type SyncPlugin = {
   abortFile(options: { tid: string }): Promise<void>;
   driveUpload(options: { token: string; path: string; name: string; tid?: string; appProperties: Record<string, string> }): Promise<{ id: string }>;
   driveDownload(options: { token: string; fileId: string; tid: string; size?: number }): Promise<{ size: number }>;
+  /** A file a Discover source offers for download, into the temp file for tid. */
+  urlDownload(options: { url: string; tid: string }): Promise<{ size: number }>;
   addListener(event: "progress", handler: (p: { tid: string; done: number; total: number }) => void): Promise<{ remove(): void }>;
 };
 
@@ -170,6 +177,8 @@ export type SyncPlugin = {
 // code paths.
 const SystemWeb: SystemPlugin = {
   prepareShare:  async ({ path }) => ({ path }),
+  setNavBar:     async () => {},
+  shareFiles:    async () => { throw new Error("unavailable"); },
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
@@ -222,6 +231,7 @@ const SyncWeb: SyncPlugin = {
   appendChunk:  unavailable,
   finishFile:   unavailable,
   abortFile:    async () => {},
+  urlDownload:  unavailable,
   driveUpload:  unavailable,
   driveDownload: unavailable,
   addListener:  async () => ({ remove() {} }),

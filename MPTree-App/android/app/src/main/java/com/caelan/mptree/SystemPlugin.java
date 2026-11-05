@@ -11,9 +11,17 @@ import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
 import android.content.Intent;
+import android.content.ClipData;
+import androidx.core.content.FileProvider;
+import com.getcapacitor.JSArray;
+import java.util.ArrayList;
 import android.net.Uri;
 import android.os.Build;
 import android.webkit.WebSettings;
+import android.graphics.Color;
+import android.view.Window;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -308,9 +316,92 @@ public class SystemPlugin extends Plugin {
     // cache named "Artist - Title.ext" and, for an mp3, with the title, artist
     // and cover written into its ID3 tag; the other tags in it are kept. Other
     // formats get the name only. The cache folder is emptied each time.
+    /** The navigation bar: its colour (older Android; newer ones draw the page
+     *  behind it) and dark or light buttons, to suit the theme. */
+    @PluginMethod
+    public void setNavBar(PluginCall call) {
+        boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
+        String color = call.getString("color");
+        getActivity().runOnUiThread(() -> {
+            try {
+                Window w = getActivity().getWindow();
+                if (color != null) {
+                    try { w.setNavigationBarColor(Color.parseColor(color)); } catch (IllegalArgumentException ignored) { }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) w.setNavigationBarContrastEnforced(false);
+                WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                c.setAppearanceLightNavigationBars(light);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("nav bar: " + e.getMessage());
+            }
+        });
+    }
+
+    // ── The share sheet, for songs ──────────────────────────────────────────
+    // Songs go out as what they are, audio, so whoever gets them can play
+    // them. WhatsApp makes an audio message of a song, which shows no name, so
+    // the names go along as text ("Artist - Title", one per line). Sent as a
+    // plain file instead (build 100) it kept its name but could not be opened.
+    @PluginMethod
+    public void shareFiles(PluginCall call) {
+        JSArray list = call.getArray("paths");
+        String title = call.getString("title", "");
+        String dialogTitle = call.getString("dialogTitle", "");
+        String text = call.getString("text", "");
+        try {
+            ArrayList<Uri> uris = new ArrayList<>();
+            ArrayList<String> types = new ArrayList<>();
+            String authority = getContext().getPackageName() + ".shareprovider";
+            for (int i = 0; list != null && i < list.length(); i++) {
+                String p = list.getString(i);
+                if (p.startsWith("content://")) {
+                    Uri u = Uri.parse(p);
+                    uris.add(u);
+                    types.add(getContext().getContentResolver().getType(u));
+                    continue;
+                }
+                if (p.startsWith("file://")) p = Uri.parse(p).getPath();
+                uris.add(FileProvider.getUriForFile(getContext(), authority, new File(p)));
+                int dot = p.lastIndexOf('.');
+                types.add(dot < 0 ? null : android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(p.substring(dot + 1).toLowerCase(Locale.ROOT)));
+            }
+            if (uris.isEmpty()) { call.reject("nothing to share"); return; }
+            Intent send;
+            if (uris.size() == 1) {
+                send = new Intent(Intent.ACTION_SEND);
+                send.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+            } else {
+                send = new Intent(Intent.ACTION_SEND_MULTIPLE);
+                send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+            }
+            // One type for all: the same one, else "audio/*", else anything.
+            String type = types.get(0);
+            for (String ty : types) {
+                if (type == null || ty == null) { type = null; break; }
+                if (!type.equals(ty)) type = type.startsWith("audio/") && ty.startsWith("audio/") ? "audio/*" : "*/*";
+            }
+            send.setType(type == null ? "audio/*" : type);
+            if (!title.isEmpty()) send.putExtra(Intent.EXTRA_TITLE, title);
+            if (!text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
+            ClipData clip = ClipData.newRawUri(title, uris.get(0));
+            for (int i = 1; i < uris.size(); i++) clip.addItem(new ClipData.Item(uris.get(i)));
+            send.setClipData(clip);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, dialogTitle.isEmpty() ? null : dialogTitle);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("share failed: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void prepareShare(PluginCall call) {
         String path = call.getString("path");
+        // Several songs at once: the first call empties the folder, the others add.
+        boolean clear = !Boolean.FALSE.equals(call.getBoolean("clear", true));
         String title = call.getString("title", "");
         String artist = call.getString("artist", "");
         String cover = call.getString("cover");
@@ -319,8 +410,10 @@ public class SystemPlugin extends Plugin {
             try {
                 File src = new File(path);
                 File dir = new File(getContext().getCacheDir(), "share");
-                File[] old = dir.listFiles();
-                if (old != null) for (File f : old) f.delete();
+                if (clear) {
+                    File[] old = dir.listFiles();
+                    if (old != null) for (File f : old) f.delete();
+                }
                 dir.mkdirs();
                 String name = src.getName();
                 int dot = name.lastIndexOf('.');
@@ -329,6 +422,8 @@ public class SystemPlugin extends Plugin {
                 if (base.isEmpty()) base = dot >= 0 ? name.substring(0, dot) : name;
                 if (base.length() > 120) base = base.substring(0, 120).trim();
                 File out = new File(dir, base + ext);
+                // Two songs with the same name: "Name (2)".
+                for (int n = 2; out.exists(); n++) out = new File(dir, base + " (" + n + ")" + ext);
                 boolean tagged = ext.equals(".mp3") && writeMp3(src, out, title, artist, decodeCover(cover));
                 if (!tagged) { out.delete(); appendRange(src, out, 0, src.length()); }
                 JSObject ret = new JSObject();
