@@ -84,7 +84,7 @@ export type AudioPlayerPlugin = {
 export type SystemPlugin = {
   /** A copy of a song to share, named "Artist - Title" and, for an mp3, with
    *  the title, artist and cover written in. Resolves its path. */
-  prepareShare(options: { path: string; title: string; artist: string; cover?: string; clear?: boolean }): Promise<{ path: string }>;
+  prepareShare(options: { path: string; title: string; artist: string; album?: string; cover?: string; clear?: boolean; card?: boolean }): Promise<{ path: string; card?: string }>;
   /** The share sheet with these files, sent as files (documents), so apps
    *  like WhatsApp keep their names. Android only. */
   shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;

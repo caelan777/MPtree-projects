@@ -4,4 +4,8 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="share" path="share/" />
     <external-path name="music" path="." />
+    <!-- A song on a memory card, or in MPTree's own folder (Discover), when
+         no copy could be made: sharing it failed with "no configured root". -->
+    <files-path name="own" path="." />
+    <root-path name="card" path="." />
 </paths>

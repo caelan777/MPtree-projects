@@ -2805,18 +2805,29 @@ export default function App() {
   };
 
   // ── Share ─────────────────────────────────────────────────────────────────
+  // One share at a time. Each one empties the share folder first, so a second
+  // tap while a playlist was still being copied pulled the files out from
+  // under the first: the app it went to then said the share failed.
+  const sharingRef = useRef(false);
   const shareSong = useCallback(async (s: Song | null) => {
-    if (!s) return;
+    if (!s || sharingRef.current) return;
+    sharingRef.current = true;
     try {
       // A cut has no file of its own; anything else goes out as a copy that
-      // carries the name, artist and cover MPTree shows for it.
+      // carries the name, artist, album and cover MPTree shows for it, with a
+      // picture in front: WhatsApp shows the text under a picture, never
+      // under a song, so that is how the name and album arrive.
+      const album = s.album ?? "";
       const copy = s.isCut ? null : await System.prepareShare({
-        path: s.uri, title: dispName(s), artist: dispArtist(s), cover: getMeta(s).customPhoto,
+        path: s.uri, title: dispName(s), artist: dispArtist(s), album, cover: getMeta(s).customPhoto, card: true,
       }).catch(() => null);
-      await shareSongFiles([copy?.path ?? s.uri], dispName(s), t("Share song"), songLine(dispArtist(s), dispName(s)));
+      const paths = copy ? (copy.card ? [copy.card, copy.path] : [copy.path]) : [s.uri];
+      await shareSongFiles(paths, dispName(s), t("Share song"), songLine(dispArtist(s), dispName(s)) + (album ? " (" + album + ")" : ""));
     } catch (e: any) {
       const msg = String(e?.message ?? e);
       if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg); // negeer een simpele annulering
+    } finally {
+      sharingRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta]);
@@ -2830,6 +2841,8 @@ export default function App() {
     const skipped = picked.length - files.length;
     if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
     if (files.length > SHARE_MAX) { showToast(tn(SHARE_MAX, "Share at most {n} song at a time.", "Share at most {n} songs at a time.")); return; }
+    if (sharingRef.current) return;
+    sharingRef.current = true;
     try {
       // One after another into the share folder, the first emptying it.
       const paths: string[] = [];
@@ -2839,11 +2852,12 @@ export default function App() {
         const m = metaRef.current[s.id] || {};
         const name = m.customName || s.title;
         const artist = m.customArtist || (!isMissingArtist(s.artist) ? s.artist : "");
+        const album = s.album ?? "";
         const copy = await System.prepareShare({
-          path: s.uri, title: name, artist, cover: m.customPhoto, clear: paths.length === 0,
+          path: s.uri, title: name, artist, album, cover: m.customPhoto, clear: paths.length === 0,
         }).catch(() => null);
         paths.push(copy?.path ?? s.uri);
-        lines.push(songLine(artist, name));
+        lines.push(songLine(artist, name) + (album ? " (" + album + ")" : ""));
       }
       const text = (title ? title + "\n" : "") + lines.join("\n");
       await shareSongFiles(paths, title ?? tn(files.length, "{n} song", "{n} songs"), title ? t("Share playlist") : t("Share songs"), text);
@@ -2851,6 +2865,8 @@ export default function App() {
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
       if (!/cancel/i.test(msg)) showError(t("Share failed: ") + msg);
+    } finally {
+      sharingRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -4204,6 +4220,7 @@ export default function App() {
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
               onInsetJump={markInsetJump}
+              onAutoScroll={beginProgrammaticScroll}
               onOpenName={onOpenPlaylistName}
               listSignal={playlistListSignal}
               animateInsets={chromeAnimate && !discoverOpen}

@@ -19,6 +19,13 @@ import android.net.Uri;
 import android.os.Build;
 import android.webkit.WebSettings;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.media.MediaMetadataRetriever;
+import android.text.TextPaint;
+import android.text.TextUtils;
 import android.view.Window;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -404,7 +411,13 @@ public class SystemPlugin extends Plugin {
         boolean clear = !Boolean.FALSE.equals(call.getBoolean("clear", true));
         String title = call.getString("title", "");
         String artist = call.getString("artist", "");
+        String album = call.getString("album", "");
         String cover = call.getString("cover");
+        // One song: a picture goes along too, the cover or a plain card with
+        // the name and album on it. WhatsApp shows no name on a song, but it
+        // does put the text under a picture, so that is where the name and
+        // album end up.
+        boolean card = Boolean.TRUE.equals(call.getBoolean("card", false));
         if (path == null) { call.reject("no path"); return; }
         new Thread(() -> {
             try {
@@ -421,18 +434,89 @@ public class SystemPlugin extends Plugin {
                 String base = (artist.isEmpty() ? title : artist + " - " + title).replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").trim();
                 if (base.isEmpty()) base = dot >= 0 ? name.substring(0, dot) : name;
                 if (base.length() > 120) base = base.substring(0, 120).trim();
+                // A file name may be 255 bytes, and a name in Cyrillic or with
+                // emoji takes two to four bytes a letter: the copy then failed.
+                while (base.getBytes(StandardCharsets.UTF_8).length > 180) base = base.substring(0, base.length() - 1);
+                base = base.trim();
+                if (base.isEmpty()) base = "song";
                 File out = new File(dir, base + ext);
                 // Two songs with the same name: "Name (2)".
                 for (int n = 2; out.exists(); n++) out = new File(dir, base + " (" + n + ")" + ext);
-                boolean tagged = ext.equals(".mp3") && writeMp3(src, out, title, artist, decodeCover(cover));
+                byte[][] pic = decodeCover(cover);
+                boolean tagged = ext.equals(".mp3") && writeMp3(src, out, title, artist, album, pic);
                 if (!tagged) { out.delete(); appendRange(src, out, 0, src.length()); }
                 JSObject ret = new JSObject();
                 ret.put("path", out.getAbsolutePath());
+                if (card) {
+                    File img = writeCard(dir, src, pic, title, artist, album);
+                    if (img != null) ret.put("card", img.getAbsolutePath());
+                }
                 call.resolve(ret);
             } catch (Exception e) {
                 call.reject("share copy failed: " + e.getMessage());
             }
         }).start();
+    }
+
+    /** The picture that goes along with one song: its cover (the one set in
+     *  MPTree, else the one in the file), or black with the name and album in
+     *  white. Null if it could not be made; the song goes alone then. */
+    private static File writeCard(File dir, File src, byte[][] cover, String title, String artist, String album) {
+        try {
+            byte[] bytes = cover != null ? cover[1] : null;
+            if (bytes == null) {
+                MediaMetadataRetriever r = new MediaMetadataRetriever();
+                try { r.setDataSource(src.getAbsolutePath()); bytes = r.getEmbeddedPicture(); }
+                catch (Exception ignored) { }
+                finally { try { r.release(); } catch (Exception ignored) { } }
+            }
+            Bitmap art = null;
+            if (bytes != null) {
+                BitmapFactory.Options o = new BitmapFactory.Options();
+                o.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
+                int sample = 1;
+                while (Math.min(o.outWidth, o.outHeight) / (sample * 2) >= 1080) sample *= 2;
+                o = new BitmapFactory.Options();
+                o.inSampleSize = sample;
+                art = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
+            }
+            int size = 1080;
+            Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(out);
+            c.drawColor(Color.BLACK);
+            if (art != null) {
+                // Square, from the middle.
+                int s = Math.min(art.getWidth(), art.getHeight());
+                Rect from = new Rect((art.getWidth() - s) / 2, (art.getHeight() - s) / 2, (art.getWidth() + s) / 2, (art.getHeight() + s) / 2);
+                c.drawBitmap(art, from, new Rect(0, 0, size, size), new Paint(Paint.FILTER_BITMAP_FLAG));
+                art.recycle();
+            } else {
+                float w = size - 160;
+                TextPaint big = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                big.setColor(Color.WHITE);
+                big.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+                big.setTextSize(84);
+                big.setTextAlign(Paint.Align.CENTER);
+                TextPaint small = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+                small.setColor(Color.rgb(160, 160, 160));
+                small.setTextSize(50);
+                small.setTextAlign(Paint.Align.CENTER);
+                String line1 = TextUtils.ellipsize(title.isEmpty() ? src.getName() : title, big, w, TextUtils.TruncateAt.END).toString();
+                String sub = album.isEmpty() ? artist : (artist.isEmpty() ? album : artist + " · " + album);
+                String line2 = TextUtils.ellipsize(sub, small, w, TextUtils.TruncateAt.END).toString();
+                float y = line2.isEmpty() ? size / 2f + 30 : size / 2f;
+                c.drawText(line1, size / 2f, y, big);
+                if (!line2.isEmpty()) c.drawText(line2, size / 2f, y + 90, small);
+            }
+            File img = new File(dir, "cover.jpg");
+            for (int n = 2; img.exists(); n++) img = new File(dir, "cover (" + n + ").jpg");
+            try (FileOutputStream os = new FileOutputStream(img)) { out.compress(Bitmap.CompressFormat.JPEG, 90, os); }
+            out.recycle();
+            return img;
+        } catch (Throwable e) {
+            return null;
+        }
     }
 
     /** { mime, picture } from a data: URL, or null. */
@@ -491,7 +575,7 @@ public class SystemPlugin extends Plugin {
 
     /** False when the file's own tag is a kind this does not rewrite (v2.2,
      *  unsynchronised, extended header): the caller then sends a plain copy. */
-    private static boolean writeMp3(File src, File out, String title, String artist, byte[][] cover) throws IOException {
+    private static boolean writeMp3(File src, File out, String title, String artist, String album, byte[][] cover) throws IOException {
         long fileLen = src.length();
         int major = 3;
         long audioFrom = 0;
@@ -513,7 +597,7 @@ public class SystemPlugin extends Plugin {
                     String id = new String(tag, p, 4, StandardCharsets.ISO_8859_1);
                     int fs = major == 4 ? syncsafe(tag, p + 4) : plain(tag, p + 4);
                     if (fs < 0 || p + 10 + fs > size) break;
-                    boolean drop = id.equals("TIT2") || id.equals("TPE1") || (cover != null && id.equals("APIC"));
+                    boolean drop = id.equals("TIT2") || id.equals("TPE1") || (!album.isEmpty() && id.equals("TALB")) || (cover != null && id.equals("APIC"));
                     if (!drop) kept.write(tag, p, 10 + fs);
                     p += 10 + fs;
                 }
@@ -530,6 +614,7 @@ public class SystemPlugin extends Plugin {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         if (!title.isEmpty()) frame(body, "TIT2", text(title), safe);
         if (!artist.isEmpty()) frame(body, "TPE1", text(artist), safe);
+        if (!album.isEmpty()) frame(body, "TALB", text(album), safe);
         if (cover != null) {
             ByteArrayOutputStream a = new ByteArrayOutputStream();
             a.write(0);

@@ -98,6 +98,9 @@ interface Props {
    *  for the header folding or unfolding, so App does not read that scroll as
    *  the finger's and fold the header straight back (the flicker). */
   onInsetJump?:       () => void;
+  /** Called just before this view scrolls by itself (following the playing
+   *  song), so App does not fold or unfold its header for it. */
+  onAutoScroll?:      () => void;
   /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
@@ -294,7 +297,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -395,18 +398,36 @@ export const PlaylistsView: React.FC<Props> = ({
   // Leaving the detail view (or App switching to Songs) cancels selection.
   useEffect(() => { if (view === "list") exitSelect(); }, [view, exitSelect]);
 
-  // Scroll the currently-playing song into view when it changes (or when a
-  // detail view opens on the song that is already playing). Small delay so the
-  // row has mounted first.
+  // The list follows the music. When the song playing from this playlist
+  // changes, the list glides until that song sits right under the Play all
+  // strip, and the songs before it slide up under the strip.
+  //
+  // Opening a playlist that is playing does not move anything: the page opens
+  // at its top and stays still. It used to scroll the song into the middle of
+  // the screen a moment after opening, which read as the list jumping, and the
+  // header took that scroll for the finger's and folded away.
+  const followKey = useRef("");
+  const touching = useRef(false);
   useEffect(() => {
-    if (view !== "detail" && view !== "smartDetail") return;
-    if (!currentSongId) return;
-    const open = view === "detail" ? `pl:${activeId}` : `smart:${activeSmartId}`;
-    if (playingFrom !== open) return;
-    const t = setTimeout(() => {
-      currentRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 120);
-    return () => clearTimeout(t);
+    const open = view === "detail" ? `pl:${activeId}` : view === "smartDetail" ? `smart:${activeSmartId}` : "";
+    const key = open + "|" + (currentSongId ?? "");
+    const before = followKey.current;
+    followKey.current = key;
+    // A view just opened, or the song is the same: stay still.
+    if (!open || !currentSongId || before === key || !before.startsWith(open + "|")) return;
+    if (playingFrom !== open || selectMode || touching.current) return;
+    const id = requestAnimationFrame(() => {
+      const el = scrollBodyRef.current, row = currentRowRef.current, strip = stripRef.current;
+      if (!el || !row || !strip) return;
+      const target = el.scrollTop + row.getBoundingClientRect().top - el.getBoundingClientRect().top
+        - (insetInsideRef.current + strip.offsetHeight + 6);
+      const top = Math.max(0, Math.min(target, el.scrollHeight - el.clientHeight));
+      if (Math.abs(top - el.scrollTop) < 2) return;
+      onAutoScroll?.();
+      el.scrollTo({ top, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSongId, view, playingFrom, activeId, activeSmartId]);
   useEffect(() => { if (resetToListSignal) exitSelect(); }, [resetToListSignal, exitSelect]);
 
@@ -856,6 +877,18 @@ export const PlaylistsView: React.FC<Props> = ({
   const sticky       = view === "addSongs";
   const insetOutside = sticky ? topInset : 0;
   const insetInside  = sticky ? 0 : topInset;
+  const insetInsideRef = useRef(insetInside);
+  insetInsideRef.current = insetInside;
+  // A playlist's Play all and Shuffle sit on a strip of their own under its
+  // card. The card scrolls away; the strip stays below the header, and the
+  // songs slide under it. Stuck, it is a card of its own, round all round.
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const [stripStuck, setStripStuck] = useState(false);
+  const checkStuck = () => {
+    const strip = stripRef.current, card = cardRef.current;
+    const stuck = !!strip && !!card && strip.getBoundingClientRect().top - card.getBoundingClientRect().bottom > 0.5;
+    if (stuck !== stripStuck) setStripStuck(stuck);
+  };
   // One motion for everything the fold moves, matching CHROME_MOTION in App.
   // The root padding used to have no transition at all, so in a playlist the
   // whole view snapped to its new offset while the logo was still folding: that
@@ -910,7 +943,8 @@ export const PlaylistsView: React.FC<Props> = ({
     const ease = "cubic-bezier(0.22, 1, 0.36, 1)";
     if (!from) {
       card.animate([{ opacity: 0, transform: "translateY(28px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 230, easing: ease });
-      const d = card.querySelector<HTMLElement>("[data-disc]");
+      stripRef.current?.animate([{ opacity: 0, transform: "translateY(28px)" }, { opacity: 1, transform: "none" }], { duration: 230, easing: ease });
+      const d =card.querySelector<HTMLElement>("[data-disc]");
       if (d) d.animate([{ transform: `translateX(-${Math.round(d.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 250, delay: 160, easing: ease, fill: "backwards" });
       return;
     }
@@ -943,7 +977,9 @@ export const PlaylistsView: React.FC<Props> = ({
       [{ transform: `translateX(-${Math.round(disc.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
       { duration: 250, delay: 180, easing: ease, fill: "backwards" },
     );
-    let row = card.nextElementSibling as HTMLElement | null;
+    const strip = stripRef.current;
+    if (strip) strip.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 80, easing: "ease", fill: "backwards" });
+    let row = (strip ?? card).nextElementSibling as HTMLElement | null;
     for (let i = 0; row && i < 10; i++, row = row.nextElementSibling as HTMLElement | null) {
       row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 200, delay: 110 + i * 21, easing: ease, fill: "backwards" });
     }
@@ -973,10 +1009,10 @@ export const PlaylistsView: React.FC<Props> = ({
       border: primary ? "none" : `1.5px solid ${t.border}`,
       cursor: empty ? "default" : "pointer", opacity: empty ? 0.4 : 1,
     });
-    return (
+    return (<>
       <div ref={cardRef} style={{
-        margin: "4px 12px 8px", padding: "12px 14px 16px", borderRadius: 26,
-        background: t.card, border: `1px solid ${t.border}`,
+        margin: "4px 12px 0", padding: "12px 14px 4px", borderRadius: "26px 26px 0 0",
+        background: t.card, border: `1px solid ${t.border}`, borderBottom: "none",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={goBack} aria-label={tr("Back")} style={roundBtn}>
@@ -1042,8 +1078,20 @@ export const PlaylistsView: React.FC<Props> = ({
             )}
           </div>
         </div>
+      </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+      {/* Play all and Shuffle: the card's bottom while the card is in view,
+          then pinned under the header with the songs sliding under it. */}
+      <div ref={stripRef} data-strip style={{
+        position: "sticky", top: insetInside, zIndex: 2,
+        margin: "0 12px 8px", padding: "12px 14px 16px",
+        background: t.card, border: `1px solid ${t.border}`,
+        borderTopColor: stripStuck ? t.border : "transparent",
+        borderRadius: stripStuck ? 22 : "0 0 26px 26px",
+        boxShadow: stripStuck ? "0 10px 24px rgba(0,0,0,0.28)" : "0 0 0 rgba(0,0,0,0)",
+        transition: `border-radius 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, top ${FOLD_MOTION}`,
+      }}>
+        <div style={{ display: "flex", gap: 10 }}>
           <button onClick={() => { if (!empty) onPlayPlaylist(list, false, source); }} disabled={empty} style={bigBtn(true)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             {tr("Play All")}
@@ -1056,7 +1104,7 @@ export const PlaylistsView: React.FC<Props> = ({
           </button>
         </div>
       </div>
-    );
+    </>);
   };
   const noteIcon = (
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1378,7 +1426,11 @@ export const PlaylistsView: React.FC<Props> = ({
           const top = (e.target as HTMLDivElement).scrollTop;
           if ((top > 0) !== bodyScrolled) setBodyScrolled(top > 0);
           onBodyScroll?.(top);
+          checkStuck();
         }}
+        onTouchStart={() => { touching.current = true; }}
+        onTouchEnd={() => { touching.current = false; }}
+        onTouchCancel={() => { touching.current = false; }}
         style={{
           flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none",
           position: "relative", zIndex: 1,

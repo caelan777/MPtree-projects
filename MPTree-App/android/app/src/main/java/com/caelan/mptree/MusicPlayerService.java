@@ -28,6 +28,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 
 import android.support.v4.media.session.MediaSessionCompat;
 
@@ -278,6 +279,34 @@ public class MusicPlayerService extends Service {
         catch (Exception ignored) { }
     }
 
+    /** The player's own lock goes the moment its song ends, and the next song
+     *  only takes one once it has loaded. In between the phone could fall
+     *  asleep: with the app gone from recents and the screen off, the song ran
+     *  out and the next one never started. This holds the CPU across that gap,
+     *  for at most 15 seconds. */
+    private PowerManager.WakeLock gapLock;
+    private void holdGap() {
+        try {
+            if (gapLock == null) {
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                if (pm == null) return;
+                gapLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MPTree:nextSong");
+                gapLock.setReferenceCounted(false);
+            }
+            gapLock.acquire(15000);
+        } catch (Exception ignored) { }
+    }
+    private void releaseGap() {
+        try { if (gapLock != null && gapLock.isHeld()) gapLock.release(); } catch (Exception ignored) { }
+    }
+
+    /** A service the app only binds to ends with the window. Started, it
+     *  stays: this makes sure it is, from inside, where Android allows it
+     *  while the music plays. */
+    private void ensureStarted() {
+        try { startService(new Intent(this, MusicPlayerService.class)); } catch (Exception ignored) { }
+    }
+
     public interface OnCompletionListener {
         void onTrackComplete();
     }
@@ -361,6 +390,7 @@ public class MusicPlayerService extends Service {
         try { unregisterReceiver(noisyReceiver); } catch (Exception ignored) {}
         abandonAudioFocus();
         // FIX 1: Recycle cached bitmaps to release their native memory.
+        releaseGap();
         if (cachedLogoArt != null)   { cachedLogoArt.recycle();   cachedLogoArt = null; }
         if (currentTrackArt != null) { currentTrackArt.recycle(); currentTrackArt = null; }
         super.onDestroy();
@@ -373,7 +403,12 @@ public class MusicPlayerService extends Service {
         // foreground, which is what keeps Android from ending it with the
         // window (an earlier promotion can have been refused, see
         // promoteToForeground). Not playing: nothing to keep alive.
-        if (isPlaying) showNotification();
+        // In split screen the window went with the music still bound to it;
+        // being started as well keeps the service when the binding goes.
+        if (isPlaying || isPreparing) {
+            ensureStarted();
+            showNotification();
+        }
     }
 
     private void createNotificationChannel() {
@@ -752,6 +787,7 @@ public class MusicPlayerService extends Service {
                 mp.start();
                 applyPlaybackSpeed(mp); // keep user's speed across track changes
                 isPlaying = true;
+                releaseGap();
                 if (fadeInNext) {
                     fadeInNext = false;
                     if (wasAutoAdvance && crossfadeDurationMs > 0) fadeIn(mp, myToken);
@@ -802,6 +838,7 @@ public class MusicPlayerService extends Service {
 
         mediaPlayer.setOnCompletionListener(mp -> {
             if (myToken != playToken) return;
+            holdGap();
             mainHandler.post(() -> {
                 if (myToken != playToken) return;
                 advanceForCompletion();
@@ -1101,6 +1138,7 @@ public class MusicPlayerService extends Service {
                     if (at >= 0) nativeQueueIndex = at;
                     mediaPlayer.setOnCompletionListener(mp -> {
                         if (promotedToken != playToken) return;
+                        holdGap();
                         mainHandler.post(() -> {
                             if (promotedToken != playToken) return;
                             advanceForCompletion();
@@ -1207,6 +1245,7 @@ public class MusicPlayerService extends Service {
 
         if (next < 0 || next >= nativeQueue.size()) {
             // Queue exhausted: stop and notify JS to reset its transport UI.
+            releaseGap();
             isPlaying = false;
             updatePlaybackState(PlaybackState.STATE_STOPPED);
             showNotification();
@@ -1756,6 +1795,7 @@ public class MusicPlayerService extends Service {
                 startForeground(NOTIFICATION_ID, notification);
             }
             isForeground = true;
+            ensureStarted();
         } catch (Exception e) {
             // Could not go foreground (background-start restriction). Fall back
             // to a normal notification so controls still show and we don't crash.
