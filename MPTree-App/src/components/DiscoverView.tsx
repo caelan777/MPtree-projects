@@ -66,7 +66,7 @@ function DiscoverViewInner({
   /** Playing here starts: MPTree's own playback should pause. */
   onPreview: () => void;
   /** The file is in Music/MPTree. Resolves when the song is in Songs. */
-  onSaved: (track: FreeTrack, path: string) => Promise<void>;
+  onSaved: (track: FreeTrack, path: string, repair?: boolean) => Promise<void>;
   /** Whether this page has its own small player up, so the app hides its own. */
   onActiveChange: (active: boolean) => void;
   /** Scrolling, for the header to fold and unfold as on Songs. */
@@ -289,6 +289,19 @@ function DiscoverViewInner({
   // ── A full list: one row, a search (both sources), or an artist ───────────
   // `page` counts from 0. An artist is one page: Audius gives all at once.
   const known = (): FreeTrack[] => Object.values(shelves).flatMap(v => (Array.isArray(v) ? v : []));
+
+  // Saved songs that an older build let lose their name and cover: once the
+  // track is on a shelf again, App puts them back (it does nothing for a song
+  // that still has its name). Once per track per session.
+  const mended = useRef(new Set<string>());
+  useEffect(() => {
+    for (const tr of known()) {
+      const p = saved[tr.id];
+      if (!p || mended.current.has(tr.id)) continue;
+      mended.current.add(tr.id);
+      void onSaved(tr, p, true);
+    }
+  }, [shelves, saved]); // eslint-disable-line react-hooks/exhaustive-deps
   const fetchList = async (o: ListOf, page: number): Promise<FreeTrack[]> => {
     if (o.shelf) return listShelf(o.shelf, page * pageSize(o.shelf));
     if (o.query) return searchAll(o.query, page);

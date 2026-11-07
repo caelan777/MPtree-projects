@@ -453,6 +453,9 @@ export default function App() {
   // The playlist open on the Playlists tab, by name, for the tabs: inside one
   // they read "Playlists › name", and Playlists goes back to the list.
   const [openPlaylistName, setOpenPlaylistName] = useState<string | null>(null);
+  // A playlist's own page is open: its card is the top of the screen, and the
+  // header (logo, tabs, settings) slides up out of the way.
+  const [plCardPage, setPlCardPage] = useState(false);
   const [playlistListSignal, setPlaylistListSignal] = useState(0);
   // Kept while the name folds away, so it does not empty out mid-fold.
   const [shownPlaylistName, setShownPlaylistName] = useState("");
@@ -979,6 +982,10 @@ export default function App() {
   }, [sessionNow]);
 
   // ── Scan ──────────────────────────────────────────────────────────────────
+  // Discover downloads of the last minutes, by path. Android can take a while
+  // to list a new file; until it does, a scan keeps the song instead of
+  // dropping it from Songs (where it seemed to be gone, and was saved again).
+  const justSavedRef = useRef(new Map<string, number>());
   const scanMusic = useCallback(async (removedList?: Song[]): Promise<Song[]> => {
     try {
       const [r, persistedCuts] = await Promise.all([MusicScanner.scan(), loadCutTracks()]);
@@ -988,7 +995,10 @@ export default function App() {
       const blocked = new Set(currentRemoved.map((s: Song) => s.id));
       const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
       const cutIds = new Set(persistedCuts.filter((s: Song) => !blocked.has(s.id)).map((s: Song) => s.id));
-      const result = [...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
+      const seen = new Set(sorted.map((s: Song) => s.id));
+      const recent = songsRef.current.filter(s => !seen.has(s.id) && !blocked.has(s.id) && !s.isCut
+        && Date.now() - (justSavedRef.current.get(s.uri) ?? 0) < 10 * 60_000);
+      const result = [...recent, ...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
       setSongs(() => result);
 
       return result;
@@ -2941,21 +2951,36 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A Discover download is in Music/MPTree. It goes into Songs at once, with
-  // the name, artist, genre and cover kept as MPTree's own: the file itself
-  // often has no tags, and a later scan would otherwise call it by its file name.
-  const discoverSaved = async (track: FreeTrack, path: string) => {
+  // A Discover download is in Music/MPTree. It goes into Songs with the name,
+  // artist, genre and cover kept as MPTree's own: the file itself often has no
+  // tags, or the wrong ones, and a scan would otherwise call it by those.
+  // The cover is fetched first, and the song and its name go in together, in
+  // the refs too: the account must never see the song without its name, or it
+  // keeps it that way and the name and cover are lost on the next round.
+  // `repair`: a song saved by an older build that lost them; fill them in.
+  const discoverSaved = async (track: FreeTrack, path: string, repair = false) => {
+    if (repair) {
+      if (metaRef.current[path]?.customName || !songsRef.current.some(s => s.uri === path)) return;
+    } else {
+      justSavedRef.current.set(path, Date.now());
+    }
+    const photo = await Promise.race([artDataUrl(track), new Promise<null>(r => setTimeout(() => r(null), 6000))]);
     const song: Song = { id: path, uri: path, title: track.title, artist: track.artist, duration: track.duration * 1000, dateAdded: Date.now(), isCut: false };
-    setSongs(prev => prev.some(s => s.uri === path) ? prev : [song, ...prev]);
-    const photo = await artDataUrl(track);
-    setMeta(prev => ({ ...prev, [path]: {
-      ...prev[path],
+    const withName = (m: SongMeta | undefined): SongMeta => ({
+      ...m,
       customName: track.title,
-      ...(track.artist ? { customArtist: track.artist } : {}),
-      ...(track.genre ? { customGenre: track.genre } : {}),
-      ...(photo ? { customPhoto: photo } : {}),
-    } }));
-    if (photo) AudioPlayer.setTrackArt({ path, dataUrl: photo }).catch(() => {});
+      ...(track.artist && !(repair && m?.customArtist) ? { customArtist: track.artist } : {}),
+      ...(track.genre && !(repair && m?.customGenre) ? { customGenre: track.genre } : {}),
+      ...(photo && !(repair && m?.customPhoto) ? { customPhoto: photo } : {}),
+    });
+    metaRef.current = { ...metaRef.current, [path]: withName(metaRef.current[path]) };
+    setMeta(prev => ({ ...prev, [path]: withName(prev[path]) }));
+    if (!repair) {
+      if (!songsRef.current.some(s => s.uri === path)) songsRef.current = [song, ...songsRef.current];
+      setSongs(prev => prev.some(s => s.uri === path) ? prev : [song, ...prev]);
+    }
+    if (photo && metaRef.current[path]?.customPhoto === photo) AudioPlayer.setTrackArt({ path, dataUrl: photo }).catch(() => {});
+    if (repair) return;
     setNewSongs(n => n + 1);
     showToast(t("\"{name}\" is in your Songs", { name: track.title }), {
       label: t("Play"),
@@ -2978,12 +3003,12 @@ export default function App() {
   // each time, its memo never held and the whole page was drawn again on any
   // render of App (a fold of the header, a tab, the playing song's clock).
   const discoverLatest = useRef({
-    close: () => {}, preview: () => {}, saved: (_t: FreeTrack, _p: string) => Promise.resolve(), scroll: (_top: number) => {},
+    close: () => {}, preview: () => {}, saved: (_t: FreeTrack, _p: string, _r?: boolean) => Promise.resolve(), scroll: (_top: number) => {},
   });
   const discoverCalls = useMemo(() => ({
     onClose: () => discoverLatest.current.close(),
     onPreview: () => discoverLatest.current.preview(),
-    onSaved: (t: FreeTrack, p: string) => discoverLatest.current.saved(t, p),
+    onSaved: (t: FreeTrack, p: string, r?: boolean) => discoverLatest.current.saved(t, p, r),
     onBodyScroll: (top: number) => discoverLatest.current.scroll(top),
   }), []);
 
@@ -3165,7 +3190,8 @@ export default function App() {
   // bar, and the list starts under that instead.
   const SELECT_INSET    = dims.cardTop - 2 + SELECT_TOP_H + 6;
   const songsInset      = selecting ? SELECT_INSET : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + dims.innerH + 2 + 14;
-  const playlistsInset  = selecting ? SELECT_INSET : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
+  const plBare          = page === "playlists" && plCardPage && !discoverOpen && !selecting;
+  const playlistsInset  = selecting ? SELECT_INSET : plBare ? dims.cardTop + 4 : chromeCollapsed ? COLLAPSED_INSET : dims.cardTop + (dims.innerH - dims.extraH) + 2 + 14;
   // Folding or unfolding the card while the list is scrolled: the list's top
   // padding changes at once, and the scroll position moves by the same amount,
   // so the rows on screen do not move at all. At the very top the list moves
@@ -3547,9 +3573,12 @@ export default function App() {
             borderRadius: chromeCollapsed ? "50%" : 22,
             // The card is the collapse button too. Picking songs, it makes way
             // for the bar that says how many.
-            opacity:       selecting ? 0 : 1,
-            pointerEvents: selecting ? "none" : "auto",
-            transition: move("width", "height", "border-radius"),
+            opacity:       selecting || plBare ? 0 : 1,
+            pointerEvents: selecting || plBare ? "none" : "auto",
+            transform:     plBare ? "translateY(calc(-100% - 24px))" : "none",
+            transition: chromeAnimate
+              ? `${move("width", "height", "border-radius")}, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease`
+              : "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease",
           }}
         >
           {/* Aviela's flowers, behind what the card holds. Laid over the card,
@@ -4218,7 +4247,8 @@ export default function App() {
               isLiked={isLiked}
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
-              onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
+              onBodyScroll={top => { if (!plBare) handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists"); }}
+              onCardPage={setPlCardPage}
               onInsetJump={markInsetJump}
               onAutoScroll={beginProgrammaticScroll}
               onOpenName={onOpenPlaylistName}

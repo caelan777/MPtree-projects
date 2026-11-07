@@ -101,6 +101,9 @@ interface Props {
   /** Called just before this view scrolls by itself (following the playing
    *  song), so App does not fold or unfold its header for it. */
   onAutoScroll?:      () => void;
+  /** True while a playlist's own page is open (its card, not picking songs):
+   *  App's header makes way, and the card is the top of the screen. */
+  onCardPage?:        (on: boolean) => void;
   /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
@@ -297,7 +300,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, onAutoScroll, onCardPage, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -351,7 +354,10 @@ export const PlaylistsView: React.FC<Props> = ({
   // scroll to stop it used to register as a long-press and open select/edit —
   // and (b) scroll the playing song into view.
   const scrollBodyRef = useRef<HTMLDivElement>(null);
+  /** How far a playlist's list reaches up behind the card's round bottom. */
+  const UNDER_CARD = 26;
   const currentRowRef = useRef<HTMLDivElement>(null);
+  const topSpacerRef = useRef<HTMLDivElement>(null);
   const cancelPress = useCallback(() => {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   }, []);
@@ -398,37 +404,51 @@ export const PlaylistsView: React.FC<Props> = ({
   // Leaving the detail view (or App switching to Songs) cancels selection.
   useEffect(() => { if (view === "list") exitSelect(); }, [view, exitSelect]);
 
-  // The list follows the music. When the song playing from this playlist
-  // changes, the list glides until that song sits right under the Play all
-  // strip, and the songs before it slide up under the strip.
-  //
-  // Opening a playlist that is playing does not move anything: the page opens
-  // at its top and stays still. It used to scroll the song into the middle of
-  // the screen a moment after opening, which read as the list jumping, and the
-  // header took that scroll for the finger's and folded away.
+  // The list follows the music. The song playing from this playlist sits
+  // right under the card, and the songs before it are out of sight, under it.
+  // Opening the playlist, it is there already (set before the first paint, so
+  // nothing moves). When the next song starts, the list glides up by one row
+  // and the one that ended slides away under the card. A finger on the list
+  // stops the glide, and while the finger is there the list is the finger's.
   const followKey = useRef("");
   const touching = useRef(false);
+  const glide = useRef(0);
+  const openSource = () => view === "detail" ? `pl:${activeId}` : view === "smartDetail" ? `smart:${activeSmartId}` : "";
+  const alignCurrent = (animate: boolean) => {
+    const el = scrollBodyRef.current, row = currentRowRef.current;
+    cancelAnimationFrame(glide.current);
+    if (!el || !row) return;
+    const target = el.scrollTop + row.getBoundingClientRect().top - el.getBoundingClientRect().top - UNDER_CARD - 2;
+    const top = Math.max(0, Math.min(Math.round(target), el.scrollHeight - el.clientHeight));
+    if (Math.abs(top - el.scrollTop) < 2) return;
+    onAutoScroll?.();
+    if (!animate || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { el.scrollTop = top; return; }
+    const from = el.scrollTop, dist = top - from;
+    const dur = Math.min(760, 420 + Math.abs(dist) * 0.3);
+    const t0 = performance.now();
+    // Slow at both ends: the row leaves gently and settles gently.
+    const ease = (p: number) => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    const step = (now: number) => {
+      if (touching.current) return;
+      const p = Math.min(1, (now - t0) / dur);
+      el.scrollTop = from + dist * ease(p);
+      if (p < 1) glide.current = requestAnimationFrame(step);
+    };
+    glide.current = requestAnimationFrame(step);
+  };
   useEffect(() => {
-    const open = view === "detail" ? `pl:${activeId}` : view === "smartDetail" ? `smart:${activeSmartId}` : "";
+    const open = openSource();
     const key = open + "|" + (currentSongId ?? "");
     const before = followKey.current;
     followKey.current = key;
-    // A view just opened, or the song is the same: stay still.
+    // A view just opened (placed by the layout effect below), or the same song.
     if (!open || !currentSongId || before === key || !before.startsWith(open + "|")) return;
     if (playingFrom !== open || selectMode || touching.current) return;
-    const id = requestAnimationFrame(() => {
-      const el = scrollBodyRef.current, row = currentRowRef.current, strip = stripRef.current;
-      if (!el || !row || !strip) return;
-      const target = el.scrollTop + row.getBoundingClientRect().top - el.getBoundingClientRect().top
-        - (insetInsideRef.current + strip.offsetHeight + 6);
-      const top = Math.max(0, Math.min(target, el.scrollHeight - el.clientHeight));
-      if (Math.abs(top - el.scrollTop) < 2) return;
-      onAutoScroll?.();
-      el.scrollTo({ top, behavior: "smooth" });
-    });
+    const id = requestAnimationFrame(() => alignCurrent(true));
     return () => cancelAnimationFrame(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSongId, view, playingFrom, activeId, activeSmartId]);
+  useEffect(() => () => cancelAnimationFrame(glide.current), []);
   useEffect(() => { if (resetToListSignal) exitSelect(); }, [resetToListSignal, exitSelect]);
 
   // ── Depth reporting ───────────────────────────────────────────────────────
@@ -878,6 +898,23 @@ export const PlaylistsView: React.FC<Props> = ({
   const insetOutside = sticky ? topInset : 0;
   const insetInside  = sticky ? 0 : topInset;
   const insetInsideRef = useRef(insetInside);
+  // A playlist's page: its card (with Play all) stands still at the top, and
+  // only the songs move, under it. Picking songs, the card is away as before.
+  const cardFixed = !selectMode && ((view === "detail" && !!activePlaylist) || (view === "smartDetail" && !!activeSmartPlaylist));
+  useEffect(() => { onCardPage?.(cardFixed); }, [cardFixed, onCardPage]);
+  // The list's height, for the room under the last song: the playing song can
+  // always come up to the card, even when it is the last one.
+  const [bodyH, setBodyH] = useState(0);
+  useEffect(() => {
+    const el = scrollBodyRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setBodyH(el.clientHeight));
+    ro.observe(el);
+    setBodyH(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
+  const tailFor = (source: string, n: number) =>
+    cardFixed && playingFrom === source && n > 0 ? Math.max(bottomInset, bodyH - rowH - UNDER_CARD - 8) : bottomInset;
   insetInsideRef.current = insetInside;
   // A playlist's Play all and Shuffle sit on a strip of their own under its
   // card. The card scrolls away; the strip stays below the header, and the
@@ -907,15 +944,20 @@ export const PlaylistsView: React.FC<Props> = ({
     const el = scrollBodyRef.current;
     const delta = insetInside - prevInside.current;
     prevInside.current = insetInside;
-    if (!el || !delta || sticky || el.scrollTop <= 0) return;
+    // Under a playlist's fixed card the list's own spacer does not change.
+    if (!el || !delta || sticky || cardFixed || el.scrollTop <= 0) return;
     onInsetJump?.();
     el.scrollTop += delta;
-  }, [insetInside, sticky, onInsetJump]);
+  }, [insetInside, sticky, cardFixed, onInsetJump]);
   // Each view starts at its top. They share one scroller, so a playlist
   // opened from far down the list used to open scrolled down as far.
   useLayoutEffect(() => {
     const el = scrollBodyRef.current;
     if (el && el.scrollTop > 0) el.scrollTop = 0;
+    // A playlist that is playing opens at its song.
+    const open = openSource();
+    if (open && playingFrom === open && !selectMode) alignCurrent(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, activeId, activeSmartId]);
   const rootTransition  = animateInsets ? `padding-top ${FOLD_MOTION}` : "none";
 
@@ -979,10 +1021,16 @@ export const PlaylistsView: React.FC<Props> = ({
     );
     const strip = stripRef.current;
     if (strip) strip.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 80, easing: "ease", fill: "backwards" });
-    let row = (strip ?? card).nextElementSibling as HTMLElement | null;
+    let row = (cardFixed ? topSpacerRef.current : (strip ?? card))?.nextElementSibling as HTMLElement | null;
+    const body = scrollBodyRef.current;
+    if (cardFixed && body) {
+      const edge = body.getBoundingClientRect().top + UNDER_CARD;
+      while (row && row.getBoundingClientRect().bottom <= edge) row = row.nextElementSibling as HTMLElement | null;
+    }
     for (let i = 0; row && i < 10; i++, row = row.nextElementSibling as HTMLElement | null) {
       row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 200, delay: 110 + i * 21, easing: ease, fill: "backwards" });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, activeId, activeSmartId]);
 
   // ── The playlist's card ───────────────────────────────────────────────────
@@ -1082,7 +1130,14 @@ export const PlaylistsView: React.FC<Props> = ({
 
       {/* Play all and Shuffle: the card's bottom while the card is in view,
           then pinned under the header with the songs sliding under it. */}
-      <div ref={stripRef} data-strip style={{
+      <div ref={stripRef} data-strip style={cardFixed ? {
+        position: "relative", zIndex: 2,
+        margin: "0 12px", padding: "12px 14px 16px",
+        background: t.card, border: `1px solid ${t.border}`, borderTop: "none",
+        borderRadius: "0 0 26px 26px",
+        boxShadow: bodyScrolled ? "0 12px 22px -8px rgba(0,0,0,0.45)" : "0 0 0 rgba(0,0,0,0)",
+        transition: "box-shadow 0.3s ease",
+      } : {
         position: "sticky", top: insetInside, zIndex: 2,
         margin: "0 12px 8px", padding: "12px 14px 16px",
         background: t.card, border: `1px solid ${t.border}`,
@@ -1287,6 +1342,18 @@ export const PlaylistsView: React.FC<Props> = ({
     </>
   );
 
+  const fixedCard = !cardFixed ? null
+    : view === "detail" && activePlaylist ? renderCard({
+      source: `pl:${activePlaylist.id}`, name: activePlaylist.name, photo: activePlaylist.coverPhoto,
+      icon: noteIcon, list: playlistSongs, own: true,
+    })
+    : activeSmartPlaylist ? renderCard({
+      source: `smart:${activeSmartPlaylist.id}`, name: activeSmartPlaylist.name,
+      icon: (SMART_CARD_STYLES[activeSmartPlaylist.id] ?? FALLBACK_SMART_STYLE).icon(52),
+      list: smartPlaylistSongs, own: false,
+    })
+    : null;
+
   return (
     <div style={{
       position:   "absolute", inset: 0,
@@ -1418,6 +1485,14 @@ export const PlaylistsView: React.FC<Props> = ({
         </div>
       )}
 
+      {/* ── A playlist's card, standing still above its songs ─────────── */}
+      {cardFixed && (
+        <div style={{ position: "relative", zIndex: 2, flexShrink: 0 }}>
+          <div style={{ height: insetInside, transition: insetTransition }} aria-hidden="true" />
+          {fixedCard}
+        </div>
+      )}
+
       {/* ── Scrollable content ──────────────────────────────────────────── */}
       <div
         ref={scrollBodyRef}
@@ -1428,12 +1503,19 @@ export const PlaylistsView: React.FC<Props> = ({
           onBodyScroll?.(top);
           checkStuck();
         }}
-        onTouchStart={() => { touching.current = true; }}
+        onTouchStart={() => { touching.current = true; cancelAnimationFrame(glide.current); }}
         onTouchEnd={() => { touching.current = false; }}
         onTouchCancel={() => { touching.current = false; }}
         style={{
           flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none",
           position: "relative", zIndex: 1,
+          // Under a playlist's card the list starts behind the strip's round
+          // bottom, so a song going up passes under it, fading as it goes.
+          ...(cardFixed ? {
+            marginTop: -UNDER_CARD,
+            WebkitMaskImage: `linear-gradient(to bottom, transparent 0, transparent ${UNDER_CARD - 18}px, #000 ${UNDER_CARD + 6}px)`,
+            maskImage: `linear-gradient(to bottom, transparent 0, transparent ${UNDER_CARD - 18}px, #000 ${UNDER_CARD + 6}px)`,
+          } : null),
         }}
       >
         {/* The header's height as a spacer INSIDE the scroller, so rows scroll up
@@ -1442,7 +1524,7 @@ export const PlaylistsView: React.FC<Props> = ({
             node that is being removed, so unmounting it on a view change snapped
             this to zero while the root's padding was still easing in, which read
             as a double jump. */}
-        <div style={{ height: insetInside, transition: bodyScrolled && !sticky ? "none" : insetTransition }} aria-hidden="true" />
+        <div ref={topSpacerRef} style={{ height: cardFixed ? UNDER_CARD : insetInside, transition: cardFixed || (bodyScrolled && !sticky) ? "none" : insetTransition }} aria-hidden="true" />
 
         {/* ════ PLAYLIST LIST ════════════════════════════════════════════ */}
         {view === "list" && renderList(false)}
@@ -1450,12 +1532,6 @@ export const PlaylistsView: React.FC<Props> = ({
         {/* ════ PLAYLIST DETAIL (user playlist) ═══════════════════════════ */}
         {view === "detail" && activePlaylist && (
           <>
-            {/* The card. Away while picking songs, so the page is the bar,
-                the rows and the actions, as on Songs. */}
-            {!selectMode && renderCard({
-              source: `pl:${activePlaylist.id}`, name: activePlaylist.name, photo: activePlaylist.coverPhoto,
-              icon: noteIcon, list: playlistSongs, own: true,
-            })}
 
             {playlistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
@@ -1467,18 +1543,13 @@ export const PlaylistsView: React.FC<Props> = ({
                 <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: playlistSongs, inPlaylist: true })}</React.Fragment>
               ))
             )}
-            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
+            <div style={{ height: tailFor(`pl:${activePlaylist.id}`, playlistSongs.length), transition: insetTransition }} aria-hidden="true" />
           </>
         )}
 
         {/* ════ SMART PLAYLIST DETAIL (read-only) ══════════════════════════ */}
         {view === "smartDetail" && activeSmartPlaylist && (
           <>
-            {!selectMode && renderCard({
-              source: `smart:${activeSmartPlaylist.id}`, name: activeSmartPlaylist.name,
-              icon: (SMART_CARD_STYLES[activeSmartPlaylist.id] ?? FALLBACK_SMART_STYLE).icon(52),
-              list: smartPlaylistSongs, own: false,
-            })}
 
             {smartPlaylistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
@@ -1495,7 +1566,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: smartPlaylistSongs, inPlaylist: false })}</React.Fragment>
               ))
             )}
-            <div style={{ height: bottomInset, transition: insetTransition }} aria-hidden="true" />
+            <div style={{ height: tailFor(`smart:${activeSmartPlaylist.id}`, smartPlaylistSongs.length), transition: insetTransition }} aria-hidden="true" />
           </>
         )}
 
