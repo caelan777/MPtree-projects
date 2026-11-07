@@ -362,6 +362,8 @@ export const PlaylistsView: React.FC<Props> = ({
   const GAP = 12;
   const currentRowRef = useRef<HTMLDivElement>(null);
   const topSpacerRef = useRef<HTMLDivElement>(null);
+  /** A playlist's songs, in one block: what the glide moves. */
+  const rowsRef = useRef<HTMLDivElement>(null);
   const cancelPress = useCallback(() => {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   }, []);
@@ -442,17 +444,17 @@ export const PlaylistsView: React.FC<Props> = ({
     if (Math.abs(dist) < 2) return;
     onAutoScroll?.();
     el.scrollTop = top;
-    if (!animate || Math.abs(dist) > el.clientHeight * 1.5 || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const lo = box.top - Math.abs(dist) - 40, hi = box.bottom + Math.abs(dist) + 40;
-    const duration = Math.min(560, 360 + Math.abs(dist) * 0.25);
-    for (const c of Array.from(el.children) as HTMLElement[]) {
-      const cr = c.getBoundingClientRect();
-      if (cr.bottom < lo || cr.top > hi || cr.height === 0) continue;
-      glideAnims.current.push(c.animate(
-        [{ transform: `translateY(${dist}px)` }, { transform: "translateY(0)" }],
-        { duration, easing: "cubic-bezier(0.32, 0, 0.18, 1)", fill: "backwards" },
-      ));
-    }
+    const block = rowsRef.current;
+    if (!animate || !block || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    // One element moves, so the phone makes one layer, not one per row (that
+    // was the catch at the start). A song far away still slides in, from at
+    // most of a screen away, rather than the list jumping.
+    const start = Math.sign(dist) * Math.min(Math.abs(dist), el.clientHeight * 0.85);
+    const duration = Math.min(560, 360 + Math.abs(start) * 0.25);
+    glideAnims.current.push(block.animate(
+      [{ transform: `translate3d(0, ${start}px, 0)` }, { transform: "translate3d(0, 0, 0)" }],
+      { duration, easing: "cubic-bezier(0.32, 0, 0.18, 1)", fill: "backwards" },
+    ));
   };
   useEffect(() => {
     const open = openSource();
@@ -920,7 +922,6 @@ export const PlaylistsView: React.FC<Props> = ({
   // only the songs move, under it. Picking songs, the card is away as before.
   const cardFixed = !selectMode && ((view === "detail" && !!activePlaylist) || (view === "smartDetail" && !!activeSmartPlaylist));
   useEffect(() => { onCardPage?.(cardFixed); }, [cardFixed, onCardPage]);
-  const tailFor = (_source: string, _n: number) => bottomInset;
   insetInsideRef.current = insetInside;
   // A playlist's Play all and Shuffle sit on a strip of their own under its
   // card. The card scrolls away; the strip stays below the header, and the
@@ -1027,7 +1028,7 @@ export const PlaylistsView: React.FC<Props> = ({
     );
     const strip = stripRef.current;
     if (strip) strip.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 80, easing: "ease", fill: "backwards" });
-    let row = (cardFixed ? topSpacerRef.current : (strip ?? card))?.nextElementSibling as HTMLElement | null;
+    let row = (cardFixed ? rowsRef.current?.firstElementChild : (strip ?? card)?.nextElementSibling) as HTMLElement | null;
     const body = scrollBodyRef.current;
     if (cardFixed && body) {
       const edge = body.getBoundingClientRect().top + UNDER_CARD;
@@ -1496,12 +1497,7 @@ export const PlaylistsView: React.FC<Props> = ({
         <div style={{ position: "relative", zIndex: 2, flexShrink: 0 }}>
           <div style={{ height: bareTop }} aria-hidden="true" />
           {fixedCard}
-          {/* Songs going up fade as they reach the card. */}
-          <div aria-hidden="true" style={{
-            position: "absolute", left: 0, right: 0, top: "100%", height: 14, pointerEvents: "none",
-            background: `linear-gradient(${t.bg}, ${t.bg}00)`,
-            opacity: bodyScrolled ? 1 : 0, transition: "opacity 0.2s ease",
-          }} />
+
         </div>
       )}
 
@@ -1541,7 +1537,7 @@ export const PlaylistsView: React.FC<Props> = ({
 
         {/* ════ PLAYLIST DETAIL (user playlist) ═══════════════════════════ */}
         {view === "detail" && activePlaylist && (
-          <>
+          <div ref={rowsRef}>
 
             {playlistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
@@ -1553,13 +1549,13 @@ export const PlaylistsView: React.FC<Props> = ({
                 <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: playlistSongs, inPlaylist: true })}</React.Fragment>
               ))
             )}
-            <div style={{ height: tailFor(`pl:${activePlaylist.id}`, playlistSongs.length) }} aria-hidden="true" />
-          </>
+            <div style={{ height: bottomInset }} aria-hidden="true" />
+          </div>
         )}
 
         {/* ════ SMART PLAYLIST DETAIL (read-only) ══════════════════════════ */}
         {view === "smartDetail" && activeSmartPlaylist && (
-          <>
+          <div ref={rowsRef}>
 
             {smartPlaylistSongs.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", color: t.muted, textAlign: "center" }}>
@@ -1576,8 +1572,8 @@ export const PlaylistsView: React.FC<Props> = ({
                 <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: smartPlaylistSongs, inPlaylist: false })}</React.Fragment>
               ))
             )}
-            <div style={{ height: tailFor(`smart:${activeSmartPlaylist.id}`, smartPlaylistSongs.length) }} aria-hidden="true" />
-          </>
+            <div style={{ height: bottomInset }} aria-hidden="true" />
+          </div>
         )}
 
         {/* ════ ADD SONGS VIEW ═══════════════════════════════════════════ */}
