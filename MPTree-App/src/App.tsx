@@ -3575,10 +3575,9 @@ export default function App() {
             // for the bar that says how many.
             opacity:       selecting || plBare ? 0 : 1,
             pointerEvents: selecting || plBare ? "none" : "auto",
-            transform:     plBare ? "translateY(calc(-100% - 24px))" : "none",
             transition: chromeAnimate
-              ? `${move("width", "height", "border-radius")}, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease`
-              : "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease",
+              ? `${move("width", "height", "border-radius")}, opacity 0.16s ease`
+              : "opacity 0.16s ease",
           }}
         >
           {/* Aviela's flowers, behind what the card holds. Laid over the card,
@@ -3596,7 +3595,7 @@ export default function App() {
               opacity: chromeCollapsed ? 0 : 1,
               // `selecting` too: the card's own "none" does not reach a child
               // that says "auto", so the hidden sort button stayed tappable.
-              pointerEvents: chromeCollapsed || selecting ? "none" : "auto",
+              pointerEvents: chromeCollapsed || selecting || plBare ? "none" : "auto",
               // Deliberately NOT the shared CHROME_MOTION timing: the two
               // logos (this one at 48px, the collapsed one at 30px) overlap
               // during the swap, and fading them over a third of a second
@@ -3626,7 +3625,9 @@ export default function App() {
               you are: Songs folds away, Playlists lets go of its fill, and the
               playlist's name comes in filled after a "›". */}
           {(() => {
-            const inPl = page === "playlists" && !!openPlaylistName;
+            // Not on a playlist's own page: there the header fades away as it
+            // is, rather than first turning into "Playlists › name".
+            const inPl = page === "playlists" && !!openPlaylistName && !plCardPage;
             const fold = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
             const seg = (on: boolean): React.CSSProperties => ({
               paddingTop: 6, paddingBottom: 6, paddingLeft: 14, paddingRight: 14, borderRadius: 17, border: "none", cursor: "pointer",
@@ -3775,7 +3776,7 @@ export default function App() {
             style={{
               position: "absolute", inset: 0,
               opacity: chromeCollapsed ? 1 : 0,
-              pointerEvents: chromeCollapsed ? "auto" : "none",
+              pointerEvents: chromeCollapsed && !plBare && !selecting ? "auto" : "none",
               transition: chromeAnimate ? "opacity 0.15s ease" : "none",
             }}
           >
@@ -4209,6 +4210,7 @@ export default function App() {
           >
             <PlaylistsView
               topInset={playlistsInset}
+              bareTop={dims.cardTop + 4}
               onToast={showToast}
               rowH={ROW_H}
               rowTitle={ROW_TITLE}
