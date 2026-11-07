@@ -423,12 +423,19 @@ export const PlaylistsView: React.FC<Props> = ({
   const glideAnims = useRef<Animation[]>([]);
   const stopGlide = () => { for (const a of glideAnims.current) a.cancel(); glideAnims.current = []; };
   const openSource = () => view === "detail" ? `pl:${activeId}` : view === "smartDetail" ? `smart:${activeSmartId}` : "";
+  // Like the Songs tab: a song already in sight leaves the list where it is;
+  // one out of sight is brought to the middle. The glide is not a scroll
+  // animation: the list jumps to where it ends up and the rows on screen are
+  // moved there with a transform, which runs on the GPU and does not stutter.
   const alignCurrent = (animate: boolean) => {
     const el = scrollBodyRef.current, row = currentRowRef.current;
     stopGlide();
     if (!el || !row) return;
     const box = el.getBoundingClientRect();
-    const target = el.scrollTop + row.getBoundingClientRect().top - box.top - UNDER_CARD - GAP;
+    const r = row.getBoundingClientRect();
+    const visTop = box.top + UNDER_CARD + GAP, visBottom = box.bottom - bottomInset;
+    if (r.top >= visTop && r.bottom <= visBottom) return;
+    const target = el.scrollTop + (r.top + r.height / 2) - (visTop + visBottom) / 2;
     const from = el.scrollTop;
     const top = Math.max(0, Math.min(Math.round(target), el.scrollHeight - el.clientHeight));
     const dist = top - from;
@@ -439,8 +446,8 @@ export const PlaylistsView: React.FC<Props> = ({
     const lo = box.top - Math.abs(dist) - 40, hi = box.bottom + Math.abs(dist) + 40;
     const duration = Math.min(560, 360 + Math.abs(dist) * 0.25);
     for (const c of Array.from(el.children) as HTMLElement[]) {
-      const r = c.getBoundingClientRect();
-      if (r.bottom < lo || r.top > hi || r.height === 0) continue;
+      const cr = c.getBoundingClientRect();
+      if (cr.bottom < lo || cr.top > hi || cr.height === 0) continue;
       glideAnims.current.push(c.animate(
         [{ transform: `translateY(${dist}px)` }, { transform: "translateY(0)" }],
         { duration, easing: "cubic-bezier(0.32, 0, 0.18, 1)", fill: "backwards" },
@@ -913,19 +920,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // only the songs move, under it. Picking songs, the card is away as before.
   const cardFixed = !selectMode && ((view === "detail" && !!activePlaylist) || (view === "smartDetail" && !!activeSmartPlaylist));
   useEffect(() => { onCardPage?.(cardFixed); }, [cardFixed, onCardPage]);
-  // The list's height, for the room under the last song: the playing song can
-  // always come up to the card, even when it is the last one.
-  const [bodyH, setBodyH] = useState(0);
-  useEffect(() => {
-    const el = scrollBodyRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setBodyH(el.clientHeight));
-    ro.observe(el);
-    setBodyH(el.clientHeight);
-    return () => ro.disconnect();
-  }, []);
-  const tailFor = (source: string, n: number) =>
-    cardFixed && playingFrom === source && n > 0 ? Math.max(bottomInset, bodyH - rowH - UNDER_CARD - GAP - 8) : bottomInset;
+  const tailFor = (_source: string, _n: number) => bottomInset;
   insetInsideRef.current = insetInside;
   // A playlist's Play all and Shuffle sit on a strip of their own under its
   // card. The card scrolls away; the strip stays below the header, and the

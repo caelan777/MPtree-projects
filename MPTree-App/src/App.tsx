@@ -1273,13 +1273,27 @@ export default function App() {
     const id = currentSong.id;
     // Skip the native round-trip if the user already set a custom photo.
     if (metaRef.current[id]?.customPhoto) { setNowPlayingArt(null); return; }
+    // A cover of at most 720px, not the picture in the file: those are often
+    // 3000px and several MB, and crossing the bridge as text and then being
+    // decoded on screen was the stutter at the start of every song. Decoded
+    // off screen first, so the swap itself costs nothing.
     let cancelled = false;
-    AudioPlayer.getAlbumArt({ path: currentSong.uri })
-      .then(({ art }) => {
+    let tries = 0;
+    const ask = (): void => { AudioPlayer.getAlbumArtThumb({ path: currentSong.uri, maxPx: 720 })
+      .then(async ({ art, ready }) => {
         if (cancelled) return;
-        setNowPlayingArt(art ? { id, url: `data:image/jpeg;base64,${art}` } : null);
+        // The service binds a moment after launch: ask again rather than
+        // calling the song coverless.
+        if (ready === false && ++tries < 10) { setTimeout(() => { if (!cancelled) ask(); }, 400); return; }
+        if (!art) { setNowPlayingArt(null); return; }
+        const url = `data:image/jpeg;base64,${art}`;
+        const img = new Image();
+        img.src = url;
+        await img.decode().catch(() => {});
+        if (!cancelled) setNowPlayingArt({ id, url });
       })
-      .catch(() => { if (!cancelled) setNowPlayingArt(null); });
+      .catch(() => { if (!cancelled) setNowPlayingArt(null); }); };
+    ask();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
