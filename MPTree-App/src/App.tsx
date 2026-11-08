@@ -398,19 +398,20 @@ export default function App() {
   const programmaticCap   = useRef(0);
   const beginProgrammaticScroll = useCallback(() => {
     const now = Date.now();
-    programmaticUntil.current = now + 800;
-    programmaticCap.current   = now + 3000;
+    programmaticUntil.current = now + 4000;
+    programmaticCap.current   = now + 4000;
+    window.dispatchEvent(new Event("mptree-autoscroll"));
   }, []);
   // A smooth scroll across a long list (shuffle jumps anywhere) outlasts any
   // fixed wait, and its last events used to fold the header and the player
   // away right after the tap that had opened them. So while the app's own
   // scroll is still producing events, it is still the app's scroll.
-  const programmaticScrolling = () => {
-    const now = Date.now();
-    if (now >= programmaticUntil.current) return false;
-    programmaticUntil.current = Math.min(programmaticCap.current, Math.max(programmaticUntil.current, now + 250));
-    return true;
-  };
+  // It stays the app's until that scroll has come to rest (scrollend), a
+  // finger touches the screen, or four seconds have passed. It used to end
+  // when the events paused for a quarter of a second, and a phone busy with
+  // the new song pauses longer than that: the rest of the scroll then folded
+  // the header away after a shuffle or a skip.
+  const programmaticScrolling = () => Date.now() < programmaticUntil.current;
   // A scroll the app starts, kept until it has arrived. Unfolding the header
   // moves the list's scroll position in the same frame (see the fold's layout
   // effect), and setting scrollTop stops a smooth scroll dead: the scroll-to-top
@@ -427,8 +428,24 @@ export default function App() {
   // A finger on the screen takes over: from there on a scroll is the user's.
   useEffect(() => {
     const takeOver = () => { programmaticUntil.current = 0; pendingScroll.current = null; };
+    // A scroll that has come to rest: the app's own is over. Not while a
+    // fold is still to start one again (pendingScroll), and not in the first
+    // moments: setting scrollTop for the fold ends a scroll of its own.
+    let armedAt = 0;
+    const settled = () => {
+      if (pendingScroll.current) return;
+      const now = Date.now();
+      if (programmaticUntil.current > now && now - armedAt > 200) programmaticUntil.current = now + 150;
+    };
+    const arm = () => { armedAt = Date.now(); };
     window.addEventListener("touchstart", takeOver, { passive: true, capture: true });
-    return () => window.removeEventListener("touchstart", takeOver, { capture: true });
+    window.addEventListener("scrollend", settled, { passive: true, capture: true });
+    window.addEventListener("mptree-autoscroll", arm);
+    return () => {
+      window.removeEventListener("touchstart", takeOver, { capture: true });
+      window.removeEventListener("scrollend", settled, { capture: true });
+      window.removeEventListener("mptree-autoscroll", arm);
+    };
   }, []);
 
   // Bring the chrome back. Playing something — tapping a song, hitting shuffle
@@ -724,10 +741,14 @@ export default function App() {
   // shuffle button. Started from Playlists it spotlit things that were not on
   // screen, so it always goes to Songs with the header open first, and waits
   // for that to have finished moving before measuring anything.
+  // From Discover, Discover closes first (it lies over Songs), and the tour
+  // waits for the wall that takes it away.
   const startTutorial = (delayMs: number) => {
+    const fromDiscover = discoverOpenRef.current;
+    if (fromDiscover) leaveDiscover();
     setPage("songs");
     openChrome();
-    window.setTimeout(() => setShowOnboarding(true), delayMs);
+    window.setTimeout(() => setShowOnboarding(true), fromDiscover ? Math.max(delayMs, WALL_MS + 100) : delayMs);
   };
   // The search field used to unmount when you left the Songs tab, which took the
   // Android keyboard with it. It stays mounted now (see the header card), so the
@@ -4203,6 +4224,7 @@ export default function App() {
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
+              onAutoScroll={beginProgrammaticScroll}
               onInsetJump={markInsetJump}
               onOpenName={onOpenPlaylistName}
               listSignal={playlistListSignal}
