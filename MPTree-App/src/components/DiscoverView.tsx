@@ -6,14 +6,14 @@ import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Sync } from "../plugins";
 import {
-  SHELVES, POPULAR, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
+  SHELVES, POPULAR, POPULAR_ALL, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
   saveName, licenceChip, nextArt, baseName, onSavedChange, type FreeTrack,
   searchAll, artistsOf, artistTracks, type Artist,
 } from "../discover";
 
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
 // Free music to download, as shelves of covers per genre, from Audius and the
-// Internet Archive, under Popular songs and Popular artists. It is the first page,
+// Internet Archive, under Popular this week and Popular artists. It is the first page,
 // left of Songs, under the same header card: the download button in the card
 // slides it in, and Back or a tab takes you back. It is not swiped, so the
 // rows of covers can scroll sideways freely. The header's search box searches both sources while you are here.
@@ -77,6 +77,8 @@ function DiscoverViewInner({
   animateInsets?: boolean;
 }) {
   const [shelves, setShelves] = useState<Record<string, FreeTrack[] | "error">>({});
+  // The week had too few free songs: the first list is the most played ever.
+  const [popAll, setPopAll] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [dl, setDl] = useState<Record<string, Dl>>({});
   const [list, setList] = useState<null | ListOf & { tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
@@ -135,8 +137,12 @@ function DiscoverViewInner({
   // ── Shelves ───────────────────────────────────────────────────────────────
   const loadAll = useCallback(() => {
     setShelves({});
+    setPopAll(false);
     [POPULAR, ...SHELVES].forEach(s => {
-      loadShelf(s)
+      const load = s === POPULAR
+        ? loadShelf(s).catch(() => loadShelf(POPULAR_ALL).then(tracks => { setPopAll(true); return tracks; }))
+        : loadShelf(s);
+      load
         .then(tracks => setShelves(prev => ({ ...prev, [s.key]: tracks })))
         .catch(() => setShelves(prev => ({ ...prev, [s.key]: "error" })));
     });
@@ -498,8 +504,9 @@ function DiscoverViewInner({
     </div>
   );
 
-  // Popular songs: columns of four, numbered, a column at a time.
+  // Popular this week: columns of four, numbered, a column at a time.
   const popular = shelves[POPULAR.key];
+  const popTitle = popAll ? t("Popular songs") : t("Popular this week");
   const popularSection = () => {
     if (popular === "error" || (Array.isArray(popular) && popular.length === 0)) return null;
     const cols: (FreeTrack | null)[][] = [];
@@ -507,7 +514,7 @@ function DiscoverViewInner({
     for (let i = 0; i < items.length; i += 4) cols.push(items.slice(i, i + 4));
     return (
       <div>
-        {sectionTitle(t("Popular songs"), popular ? () => openList({ title: t("Popular songs"), shelf: POPULAR }) : undefined)}
+        {sectionTitle(popTitle, popular ? () => openList({ title: popTitle, shelf: popAll ? POPULAR_ALL : POPULAR }) : undefined)}
         <div data-hscroll="" style={{ display: "flex", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x proximity", scrollPaddingInline: 16 }}>
           {cols.map((col, c) => (
             <div key={c} style={{ flex: "0 0 calc(100% - 28px)", minWidth: 0, scrollSnapAlign: "end" }}>
@@ -661,6 +668,16 @@ function DiscoverViewInner({
         ) : homeView}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}
+          {/* Audius' API terms ask apps to give their users these. */}
+          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", justifyContent: "center", columnGap: 14, rowGap: 2 }}>
+            {([
+              [t("Audius privacy policy"), "https://audius.co/legal/privacy-policy"],
+              [t("Audius API terms"), "https://audius.co/legal/api-terms"],
+              ["Open Music License", "https://openaudiofoundation.org/open-music-license.pdf"],
+            ] as const).map(([label, url]) => (
+              <button key={url} onClick={() => openSite(url)} style={{ border: "none", background: "transparent", color: T.muted, fontFamily: "inherit", fontSize: 12, padding: "6px 0", textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer" }}>{label}</button>
+            ))}
+          </div>
         </div>
         </div>
       </div>
@@ -739,6 +756,15 @@ function DiscoverViewInner({
                     <span style={{ fontSize: 11.5, fontVariantNumeric: "tabular-nums", opacity: 0.7, width: 34, textAlign: "right", flexShrink: 0 }}>{fmt(cardPreview?.pos ?? 0)}</span>
                     <Seek pos={cardPreview?.pos ?? 0} dur={card.track.duration} color={T.playBtnFg} onSeek={sec => seek(card.track, sec)} />
                     <span style={{ fontSize: 11.5, fontVariantNumeric: "tabular-nums", opacity: 0.7, width: 34, flexShrink: 0 }}>{fmt(card.track.duration)}</span>
+                  </div>
+                  {/* The credit the licence asks for: who made it, under which
+                      licence, and a link to the song where it lives. */}
+                  <div style={{ margin: "0 16px", height: 1, background: "currentColor", opacity: 0.14 }} />
+                  <div style={{ padding: "8px 8px 10px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+                    <span style={{ flex: 1, minWidth: 0, opacity: 0.65, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{credit(card.track)}</span>
+                    <button onClick={() => openSite(card.track.permalink)} style={{ border: "none", background: "transparent", color: T.playBtnFg, fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flexShrink: 0 }}>
+                      {card.track.source === "archive" ? "Internet Archive" : "Audius"}{ARROW}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -819,6 +845,15 @@ function Wall({ up }: { up: boolean }) {
       </div>
     </div>
   );
+}
+
+/** "© Artist · Open Music License", "© Artist · CC BY 3.0", or no © when
+ *  the song is in the public domain. */
+function credit(track: FreeTrack): string {
+  const chip = licenceChip(track.license);
+  const free = chip === "CC0" || chip === "PD";
+  const licence = track.source === "archive" ? track.license : chip === "OML" ? "Open Music License" : chip;
+  return [track.artist ? (free ? track.artist : `© ${track.artist}`) : "", licence].filter(Boolean).join(" · ");
 }
 
 const ARROW = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><polyline points="8 7 17 7 17 16"/></svg>;
