@@ -68,7 +68,7 @@ export type Look = {
 
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
-  cardDark: "default", cardLight: "default", icon: "classic", photoDisc: false,
+  cardDark: "default", cardLight: "default", icon: "classic", photoDisc: true,
   flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
 };
@@ -81,6 +81,7 @@ export const FREE = { vinyl: "classic", dark: "classic", light: "classic", card:
 export const isFreeVinyl = (v: VinylSkin): boolean => v === "classic" || v === "white";
 
 const KEY = "mptree_look";
+const COVER_KEY = "mptree_cover_disc";
 
 // The saved look, and while the Personalise sheet is open, a preview of what is
 // being tried. Without Pro anything can be tried; the preview is dropped when
@@ -159,8 +160,23 @@ export async function loadLook(): Promise<Look> {
       if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };
     }
   } catch { /* a broken entry just means the default look */ }
+  // Since November 2026 a song's cover fills the record, for everyone once:
+  // before, the picture disc was off until the record was tapped.
+  try {
+    if (!(await Preferences.get({ key: COVER_KEY })).value) {
+      Preferences.set({ key: COVER_KEY, value: "1" }).catch(() => {});
+      if (!look.photoDisc) saveLook({ photoDisc: true });
+    }
+  } catch { /* stays as it was */ }
   emit();
   return look;
+}
+
+/** The records a swipe on the player's record goes through: the two free
+ *  ones, and with Pro every record, Lantern's too unless it is shut. */
+export function swipeRecords(pro: boolean): VinylSkin[] {
+  if (!pro) return ["classic", "white"];
+  return ["classic", "white", "smoke", "marble", ...FLOWER_RECORDS, ...(lanternLockDays() > 0 ? [] : LANTERN_RECORDS)];
 }
 
 export function saveLook(patch: Partial<Look>): Look {

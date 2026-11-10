@@ -8,7 +8,7 @@ import { IC } from "./Icons";
 import { Logo } from "./Logo";
 import {
   useOwnsPro, useAccountPro, useAdDay, buyPro, restorePro, proPrice, lockProForTesting,
-  watchAdForPro, adFailText, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
+  watchAdForPro, adFailText, adOkText, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
 } from "../pro";
 import { useSync, signIn } from "../sync/engine";
 import { GoogleG } from "./AccountSheet";
@@ -82,7 +82,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, T }: Pr
     setBusy("ad");
     const r = await watchAdForPro();
     setBusy(null);
-    if (r === "pro") { onToast(t("Pro is on for 24 hours")); onClose(); }
+    if (r === "pro" || r === "pro-free") { onToast(adOkText(r)); onClose(); }
     else onToast(adFailText(r));
   };
 

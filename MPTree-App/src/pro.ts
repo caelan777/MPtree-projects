@@ -283,27 +283,40 @@ if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) checkDay(); });
 }
 
-export type AdResult = "pro" | "offline" | "closed" | "none" | "consent" | "failed";
+/** "pro-free": Google had no ad to give, so the day came without one. */
+export type AdResult = "pro" | "pro-free" | "offline" | "closed" | "none" | "consent" | "failed";
 
 /** Shows one ad. Watched to the end, Pro is on for 24 hours from now. */
 export async function watchAdForPro(): Promise<AdResult> {
   if (!ADS_ON) return "failed";
   count("ad-start");
+  let free = false;
   try {
     const r = await Ads.showRewarded({ adUnitId: AD_UNIT });
     if (!r.rewarded) {
       const why = r.reason;
-      return why === "offline" || why === "closed" || why === "none" || why === "consent" ? why : "failed";
+      if (why === "offline" || why === "closed" || why === "consent") return why;
+      // Google had no ad, or could not be reached for one: so it is in
+      // Russia, where Google sells no ads and Play takes no payments. Nobody
+      // misses out on the day because of where they live; it comes anyway.
+      free = true;
     }
-  } catch {
-    return "failed";
+  } catch (e) {
+    // A second tap while an ad is on its way is not a missing ad.
+    if ((e as { code?: string })?.code === "BUSY") return "failed";
+    free = true;
   }
-  count("ad-done");
+  count(free ? "ad-missing" : "ad-done");
   const now = Date.now();
   const day: StoredDay = { from: now, until: now + DAY };
   storeDay(day);
   runDay(day.from, day.until);
-  return "pro";
+  return free ? "pro-free" : "pro";
+}
+
+/** What to say when the day is on: with the ad, or without one. */
+export function adOkText(r: "pro" | "pro-free"): string {
+  return r === "pro" ? t("Pro is on for 24 hours") : t("There was no ad to show, so Pro is on for 24 hours anyway.");
 }
 
 /** What to tell someone whose ad did not give them Pro. */

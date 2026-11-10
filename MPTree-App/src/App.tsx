@@ -49,7 +49,7 @@ import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
 import { useBackground, loadBackground } from "./background";
 import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
-import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, giveDay } from "./pro";
+import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, adOkText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -873,7 +873,7 @@ export default function App() {
   };
   const adWatch = async () => {
     const r = await watchAdForPro();
-    if (r === "pro") { setProOffNote(false); showToast(t("Pro is on for 24 hours")); return true; }
+    if (r === "pro" || r === "pro-free") { setProOffNote(false); showToast(adOkText(r)); return true; }
     showToast(adFailText(r));
     return false;
   };

@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Browser } from "@capacitor/browser";
+import { Preferences } from "@capacitor/preferences";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Sync } from "../plugins";
+import { count, countDaily } from "../counter";
 import {
   SHELVES, POPULAR, POPULAR_ALL, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
   saveName, licenceChip, nextArt, baseName, onSavedChange, type FreeTrack,
@@ -83,6 +85,18 @@ function DiscoverViewInner({
   const [dl, setDl] = useState<Record<string, Dl>>({});
   const [list, setList] = useState<null | ListOf & { tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
   const [failNote, setFailNote] = useState<string | null>(null);
+  // Add more music: a site of their own choosing, typed in once, then one
+  // tap opens it in the browser. Kept on the phone only.
+  const [ownLink, setOwnLink] = useState<string | null>(null);
+  const [ownEdit, setOwnEdit] = useState<string | null>(null);
+  useEffect(() => { Preferences.get({ key: OWN_KEY }).then(r => setOwnLink(r.value || null)).catch(() => {}); }, []);
+  const saveOwn = (raw: string) => {
+    const url = toLink(raw);
+    if (raw.trim() && !url) return;
+    setOwnLink(url);
+    setOwnEdit(null);
+    (url ? Preferences.set({ key: OWN_KEY, value: url }) : Preferences.remove({ key: OWN_KEY })).catch(() => {});
+  };
   // `loading`: asked to play, no sound yet (starting, or buffering).
   const [preview, setPreview] = useState<Preview | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -125,6 +139,8 @@ function DiscoverViewInner({
     window.setTimeout(() => setPasses(p => p.filter(x => x.id !== id)), WALL_MS);
   }, [open]);
 
+  // The anonymous counter (counter.ts): Discover opened, once a day.
+  useEffect(() => { if (open) countDaily("discover"); }, [open]);
   // Gone from the screen: next time it opens on its home, not on an old list.
   useEffect(() => { if (!shown) { setCard(null); setList(null); } }, [shown]);
   useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -207,6 +223,7 @@ function DiscoverViewInner({
     a.src = track.stream;
     void a.play().catch(() => setPreview(null));
     setPreview({ track, playing: true, loading: true, pos: 0 });
+    count("discover-play");
   };
 
   /** To a point in the song, in seconds. Starts it when it is not the one playing. */
@@ -216,6 +233,7 @@ function DiscoverViewInner({
       onPreview();
       a.src = track.stream;
       setPreview({ track, playing: true, loading: true, pos: sec });
+      count("discover-play");
       const go = () => { a.currentTime = sec; a.removeEventListener("loadedmetadata", go); };
       a.addEventListener("loadedmetadata", go);
       void a.play().catch(() => setPreview(null));
@@ -279,6 +297,7 @@ function DiscoverViewInner({
       await markSaved(track.id, out.path);
       setSaved(s => ({ ...s, [track.id]: out.path! }));
       setDl(d => ({ ...d, [track.id]: "done" }));
+      count("discover-download");
       if (!flyCard(track.id)) flyCover(track, from);
       await onSaved(track, out.path);
     } catch (e) {
@@ -575,6 +594,23 @@ function DiscoverViewInner({
     </button>
   );
 
+  /** Add more music: unset, a tap asks for the link; set, a tap opens it
+   *  and the pencil changes it. */
+  const ownCard = () => (
+    <div className="mp-press" role="button" onClick={() => (ownLink ? openSite(ownLink) : setOwnEdit(""))} style={{ height: 64, padding: "0 6px 0 12px", borderRadius: 16, border: `1px solid ${T.border}`, background: T.card, color: T.text, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+      <span style={{ width: 40, height: 40, borderRadius: 11, background: T.text, color: T.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IC.Plus /></span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{t("Add more music")}</span>
+        <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {ownLink ? ownLink.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : t("Add a link to a site you get music from")}
+        </span>
+      </span>
+      {ownLink ? (
+        <button onClick={e => { e.stopPropagation(); setOwnEdit(ownLink); }} aria-label={t("Change the link")} style={{ width: 40, height: 40, border: "none", background: "transparent", color: T.muted, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}><IC.Edit /></button>
+      ) : null}
+    </div>
+  );
+
   const allFailed = [POPULAR, ...SHELVES].every(s => shelves[s.key] === "error");
   const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
 
@@ -598,10 +634,11 @@ function DiscoverViewInner({
               {siteCard(t("More music on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
               {siteCard(t("Buy music on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
             </div>
+            <div style={{ padding: "10px 16px 0" }}>{ownCard()}</div>
             {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
           </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [shelves, saved, dl, libraryNames, previewKey, small, T]);
+  ), [shelves, saved, dl, libraryNames, previewKey, small, T, ownLink]);
   const listView = useMemo(() => !list ? null : (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
@@ -718,6 +755,22 @@ function DiscoverViewInner({
           they fly into its Songs tab. */}
       {createPortal(
         <>
+          {ownEdit !== null && (
+            <div onClick={() => setOwnEdit(null)} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)", color: T.text, padding: 20 }}>
+              <form noValidate onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveOwn(ownEdit); }} style={{ width: "min(340px, 100%)", background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20, padding: 18, boxShadow: "0 30px 60px rgba(0,0,0,0.5)" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Add more music")}</div>
+                <div style={{ fontSize: 13, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{t("The site you get music from. A tap on the card then opens it in your browser.")}</div>
+                <input autoFocus type="url" inputMode="url" value={ownEdit} onChange={e => setOwnEdit(e.target.value)} placeholder="example.com" aria-label={t("Link")}
+                  style={{ width: "100%", boxSizing: "border-box", marginTop: 14, height: 46, borderRadius: 12, border: `1px solid ${ownEdit.trim() && !toLink(ownEdit) ? T.text : T.border}`, background: T.card, color: T.text, fontSize: 16, padding: "0 12px", fontFamily: "inherit", outline: "none" }} />
+                {ownEdit.trim() && !toLink(ownEdit) && <div style={{ fontSize: 12.5, color: T.muted, marginTop: 6 }}>{t("That is not a web address.")}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                  {ownLink && <button type="button" onClick={() => saveOwn("")} style={{ marginRight: "auto", border: "none", background: "transparent", color: T.muted, fontSize: 14, fontWeight: 600, fontFamily: "inherit", padding: "9px 4px", cursor: "pointer" }}>{t("Remove")}</button>}
+                  <button type="button" onClick={() => setOwnEdit(null)} style={{ border: "none", background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", padding: "9px 12px", cursor: "pointer" }}>{t("Cancel")}</button>
+                  <button type="submit" disabled={!toLink(ownEdit)} style={{ border: "none", borderRadius: 12, background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", padding: "9px 16px", cursor: "pointer", opacity: toLink(ownEdit) ? 1 : 0.4 }}>{t("Save")}</button>
+                </div>
+              </form>
+            </div>
+          )}
           {card && (
             <div onClick={closeCard} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease, opacity 0.16s ease`, opacity: cardOut ? 0 : 1, animation: "mptree-fade-in 0.22s ease backwards", color: T.text }}>
               <style>{KEYFRAMES}</style>
@@ -800,6 +853,18 @@ export const DiscoverView = React.memo(DiscoverViewInner, (a, b) => {
   }
   return true;
 });
+
+const OWN_KEY = "mptree_own_source";
+/** "example.com/music" → "https://example.com/music"; null for anything that
+ *  is not a web address. */
+function toLink(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || /\s/.test(v)) return null;
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(v) ? v : "https://" + v);
+    return (u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes(".") ? u.href : null;
+  } catch { return null; }
+}
 
 const FLY_MS = 600;
 export const WALL_MS = 900;

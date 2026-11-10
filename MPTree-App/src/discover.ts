@@ -297,7 +297,7 @@ const shelfKey = (key: string) => "mptree_discover5_" + key;
 const session = new Map<string, FreeTrack[]>();
 
 // Audius shelves that older versions kept on the phone: removed once.
-const forgetStored = Preferences.keys().then(({ keys }) => Promise.all(keys
+const forgetStored = Promise.resolve().then(() => Preferences.keys()).then(({ keys }) => Promise.all(keys
   .filter(k => k.startsWith("mptree_discover") && k !== SAVED && !k.startsWith(shelfKey("ia-")))
   .map(key => Preferences.remove({ key })))).catch(() => {});
 
