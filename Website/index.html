@@ -15,18 +15,18 @@
 <meta property="og:title" content="MPTree, an offline music player">
 <meta property="og:description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
 <meta property="og:url" content="https://mp-tree.net/">
-<meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=43">
+<meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=45">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=43">
+<meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=45">
 
 <link rel="icon" type="image/svg+xml" href="assets/icon/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
-<link rel="stylesheet" href="assets/tokens.css?v=43">
-<link rel="stylesheet" href="assets/site.css?v=43">
+<link rel="stylesheet" href="assets/tokens.css?v=45">
+<link rel="stylesheet" href="assets/site.css?v=45">
 </head>
 <body>
 
@@ -56,7 +56,7 @@
 
     <div class="hero-disc" aria-hidden="true">
       <div class="disc">
-        <img src="assets/img/vinyl.webp?v=43" alt="" width="1000" height="1000">
+        <img src="assets/img/vinyl.webp?v=45" alt="" width="1000" height="1000">
       </div>
       <div class="disc-label">
         <img src="assets/img/mptree-mark-black.svg" alt="" width="26" height="26">
@@ -70,11 +70,8 @@
         MPTree plays the music files already on your phone or computer. No subscription, no
         internet needed. It is free, and nothing you listen to ever leaves your device.
       </p>
-      <!-- Google Play is the way in now. The direct download is still here,
-           one step down, for anyone who cannot use Play or wants an older
-           build. Note the two are signed with different keys: Play re-signs
-           what it is given, so Android will not install one over the other.
-           See docs/play-release-checklist.html. -->
+      <!-- Android is Google Play only since October 2026; Windows comes from
+           the Microsoft Store. Keep the cid on the Store link. -->
       <div class="cta">
         <a class="btn btn-lg" href="https://play.google.com/store/apps/details?id=com.caelan.mptree"
            target="_blank" rel="noopener">
@@ -88,14 +85,14 @@
 
   </section>
 
-  <!-- ── Interface. The preview is a real screenshot of the app, so it cannot
-       drift from the real thing. Re-export the shot when the interface
-       changes. These used to be buttons into the in-browser demo; they are
-       plain pictures now, so nothing here is clickable. ─────────────────── -->
+  <!-- ── Interface. Real screenshots of the app, so they cannot drift from
+       the real thing. The phones are MPTree 1.4.0, captured with
+       Branding/store/app-screens/capture/flows-site-1.4.0.mjs; run it again
+       when the interface changes. ─────────────────────────────────────── -->
   <section id="look" class="section wrap">
     <h2>How it looks</h2>
     <p class="section-lede">
-      Straight from the app, on your phone and on your computer.
+      Straight from the app: your songs, your playlists, and Discover for free music.
     </p>
 
     <!-- Android or Windows. Both are pictures of the real interface; the
@@ -111,16 +108,23 @@
       <div class="phone-row">
         <div class="phone">
           <div class="phone-screen">
-            <img class="phone-shot" src="assets/img/screens/songs.png?v=43"
+            <img class="phone-shot" src="assets/img/screens/songs.png?v=45"
                  alt="The MPTree song list, with a track playing in the bar at the bottom"
-                 width="1080" height="2400" loading="lazy">
+                 width="1080" height="2160" loading="lazy">
           </div>
         </div>
         <div class="phone">
           <div class="phone-screen">
-            <img class="phone-shot" src="assets/img/screens/playlists.png?v=43"
+            <img class="phone-shot" src="assets/img/screens/playlists.png?v=45"
                  alt="The MPTree playlists page, with the automatic playlists above your own"
-                 width="1080" height="2400" loading="lazy">
+                 width="1080" height="2160" loading="lazy">
+          </div>
+        </div>
+        <div class="phone">
+          <div class="phone-screen">
+            <img class="phone-shot" src="assets/img/screens/discover.png?v=45"
+                 alt="Discover in MPTree: search free music, and the songs popular this week, each with a download button"
+                 width="1080" height="2160" loading="lazy">
           </div>
         </div>
       </div>
@@ -130,34 +134,13 @@
     <div id="look-windows" role="tabpanel" hidden>
       <div class="desk">
         <div class="desk-bar" aria-hidden="true"><span></span><span></span><span></span></div>
-        <img class="desk-shot" src="assets/img/screens/windows.jpg?v=43"
+        <img class="desk-shot" src="assets/img/screens/windows.jpg?v=45"
              alt="MPTree on Windows: a sidebar, the song list as a table, and the record with what plays next on the right"
              width="1920" height="1140" loading="lazy">
       </div>
       <p class="look-note"><a href="https://get.microsoft.com/installer/download/9PN3L88V4H58?cid=website_cta_psi">Download for Windows</a></p>
     </div>
   </section>
-
-  <!-- ── Interactive demo ─────────────────────────────────────────────────
-       The real app, built for the web into /demo/ and shown in an iframe. Its
-       audio and library plugins have browser stand-ins, so the whole interface
-       is explorable; there is no actual sound. Loaded only when opened. ──── -->
-  <div class="demo-modal" id="demo-modal" hidden>
-    <div class="demo-backdrop" data-demo-close></div>
-    <div class="demo-shell" role="dialog" aria-modal="true" aria-label="MPTree interactive demo">
-      <div class="demo-bar">
-        <span class="demo-note">Sample library, no sound</span>
-        <button class="demo-x" data-demo-close aria-label="Close demo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-      <div class="demo-screen">
-        <iframe id="demo-iframe" title="MPTree interactive demo" src="about:blank"></iframe>
-      </div>
-    </div>
-  </div>
 
   <!-- ── Features ─────────────────────────────────────────────────────── -->
   <section id="features" class="section wrap">
@@ -167,6 +150,10 @@
       <li>
         <h3>Works offline</h3>
         <p>Everything plays straight off your phone, so it keeps working in flight mode, underground, or anywhere with no signal.</p>
+      </li>
+      <li>
+        <h3>Free music to download</h3>
+        <p>Discover finds free songs on Audius and the Internet Archive. Download one and it plays offline like the rest of your library.</p>
       </li>
       <li>
         <h3>Playlists that fill themselves</h3>
@@ -187,6 +174,14 @@
       <li>
         <h3>Backups</h3>
         <p>Pack your playlists, artwork and music into one file, then restore the lot on a new phone.</p>
+      </li>
+      <li>
+        <h3>Make it yours</h3>
+        <p>Record skins, colour shades and app icons come with MPTree Pro, a one-time €2.99. Everything above stays free.</p>
+      </li>
+      <li>
+        <h3>On all your devices</h3>
+        <p>With Pro, sign in and your songs and playlists follow you from one device to the next.</p>
       </li>
     </ul>
   </section>
@@ -276,6 +271,6 @@
   </div>
 </footer>
 
-<script src="assets/site.js?v=43" defer></script>
+<script src="assets/site.js?v=45" defer></script>
 </body>
 </html>
