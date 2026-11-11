@@ -14,15 +14,10 @@ import { join } from "node:path";
 
 const SITE = "https://mp-tree.net";
 
-/* versions.js sets globals on `window` rather than exporting, because it is
- * loaded by a plain script tag on the site. Running it against a stub gives
- * the same array the site itself renders, so there is no second copy of the
- * release list to keep in step. */
-function readVersionsJs(repoRoot) {
-  const src = readFileSync(join(repoRoot, "Website", "assets", "versions.js"), "utf8");
-  const win = {};
-  new Function("window", src)(win);
-  return { repo: win.MPTREE_REPO, versions: win.MPTREE_VERSIONS ?? [] };
+/* Since October 2026 there is no versions page: the repo's own
+ * Website/version.json is the truth, and the live copy must match it. */
+function readRepoVersion(repoRoot) {
+  return JSON.parse(readFileSync(join(repoRoot, "Website", "version.json"), "utf8"));
 }
 
 /* Never request the real ?v= URL of an asset while checking. Cloudflare serves
@@ -32,33 +27,32 @@ function readVersionsJs(repoRoot) {
 const bust = url => `${url}${url.includes("?") ? "&" : "?"}nocache=${Date.now()}`;
 
 export async function site(repoRoot) {
-  const { versions } = readVersionsJs(repoRoot);
-  const newest = versions[0];
+  const repo = readRepoVersion(repoRoot);
 
   const res = await fetch(bust(`${SITE}/version.json`), { redirect: "follow" });
   if (!res.ok) return { ok: false, reason: `version.json answered ${res.status}` };
   const live = await res.json();
 
+  const t0 = Date.now();
   const home = await fetch(bust(`${SITE}/`));
+  const ms = Date.now() - t0;
   const html = home.ok ? await home.text() : "";
-  const assetVersion = html.match(/site\.css\?v=(\d+)/)?.[1] ?? null;
+  const assetVersion = html.match(/site.css?v=(d+)/)?.[1] ?? null;
 
-  const agrees = live.latest === newest?.version;
+  const agrees = live.latest === repo.latest && live.windows?.latest === repo.windows?.latest;
 
   return {
     ok: true,
     reachable: home.ok,
+    responseMs: ms,
     assetVersion,
     liveVersion: live.latest,
     liveDate:    live.date,
-    repoVersion: newest?.version ?? null,
-    repoDate:    newest?.date ?? null,
+    liveWindows: live.windows?.latest ?? null,
+    repoVersion: repo.latest,
+    repoWindows: repo.windows?.latest ?? null,
     agrees,
-    // Spelled out rather than left to the page to work out, so the reason a
-    // panel is flagged travels with the flag.
     warning: agrees ? null
-      : `version.json says ${live.latest} but versions.js says ${newest?.version}. ` +
-        `Anyone on an older build is not being told an update exists.`,
-    releaseCount: versions.length,
+      : `The live version.json (${live.latest} / Windows ${live.windows?.latest}) differs from the repo (${repo.latest} / Windows ${repo.windows?.latest}).`,
   };
 }

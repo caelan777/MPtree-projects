@@ -28,6 +28,7 @@ import { github }     from "./sources/github.mjs";
 import { site }       from "./sources/site.mjs";
 import { cloudflare } from "./sources/cloudflare.mjs";
 import { play }       from "./sources/play.mjs";
+import { counter }    from "./sources/counter.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -63,6 +64,7 @@ const SOURCES = [
   ["site",       "Site health",     () => site(ROOT)],
   ["cloudflare", "Cloudflare",      () => cloudflare(env)],
   ["play",       "Google Play",     () => play(env, HERE)],
+  ["counter",    "App counter",     () => counter(env)],
 ];
 
 const say = (...a) => { if (!QUIET) console.log(...a); };
@@ -105,7 +107,10 @@ const template = readFileSync(join(HERE, "dashboard.html"), "utf8");
 if (!template.includes("__SNAPSHOT__")) {
   throw new Error("dashboard.html has no __SNAPSHOT__ placeholder to fill in");
 }
-writeFileSync(PAGE, template.replace("__SNAPSHOT__", inline));
+// The brand mark, straight from the master SVG, so the page never carries a stale copy.
+const mark = readFileSync(join(ROOT, "Branding", "source", "mptree-mark.svg"), "utf8")
+  .replace(/<title>[^<]*<\/title>/, "").replace(/role="img"[^>]*?aria-label="[^"]*"/, 'aria-hidden="true"');
+writeFileSync(PAGE, template.replace("__SNAPSHOT__", () => inline).replace("__MARK__", () => mark));
 
 const ready = Object.values(data.sources).filter(s => s.ok).length;
 say(`\n${OUT}\n${PAGE}\n${ready} of ${SOURCES.length} sources answered.`);

@@ -146,48 +146,112 @@ export async function play(env, dashboardDir) {
     return out;
   }
 
-  try {
-    const prefix = `stats/installs/installs_${PACKAGE}_`;
+  const listCsv = async (prefix, suffix) => {
     const list = await fetch(
       `https://storage.googleapis.com/storage/v1/b/${bucket}/o?prefix=${encodeURIComponent(prefix)}`,
       { headers: auth },
     ).then(r => r.json());
+    return (list.items ?? []).filter(o => o.name.endsWith(suffix))
+      .sort((x, y) => x.name.localeCompare(y.name));
+  };
+  const readCsv = async obj => parseCsv(decodeCsv(await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(obj.name)}?alt=media`,
+    { headers: { authorization: `Bearer ${token}` } },
+  ).then(r => r.arrayBuffer())));
+  const n = v => Number(v ?? 0) || 0;
 
-    const overviews = (list.items ?? [])
-      .filter(o => o.name.endsWith("_overview.csv"))
-      .sort((a, b) => a.name.localeCompare(b.name));
+  try {
+    const prefix = `stats/installs/installs_${PACKAGE}_`;
+    const overviews = await listCsv(prefix, "_overview.csv");
 
     if (!overviews.length) {
       out.installs = { note: "No install reports in the bucket yet. Google writes them once the app has data." };
       return out;
     }
 
+    // The last three months, so the chart covers more than the days of this one.
+    const rows = [];
+    for (const o of overviews.slice(-3)) rows.push(...await readCsv(o));
     const newest = overviews[overviews.length - 1];
-    const csv = await fetch(
-      `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(newest.name)}?alt=media`,
-      { headers: { authorization: `Bearer ${token}` } },
-    ).then(r => r.arrayBuffer());
-
-    const rows = parseCsv(decodeCsv(csv));
     const last = rows[rows.length - 1] ?? {};
-    const num  = k => Number(last[k] ?? 0) || 0;
 
     out.installs = {
       report:        newest.name.split("/").pop(),
       through:       last.Date ?? null,
-      totalUsers:    num("Total User Installs"),
-      activeDevices: num("Active Device Installs"),
-      dailyInstalls: num("Daily User Installs"),
-      dailyUninstalls: num("Daily User Uninstalls"),
-      days: rows.slice(-30).map(r => ({
+      totalUsers:    n(last["Total User Installs"]),
+      activeDevices: n(last["Active Device Installs"]),
+      dailyInstalls: n(last["Daily User Installs"]),
+      dailyUninstalls: n(last["Daily User Uninstalls"]),
+      days: rows.slice(-90).map(r => ({
         date:      r.Date,
-        installs:  Number(r["Daily User Installs"] ?? 0) || 0,
-        uninstalls: Number(r["Daily User Uninstalls"] ?? 0) || 0,
-        active:    Number(r["Active Device Installs"] ?? 0) || 0,
+        installs:  n(r["Daily User Installs"]),
+        uninstalls: n(r["Daily User Uninstalls"]),
+        active:    n(r["Active Device Installs"]),
+        updates:   n(r["Daily Device Upgrades"]),
       })),
     };
+
+    // Active devices per country, on the last day of the newest report.
+    const countryFile = (await listCsv(prefix, "_country.csv")).pop();
+    if (countryFile) {
+      const cr = await readCsv(countryFile);
+      const lastDay = cr.reduce((m, r) => r.Date > m ? r.Date : m, "");
+      const installsBy = {};
+      for (const r of cr) installsBy[r.Country] = (installsBy[r.Country] ?? 0) + n(r["Daily User Installs"]);
+      out.installs.countries = cr.filter(r => r.Date === lastDay)
+        .map(r => ({ country: r.Country, active: n(r["Active Device Installs"]), installs: installsBy[r.Country] ?? 0 }))
+        .sort((x, y) => y.active - x.active).slice(0, 12);
+    }
   } catch (err) {
     out.installs = { error: err.message };
+  }
+
+  // ── Crashes and ANRs, same bucket ──────────────────────────────────────
+  try {
+    const files = await listCsv(`stats/crashes/crashes_${PACKAGE}_`, "_overview.csv");
+    const rows = [];
+    for (const o of files.slice(-2)) rows.push(...await readCsv(o));
+    out.crashes = rows.length ? {
+      days: rows.slice(-60).map(r => ({ date: r.Date, crashes: n(r["Daily Crashes"]), anrs: n(r["Daily ANRs"]) })),
+    } : { note: "No crash reports in the bucket yet." };
+  } catch (err) {
+    out.crashes = { error: err.message };
+  }
+
+  // ── Store listing: visitors, acquisitions, where they came from ───────
+  try {
+    const files = await listCsv(`stats/store_performance/store_performance_${PACKAGE}_`, "_traffic_source.csv");
+    const rows = [];
+    for (const o of files.slice(-2)) rows.push(...await readCsv(o));
+    const byDay = {}, bySource = {};
+    for (const r of rows) {
+      const d = (byDay[r.Date] ??= { date: r.Date, visitors: 0, acquisitions: 0 });
+      d.visitors += n(r["Store listing visitors"]); d.acquisitions += n(r["Store listing acquisitions"]);
+      const key = r["Traffic source"] === "Google Play search" ? `Zoeken: ${r["Search term"]}` : r["Traffic source"];
+      const b = (bySource[key] ??= { source: key, visitors: 0, acquisitions: 0 });
+      b.visitors += n(r["Store listing visitors"]); b.acquisitions += n(r["Store listing acquisitions"]);
+    }
+    out.store = rows.length ? {
+      days: Object.values(byDay).sort((x, y) => x.date.localeCompare(y.date)).slice(-60),
+      sources: Object.values(bySource).sort((x, y) => y.visitors - x.visitors).slice(0, 10),
+    } : { note: "No store listing reports yet." };
+  } catch (err) {
+    out.store = { error: err.message };
+  }
+
+  // ── Ratings, same bucket ───────────────────────────────────────────────
+  try {
+    const files = await listCsv(`stats/ratings/ratings_${PACKAGE}_`, "_overview.csv");
+    const rows = [];
+    for (const o of files.slice(-3)) rows.push(...await readCsv(o));
+    const last = rows[rows.length - 1];
+    out.ratings = last ? {
+      through: last.Date,
+      total: Number(last["Total Average Rating"]) || null,
+      days: rows.slice(-90).map(r => ({ date: r.Date, avg: Number(r["Daily Average Rating"]) || null })),
+    } : { note: "No rating reports in the bucket yet." };
+  } catch (err) {
+    out.ratings = { error: err.message };
   }
 
   return out;

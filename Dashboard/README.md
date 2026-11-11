@@ -105,8 +105,10 @@ Not an oversight, these have no path at all:
 | `sources/github.mjs` | Release download counts, commits. No setup |
 | `sources/site.mjs` | Live `version.json` against `versions.js`. No setup |
 | `sources/cloudflare.mjs` | Zone analytics and Pages deploys. Needs a token |
-| `sources/play.mjs` | Reviews, and installs from the reports bucket |
-| `dashboard.html` | The page itself, published as an artifact |
+| `sources/play.mjs` | Reviews, installs (3 months, per country), crashes, ratings and store listing conversion from the reports bucket |
+| `sources/counter.mjs` | The app's anonymous counter (`/a/<platform>/<event>`), per day and country, from Cloudflare. Same token |
+| `schermkaart.html` | The MPTree screen map, published next to the page and opened from the side panel. Its screenshots (`s/*.webp`) are copied from the schermkaart artifact on publish |
+| `dashboard.html` | The page template; `collect.mjs` bakes the numbers and the brand mark into `dashboard.build.html`, which is published at https://claude.ai/artifact/Hd9k4mCcz9oQD9PTfQJnzu (since 10 November 2026; the September one is the old page) |
 | `tv-numbers.mjs` | Collects, then puts the few numbers the TV shows in a secret gist (daily, Task Scheduler "MPTree TV numbers") |
 | `secrets.env` | Credentials. Gitignored |
 | `data.json` | Output. Gitignored |
