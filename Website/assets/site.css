@@ -476,6 +476,37 @@ a { color: inherit; text-decoration: none; }
   .grid { grid-template-columns: 1fr; }
   .get { padding: 32px 20px; }
   .cta .btn { width: 100%; justify-content: center; }
+
+  /* ── A phone gets the short version ─────────────────────────────────
+     Most of what makes the page busy on a small screen is things a phone
+     cannot use (the Windows build) or does not need said twice. They are
+     hidden here, not removed: a wide screen still shows all of it. */
+  .wide-only { display: none; }
+  .hero { padding: 44px 0 52px; }
+  .hero-disc { opacity: 0.24; }
+  .section { padding: 44px 20px; }
+  /* Windows cannot be installed from a phone, so its buttons and its
+     picture go. The line under "Get MPTree" still says it exists. */
+  .hero .cta .btn-ghost, #get .cta .btn-ghost { display: none; }
+  #look .look-switch, #look .section-lede { display: none; }
+  #look-windows { display: none !important; }
+  #look-android { display: block !important; }
+  /* What it does: the nine names, each opening on a tap (assets/site.js).
+     Without script nothing is folded and every line shows, as before. */
+  .grid.fold li { padding: 0; }
+  .grid.fold h3 { margin: 0; }
+  .grid.fold h3 button { display: flex; width: 100%; padding: 17px 20px; justify-content: space-between; align-items: center; cursor: pointer; }
+  .grid.fold h3 button::after { content: "+"; font-weight: 400; font-size: 20px; line-height: 1; color: var(--mp-muted); }
+  .grid.fold li.open h3 button::after { content: "−"; }
+  .grid.fold p { display: none; padding: 0 20px 18px; }
+  .grid.fold li.open p { display: block; }
+}
+
+/* The feature names are buttons so a phone can fold them. On a wide screen
+   they look and behave like the plain headings they were. */
+.grid h3 button {
+  font: inherit; letter-spacing: inherit; color: inherit; text-align: left;
+  background: none; border: 0; padding: 0; margin: 0; cursor: text; user-select: text;
 }
 
 /* ── How it looks: Android or Windows ─────────────────────────────────── */

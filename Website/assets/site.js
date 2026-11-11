@@ -46,6 +46,33 @@
     });
   }
 
+  /* ── What it does: folded on a phone ─────────────────────────────────
+   * Each feature name becomes a button that opens its line. The folding
+   * itself is CSS and only applies on a narrow screen (see site.css), so on
+   * a wide one the buttons change nothing.
+   */
+  var grid = document.querySelector("#features .grid");
+  if (grid) {
+    var items = grid.querySelectorAll("li");
+    for (var f = 0; f < items.length; f++) {
+      (function (li) {
+        var h = li.querySelector("h3");
+        if (!h) return;
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = h.textContent;
+        b.setAttribute("aria-expanded", "false");
+        h.textContent = "";
+        h.appendChild(b);
+        b.addEventListener("click", function () {
+          var open = li.classList.toggle("open");
+          b.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+      })(items[f]);
+    }
+    grid.classList.add("fold");
+  }
+
   /* The comment section used to be loaded here, lazily, from Cusdis. Their
    * service returns 521 and their repository is archived, so the whole thing
    * is gone. Nothing on the site loads from a third party any more. */
