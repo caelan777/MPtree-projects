@@ -32,7 +32,8 @@ MPtree projects/            ← workspace root (this folder)
 ├─ Branding/                ← brand assets, generated from one master SVG
 ├─ Website/                 ← the site, live at mp-tree.net (Cloudflare Pages)
 ├─ Dashboard/               ← internal tooling: collects every MPTree number into one page
-└─ Desktop/                 ← the Windows prototype (Tauri). See Desktop/README.md
+├─ Desktop/                 ← the Windows prototype (Tauri). See Desktop/README.md
+└─ TV/                      ← a home screen for the living room Android TV (React + Capacitor). See TV/README.md
 ```
 
 `Dashboard/` is not a surface, it is a workbench. `node Dashboard/collect.mjs`

@@ -1,0 +1,91 @@
+import { Preferences } from "@capacitor/preferences";
+
+export type LayoutId = "classic" | "editorial" | "cinema" | "dayline";
+
+export const LAYOUTS: { id: LayoutId; name: string; about: string }[] = [
+  { id: "classic", name: "Classic", about: "A greeting with the time, the next hours, the music as a big card" },
+  { id: "editorial", name: "Editorial", about: "A magazine cover: the day in one big sentence" },
+  { id: "cinema", name: "Cinema", about: "Dark, the selected app fills the screen" },
+  { id: "dayline", name: "Day line", about: "Today as one line, from morning to midnight" },
+];
+
+/** Everything the launcher remembers. Kept on the TV only (Capacitor Preferences). */
+export type Settings = {
+  /** Shown in the account pill. */
+  name: string;
+  /** e.g. http://192.168.1.20:8123 or http://homeassistant.local:8123 */
+  haUrl: string;
+  /** A Home Assistant long-lived access token. Never leaves the TV. */
+  haToken: string;
+  /** Home Assistant on Home: the house and the weather. Unset means "on once an
+   *  address and token are filled in". */
+  haEnabled?: boolean;
+  /** Package names of the apps in the row at the bottom, in order. */
+  dock: string[];
+  /** False until the row has been filled once, so a deliberately empty row stays empty. */
+  dockChosen: boolean;
+  /** Minutes without a key press before the screensaver starts. 0 = never. */
+  saverMinutes: number;
+  /** MPTree's own (the clock on black, or the song while MPTree plays), or the TV's own. */
+  saverStyle: "plain" | "tv";
+  /** The Home layout. */
+  layout: LayoutId;
+  /** A different layout every day, in turn. */
+  layoutDaily: boolean;
+  /** "auto" goes dark when the sun goes down. */
+  theme: "auto" | "light" | "dark";
+  /** The quick switch in the top bar, in auto: holds until the next sunrise or sunset. */
+  themeOverride: { dark: boolean; until: number } | null;
+};
+
+export const DEFAULTS: Settings = {
+  name: "Caelan",
+  haUrl: "",
+  haToken: "",
+  dock: [],
+  dockChosen: false,
+  saverMinutes: 10,
+  saverStyle: "plain",
+  layout: "classic",
+  layoutDaily: false,
+  theme: "auto",
+  themeOverride: null,
+};
+
+const KEY = "mptree_tv_settings";
+
+export async function loadSettings(): Promise<Settings> {
+  try {
+    const { value } = await Preferences.get({ key: KEY });
+    if (!value) return DEFAULTS;
+    const s: Settings = { ...DEFAULTS, ...JSON.parse(value) };
+    // Sky and the photo screensaver are gone: what was set to them gets the nearest.
+    if (!LAYOUTS.some(l => l.id === s.layout)) s.layout = "classic";
+    if (s.saverStyle !== "tv") s.saverStyle = "plain";
+    return s;
+  } catch {
+    return DEFAULTS;
+  }
+}
+
+export function saveSettings(s: Settings): void {
+  Preferences.set({ key: KEY, value: JSON.stringify(s) }).catch(() => {});
+}
+
+/** The first time the launcher runs, the bottom row is filled with the apps
+ *  asked for, found by name since package names differ per TV. */
+const WANTED: RegExp[] = [/^youtube$/i, /npo/i, /hbo|^max$/i, /browser|chrome|firefox|tv bro|internet/i, /mptree/i];
+
+export function defaultDock(labels: { packageName: string; label: string }[]): string[] {
+  const out: string[] = [];
+  for (const re of WANTED) {
+    const hit = labels.find(a => re.test(a.label) && !out.includes(a.packageName));
+    if (hit) out.push(hit.packageName);
+  }
+  return out;
+}
+
+/** Whether Home shows Home Assistant: switched on, or never switched and set up. */
+export function haOn(s: Settings): boolean {
+  return s.haEnabled ?? !!(s.haUrl && s.haToken);
+}

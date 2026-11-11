@@ -1,0 +1,195 @@
+import { useEffect, useState } from "react";
+
+// Moving around with the remote. Anything marked `data-f` can take focus; the
+// arrow keys move focus to the nearest such element in that direction, by where
+// things actually are on screen, so layouts never need a hand-made focus map.
+//
+// Two extras, both driven by holding a key:
+//   data-hold  Holding left or right fires a "tvhold" event instead of moving
+//              (the heating tile changes its temperature this way). A short
+//              press still moves focus.
+//   data-long  Holding OK for half a second fires "tvlong" (the Apps page pins an app this way).
+//              A short press still clicks.
+//
+// And two for explaining and grouping:
+//   data-ok    What OK does on this element, in words. Shown in the line at the top.
+//   data-group Coming into a group from outside lands on its element marked
+//              data-current (Settings: Left from a page goes back to that page's
+//              section, not to whichever section happens to be nearest).
+//   data-zone  Left and right stay inside it. When there is nothing further that
+//              way, the zone gets a "tvedge" event instead (Home slides to the
+//              House page this way, and back).
+
+/** How long OK has to be held to count as holding. */
+const LONG_MS = 550;
+
+export type Dir = "left" | "right" | "up" | "down";
+
+const ARROWS: Record<string, Dir> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
+
+/** Android TV sends the remote's OK as Enter; some remotes send DPAD_CENTER (23). */
+export function isOk(e: KeyboardEvent): boolean {
+  return e.key === "Enter" || e.keyCode === 23 || e.key === "Select";
+}
+
+function focusables(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>("[data-f]")].filter(el => {
+    if (el.closest("[inert]") || el.closest("[aria-hidden='true']")) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  });
+}
+
+export function focusEl(el: HTMLElement | null | undefined): void {
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  // Only the pages that scroll (Apps, Settings) scroll to it; Home never moves.
+  if (el.closest(".page, .set-main")) el.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/** Focus the element marked `data-default` in a container, else its first focusable.
+ *  Never one that can't be reached (inside something inert, like the Home page that
+ *  is slid away). */
+export function focusFirst(root: ParentNode = document): void {
+  const ok = (el: HTMLElement) => !el.closest("[inert]");
+  const el = [...root.querySelectorAll<HTMLElement>("[data-default]")].find(ok)
+    ?? [...root.querySelectorAll<HTMLElement>("[data-f]")].find(ok);
+  focusEl(el);
+}
+
+/** Focus the first reachable element matching `selector`, else the first thing there is. */
+export function focusOne(selector: string): void {
+  const el = [...document.querySelectorAll<HTMLElement>(selector)].find(e => !e.closest("[inert]"));
+  if (el) focusEl(el); else focusFirst();
+}
+
+export function move(dir: Dir): void {
+  const cur = document.activeElement as HTMLElement | null;
+  const all = focusables();
+  if (!cur || !all.includes(cur)) { focusFirst(); return; }
+  const a = cur.getBoundingClientRect();
+  const sideways = dir === "left" || dir === "right";
+  const zone = sideways ? cur.closest<HTMLElement>("[data-zone]") : null;
+  let best: HTMLElement | null = null;
+  let bestScore = Infinity;
+  for (const el of all) {
+    if (el === cur) continue;
+    if (zone && !zone.contains(el)) continue;
+    const b = el.getBoundingClientRect();
+    let primary: number, orth: number;
+    if (dir === "left" || dir === "right") {
+      primary = dir === "right" ? b.left - a.right : a.left - b.right;
+      orth = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
+    } else {
+      primary = dir === "down" ? b.top - a.bottom : a.top - b.bottom;
+      orth = Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
+    }
+    if (primary < -8) continue;
+    // Sideways, stay on the same row if at all possible. Up and down may drift
+    // sideways more: going up from the app row should reach the tiles, not the top bar.
+    // Up and down prefer what is in the same column: something beside you in
+    // another column (the Settings sections next to a page) is not "below".
+    const score = Math.max(0, primary) + orth * (sideways ? 2.5 : 0.4) + (!sideways && orth > 0 ? 40 : 0);
+    if (score < bestScore) { bestScore = score; best = el; }
+  }
+  if (best) {
+    const group = best.closest<HTMLElement>("[data-group]");
+    if (group && !group.contains(cur) && (dir === "left" || dir === "right")) {
+      const current = group.querySelector<HTMLElement>("[data-current]");
+      if (current && all.includes(current)) best = current;
+    }
+    focusEl(best);
+  } else if (zone) {
+    zone.dispatchEvent(new CustomEvent("tvedge", { detail: dir }));
+  }
+}
+
+/** What OK does on the focused element, from its data-ok, kept up to date as
+ *  focus moves and as the element changes (an ON switch becoming OFF). */
+export function useOkHint(): string | null {
+  const [hint, setHint] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () => {
+      const el = document.activeElement as HTMLElement | null;
+      setHint(el?.closest<HTMLElement>("[data-ok]")?.dataset.ok ?? null);
+    };
+    const obs = new MutationObserver(read);
+    obs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-ok"] });
+    document.addEventListener("focusin", read);
+    document.addEventListener("focusout", read);
+    read();
+    return () => { obs.disconnect(); document.removeEventListener("focusin", read); document.removeEventListener("focusout", read); };
+  }, []);
+  return hint;
+}
+
+/**
+ * Wires the remote to the page. `onKey` sees every key first and can return
+ * true to say it handled it (the screensaver uses this to swallow the key that
+ * wakes it).
+ */
+export function useRemote(onKey?: (e: KeyboardEvent) => boolean): void {
+  useEffect(() => {
+    let pendingDir: Dir | null = null;
+    let held = false;
+    let okDown = false;
+    let longFired = false;
+    let longTimer: number | undefined;
+
+    const down = (e: KeyboardEvent) => {
+      if (onKey?.(e)) { e.preventDefault(); return; }
+      const cur = document.activeElement as HTMLElement | null;
+      const dir = ARROWS[e.key];
+
+      if (dir) {
+        // Text fields: while the TV's keyboard is open it takes the arrows itself,
+        // so an arrow that reaches us means nobody is typing: move, like anywhere else.
+        e.preventDefault();
+        if (cur?.hasAttribute("data-hold") && (dir === "left" || dir === "right")) {
+          if (!e.repeat) { pendingDir = dir; held = false; return; }
+          held = true;
+          cur.dispatchEvent(new CustomEvent("tvhold", { detail: dir }));
+          return;
+        }
+        move(dir);
+        return;
+      }
+
+      if (isOk(e) && cur?.hasAttribute("data-long")) {
+        e.preventDefault();
+        // Timed, not counted: not every TV sends repeats while OK is held.
+        if (e.repeat || okDown) return;
+        okDown = true;
+        longFired = false;
+        window.clearTimeout(longTimer);
+        longTimer = window.setTimeout(() => {
+          if (!okDown) return;
+          longFired = true;
+          cur.dispatchEvent(new CustomEvent("tvlong"));
+        }, LONG_MS);
+      }
+    };
+
+    const up = (e: KeyboardEvent) => {
+      const cur = document.activeElement as HTMLElement | null;
+      if (pendingDir && ARROWS[e.key] === pendingDir) {
+        if (!held) move(pendingDir);
+        pendingDir = null;
+        held = false;
+      }
+      if (okDown && isOk(e)) {
+        okDown = false;
+        window.clearTimeout(longTimer);
+        if (!longFired) cur?.click();
+      }
+    };
+
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.clearTimeout(longTimer);
+    };
+  }, [onKey]);
+}

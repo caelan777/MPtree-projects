@@ -1,0 +1,521 @@
+<title>MPTree TV Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+/* Layout: ten home screens, each drawn at real 1920×1080 and shown at half size, two per
+   row on a working board. Every screen holds the same content so they compare fairly. */
+:root{
+  --bg:#ececec; --fg:#111; --sub:#666; --line:#d4d4d4; --panel:#fafafa;
+  --sans: Inter, system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono: "JetBrains Mono", ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#111;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0b0b;--fg:#f2f2f2;--sub:#8a8a8a;--line:#262626;--panel:#111;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 48px}
+.intro{max-width:72ch;display:grid;gap:10px;margin-bottom:28px}
+.intro h1{font-size:30px;letter-spacing:-0.04em;margin:0;line-height:1.1}
+.intro p{margin:0;color:var(--sub);line-height:1.55}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}
+.strip{overflow-x:auto;padding-bottom:10px}
+.boards{display:grid;grid-template-columns:repeat(2,960px);gap:40px 28px;width:max-content}
+.board{display:grid;gap:10px;align-content:start}
+.cap{display:flex;gap:12px;align-items:baseline}
+.cap .n{font-family:var(--mono);font-size:13px;color:var(--sub)}
+.cap h2{margin:0;font-size:22px;letter-spacing:-0.03em}
+.note{margin:0;font-size:13px;line-height:1.55;color:var(--sub);max-width:960px}
+.note b{color:var(--fg);font-weight:600}
+.frame{width:960px;height:540px;overflow:hidden;border-radius:14px;border:1px solid var(--line);background:#fff}
+
+/* ── shared TV pieces, MPTree LIGHT tokens ── */
+.tv{--accent:#000;--surface:#f5f5f5;--card:#efefef;--ground:#fff;--muted:#888;--dim:#e0e0e0;--border:#d8d8d8;--text:#111;--textSub:#666;--btnFg:#fff;
+  width:1920px;height:1080px;transform:scale(.5);transform-origin:0 0;background:var(--ground);color:var(--text);position:relative;font-family:var(--sans);overflow:hidden}
+.tv.dark{--accent:#fff;--surface:#111;--card:#141414;--ground:#000;--muted:#777;--dim:#252525;--border:#2a2a2a;--text:#fff;--textSub:#9a9a9a;--btnFg:#000}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.ic{display:inline-flex;flex-shrink:0}
+.logo{display:inline-flex;color:currentColor}
+/* the standard top bar: account, Home+Apps together, settings, screensaver */
+.top{position:absolute;left:96px;right:96px;top:54px;height:80px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.grp{display:flex;align-items:center;gap:14px}
+.acc{display:flex;align-items:center;gap:14px;height:72px;padding:0 26px 0 12px;border-radius:36px;border:2px solid var(--border);background:var(--surface);font-size:26px;font-weight:600}
+.av{width:50px;height:50px;border-radius:50%;background:var(--text);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700}
+.seg{display:flex;background:var(--surface);border:2px solid var(--border);border-radius:38px;padding:5px;gap:4px}
+.seg span{height:58px;padding:0 32px;border-radius:30px;font-size:26px;font-weight:700;display:flex;align-items:center;color:var(--muted)}
+.seg span.on{background:var(--accent);color:var(--btnFg)}
+.ib{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text);background:var(--surface);border:2px solid var(--border)}
+.focus{background:var(--accent)!important;color:var(--btnFg)!important;border-color:var(--accent)!important;transform:scale(1.06);box-shadow:0 18px 40px rgba(0,0,0,.22);position:relative;z-index:4}
+.dark .focus{box-shadow:0 18px 50px rgba(255,255,255,.12)}
+.focus .sub,.focus .k{color:inherit!important;opacity:.7}
+.mk{width:58px;height:58px;border-radius:16px;background:var(--text);color:var(--ground);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;letter-spacing:-0.04em;flex-shrink:0}
+.focus .mk{background:var(--ground);color:var(--text)}
+.mk.add{background:transparent;border:2px dashed var(--border);color:var(--textSub)}
+
+/* ── 1 · Classic ── */
+.d1 .mid{position:absolute;left:96px;right:96px;top:172px;height:560px;display:grid;grid-template-columns:640px 1fr;gap:44px}
+.d1 .time{font-size:220px;font-weight:800;letter-spacing:-0.06em;line-height:.88}
+.d1 .date{font-size:32px;color:var(--textSub);margin-top:12px}
+.d1 .wx{margin-top:22px;font-size:28px;display:flex;gap:26px;color:var(--text)}
+.d1 .wx b{font-weight:800}
+.d1 .mpt{margin-top:30px;background:var(--card);border:2px solid var(--border);border-radius:30px;padding:24px 30px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.d1 .mpt .h{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;font-size:24px;font-weight:700}
+.v{font-size:40px;font-weight:800;letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
+.k{font-size:17px;color:var(--textSub);margin-top:2px}
+.d1 .ctl{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:18px}
+.d1 .c{background:var(--card);border:2px solid var(--border);border-radius:30px;padding:28px 30px;display:flex;flex-direction:column;justify-content:space-between}
+.d1 .c .t{font-size:28px;font-weight:700}.d1 .c .s{font-size:20px;color:var(--textSub);margin-top:4px}
+.d1 .c .big{font-size:76px;font-weight:800;letter-spacing:-0.04em;line-height:1}
+.d1 .c.pri{background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.d1 .c.pri .s{color:rgba(255,255,255,.7)}
+.d1 .dock{position:absolute;left:96px;right:96px;bottom:54px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px}
+.app{height:180px;border-radius:28px;background:var(--surface);border:2px solid var(--border);display:flex;flex-direction:column;justify-content:space-between;padding:22px 24px}
+.app .nm{font-size:28px;font-weight:700;letter-spacing:-0.02em}
+.app.add{border-style:dashed;background:transparent;color:var(--textSub)}
+
+/* ── 2 · Bento ── */
+.d2 .grid{position:absolute;left:96px;right:96px;top:160px;bottom:54px;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:1fr 1fr 1fr 190px;gap:18px}
+.d2 .b{border-radius:34px;background:var(--card);border:2px solid var(--border);padding:26px 28px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;position:relative}
+.d2 .clock{grid-column:1/3;grid-row:1/3;background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.d2 .clock .ct{font-size:190px;font-weight:900;letter-spacing:-0.07em;line-height:.85}
+.d2 .clock .cd{font-size:28px;opacity:.7}
+.d2 .wx{grid-column:3/5;grid-row:1/2;flex-direction:row;align-items:center;gap:28px;justify-content:flex-start}
+.d2 .wx .big{font-size:110px;font-weight:800;letter-spacing:-0.05em}
+.d2 .in{grid-column:5/6;grid-row:1/2}
+.d2 .hum{grid-column:6/7;grid-row:1/2}
+.d2 .sun{grid-column:3/4;grid-row:2/3}
+.d2 .off{grid-column:4/5;grid-row:2/3}
+.d2 .mp{grid-column:5/7;grid-row:2/4}
+.d2 .ss{grid-column:1/3;grid-row:3/4;flex-direction:row;align-items:center;justify-content:space-between}
+.d2 .lights{grid-column:3/5;grid-row:3/4}
+.d2 .b .t{font-size:26px;font-weight:700}.d2 .b .s{font-size:19px;color:var(--textSub)}
+.d2 .b .n{font-size:68px;font-weight:800;letter-spacing:-0.04em;line-height:1}
+.d2 .apps{grid-column:1/-1;grid-row:4/5;display:grid;grid-template-columns:repeat(6,1fr);gap:18px}
+.d2 .apps .app{height:auto}
+.d2 .top{top:50px}
+.d2 .bar{display:flex;align-items:flex-end;gap:10px;height:120px}
+.d2 .bar i{flex:1;background:var(--text);border-radius:6px 6px 0 0}
+.d2 .dots{display:flex;gap:10px;flex-wrap:wrap}
+.d2 .dots span{font-size:20px;padding:8px 16px;border-radius:20px;border:2px solid var(--border);background:var(--ground)}
+
+/* ── 3 · Editorial ── */
+.d3{background:#fff}
+.d3 .nav{position:absolute;left:120px;right:120px;top:70px;display:flex;justify-content:space-between;font-size:28px;font-weight:600;color:var(--muted)}
+.d3 .nav .l,.d3 .nav .r{display:flex;gap:44px;align-items:center}
+.d3 .nav .on{color:var(--text);border-bottom:4px solid var(--text);padding-bottom:6px}
+.d3 .lede{position:absolute;left:120px;right:220px;top:200px;font-size:82px;line-height:1.08;letter-spacing:-0.035em;font-weight:500;color:#9a9a9a}
+.d3 .lede b{color:var(--text);font-weight:800}
+.d3 .acts{position:absolute;left:120px;top:660px;display:flex;gap:56px;font-size:40px;font-weight:700}
+.d3 .acts span{border-bottom:4px solid var(--text);padding-bottom:6px}
+.d3 .acts .focus{padding:10px 26px;border-radius:16px;border-bottom:none}
+.d3 .side{position:absolute;right:120px;top:660px;text-align:right;font-size:26px;color:var(--textSub);line-height:1.5}
+.d3 .side b{color:var(--text)}
+.d3 .apps{position:absolute;left:120px;right:120px;bottom:74px;border-top:3px solid var(--text);padding-top:28px;display:flex;justify-content:space-between;font-size:46px;font-weight:800;letter-spacing:-0.03em}
+.d3 .apps span{padding:8px 18px;border-radius:14px}
+.d3 .apps .dim{color:#bbb}
+
+/* ── 4 · Cinema (dark) ── */
+.d4 .strip4{position:absolute;left:96px;right:96px;top:54px;height:80px;display:flex;align-items:center;justify-content:space-between}
+.d4 .ctr{font-size:30px;font-weight:700;display:flex;gap:28px;align-items:center}
+.d4 .ctr .sub{color:var(--textSub);font-weight:500}
+.d4 .posters{position:absolute;left:96px;right:96px;top:250px;height:520px;display:grid;grid-template-columns:repeat(6,1fr);gap:24px;align-items:center}
+.d4 .poster{height:460px;border-radius:30px;border:2px solid var(--border);padding:26px;display:flex;flex-direction:column;justify-content:flex-end;position:relative;overflow:hidden}
+.d4 .poster .nm{font-size:32px;font-weight:800;position:relative}
+.d4 .poster .s{font-size:19px;color:var(--textSub);position:relative;margin-top:4px}
+.d4 .poster.focus{height:520px;transform:none}
+.d4 .poster.focus .s{color:rgba(0,0,0,.6)}
+.d4 .g1{background:linear-gradient(160deg,#3a3a3a,#0d0d0d)}
+.d4 .g2{background:linear-gradient(200deg,#2a2a2a,#111 60%)}
+.d4 .g3{background:radial-gradient(circle at 70% 20%,#4a4a4a,#0e0e0e 60%)}
+.d4 .g4{background:linear-gradient(180deg,#1e1e1e,#0a0a0a)}
+.d4 .poster .big{position:absolute;top:30px;left:26px;font-size:120px;font-weight:900;letter-spacing:-0.07em;opacity:.18;line-height:1}
+.d4 .poster.focus .big{opacity:.15}
+.d4 .bottom{position:absolute;left:96px;right:96px;bottom:60px;display:flex;justify-content:space-between;align-items:center}
+.d4 .pill{height:76px;padding:0 34px;border-radius:38px;border:2px solid var(--border);display:inline-flex;align-items:center;gap:14px;font-size:26px;font-weight:700;margin-right:14px;background:var(--surface)}
+.d4 .ticker{font-family:var(--mono);font-size:22px;color:var(--textSub);display:flex;gap:34px;align-items:center}
+.d4 .ticker b{color:var(--text)}
+
+/* ── 5 · Rail ── */
+.d5 .rail{position:absolute;left:0;top:0;bottom:0;width:170px;background:var(--surface);border-right:2px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:54px 0;gap:22px}
+.d5 .rail .item{width:110px;height:96px;border-radius:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:700;color:var(--muted)}
+.d5 .rail .item.on{background:var(--accent);color:var(--btnFg)}
+.d5 .rail .sp{flex:1}
+.d5 .main{position:absolute;left:250px;right:96px;top:60px;bottom:54px}
+.d5 .hd{display:flex;justify-content:space-between;align-items:baseline}
+.d5 .hd h3{font-size:54px;letter-spacing:-0.04em;margin:0;font-weight:800}
+.d5 .hd .t{font-size:54px;font-weight:300;letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
+.d5 .lab{font-size:20px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:38px 0 16px}
+.d5 .row{display:grid;grid-template-columns:repeat(6,1fr);gap:20px}
+.d5 .row .app{height:200px}
+.d5 .row4{display:grid;grid-template-columns:1.2fr 1.2fr 1fr 1fr;gap:20px}
+.d5 .c{height:190px;border-radius:28px;background:var(--card);border:2px solid var(--border);padding:24px 28px;display:flex;flex-direction:column;justify-content:space-between}
+.d5 .c .t{font-size:27px;font-weight:700}.d5 .c .s{font-size:19px;color:var(--textSub)}
+.d5 .c .n{font-size:64px;font-weight:800;letter-spacing:-0.04em;line-height:1}
+.d5 .mstrip{display:flex;align-items:center;gap:60px;border-top:2px solid var(--border);padding-top:26px;font-size:24px;color:var(--textSub)}
+.d5 .mstrip b{color:var(--text);font-size:34px;letter-spacing:-0.02em;margin-right:8px}
+
+/* ── 6 · Swiss, number keys ── */
+.d6{--r:0}
+.d6 .frame6{position:absolute;inset:54px 96px;border:3px solid var(--text);display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:96px 1fr 1fr 210px}
+.d6 .cell{border-right:2px solid var(--text);border-bottom:2px solid var(--text);padding:22px 26px;position:relative;display:flex;flex-direction:column;justify-content:space-between}
+.d6 .lbl{font-family:var(--mono);font-size:17px;letter-spacing:.12em;text-transform:uppercase}
+.d6 .huge{font-size:170px;font-weight:900;letter-spacing:-0.06em;line-height:.82}
+.d6 .num{font-size:84px;font-weight:800;letter-spacing:-0.05em;line-height:.9;font-variant-numeric:tabular-nums}
+.d6 .nav6{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;padding:0 26px;border-right:none}
+.d6 .nav6 .l,.d6 .nav6 .r{display:flex;gap:40px;align-items:center;font-size:26px;font-weight:700}
+.d6 .nav6 .on{background:var(--text);color:var(--ground);padding:6px 16px}
+.d6 .keys{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,1fr);border-right:none;border-bottom:none;padding:0}
+.d6 .key{border-right:2px solid var(--text);padding:22px 26px;display:flex;flex-direction:column;justify-content:space-between}
+.d6 .key:last-child{border-right:none}
+.d6 .key .kn{font-family:var(--mono);font-size:46px;font-weight:700}
+.d6 .key .nm{font-size:34px;font-weight:800;letter-spacing:-0.02em}
+.d6 .key.focus{transform:none;box-shadow:none}
+.d6 .btn6{font-size:34px;font-weight:800;letter-spacing:-0.02em;display:flex;justify-content:space-between;align-items:flex-end}
+.d6 .inv{background:var(--text);color:var(--ground)}
+
+/* ── 7 · Three cards ── */
+.d7 .three{position:absolute;left:96px;right:96px;top:170px;bottom:54px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px}
+.d7 .card{border-radius:44px;background:var(--card);border:2px solid var(--border);padding:40px;display:flex;flex-direction:column;gap:18px}
+.d7 .card h3{margin:0 0 6px;font-size:64px;letter-spacing:-0.045em;font-weight:900}
+.d7 .li{display:flex;align-items:center;gap:20px;height:96px;border-radius:24px;padding:0 22px;background:var(--ground);border:2px solid var(--border);font-size:30px;font-weight:700}
+.d7 .li .mk{width:52px;height:52px;font-size:21px;border-radius:14px}
+.d7 .bigbtn{flex:1;border-radius:32px;background:var(--ground);border:2px solid var(--border);display:flex;flex-direction:column;justify-content:space-between;padding:30px}
+.d7 .bigbtn .t{font-size:42px;font-weight:800;letter-spacing:-0.03em}
+.d7 .bigbtn .s{font-size:22px;color:var(--textSub)}
+.d7 .bigbtn.focus .s{color:rgba(255,255,255,.7)}
+.d7 .today .n{font-size:120px;font-weight:900;letter-spacing:-0.06em;line-height:.9}
+.d7 .kv{display:flex;justify-content:space-between;font-size:28px;padding:18px 0;border-bottom:2px solid var(--border)}
+.d7 .kv b{font-variant-numeric:tabular-nums}
+
+/* ── 8 · Ambient sky, glass ── */
+.d8{background:linear-gradient(180deg,#d9dde2 0%,#eceef0 45%,#f6f2ee 70%,#e7e2dd 100%)}
+.d8 .sunorb{position:absolute;left:1180px;top:520px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,#fff 0 30%,rgba(255,255,255,.6) 45%,transparent 70%)}
+.d8 .cloud{position:absolute;border-radius:50%;background:radial-gradient(ellipse,rgba(255,255,255,.85),transparent 70%);filter:blur(10px)}
+.d8 .hill{position:absolute;left:-100px;right:-100px;bottom:-260px;height:560px;border-radius:50%;background:linear-gradient(180deg,#bdbdbd,#8f8f8f)}
+.d8 .hill2{position:absolute;left:700px;right:-300px;bottom:-330px;height:600px;border-radius:50%;background:linear-gradient(180deg,#a5a5a5,#7a7a7a)}
+.d8 .glass{background:rgba(255,255,255,.55);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);border:2px solid rgba(255,255,255,.7);border-radius:36px;box-shadow:0 10px 40px rgba(0,0,0,.08)}
+.d8 .top .acc,.d8 .top .seg,.d8 .top .ib{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.7);backdrop-filter:blur(20px)}
+.d8 .hello{position:absolute;left:96px;top:190px;padding:36px 44px;width:720px}
+.d8 .hello .t{font-size:170px;font-weight:300;letter-spacing:-0.06em;line-height:.9}
+.d8 .hello .d{font-size:30px;color:#555;margin-top:12px}
+.d8 .hello .w{font-size:30px;margin-top:22px;display:flex;gap:28px}
+.d8 .col{position:absolute;right:96px;top:190px;width:560px;display:grid;gap:18px}
+.d8 .gbtn{padding:26px 30px;display:flex;align-items:center;gap:22px;font-size:30px;font-weight:700}
+.d8 .gbtn .s{font-size:20px;color:#666;font-weight:500;margin-top:2px}
+.d8 .gbtn .ic{width:64px;height:64px;border-radius:50%;background:#111;color:#fff;align-items:center;justify-content:center}
+.d8 .gbtn.focus .ic{background:#fff;color:#111}
+.d8 .mrow{padding:22px 30px;display:flex;justify-content:space-between;font-size:22px;color:#555}
+.d8 .mrow b{display:block;color:#111;font-size:36px;letter-spacing:-0.02em}
+.d8 .dock8{position:absolute;left:50%;transform:translateX(-50%);bottom:54px;padding:18px;display:flex;gap:16px}
+.d8 .dock8 .app{width:200px;height:150px;background:rgba(255,255,255,.6);border-color:rgba(255,255,255,.8)}
+.d8 .dock8 .app.focus{background:#111!important}
+
+/* ── 9 · Day line ── */
+.d9 .head9{position:absolute;left:96px;right:96px;top:170px;display:flex;justify-content:space-between;align-items:flex-end}
+.d9 .head9 .t{font-size:150px;font-weight:800;letter-spacing:-0.06em;line-height:.85}
+.d9 .head9 .temps{display:flex;gap:70px}
+.d9 .head9 .temps div{text-align:right}
+.d9 .head9 .temps .n{font-size:86px;font-weight:800;letter-spacing:-0.04em;line-height:.9}
+.d9 .head9 .temps .k{font-size:22px}
+.d9 svg.day{position:absolute;left:96px;top:410px;width:1728px;height:330px;overflow:visible}
+.d9 .sunbtn{position:absolute;left:1080px;top:690px;width:330px;padding:22px 26px;border-radius:26px;background:var(--accent);color:var(--btnFg);font-size:28px;font-weight:800}
+.d9 .sunbtn .s{font-size:19px;opacity:.7;font-weight:500;margin-top:4px}
+.d9 .offbtn{position:absolute;left:96px;top:690px;padding:22px 26px;border-radius:26px;background:var(--card);border:2px solid var(--border);font-size:28px;font-weight:800;display:flex;gap:14px;align-items:center}
+.d9 .mp9{position:absolute;left:440px;top:712px;font-size:22px;color:var(--textSub);display:flex;gap:30px;align-items:center}
+.d9 .mp9 b{color:var(--text);font-size:30px}
+.d9 .dock9{position:absolute;left:96px;right:96px;bottom:54px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px}
+.d9 .dock9 .app{height:150px}
+
+/* ── 10 · Music first ── */
+.d10 .np{position:absolute;left:96px;top:170px;width:1000px;height:560px;display:grid;grid-template-columns:480px 1fr;gap:44px;align-items:center}
+.d10 .art{width:480px;height:480px;border-radius:30px;background:radial-gradient(circle at 30% 30%,#d9d9d9 0 18%,#5a5a5a 19% 34%,#1d1d1d 35%);box-shadow:0 30px 60px rgba(0,0,0,.25)}
+.d10 .np .lab{font-size:20px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;display:flex;gap:12px;align-items:center}
+.d10 .np h3{font-size:72px;letter-spacing:-0.045em;margin:16px 0 6px;line-height:1}
+.d10 .np .by{font-size:32px;color:var(--textSub)}
+.d10 .prog{margin-top:40px;height:6px;background:var(--dim);border-radius:3px;position:relative}
+.d10 .prog i{position:absolute;inset:0 auto 0 0;width:38%;background:var(--accent);border-radius:3px}
+.d10 .pt{display:flex;justify-content:space-between;font-family:var(--mono);font-size:20px;color:var(--muted);margin-top:10px}
+.d10 .ctrls{display:flex;gap:22px;margin-top:30px;align-items:center}
+.d10 .cb{width:88px;height:88px;border-radius:50%;background:var(--surface);border:2px solid var(--border);display:flex;align-items:center;justify-content:center}
+.d10 .cb.play{width:112px;height:112px;background:var(--accent);color:var(--btnFg);border-color:var(--accent)}
+.d10 .side{position:absolute;right:96px;top:170px;width:560px;display:grid;gap:16px}
+.d10 .sc{background:var(--card);border:2px solid var(--border);border-radius:28px;padding:22px 28px;display:flex;justify-content:space-between;align-items:center;font-size:26px;font-weight:700}
+.d10 .sc .s{font-size:19px;color:var(--textSub);font-weight:500;margin-top:3px}
+.d10 .sc .n{font-size:52px;font-weight:800;letter-spacing:-0.04em}
+.d10 .sc.focus .s{color:rgba(255,255,255,.7)}
+.d10 .dock10{position:absolute;left:96px;right:96px;bottom:54px;display:grid;grid-template-columns:repeat(6,1fr);gap:20px}
+.d10 .dock10 .app{height:150px}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-logo" viewBox="-250 -250 1500 1500"><path fill="currentColor" fill-rule="evenodd" d="M40.9 100.8L38.9 102.8L30.9 102.8L19 108.8L4 125.7L2 139.7L0 141.7L0 862.3L8 880.2L19 891.2L25 895.2L28.9 895.2L36.9 899.2L54.9 899.2L56.9 897.2L62.9 897.2L76.8 889.2L83.8 882.2L89.8 870.3L89.8 856.3L91.8 854.3L89.8 850.3L90.8 575.8L518 575.8L520 573.9L524 573.9L537.9 565.9L859.3 244.5L862.3 245.5L862.3 397.2L734.5 523L726.5 536.9L726.5 540.9L724.6 542.9L724.6 552.9L726.5 554.9L726.5 562.9L728.5 564.9L732.5 580.8L737.5 585.8L805.4 585.8L807.4 587.8L821.4 587.8L823.4 589.8L829.3 589.8L831.3 591.8L841.3 593.8L847.3 597.8L851.3 597.8L855.3 601.8L861.3 603.8L884.2 624.8L892.2 636.7L896.2 644.7L896.2 648.7L900.2 654.7L902.2 674.7L904.2 676.6L904.2 696.6L902.2 698.6L902.2 708.6L900.2 710.6L900.2 716.6L892.2 736.5L876.2 758.5L857.3 775.4L835.3 787.4L831.3 787.4L823.4 791.4L817.4 791.4L815.4 793.4L807.4 793.4L805.4 795.4L565.9 795.4L563.9 797.4L559.9 797.4L539.9 815.4L537.9 815.4L526.9 826.3L526.9 828.3L524 829.3L493 860.3L485 874.3L487 876.2L489 886.2L496 891.2L827.3 891.2L829.3 889.2L839.3 889.2L841.3 887.2L849.3 887.2L851.3 885.2L857.3 885.2L859.3 883.2L869.3 881.2L903.2 865.3L933.1 843.3L964.1 810.4L982 780.4L982 776.4L992 754.5L992 748.5L996 738.5L996 730.5L998 728.5L998 714.6L1000 712.6L1000 682.6L998 680.6L996 658.7L992 650.7L992 644.7L990 642.7L988 632.7L978 612.8L962.1 588.8L946.1 572.9L946.1 570.9L943.1 569.9L931.1 557.9L917.2 547.9L895.2 535.9L891.2 535.9L875.2 527.9L859.3 525.9L856.3 523L944.1 435.1L950.1 421.2L950.1 405.2L952.1 403.2L952.1 397.2L950.1 395.2L952.1 393.2L952.1 379.2L950.1 377.2L952.1 373.3L952.1 343.3L950.1 341.3L952.1 339.3L952.1 303.4L950.1 301.4L952.1 297.4L952.1 287.4L950.1 285.4L950.1 281.4L952.1 279.4L950.1 277.4L952.1 275.4L952.1 271.5L950.1 269.5L952.1 265.5L950.1 261.5L952.1 257.5L950.1 255.5L950.1 249.5L952.1 247.5L950.1 245.5L952.1 243.5L952.1 239.5L950.1 237.5L950.1 197.6L952.1 195.6L950.1 193.6L950.1 133.7L944.1 121.8L929.1 106.8L925.1 106.8L919.2 102.8L913.2 102.8L911.2 100.8L901.2 100.8L899.2 102.8L891.2 102.8L879.2 108.8L749.5 236.5L747.5 236.5L691.6 292.4L689.6 292.4L688.6 295.4L685.6 296.4L615.8 366.3L613.8 366.3L603.8 378.2L601.8 378.2L545.9 434.1L543.9 434.1L539.9 440.1L537.9 440.1L498 480L496 480L486 490L480 490L452.1 464.1L450.1 464.1L426.1 440.1L424.2 440.1L400.2 416.2L398.2 416.2L284.4 308.4L282.4 308.4L80.8 114.8L64.9 104.8L60.9 104.8L52.9 100.8ZM90.8 238.5L90.8 492L357.3 491L266.5 404.2L264.5 404.2L260.5 398.2L258.5 398.2L130.7 274.5L128.7 274.5L92.8 238.5Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sunset" viewBox="0 0 24 24"><path d="M7 15a5 5 0 0 1 10 0M3 15h2M19 15h2M12 4v4M9.5 6.5L12 9l2.5-2.5M5.6 9.6l1.4 1.4M18.4 9.6L17 11M3 19h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-off" viewBox="0 0 24 24"><path d="M12 3v8M7 6.3a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-temp" viewBox="0 0 24 24"><path d="M10 4a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="17" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6h-6v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="4" y="13" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="13" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 5.5v13l9-6.5zM16.5 5.5h2.5v13h-2.5z" fill="currentColor"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 5.5v13l-9-6.5zM7.5 5.5H5v13h2.5z" fill="currentColor"/></symbol>
+</defs></svg>
+
+<header class="intro">
+  <span class="eyebrow">MPTree TV · home screen · 10 directions · 31 Oct 2026</span>
+  <h1>Ten home screens for the living room TV</h1>
+  <p>Every screen holds the same things so you can compare them fairly: account, Home and Apps side by side, Settings and Screensaver; your Sunset button and All lights off; inside temperature (living room sensor) and the weather outside; the MPTree numbers; and the dock with YouTube, NPO Start, HBO Max, Browser, MPTree and Add app. The item in black is where the remote's focus is. Numbers are examples. App tiles are stand-ins; the real ones use each app's own picture.</p>
+</header>
+
+<div class="strip"><div class="boards">
+
+<!-- 1 -->
+<section class="board">
+  <div class="cap"><span class="n">01</span><h2>Classic MPTree</h2></div>
+  <div class="frame"><div class="tv d1">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="mid">
+      <div>
+        <div class="time">14:55</div><div class="date">Saturday 31 October</div>
+        <div class="wx"><span><b>9°</b> cloudy outside</span><span><b>20.2°</b> inside</span></div>
+        <div class="mpt"><div class="h"><span style="display:flex;gap:12px;align-items:center"><span class="logo"><svg width="40" height="40"><use href="#i-logo"/></svg></span>MPTree</span><span class="mono" style="font-size:17px;color:var(--muted);font-weight:400">2 h ago</span></div>
+          <div><div class="v">1,284</div><div class="k">Play installs</div></div><div><div class="v">4.6</div><div class="k">Rating</div></div><div><div class="v">212</div><div class="k">Windows</div></div><div><div class="v">3.4k</div><div class="k">Site, 7 days</div></div></div>
+      </div>
+      <div class="ctl">
+        <div class="c pri"><svg width="54" height="54"><use href="#i-sunset"/></svg><div><div class="t">Sunset</div><div class="s">Runs itself at 17:12. OK runs it now.</div></div></div>
+        <div class="c"><svg width="54" height="54"><use href="#i-off"/></svg><div><div class="t">All lights off</div><div class="s">All 7 are off</div></div></div>
+        <div class="c"><div class="s">Inside, living room</div><div><div class="big">20.2°</div><div class="s">Humidity 63%</div></div></div>
+        <div class="c"><div class="s" style="display:flex;justify-content:space-between">Outside <svg width="40" height="40"><use href="#i-cloud"/></svg></div><div><div class="big">9°</div><div class="s">Cloudy, 11° later, rain at 20:00</div></div></div>
+      </div>
+    </div>
+    <div class="dock">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app focus"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>The first design, tidied.</b> Clock and numbers left, the four home things right, apps at the bottom. Calm and familiar; the safest pick.</p>
+</section>
+
+<!-- 2 -->
+<section class="board">
+  <div class="cap"><span class="n">02</span><h2>Bento</h2></div>
+  <div class="frame"><div class="tv d2">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="grid">
+      <div class="b clock"><div class="cd">Saturday 31 October</div><div class="ct">14:55</div></div>
+      <div class="b wx"><svg width="110" height="110"><use href="#i-cloud"/></svg><div class="big">9°</div><div><div class="t">Cloudy</div><div class="s">11° later, rain at 20:00</div></div></div>
+      <div class="b in"><div class="s">Inside</div><div class="n">20.2°</div></div>
+      <div class="b hum"><div class="s">Humidity</div><div class="n">63%</div></div>
+      <div class="b sun focus"><svg width="56" height="56"><use href="#i-sunset"/></svg><div><div class="t">Sunset</div><div class="s">17:12</div></div></div>
+      <div class="b off"><svg width="56" height="56"><use href="#i-off"/></svg><div><div class="t">All off</div><div class="s">Lights</div></div></div>
+      <div class="b mp"><div style="display:flex;justify-content:space-between;align-items:center"><span class="t" style="display:flex;gap:12px;align-items:center"><span class="logo"><svg width="40" height="40"><use href="#i-logo"/></svg></span>MPTree installs</span><span class="mono s">7 days</span></div>
+        <div class="bar"><i style="height:40%"></i><i style="height:55%"></i><i style="height:48%"></i><i style="height:62%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:92%"></i></div>
+        <div style="display:flex;justify-content:space-between"><div><div class="n" style="font-size:56px">1,284</div><div class="s">Play installs, +23 today</div></div><div style="text-align:right"><div class="n" style="font-size:56px">4.6</div><div class="s">rating</div></div></div></div>
+      <div class="b ss"><div><div class="t">Sun goes down in 2 h 17 min</div><div class="s">Dusk 17:48, sunrise 07:34</div></div><svg width="70" height="70"><use href="#i-sunset"/></svg></div>
+      <div class="b lights"><div class="t">Lights</div><div class="dots"><span>Living room</span><span>Corner lamp</span><span>TV light</span><span>Entrance</span><span>Bathroom</span></div></div>
+      <div class="apps">
+        <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+      </div>
+    </div>
+  </div></div>
+  <p class="note"><b>Everything is a box, in different sizes.</b> The clock is the one black block; the most used things get the biggest boxes. Fits a lot without feeling crowded, and every box is easy to reach with the arrows.</p>
+</section>
+
+<!-- 3 -->
+<section class="board">
+  <div class="cap"><span class="n">03</span><h2>Editorial, in sentences</h2></div>
+  <div class="frame"><div class="tv d3">
+    <div class="nav"><div class="l"><span style="color:var(--text)">Caelan</span><span class="on">Home</span><span>Apps</span></div><div class="r"><span>Settings</span><span>Screensaver</span></div></div>
+    <div class="lede">It's <b>14:55</b> on Saturday. Outside it is <b>9°</b> and cloudy, inside <b>20.2°</b>. The sun sets at <b>17:12</b>. MPTree has <b>1,284</b> installs, <b>23</b> of them today.</div>
+    <div class="acts"><span class="focus">Start sunset</span><span>All lights off</span></div>
+    <div class="side">Humidity <b>63%</b><br>Rain from <b>20:00</b></div>
+    <div class="apps"><span>YouTube</span><span>NPO Start</span><span>HBO Max</span><span>Browser</span><span>MPTree</span><span class="dim">+ Add</span></div>
+  </div></div>
+  <p class="note"><b>No tiles, just type.</b> The screen reads like the first paragraph of a newspaper, with the numbers in black and the rest in grey. Very calm and very MPTree, but less "at a glance" from across the room.</p>
+</section>
+
+<!-- 4 -->
+<section class="board">
+  <div class="cap"><span class="n">04</span><h2>Cinema, dark</h2></div>
+  <div class="frame"><div class="tv d4 dark">
+    <div class="strip4">
+      <div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div>
+      <div class="ctr">14:55 <span class="sub">9° cloudy · 20.2° inside</span></div>
+      <div class="grp"><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div>
+    </div>
+    <div class="posters">
+      <div class="poster g1"><span class="big">Yt</span><div class="nm">YouTube</div><div class="s">Continue watching</div></div>
+      <div class="poster focus" style="background:#fff;color:#000"><span class="big">N</span><div class="nm">NPO Start</div><div class="s">Journaal, 2 min ago</div></div>
+      <div class="poster g3"><span class="big">H</span><div class="nm">HBO Max</div><div class="s">Episode 4 next</div></div>
+      <div class="poster g4"><span class="big">B</span><div class="nm">Browser</div><div class="s">mp-tree.net</div></div>
+      <div class="poster g2"><span class="big" style="opacity:.25"><svg width="120" height="120"><use href="#i-logo"/></svg></span><div class="nm">MPTree</div><div class="s">Night Bus Home</div></div>
+      <div class="poster" style="border-style:dashed;background:transparent"><div class="nm" style="color:var(--textSub)">+ Add app</div></div>
+    </div>
+    <div class="bottom">
+      <div><span class="pill"><svg width="34" height="34"><use href="#i-sunset"/></svg>Sunset 17:12</span><span class="pill"><svg width="30" height="30"><use href="#i-off"/></svg>All lights off</span></div>
+      <div class="ticker"><span class="logo"><svg width="36" height="36"><use href="#i-logo"/></svg></span><span><b>1,284</b> installs</span><span><b>+23</b> today</span><span><b>4.6</b> rating</span><span><b>212</b> Windows</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>The TV is for watching, so the apps are the stars.</b> Black like MPTree's dark mode, big poster cards, and a line under each one (the app's own "continue watching" where it shares it). Home controls and numbers sit in thin strips. Easiest on the eyes in the evening.</p>
+</section>
+
+<!-- 5 -->
+<section class="board">
+  <div class="cap"><span class="n">05</span><h2>Side rail</h2></div>
+  <div class="frame"><div class="tv d5">
+    <div class="rail">
+      <span class="av" style="width:72px;height:72px;font-size:32px">C</span>
+      <span class="item on"><svg width="36" height="36"><use href="#i-home"/></svg>Home</span>
+      <span class="item"><svg width="36" height="36"><use href="#i-grid"/></svg>Apps</span>
+      <span class="sp"></span>
+      <span class="item"><svg width="36" height="36"><use href="#i-gear"/></svg>Settings</span>
+      <span class="item"><svg width="34" height="34"><use href="#i-moon"/></svg>Sleep</span>
+    </div>
+    <div class="main">
+      <div class="hd"><h3>Good afternoon, Caelan</h3><span class="t">14:55</span></div>
+      <div class="lab">Watch</div>
+      <div class="row">
+        <div class="app focus"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+      </div>
+      <div class="lab">Home</div>
+      <div class="row4">
+        <div class="c"><svg width="50" height="50"><use href="#i-sunset"/></svg><div><div class="t">Sunset</div><div class="s">Today 17:12, or now</div></div></div>
+        <div class="c"><svg width="50" height="50"><use href="#i-off"/></svg><div><div class="t">All lights off</div><div class="s">7 lights</div></div></div>
+        <div class="c"><div class="s">Inside</div><div><div class="n">20.2°</div><div class="s">63%</div></div></div>
+        <div class="c"><div class="s">Outside</div><div><div class="n">9°</div><div class="s">Cloudy</div></div></div>
+      </div>
+      <div class="lab">MPTree</div>
+      <div class="mstrip"><span><b>1,284</b>Play installs</span><span><b>+23</b>today</span><span><b>4.6</b>rating</span><span><b>212</b>Windows</span><span><b>3.4k</b>site visitors</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>Menu on the left, content in rows.</b> Like Google TV but yours. Home and Apps are stacked right next to each other on the rail, one press apart. Apps come first because that's what you open most.</p>
+</section>
+
+<!-- 6 -->
+<section class="board">
+  <div class="cap"><span class="n">06</span><h2>Swiss grid, number keys</h2></div>
+  <div class="frame"><div class="tv d6">
+    <div class="frame6">
+      <div class="cell nav6"><div class="l"><span>CAELAN</span><span class="on">HOME</span><span>APPS</span></div><div class="r"><span>SETTINGS</span><span>SCREENSAVER</span></div></div>
+      <div class="cell" style="grid-column:1/6;grid-row:2/4"><span class="lbl">Sat 31 Oct</span><span class="huge">14:55</span></div>
+      <div class="cell" style="grid-column:6/9"><span class="lbl">Outside, cloudy</span><span class="num">9°</span></div>
+      <div class="cell" style="grid-column:9/-1;border-right:none"><span class="lbl">Inside, 63%</span><span class="num">20.2°</span></div>
+      <div class="cell inv" style="grid-column:6/9"><span class="lbl">Sunset, 17:12</span><span class="btn6">Run now <svg width="44" height="44"><use href="#i-sunset"/></svg></span></div>
+      <div class="cell" style="grid-column:9/11"><span class="lbl">Lights</span><span class="btn6">All off</span></div>
+      <div class="cell" style="grid-column:11/-1;border-right:none"><span class="lbl">MPTree</span><span class="num" style="font-size:60px">1,284</span></div>
+      <div class="cell keys">
+        <div class="key"><span class="kn">1</span><span class="nm">YouTube</span></div><div class="key focus"><span class="kn">2</span><span class="nm">NPO Start</span></div><div class="key"><span class="kn">3</span><span class="nm">HBO Max</span></div><div class="key"><span class="kn">4</span><span class="nm">Browser</span></div><div class="key"><span class="kn">5</span><span class="nm">MPTree</span></div><div class="key"><span class="kn">+</span><span class="nm">Add app</span></div>
+      </div>
+    </div>
+  </div></div>
+  <p class="note"><b>A poster, not an app.</b> Square corners, black rules, mono labels. Each app has a number: press 2 on the remote and NPO Start opens, no arrows needed. The most different from MPTree's rounded look, on purpose.</p>
+</section>
+
+<!-- 7 -->
+<section class="board">
+  <div class="cap"><span class="n">07</span><h2>Three big cards</h2></div>
+  <div class="frame"><div class="tv d7">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span style="font-size:34px;font-weight:800;margin-right:20px;font-variant-numeric:tabular-nums">14:55</span><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="three">
+      <div class="card"><h3>Watch</h3>
+        <div class="li"><span class="mk">Yt</span>YouTube</div><div class="li"><span class="mk">N</span>NPO Start</div><div class="li"><span class="mk">H</span>HBO Max</div><div class="li"><span class="mk">B</span>Browser</div><div class="li"><span class="mk"><svg width="36" height="36"><use href="#i-logo"/></svg></span>MPTree</div><div class="li" style="border-style:dashed;color:var(--textSub)"><span class="mk add"><svg width="24" height="24"><use href="#i-plus"/></svg></span>Add app</div>
+      </div>
+      <div class="card"><h3>Home</h3>
+        <div class="bigbtn focus"><svg width="72" height="72"><use href="#i-sunset"/></svg><div><div class="t">Sunset</div><div class="s">Runs at 17:12. Press OK to run it now.</div></div></div>
+        <div class="bigbtn"><svg width="68" height="68"><use href="#i-off"/></svg><div><div class="t">All lights off</div><div class="s">All 7 are off already</div></div></div>
+      </div>
+      <div class="card today"><h3>Today</h3>
+        <div style="display:flex;gap:40px;align-items:flex-end"><div><div class="n">9°</div><div class="k" style="font-size:24px">outside, cloudy</div></div><div><div class="n" style="font-size:80px">20.2°</div><div class="k" style="font-size:24px">inside</div></div></div>
+        <div style="margin-top:auto">
+          <div class="kv"><span>Rain</span><b>from 20:00</b></div>
+          <div class="kv"><span>Humidity inside</span><b>63%</b></div>
+          <div class="kv"><span>MPTree installs</span><b>1,284 (+23)</b></div>
+          <div class="kv" style="border:none"><span>MPTree rating</span><b>4.6</b></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <p class="note"><b>Three questions: what to watch, the house, the day.</b> Huge targets, almost nothing to learn, works for anyone in the house. Left and right moves between the cards, up and down inside them.</p>
+</section>
+
+<!-- 8 -->
+<section class="board">
+  <div class="cap"><span class="n">08</span><h2>Ambient sky, glass</h2></div>
+  <div class="frame"><div class="tv d8">
+    <div class="cloud" style="left:200px;top:120px;width:700px;height:200px"></div><div class="cloud" style="left:1000px;top:260px;width:600px;height:160px"></div>
+    <div class="sunorb"></div><div class="hill"></div><div class="hill2"></div>
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="hello glass"><div class="t">14:55</div><div class="d">Saturday 31 October</div><div class="w"><span><b>9°</b> cloudy</span><span><b>20.2°</b> inside</span><span>63%</span></div></div>
+    <div class="col">
+      <div class="glass gbtn focus"><span class="ic"><svg width="34" height="34"><use href="#i-sunset"/></svg></span><div>Sunset<div class="s" style="color:inherit;opacity:.7">at 17:12, or now</div></div></div>
+      <div class="glass gbtn"><span class="ic"><svg width="30" height="30"><use href="#i-off"/></svg></span><div>All lights off<div class="s">7 lights</div></div></div>
+      <div class="glass mrow"><div><b>1,284</b>MPTree installs</div><div><b>+23</b>today</div><div><b>4.6</b>rating</div></div>
+    </div>
+    <div class="dock8 glass">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>The background is the weather.</b> A soft sky that follows the real sky: brighter at noon, lower sun towards 17:12, dark at night, clouds when it's cloudy. Frosted panels float on top. The most atmospheric one; kept grey so it stays in MPTree's colours.</p>
+</section>
+
+<!-- 9 -->
+<section class="board">
+  <div class="cap"><span class="n">09</span><h2>The day as a line</h2></div>
+  <div class="frame"><div class="tv d9">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="head9"><div><div class="t">14:55</div><div style="font-size:30px;color:var(--textSub);margin-top:14px">Saturday 31 October</div></div>
+      <div class="temps"><div><div class="n">9°</div><div class="k">outside, cloudy</div></div><div><div class="n">20.2°</div><div class="k">inside, 63%</div></div></div></div>
+    <svg class="day" viewBox="0 0 1728 330">
+      <!-- 06:00 at x=0, 24:00 at x=1728: 96 px per hour -->
+      <line x1="0" y1="200" x2="1728" y2="200" stroke="#d8d8d8" stroke-width="3"/>
+      <path d="M150 200 C 420 -40, 900 -40, 1075 200" fill="none" stroke="#111" stroke-width="4"/>
+      <path d="M150 200 C 420 -40, 860 -40, 859 60" fill="none" stroke="#111" stroke-width="12" stroke-linecap="round" opacity=".12"/>
+      <circle cx="859" cy="78" r="22" fill="#111"/>
+      <line x1="1075" y1="200" x2="1075" y2="232" stroke="#111" stroke-width="3"/>
+      <g font-family="JetBrains Mono, monospace" font-size="22" fill="#888">
+        <text x="0" y="244">06</text><text x="384" y="244">10</text><text x="768" y="244">14</text><text x="1152" y="244">18</text><text x="1536" y="244">22</text>
+        <text x="150" y="176" fill="#111">07:34</text><text x="1092" y="176" fill="#111">17:12</text>
+      </g>
+      <text x="859" y="30" text-anchor="middle" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="#111">now</text>
+      <rect x="1075" y="200" width="653" height="10" fill="#111" opacity=".08"/>
+    </svg>
+    <div class="offbtn"><svg width="36" height="36"><use href="#i-off"/></svg>All lights off</div>
+    <div class="mp9"><span class="logo"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span><b>1,284</b> installs</span><span><b>+23</b> today</span><span><b>4.6</b></span></div>
+    <div class="sunbtn focus" style="transform:none"><div style="display:flex;gap:14px;align-items:center"><svg width="38" height="38"><use href="#i-sunset"/></svg>Sunset at 17:12</div><div class="s">OK runs it now</div></div>
+    <div class="dock9">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>Your day from sunrise to midnight.</b> The sun's path from Home Assistant's sun data, a dot for now, and your Sunset button pinned to the moment the sun goes down. Later, more automations could hang on the line at their own times.</p>
+</section>
+
+<!-- 10 -->
+<section class="board">
+  <div class="cap"><span class="n">10</span><h2>Music first, MPTree on the TV</h2></div>
+  <div class="frame"><div class="tv d10">
+    <div class="top"><div class="grp"><span class="acc"><span class="av">C</span>Caelan</span><span class="seg"><span class="on">Home</span><span>Apps</span></span></div><div class="grp"><span style="font-size:34px;font-weight:800;margin-right:20px;font-variant-numeric:tabular-nums">14:55</span><span class="ib"><svg width="34" height="34"><use href="#i-gear"/></svg></span><span class="ib"><svg width="32" height="32"><use href="#i-moon"/></svg></span></div></div>
+    <div class="np">
+      <div class="art"></div>
+      <div>
+        <div class="lab"><span class="logo"><svg width="30" height="30"><use href="#i-logo"/></svg></span>Playing in MPTree</div>
+        <h3>Night Bus Home</h3><div class="by">Maren Oduya</div>
+        <div class="prog"><i></i></div><div class="pt"><span>1:24</span><span>3:41</span></div>
+        <div class="ctrls"><span class="cb"><svg width="34" height="34"><use href="#i-prev"/></svg></span><span class="cb play"><svg width="44" height="44"><use href="#i-pause"/></svg></span><span class="cb"><svg width="34" height="34"><use href="#i-next"/></svg></span></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="sc"><div>Outside<div class="s">Cloudy, rain at 20:00</div></div><span class="n">9°</span></div>
+      <div class="sc"><div>Inside<div class="s">Humidity 63%</div></div><span class="n">20.2°</span></div>
+      <div class="sc focus"><div>Sunset<div class="s">17:12, OK runs it now</div></div><svg width="52" height="52"><use href="#i-sunset"/></svg></div>
+      <div class="sc"><div>All lights off<div class="s">7 lights</div></div><svg width="48" height="48"><use href="#i-off"/></svg></div>
+      <div class="sc"><div>MPTree installs<div class="s">+23 today, rating 4.6</div></div><span class="n">1,284</span></div>
+    </div>
+    <div class="dock10">
+      <div class="app"><span class="mk">Yt</span><span class="nm">YouTube</span></div><div class="app"><span class="mk">N</span><span class="nm">NPO Start</span></div><div class="app"><span class="mk">H</span><span class="nm">HBO Max</span></div><div class="app"><span class="mk">B</span><span class="nm">Browser</span></div><div class="app"><span class="mk"><svg width="40" height="40"><use href="#i-logo"/></svg></span><span class="nm">MPTree</span></div><div class="app add"><span class="mk add"><svg width="28" height="28"><use href="#i-plus"/></svg></span><span class="nm">Add app</span></div>
+    </div>
+  </div></div>
+  <p class="note"><b>The TV as your stereo.</b> When MPTree is playing, the home screen becomes its player, with the house and the weather next to it. When nothing plays it falls back to one of the other layouts. Only works once MPTree runs on the TV (see the chat).</p>
+</section>
+
+</div></div>

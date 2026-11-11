@@ -57,3 +57,13 @@ Branding/ad/stills/
 Branding/ad/voice/*.wav
 Branding/ad/voice/*.mp3
 Branding/ad/voice/*.m4a
+
+# ── Local work folders and rendered video ─────────────────────────────────
+# Films, renders and scratch work stay on this machine; the scripts are kept.
+tmp-edit/
+brag-output/
+Branding/tiktok/*.mp4
+Branding/tiktok/stills/
+# iOS lives on the ios branch, not here
+MPTree-App/ios/
+Branding/tiktok/.cache/

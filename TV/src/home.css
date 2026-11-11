@@ -1,0 +1,236 @@
+/* ══ Round four: Home in two pages (TV/design/v4.html) ═════════════════════════
+   The day in the chosen layout on the first page, the house on the second.
+   Sizes are real TV pixels on the 1920×1080 stage. */
+
+/* ── the top bar, quieter: no borders, soft grey pills ── */
+.acc { border: none; background: transparent; margin-left: -10px; padding: 0 26px 0 10px; height: 68px; font-size: 27px; }
+.acc.on { background: var(--surface); }
+.av { width: 48px; height: 48px; font-size: 22px; }
+.seg { background: transparent; border: none; padding: 0; gap: 6px; }
+.seg button { height: 58px; padding: 0 26px; border-radius: 29px; font-weight: 600; }
+.seg button.on { background: var(--surface); color: var(--text); }
+.tb { border: none; background: var(--surface); height: 62px; padding: 0 22px 0 18px; font-size: 23px; color: var(--textSub); }
+/* the living-room speaker: small and quiet after Apps; a dot when it is connected */
+.spk { height: 54px; padding: 0 20px 0 16px; border-radius: 27px; display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 600; color: var(--textSub); white-space: nowrap; }
+.spk.on { color: var(--text); }
+.spk.on::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.stage.on-cinema .seg button.on, .stage.on-cinema .tb { background: rgba(255, 255, 255, .07); }
+
+/* ── the two pages, side by side; Right at the edge slides over ── */
+.pages { position: absolute; left: 0; top: 0; width: 3840px; height: 1080px; display: flex; transition: transform .55s cubic-bezier(.22, .7, .2, 1); }
+.pages.at-house { transform: translateX(-1920px); }
+.hp { position: relative; width: 1920px; height: 1080px; flex-shrink: 0; overflow: clip; }
+@media (prefers-reduced-motion: reduce) { .pages { transition: none; } }
+
+/* the tab at the edge: "House ›" on the first page, "‹ Home" on the second */
+.edge { position: absolute; top: 450px; width: 52px; height: 170px; border-radius: 26px; background: var(--surface); color: var(--textSub); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 19px; font-weight: 600; letter-spacing: .06em; z-index: 3; pointer-events: none; }
+.edge span { writing-mode: vertical-rl; }
+.edge.right { right: 30px; }
+.edge.left { left: 30px; }
+.edge.left span { transform: rotate(180deg); }
+.ci ~ .edge { background: rgba(255, 255, 255, .07); }
+
+/* ── shared pieces ── */
+.hrs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.hrs span { display: grid; justify-items: center; gap: 6px; }
+.rec { display: block; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle, #f4f4f4 0 8%, #2a2a2d 9% 28%, #4a4a4e 29% 30%, #18181a 31% 52%, #3a3a3e 53% 54%, #141416 55%); }
+.cover { display: block; flex-shrink: 0; object-fit: cover; }
+.songline { display: block; height: 4px; border-radius: 2px; background: var(--border); position: relative; overflow: hidden; }
+.songline i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--text); border-radius: 2px; }
+/* MPTree's downloads: one quiet line, the mark then "133 MPTree downloads" */
+.dls { display: flex; align-items: center; gap: 14px; font-size: 28px; color: var(--textSub); white-space: nowrap; }
+.dls svg { color: var(--text); flex-shrink: 0; }
+.dls b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── 1 Classic: a greeting with the time in it, the music as one big card ── */
+.cl-left { position: absolute; left: 96px; top: 176px; width: 1060px; display: grid; gap: 30px; align-content: start; justify-items: start; }
+.cl-greet { margin: -12px 0 0 -4px; font-family: var(--serif); font-weight: 400; font-size: 120px; line-height: .98; letter-spacing: -0.01em; text-wrap: balance; }
+.cl-greet i { color: var(--muted); }
+.cl-meta { display: flex; gap: 34px; font-size: 30px; color: var(--textSub); }
+.cl-meta b { color: var(--text); font-weight: 600; }
+.cl-hours { width: 880px; border-top: 2px solid var(--border); border-bottom: 2px solid var(--border); }
+.cl-hours span { padding: 16px 0 14px; font-size: 19px; color: var(--muted); }
+.cl-hours b { font-size: 30px; color: var(--text); font-weight: 600; }
+.cl-hours svg { color: var(--textSub); }
+.cl-hours .rain { background: repeating-linear-gradient(135deg, transparent 0 9px, rgba(127, 127, 127, .14) 9px 11px); }
+.cl-dls { margin-top: 8px; }
+.ci-dls { font-size: 24px; }
+
+/* the music card: black on white, white on black */
+.mcard { position: absolute; border-radius: 40px; background: var(--text); color: var(--bg); padding: 40px; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; --cardSub: rgba(255, 255, 255, .62); --cardLine: rgba(255, 255, 255, .25); }
+.stage.dark .mcard { --cardSub: rgba(0, 0, 0, .58); --cardLine: rgba(0, 0, 0, .18); }
+.cl-music { right: 96px; top: 176px; width: 600px; height: 620px; }
+.mc-disc { width: 230px; height: 230px; align-self: flex-end; }
+.mc-logo { display: grid; place-items: center; }
+/* MPTree's record: the shadow stays still, only the record turns (7 s a turn) */
+.vinyl { display: grid; place-items: center; border-radius: 50%; box-shadow: 0 6px 24px rgba(0, 0, 0, .4); contain: layout paint; }
+.vy-rec { grid-area: 1 / 1; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; animation: vy-spin 7s linear infinite paused; will-change: transform; backface-visibility: hidden; }
+.vy-rec.on { animation-play-state: running; }
+.vy-label { grid-area: 1 / 1; z-index: 1; width: 24%; height: 24%; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
+.vy-label { overflow: hidden; }
+.vy-label svg { width: 50%; height: auto; }
+.vy-label img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes vy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .vy-rec { animation: none; } }
+.mc-body { display: grid; gap: 8px; min-width: 0; }
+.mc-kick { font-size: 20px; color: var(--cardSub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-title { margin: 0; font-size: 52px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mcard.playing .mc-title { font-size: 44px; }
+.mc-by { margin: 0; font-size: 23px; color: var(--cardSub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-line { display: block; height: 4px; border-radius: 2px; background: var(--cardLine); position: relative; overflow: hidden; margin: 10px 0 6px; }
+.mc-line i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bg); border-radius: 2px; }
+.mc-btns { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.mc-b { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--cardLine); flex-shrink: 0; }
+.mc-b.pl { background: var(--bg); color: var(--text); border-color: var(--bg); }
+.mc-go { height: 72px; padding: 0 30px; border-radius: 36px; border: 2px solid var(--cardSub); display: inline-flex; align-items: center; gap: 12px; font-size: 25px; font-weight: 600; justify-self: start; margin-top: 18px; white-space: nowrap; }
+.mc-btns .mc-go { margin: 0 0 0 auto; padding: 0 24px; font-size: 22px; }
+/* On the card the usual black highlight would vanish: the focused thing turns the
+   colour of the ground, with a ring around it. */
+.mcard .f:focus { background: var(--bg) !important; color: var(--text) !important; border-color: var(--bg) !important; box-shadow: 0 0 0 5px var(--text), 0 0 0 9px var(--bg) !important; transform: scale(1.08); }
+
+/* ── 2 Editorial, minimal: a hairline masthead, one big serif line, one quiet line ── */
+.ed-mast { position: absolute; left: 96px; right: 96px; top: 176px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--border); padding-bottom: 16px; font-family: var(--mono); font-size: 18px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ed-lede { position: absolute; left: 96px; right: 96px; top: 262px; margin: 0 0 0 -0.04em; font-family: var(--serif); font-weight: 400; font-size: 168px; line-height: .96; letter-spacing: -0.02em; color: var(--text); }
+.ed-lede i { color: var(--muted); }
+.ed-line { position: absolute; left: 96px; right: 96px; top: 618px; margin: 0; font-size: 30px; line-height: 1.4; color: var(--textSub); }
+.ed-music { position: absolute; left: 96px; right: 96px; top: 712px; display: flex; align-items: baseline; gap: 22px; min-width: 0; }
+.ed-kick { font-family: var(--mono); font-size: 17px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.ed-song { font-family: var(--serif); font-size: 44px; color: var(--textSub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ed-song b { font-weight: 400; color: var(--text); }
+.ed-acts { display: flex; gap: 6px; margin-left: -14px; font-family: var(--serif); font-style: italic; font-size: 44px; flex-shrink: 0; }
+.ed-song + .ed-acts { margin-left: 8px; }
+.ed-act { padding: 2px 14px 8px; border-radius: 14px; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 10px; text-decoration-color: var(--muted); white-space: nowrap; }
+.ed-act:focus { text-decoration: none; transform: none; }
+.ed-dls { flex-shrink: 0; margin: 0 0 0 34px; font-family: var(--serif); font-size: 44px; color: var(--textSub); white-space: nowrap; }
+.ed-dls b { font-weight: 400; color: var(--text); }
+.ed-apps { position: absolute; left: 96px; right: 96px; bottom: 56px; display: flex; gap: 6px; border-top: 1px solid var(--border); padding-top: 22px; margin-left: 0; }
+.ed-app { font-size: 30px; font-weight: 500; letter-spacing: -0.01em; padding: 6px 16px; margin-right: 18px; border-radius: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ed-app:first-child { margin-left: -16px; }
+.ed-app.dim { color: var(--muted); margin-left: auto; margin-right: -16px; }
+
+/* ── 3 Cinema: the selected app fills the room (always dark) ── */
+.ci-back { position: absolute; inset: 0; background: radial-gradient(70% 90% at 30% 35%, rgba(255, 255, 255, .13), transparent 60%), radial-gradient(60% 70% at 80% 10%, rgba(255, 255, 255, .06), transparent 60%), linear-gradient(180deg, #121214 0%, #060607 62%); }
+.ci-back::after { content: ""; position: absolute; left: -10%; right: -10%; top: 180px; height: 520px; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .035) 0 2px, transparent 2px 120px); opacity: .6; }
+.ci-feature { position: absolute; left: 96px; top: 176px; width: 1150px; }
+.ci-feature .kick { font-family: var(--mono); font-size: 18px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.ci-feature h2 { margin: 14px 0 0; font-size: 150px; line-height: .95; letter-spacing: -0.04em; font-weight: 600; font-stretch: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-feature h2.long { font-size: 112px; }
+.ci-feature p { margin: 18px 0 0; font-size: 28px; color: var(--textSub); }
+.ci-clock { position: absolute; right: 96px; top: 174px; text-align: right; }
+.ci-clock b { display: block; font-size: 96px; font-weight: 500; font-stretch: 80%; letter-spacing: -0.03em; line-height: .9; font-variant-numeric: tabular-nums; }
+.ci-clock span { font-size: 24px; color: var(--textSub); }
+.ci-row { position: absolute; left: 96px; right: 96px; top: 520px; height: 310px; --gap: 20px; align-items: end; }
+.ci-row .ar-i { display: flex; align-items: flex-end; height: 100%; }
+.ci-row .ci-card { width: 100%; }
+.ci-card { height: 250px; border-radius: 24px; background: #18191b; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 22px; font-size: 28px; font-weight: 600; color: #f4f5f6; transition: height var(--move), background var(--move), color var(--move), box-shadow var(--move); }
+.ci-card .glyph { position: absolute; left: 22px; top: 18px; font-size: 92px; font-weight: 700; letter-spacing: -0.06em; opacity: .12; line-height: 1; }
+.ci-card img.bn { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.ci-card .bn.mark { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 16 / 9; display: grid; place-items: center; background: #000; color: #fff; }
+.ci-card img.ic { position: absolute; left: 22px; top: 22px; width: 96px; height: 96px; border-radius: 22px; }
+.ci-card .nm { position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ci-card.add { background: transparent; border: 2px dashed #2c2d30; color: var(--muted); align-items: flex-start; gap: 10px; }
+.ci-card:focus { height: 300px; transform: none; background: #f2f2f2 !important; color: #0b0b0b !important; box-shadow: 0 30px 80px rgba(255, 255, 255, .12) !important; }
+.ci-card:focus .glyph { opacity: .9; font-size: 40px; letter-spacing: -0.02em; top: 24px; }
+.ci-foot { position: absolute; left: 96px; right: 96px; bottom: 58px; display: flex; justify-content: space-between; align-items: center; gap: 30px; }
+.ci-chips { display: flex; gap: 10px; min-width: 0; }
+.ci-chip { height: 66px; max-width: 1000px; padding: 0 26px; border-radius: 33px; background: rgba(255, 255, 255, .07); display: flex; align-items: center; gap: 12px; font-size: 23px; font-weight: 600; color: #e7e7e8; white-space: nowrap; min-width: 0; }
+.ci-chip .ttl { max-width: 460px; overflow: hidden; text-overflow: ellipsis; }
+.ci-chip .dim { color: var(--muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 5 Day line: the day as one drawing ── */
+.dl-head { position: absolute; left: 96px; right: 96px; top: 168px; display: flex; justify-content: space-between; align-items: flex-start; }
+.dl-head .t { margin-left: -2px; font-size: 170px; font-weight: 600; font-stretch: 78%; letter-spacing: -0.035em; line-height: .82; font-variant-numeric: tabular-nums; }
+.dl-head .d { font-size: 30px; color: var(--textSub); margin-top: 18px; }
+.dl-temps { display: flex; gap: 64px; text-align: right; margin-top: 2px; }
+.dl-temps b { display: block; font-size: 84px; font-weight: 600; font-stretch: 80%; letter-spacing: -0.03em; line-height: .9; font-variant-numeric: tabular-nums; }
+.dl-temps span { font-size: 22px; color: var(--textSub); }
+/* the line: 06:00 at the left, midnight at the right; everything on it is placed
+   by `left: %` and centred on its spot */
+.dl-line { position: absolute; left: 96px; right: 96px; top: 470px; height: 260px; }
+.dl-line > span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.dl-sun { top: 0; display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 600; color: var(--textSub); }
+.dl-track { position: absolute; left: 0; right: 0; top: 52px; height: 10px; border-radius: 5px; background: var(--border); }
+.dl-past { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--text); }
+.dl-rain { position: absolute; top: -6px; bottom: -6px; border-radius: 4px; background: repeating-linear-gradient(135deg, var(--muted) 0 3px, transparent 3px 9px); }
+.dl-dot { position: absolute; top: 50%; width: 30px; height: 30px; border-radius: 50%; background: var(--text); border: 6px solid var(--bg); transform: translate(-50%, -50%); box-sizing: content-box; }
+.dl-nowlbl { top: 82px; font-size: 22px; font-weight: 700; }
+.dl-rainlbl { top: 0; font-size: 20px; font-weight: 600; color: var(--textSub); }
+.dl-hr { top: 130px; display: grid; justify-items: center; gap: 8px; }
+.dl-hr .tm { font-size: 22px; font-weight: 600; color: var(--textSub); }
+.dl-hr b { font-size: 34px; font-weight: 600; }
+.dl-hr.past { opacity: .45; }
+.dl-pills { position: absolute; left: 96px; right: 96px; top: 774px; display: flex; gap: 12px; align-items: center; }
+.dl-pill { height: 64px; max-width: 1000px; padding: 0 24px; border-radius: 32px; background: var(--surface); display: flex; align-items: center; gap: 12px; font-size: 23px; font-weight: 600; white-space: nowrap; min-width: 0; }
+.dl-pill .ttl { max-width: 480px; overflow: hidden; text-overflow: ellipsis; }
+.dl-pill .m { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--textSub); overflow: hidden; text-overflow: ellipsis; }
+.f:focus .m { color: var(--focusSub); }
+.dl-dls { margin-left: auto; }
+
+/* ── the House page ── */
+.hs-head { position: absolute; left: 96px; right: 96px; top: 168px; display: flex; justify-content: space-between; align-items: flex-end; }
+.hs-head h2 { margin: 0; font-size: 96px; font-weight: 600; font-stretch: 82%; letter-spacing: -0.035em; line-height: .9; }
+.hs-head p { margin: 14px 0 0; font-size: 28px; color: var(--textSub); }
+.hs-clock { text-align: right; }
+.hs-clock b { display: block; font-size: 64px; font-weight: 500; font-stretch: 80%; letter-spacing: -0.02em; line-height: .9; font-variant-numeric: tabular-nums; }
+.hs-clock span { font-size: 24px; color: var(--textSub); }
+.hs-tiles { position: absolute; left: 96px; right: 96px; top: 330px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 280px 280px; gap: 18px; }
+.tl { border-radius: 30px; background: var(--surface); padding: 26px 28px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; min-width: 0; }
+.tl .row1 { display: flex; justify-content: space-between; align-items: center; }
+.tl .ico { width: 62px; height: 62px; border-radius: 50%; background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; }
+.tl .t { display: block; font-size: 30px; font-weight: 600; letter-spacing: -0.01em; }
+.tl .big { display: block; font-size: 70px; font-weight: 600; font-stretch: 85%; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.tl .s { font-size: 20px; color: var(--textSub); margin-top: 6px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tl:focus { transform: scale(1.035); }
+.tl:focus .ico { background: rgba(127, 127, 127, .22); color: var(--btnFg); }
+.st { font-family: var(--mono); font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--textSub); }
+.st::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; }
+.st.on { color: var(--text); }
+.st.on::before { background: currentColor; }
+.st.none::before { display: none; }
+.f:focus .st { color: var(--btnFg); }
+.f:focus .s { color: var(--focusSub); }
+.hs-off { position: absolute; left: 96px; top: 330px; width: 1100px; display: grid; gap: 22px; justify-items: start; }
+.hs-off h3 { margin: 0; font-size: 56px; font-weight: 600; letter-spacing: -0.03em; }
+.hs-off p { margin: 0 0 10px; font-size: 28px; line-height: 1.45; color: var(--textSub); }
+
+/* Settings: the command to type, selectable and wrapping */
+.cmd { margin-top: 12px; padding: 12px 16px; border-radius: 14px; background: var(--surface); font-size: 16px; line-height: 1.5; word-break: break-all; color: var(--text); }
+
+/* ── the music panel, round four ── */
+.mu-art.rec { border-radius: 50%; }
+.mu-note { font-size: 21px; color: var(--textSub); }
+
+/* ══ Round five ═════════════════════════════════════════════════════════════════ */
+
+/* ── Home's row of apps, then "All apps": six across; the seventh waits past the
+   right edge and the row slides one place left when Right reaches it ── */
+.arow { display: grid; grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: calc((100% - 5 * var(--gap, 20px)) / 6); gap: var(--gap, 20px); transform: translateX(calc(var(--shift, 0) * (100% + var(--gap, 20px)) / -6)); transition: transform .35s cubic-bezier(.22, .7, .2, 1); }
+.dock.arow { --gap: 20px; }
+@media (prefers-reduced-motion: reduce) { .arow { transition: none; } }
+.tile .face.add .mk.add { border-style: solid; }
+
+/* ── the intro when the TV turns on: the logo, then through it to Home ── */
+.intro { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; color: #fff; overflow: hidden; }
+.in-ground { position: absolute; inset: 0; background: #000; }
+.in-mark { position: relative; animation: in-appear .9s cubic-bezier(.2, .7, .2, 1) both; }
+.in-breathe { animation: in-breathe 3.2s ease-in-out .9s infinite; }
+.in-name { position: absolute; left: 0; right: 0; bottom: 84px; text-align: center; font-size: 26px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; color: rgba(255, 255, 255, .72); animation: in-words .9s ease .5s both; }
+.intro.fly .in-mark { animation: in-fly .95s both; }
+.intro.fly .in-breathe { animation: none; }
+.intro.fly .in-ground { animation: in-ground .95s linear both; }
+.intro.fly .in-name { animation: in-words-out .3s ease both; }
+@keyframes in-appear { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes in-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes in-words { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes in-words-out { to { opacity: 0; } }
+@keyframes in-fly {
+  0%   { transform: scale(1); opacity: 1; animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+  22%  { transform: scale(.9); opacity: 1; animation-timing-function: cubic-bezier(.6, 0, .9, .4); }
+  94%  { transform: scale(60); opacity: 1; }
+  100% { transform: scale(60); opacity: 0; }
+}
+@keyframes in-ground { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .in-mark, .in-breathe, .in-name { animation: none !important; }
+  .intro.fly .in-mark, .intro.fly .in-name { animation: in-words-out .5s ease both !important; }
+}

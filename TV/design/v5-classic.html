@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classic Left Side</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* A working board: Classic, five ways to do the left side (the greeting and the
+   weather). The music card, the top bar and the apps stay as they are, greyed a
+   little so the left side is what you look at. Real 1920×1080 screens, scaled. */
+:root{
+  --bg:#e8e9eb; --fg:#121314; --sub:#5b5e64; --line:#d0d2d6;
+  --sans:"Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --serif:"Instrument Serif", Georgia, "Times New Roman", serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0c0e;--fg:#f1f2f4;--sub:#8a8e95;--line:#24262b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b0c0e;--fg:#f1f2f4;--sub:#8a8e95;--line:#24262b;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);padding:36px 16px 56px}
+.head{max-width:72ch;display:grid;gap:10px;margin:0 auto 28px 0}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}
+.head h1{margin:0;font-size:clamp(28px,4vw,40px);letter-spacing:-0.03em;line-height:1.05;font-weight:600}
+.head p{margin:0;color:var(--sub);line-height:1.55;font-size:15px}
+.boards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,680px),1fr));gap:40px 28px;max-width:1960px}
+.board{display:grid;gap:12px;align-content:start;min-width:0}
+.cap{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.cap .n{font-family:var(--mono);font-size:12px;color:var(--sub)}
+.cap h2{margin:0;font-size:21px;letter-spacing:-0.02em;font-weight:600}
+.cap .k{font-size:14px;color:var(--sub)}
+.frame{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:#fff}
+.frame>.tv{position:absolute;left:0;top:0;transform-origin:0 0;transform:scale(var(--s,.35))}
+.notes{margin:0;padding:0;list-style:none;display:grid;gap:6px;font-size:14px;line-height:1.5;color:var(--sub);max-width:72ch}
+.notes li{display:flex;gap:10px}.notes li::before{content:"";flex:0 0 7px;height:7px;margin-top:8px;border-radius:50%;background:var(--fg);opacity:.5}
+.notes b{color:var(--fg);font-weight:600}
+
+/* ── the TV, as the launcher draws it ── */
+.tv,.tv *{box-sizing:border-box}
+.tv{--ink:#0d0e10;--ink2:#5e6168;--ink3:#9a9da3;--paper:#fff;--tile:#f3f4f5;--rule:#e2e4e7;
+  width:1920px;height:1080px;position:relative;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--sans)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bar{position:absolute;left:86px;right:96px;top:60px;height:68px;display:flex;align-items:center;gap:14px;opacity:.55}
+.who{display:flex;align-items:center;gap:14px;font-size:27px;font-weight:600;padding:0 26px 0 10px}
+.who i{width:48px;height:48px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-style:normal;font-size:22px;font-weight:700}
+.tabs{display:flex;gap:6px;font-size:26px;font-weight:600}.tabs span{height:58px;padding:0 26px;border-radius:29px;display:flex;align-items:center;color:var(--ink3)}.tabs .on{color:var(--ink);background:var(--tile)}
+.tools{margin-left:auto;display:flex;gap:10px}.tools span{height:62px;padding:0 24px;border-radius:31px;display:flex;align-items:center;font-size:23px;font-weight:600;color:var(--ink2);background:var(--tile)}
+.music{position:absolute;right:96px;top:176px;width:600px;height:620px;border-radius:40px;background:var(--ink);color:#fff;padding:40px;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;opacity:.55}
+.music .rec{position:absolute;right:40px;top:40px;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,#f4f4f4 0 8%,#2a2a2d 9% 28%,#4a4a4e 29% 30%,#18181a 31% 52%,#3a3a3e 53% 54%,#141416 55%)}
+.music small{font-size:20px;color:rgba(255,255,255,.62)}.music b{font-size:44px;letter-spacing:-0.02em}.music span{font-size:23px;color:rgba(255,255,255,.62)}
+.apps{position:absolute;left:96px;right:96px;bottom:40px;display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 100px)/6);gap:20px;opacity:.55}
+.apps div{aspect-ratio:16/9;border-radius:26px;background:var(--tile);border:2px solid var(--rule);padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;font-size:26px;font-weight:700}
+.apps div i{width:64px;height:64px;border-radius:16px;background:var(--ink)}
+.apps .all i{background:none;border:2px solid var(--rule)}
+
+/* the left side, shared */
+.L{position:absolute;left:96px;top:176px;width:1040px}
+.greet{margin:-12px 0 0 -4px;font-family:var(--serif);font-weight:400;font-size:120px;line-height:.98;letter-spacing:-0.01em}
+.greet i{color:var(--ink3)}
+.lbl{font-family:var(--mono);font-size:17px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+svg.w{width:30px;height:30px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* 1 the ruled strip, tidied */
+.o1 .meta{display:flex;gap:34px;margin-top:30px;font-size:30px;color:var(--ink2)}.o1 .meta b{color:var(--ink);font-weight:600}
+.o1 .hrs{margin-top:30px;width:880px;display:grid;grid-template-columns:repeat(6,1fr);border-top:2px solid var(--rule);border-bottom:2px solid var(--rule)}
+.o1 .hrs span{display:grid;justify-items:center;gap:6px;padding:16px 0 14px;font-size:19px;color:var(--ink3)}.o1 .hrs b{font-size:30px;color:var(--ink);font-weight:600}
+.o1 .hrs .r{background:repeating-linear-gradient(135deg,transparent 0 9px,rgba(127,127,127,.14) 9px 11px)}
+
+/* 2 three big figures and the day as a line */
+.o2 .greet{font-size:84px}
+.o2 .figs{margin-top:46px;display:flex;gap:70px}
+.o2 .fig b{display:block;font-size:120px;font-weight:500;font-stretch:80%;letter-spacing:-0.04em;line-height:.9;font-variant-numeric:tabular-nums}
+.o2 .fig span{display:block;margin-top:14px}
+.o2 .spark{margin-top:44px;width:880px}
+.o2 .spark text{font-family:var(--mono);font-size:17px;fill:var(--ink3)}
+
+/* 3 three soft cards */
+.o3 .cards{margin-top:46px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;width:1020px}
+.o3 .card{border-radius:30px;background:var(--tile);padding:26px 28px;display:grid;gap:10px;align-content:start;min-height:230px}
+.o3 .card .t{display:flex;justify-content:space-between;align-items:center;color:var(--ink2)}
+.o3 .card b{font-size:64px;font-weight:600;font-stretch:85%;letter-spacing:-0.03em;line-height:1}
+.o3 .card p{margin:0;font-size:22px;color:var(--ink2);line-height:1.35}
+
+/* 4 one sentence */
+.o4 .say{margin:40px 0 0;font-family:var(--serif);font-size:52px;line-height:1.18;color:var(--ink3);max-width:1000px}
+.o4 .say b{color:var(--ink);font-weight:400}
+.o4 .dots{margin-top:44px;width:880px;display:grid;grid-template-columns:repeat(8,1fr);font-family:var(--mono);font-size:17px;color:var(--ink3)}
+.o4 .dots span{display:grid;justify-items:center;gap:12px}
+.o4 .dots i{width:14px;height:14px;border-radius:50%;background:var(--ink)}
+.o4 .dots .r i{background:none;border:3px solid var(--ink)}
+.o4 .dots .now{color:var(--ink);font-weight:600}
+
+/* 5 the evening as a list */
+.o5 .list{margin-top:44px;width:900px;display:grid}
+.o5 .row{display:grid;grid-template-columns:150px 54px 1fr auto;align-items:center;gap:18px;padding:18px 0;border-bottom:2px solid var(--rule);font-size:30px}
+.o5 .row:first-child{border-top:2px solid var(--rule)}
+.o5 .row .tm{font-family:var(--mono);font-size:22px;color:var(--ink3)}
+.o5 .row .v{font-weight:600;font-variant-numeric:tabular-nums}
+.o5 .row.now .tm{color:var(--ink);font-weight:600}
+.o5 .row .sub{color:var(--ink2)}
+</style>
+</head>
+<body>
+<header class="head">
+  <div class="eyebrow">MPTree TV · round five · Classic</div>
+  <h1>Five ways to do Classic's left side</h1>
+  <p>Only the left side changes: the greeting, the weather and the next hours. The music card, the top bar and the apps stay as they are (greyed a little here). Same moment in all five: Monday 17:02, 11° and cloudy, rain from 21:00, sunset 17:08, 20.5° inside. Pick one (or parts of two) and I build it.</p>
+</header>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9z"/></symbol>
+  <symbol id="rain" viewBox="0 0 24 24"><path d="M20 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.3M16 14v6M8 14v6M12 16v6"/></symbol>
+  <symbol id="sunset" viewBox="0 0 24 24"><path d="M12 10V2M4.9 10.9l1.4 1.4M2 18h2M20 18h2M17.7 12.3l1.4-1.4M22 22H2M16 6l-4 4-4-4M16 18a4 4 0 0 0-8 0"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+</defs></svg>
+
+<div class="boards">
+
+<!-- shared parts are repeated per screen so each one stands alone -->
+
+<section class="board">
+  <div class="cap"><span class="n">01</span><h2>Ruled strip, tidied</h2><span class="k">today's Classic, cleaned up</span></div>
+  <div class="frame"><div class="tv o1">
+    <div class="bar"><span class="who"><i>C</i>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="tools"><span>Settings</span><span>Dark</span><span>Screensaver</span></span></div>
+    <div class="L">
+      <div class="greet">Good afternoon, Caelan. <i>It's 17:02.</i></div>
+      <div class="meta"><span><b>Monday</b> 2 November</span><span><b>11°</b> cloudy</span><span><b>20.5°</b> inside</span></div>
+      <div class="hrs"><span>18:00<svg class="w"><use href="#cloud"/></svg><b>10°</b></span><span>19:00<svg class="w"><use href="#cloud"/></svg><b>11°</b></span><span>20:00<svg class="w"><use href="#cloud"/></svg><b>11°</b></span><span class="r">21:00<svg class="w"><use href="#rain"/></svg><b>11°</b></span><span class="r">22:00<svg class="w"><use href="#rain"/></svg><b>10°</b></span><span>23:00<svg class="w"><use href="#cloud"/></svg><b>10°</b></span></div>
+    </div>
+    <div class="music"><span class="rec"></span><small>Playing · MPTree, on this TV</small><b>Warning Sign</b><span>Coldplay</span></div>
+    <div class="apps"><div><i></i>YouTube</div><div><i></i>NPO Start</div><div><i></i>HBO Max</div><div><i></i>TV Bro</div><div><i></i>Netflix</div><div><i></i>MPTree</div><div class="all"><i></i>All apps</div></div>
+  </div></div>
+  <ul class="notes"><li><span><b>What changes:</b> the strip is a touch wider and taller so it lines up under the greeting, and inside joins the date line.</span></li><li><span><b>Good for:</b> keeping what you know, just neater.</span></li></ul>
+</section>
+
+<section class="board">
+  <div class="cap"><span class="n">02</span><h2>Three big figures</h2><span class="k">outside, inside, sunset, then the day as a line</span></div>
+  <div class="frame"><div class="tv o2">
+    <div class="bar"><span class="who"><i>C</i>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="tools"><span>Settings</span><span>Dark</span><span>Screensaver</span></span></div>
+    <div class="L">
+      <div class="greet">Good afternoon, Caelan.</div>
+      <div class="figs">
+        <div class="fig"><b>17:02</b><span class="lbl">Monday 2 Nov</span></div>
+        <div class="fig"><b>11°</b><span class="lbl">Outside, cloudy</span></div>
+        <div class="fig"><b>20.5°</b><span class="lbl">Inside</span></div>
+      </div>
+      <svg class="spark" viewBox="0 0 880 150" aria-hidden="true">
+        <defs><pattern id="h2" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#fff"/><rect width="3" height="10" fill="#e2e4e7"/></pattern></defs>
+        <rect x="440" y="10" width="220" height="100" fill="url(#h2)"/>
+        <path d="M0 70 C 80 66, 150 60, 220 58 S 360 52, 440 60 S 600 76, 700 74 S 820 80, 880 82" fill="none" stroke="#0d0e10" stroke-width="3"/>
+        <line x1="0" y1="110" x2="880" y2="110" stroke="#e2e4e7" stroke-width="2"/>
+        <circle cx="0" cy="70" r="9" fill="#0d0e10"/>
+        <text x="0" y="140">now</text><text x="200" y="140">19:00</text><text x="440" y="140">rain 21:00</text><text x="800" y="140">01:00</text>
+      </svg>
+    </div>
+    <div class="music"><span class="rec"></span><small>Playing · MPTree, on this TV</small><b>Warning Sign</b><span>Coldplay</span></div>
+    <div class="apps"><div><i></i>YouTube</div><div><i></i>NPO Start</div><div><i></i>HBO Max</div><div><i></i>TV Bro</div><div><i></i>Netflix</div><div><i></i>MPTree</div><div class="all"><i></i>All apps</div></div>
+  </div></div>
+  <ul class="notes"><li><span><b>What changes:</b> the time leaves the sentence and becomes a figure next to the temperatures; the six boxes become one line of the next hours with the rain shaded.</span></li><li><span><b>Good for:</b> reading it from the sofa: three numbers, big.</span></li></ul>
+</section>
+
+<section class="board">
+  <div class="cap"><span class="n">03</span><h2>Three soft cards</h2><span class="k">now, rain, sun</span></div>
+  <div class="frame"><div class="tv o3">
+    <div class="bar"><span class="who"><i>C</i>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="tools"><span>Settings</span><span>Dark</span><span>Screensaver</span></span></div>
+    <div class="L">
+      <div class="greet">Good afternoon, Caelan. <i>It's 17:02.</i></div>
+      <div class="cards">
+        <div class="card"><div class="t"><span class="lbl">Now</span><svg class="w"><use href="#cloud"/></svg></div><b>11°</b><p>Cloudy in De Bilt<br>20.5° inside</p></div>
+        <div class="card"><div class="t"><span class="lbl">Rain</span><svg class="w"><use href="#rain"/></svg></div><b>21:00</b><p>Light rain until about midnight</p></div>
+        <div class="card"><div class="t"><span class="lbl">Sunset</span><svg class="w"><use href="#sunset"/></svg></div><b>17:08</b><p>In 6 minutes. Dark mode follows it.</p></div>
+      </div>
+    </div>
+    <div class="music"><span class="rec"></span><small>Playing · MPTree, on this TV</small><b>Warning Sign</b><span>Coldplay</span></div>
+    <div class="apps"><div><i></i>YouTube</div><div><i></i>NPO Start</div><div><i></i>HBO Max</div><div><i></i>TV Bro</div><div><i></i>Netflix</div><div><i></i>MPTree</div><div class="all"><i></i>All apps</div></div>
+  </div></div>
+  <ul class="notes"><li><span><b>What changes:</b> the hour boxes go; three cards answer the three questions you actually have (how is it now, will it rain, when does it get dark).</span></li><li><span><b>Good for:</b> family use: each card says one thing. With no rain the middle card says "Dry tonight".</span></li></ul>
+</section>
+
+<section class="board">
+  <div class="cap"><span class="n">04</span><h2>One sentence</h2><span class="k">the weather as words, the hours as dots</span></div>
+  <div class="frame"><div class="tv o4">
+    <div class="bar"><span class="who"><i>C</i>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="tools"><span>Settings</span><span>Dark</span><span>Screensaver</span></span></div>
+    <div class="L">
+      <div class="greet">Good afternoon, Caelan. <i>It's 17:02.</i></div>
+      <p class="say"><b>11° and cloudy.</b> Rain from <b>21:00</b> until about midnight. The sun sets in <b>6 minutes</b>, and it's <b>20.5°</b> inside.</p>
+      <div class="dots"><span class="now"><i></i>now</span><span><i></i>18</span><span><i></i>19</span><span><i></i>20</span><span class="r"><i></i>21</span><span class="r"><i></i>22</span><span class="r"><i></i>23</span><span><i></i>00</span></div>
+    </div>
+    <div class="music"><span class="rec"></span><small>Playing · MPTree, on this TV</small><b>Warning Sign</b><span>Coldplay</span></div>
+    <div class="apps"><div><i></i>YouTube</div><div><i></i>NPO Start</div><div><i></i>HBO Max</div><div><i></i>TV Bro</div><div><i></i>Netflix</div><div><i></i>MPTree</div><div class="all"><i></i>All apps</div></div>
+  </div></div>
+  <ul class="notes"><li><span><b>What changes:</b> no boxes at all. The weather is written out; under it one dot an hour, open rings where it rains.</span></li><li><span><b>Good for:</b> the calmest version, close to the new Editorial.</span></li></ul>
+</section>
+
+<section class="board">
+  <div class="cap"><span class="n">05</span><h2>The evening as a list</h2><span class="k">what is coming, in order</span></div>
+  <div class="frame"><div class="tv o5">
+    <div class="bar"><span class="who"><i>C</i>Caelan</span><span class="tabs"><span class="on">Home</span><span>Apps</span></span><span class="tools"><span>Settings</span><span>Dark</span><span>Screensaver</span></span></div>
+    <div class="L">
+      <div class="greet">Good afternoon, Caelan. <i>It's 17:02.</i></div>
+      <div class="list">
+        <div class="row now"><span class="tm">Now</span><svg class="w"><use href="#cloud"/></svg><span class="sub">Cloudy · 20.5° inside</span><span class="v">11°</span></div>
+        <div class="row"><span class="tm">17:08</span><svg class="w"><use href="#sunset"/></svg><span class="sub">Sunset, dark mode on</span><span class="v"></span></div>
+        <div class="row"><span class="tm">21:00</span><svg class="w"><use href="#rain"/></svg><span class="sub">Rain until about midnight</span><span class="v">11°</span></div>
+        <div class="row"><span class="tm">Wed</span><svg class="w"><use href="#home"/></svg><span class="sub">Alarm at 08:00</span><span class="v"></span></div>
+      </div>
+    </div>
+    <div class="music"><span class="rec"></span><small>Playing · MPTree, on this TV</small><b>Warning Sign</b><span>Coldplay</span></div>
+    <div class="apps"><div><i></i>YouTube</div><div><i></i>NPO Start</div><div><i></i>HBO Max</div><div><i></i>TV Bro</div><div><i></i>Netflix</div><div><i></i>MPTree</div><div class="all"><i></i>All apps</div></div>
+  </div></div>
+  <ul class="notes"><li><span><b>What changes:</b> the hours become the few moments that matter, in order: now, sunset, rain, and the alarm (when Home Assistant is on).</span></li><li><span><b>Good for:</b> seeing the rest of the day at a glance; it grows and shrinks with what is coming.</span></li></ul>
+</section>
+
+</div>
+
+<script>
+// Fit each 1920×1080 screen into its frame.
+(function () {
+  const fit = () => document.querySelectorAll(".frame").forEach(f => f.style.setProperty("--s", f.clientWidth / 1920));
+  fit();
+  window.addEventListener("resize", fit);
+})();
+</script>
+</body>
+</html>
