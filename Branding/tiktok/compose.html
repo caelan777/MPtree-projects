@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>MPTree TikTok compose</title>
+<!--
+  Draws one video, a frame at a time, as a pure function of the frame number,
+  and encodes it. render.mjs drives it; see the README.
+
+  What is drawn here is only what a phone recording would have around the app,
+  and what a person would add in TikTok's editor: the status bar, the gesture
+  bar, Android's "show taps" circles, and captions. The app itself is the
+  recorded frames from capture.mjs, untouched.
+-->
+<style>
+  @font-face { font-family: "TikTok Sans"; src: url(/__fonts/tiktok-sans.woff2) format("woff2"); font-weight: 400 900; }
+  @font-face { font-family: "Roboto"; src: url(/__fonts/roboto.woff2) format("woff2"); font-weight: 100 900; }
+  html, body { margin: 0; background: #111; }
+  canvas { display: block; width: 360px; height: 640px; }
+</style>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script type="module">
+import { muxMp4 } from "/__/mp4.js";
+import { muxMp4 as muxMp4Sound } from "/__/mp4-sound.js";
+import { SCORES, SR } from "/__/sounds.js";
+
+const W = 1080, H = 1920;
+// The phone: a 28dp status bar at 3x, then the app's own 612 css px.
+const BAR = 84;
+const SCREEN_SCALE = 3;          // css px to video px
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d", { alpha: false });
+
+let CUT = null, TAKES = {}, FPS = 30, TOTAL = 0;
+
+/* ── Timeline ─────────────────────────────────────────────────────────── */
+function layout(cut) {
+  let at = 0;
+  for (const s of cut.shots) {
+    s.start = at;
+    s.len = (s.to - s.from) / (s.rate || 1);
+    at += s.len;
+  }
+  // Captions and marks are timed from the start of their shot, so a shot can
+  // be trimmed without re-timing everything after it. `until` is from the same
+  // start; left out, it runs to the end of the shot, or of shot `through`.
+  const place = o => {
+    if (o.shot !== undefined) {
+      const s = cut.shots[o.shot], last = cut.shots[o.through ?? o.shot];
+      o.until = o.until !== undefined ? s.start + o.until : last.start + last.len;
+      o.at = s.start + (o.at || 0);
+    }
+    if (o.target === "plane") { o.x = PLANE_AT.x; o.y = PLANE_AT.y; o.screen = true; }
+  };
+  for (const list of [cut.captions, cut.rings, cut.badges]) (list || []).forEach(place);
+  return at;
+}
+function shotAt(t) {
+  const shots = CUT.shots;
+  for (let i = shots.length - 1; i >= 0; i--) if (t >= shots[i].start - 1e-6) return shots[i];
+  return shots[0];
+}
+
+/* ── Frames from the takes ────────────────────────────────────────────── */
+const cache = new Map();
+function frameUrl(take, k) {
+  return `/takes/${take}.${CUT.lang}/${String(k).padStart(4, "0")}.jpg`;
+}
+function bitmap(take, k) {
+  const key = take + ":" + k;
+  if (!cache.has(key)) {
+    cache.set(key, fetch(frameUrl(take, k))
+      .then(r => { if (!r.ok) throw new Error(`missing frame ${frameUrl(take, k)}`); return r.blob(); })
+      .then(b => createImageBitmap(b)));
+  }
+  return cache.get(key);
+}
+function sourceFrame(t) {
+  const s = shotAt(t);
+  const take = TAKES[s.take];
+  const u = t - s.start;
+  const src = s.from + u * (s.rate || 1);
+  const k = Math.max(0, Math.min(take.frames - 1, Math.round(src * take.fps)));
+  return { s, take, u, k };
+}
+function prefetch(i) {
+  for (let j = i; j < Math.min(TOTAL, i + 10); j++) {
+    const { s, k } = sourceFrame(j / FPS);
+    bitmap(s.take, k);
+  }
+  // Keep memory flat: drop what the playhead has passed.
+  if (cache.size > 40) for (const key of [...cache.keys()].slice(0, cache.size - 30)) {
+    cache.get(key).then(b => b.close()).catch(() => {});
+    cache.delete(key);
+  }
+}
+
+/* ── Easing ───────────────────────────────────────────────────────────── */
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const easeInOut = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeOutBack = p => { const c = 1.6; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+
+/* ── Camera ───────────────────────────────────────────────────────────── *
+   A shot can push in on part of the screen: cam is a list of
+   [seconds into the shot, scale, centre x, centre y] in video pixels. */
+function cameraAt(s, u) {
+  const keys = s.cam;
+  if (!keys || !keys.length) return { z: 1, cx: W / 2, cy: H / 2 };
+  let a = keys[0], b = keys[keys.length - 1];
+  if (u <= a[0]) b = a;
+  else if (u >= b[0]) a = b;
+  else for (let i = 0; i < keys.length - 1; i++) if (u >= keys[i][0] && u <= keys[i + 1][0]) { a = keys[i]; b = keys[i + 1]; break; }
+  const p = a === b ? 0 : easeInOut((u - a[0]) / (b[0] - a[0]));
+  const z = a[1] + (b[1] - a[1]) * p;
+  let cx = a[2] + (b[2] - a[2]) * p, cy = a[3] + (b[3] - a[3]) * p;
+  // Never show past the edge of the screen.
+  cx = Math.max(W / 2 / z, Math.min(W - W / 2 / z, cx));
+  cy = Math.max(H / 2 / z, Math.min(H - H / 2 / z, cy));
+  return { z, cx, cy };
+}
+
+/* ── The phone around the app ─────────────────────────────────────────── */
+// Material's "flight" icon (Apache 2.0), which is what Android shows in the
+// status bar in airplane mode.
+const PLANE = new Path2D("M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z");
+const STATUS = { time: "20:41", battery: 0.78 };
+// Where the plane sits, for anything that wants to point at it.
+const PLANE_AT = { x: W - 150, y: BAR / 2 };
+
+function statusBar() {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, BAR);
+  ctx.fillStyle = "#fff";
+  ctx.font = "500 40px Roboto";
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.fillText(STATUS.time, 60, BAR / 2 + 2);
+  // Airplane mode
+  ctx.save();
+  ctx.translate(PLANE_AT.x - 22, PLANE_AT.y - 22);
+  ctx.scale(44 / 24, 44 / 24);
+  ctx.fill(PLANE);
+  ctx.restore();
+  // Battery: a Pixel-style upright cell, 78% full.
+  const bw = 22, bh = 38, bx = W - 60 - bw, by = BAR / 2 - bh / 2 + 2;
+  ctx.fillRect(bx + 6, by - 4, bw - 12, 5);
+  ctx.globalAlpha = 0.35;
+  roundRect(bx, by, bw, bh, 4); ctx.fill();
+  ctx.globalAlpha = 1;
+  const fill = Math.round(bh * STATUS.battery);
+  ctx.save();
+  roundRect(bx, by, bw, bh, 4); ctx.clip();
+  ctx.fillRect(bx, by + bh - fill, bw, fill);
+  ctx.restore();
+}
+
+function gestureBar() {
+  ctx.fillStyle = "rgba(255,255,255,0.82)";
+  roundRect(W / 2 - 162, H - 30, 324, 12, 6);
+  ctx.fill();
+}
+
+// Android's "show taps": a soft grey disc under the finger, gone a moment
+// after it lifts.
+function finger(take, k) {
+  const pts = take.fingers;
+  let p = pts[k], alpha = 1, grow = 1;
+  if (!p) {
+    for (let back = 1; back <= 5; back++) {
+      if (pts[k - back]) { p = pts[k - back]; alpha = 1 - back / 6; grow = 1 + back * 0.04; break; }
+    }
+  } else {
+    let held = 0;
+    while (held < 4 && pts[k - held - 1]) held++;
+    grow = 0.82 + 0.18 * easeOutBack(clamp01((held + 1) / 4));
+  }
+  if (!p) return;
+  const x = p[0] * SCREEN_SCALE, y = BAR + p[1] * SCREEN_SCALE, r = 40 * grow;
+  ctx.globalAlpha = alpha;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.30)"; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/* ── What an editor adds ──────────────────────────────────────────────── */
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+// TikTok's own text style with a background: black type on a white slab that
+// hugs each line. Set in TikTok Sans, so it reads as text added in the app.
+function caption(c, t) {
+  const since = t - c.at;
+  const size = c.size || 62;
+  const weight = c.weight || 640;
+  ctx.font = `${weight} ${size}px "TikTok Sans"`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  const lineH = Math.round(size * 1.3);
+  const padX = Math.round(size * 0.36);
+  const radius = Math.round(size * 0.26);
+  const lines = c.lines;
+  const shown = c.stagger ? Math.min(lines.length, 1 + Math.floor(since / c.stagger)) : lines.length;
+  const cx = c.x ?? W / 2;
+  const top = (c.y ?? 620) - (lines.length * lineH) / 2;
+  const m = ctx.measureText("Hg");
+  const baseOff = (lineH + m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+
+  for (let i = 0; i < shown; i++) {
+    const born = c.stagger ? c.at + i * c.stagger : c.at;
+    // Words that open the video are there from the first frame: that frame is
+    // the one a feed shows before anything plays, and the one a cover is
+    // picked from. Everything later pops in.
+    const opening = born <= 0;
+    const p = opening ? 1 : clamp01((t - born) / 0.2);
+    const s = 0.9 + 0.1 * easeOutBack(p);
+    const a = opening ? 1 : clamp01((t - born) / 0.07);
+    const text = lines[i];
+    // An icon at the head of the first line, drawn in the text's colour.
+    const icon = i === 0 && c.icon === "plane" ? PLANE : null;
+    const iconW = icon ? size * 0.92 : 0, gap = icon ? size * 0.22 : 0;
+    const tw = ctx.measureText(text).width + iconW + gap;
+    const y = top + i * lineH;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(cx, y + lineH / 2);
+    ctx.scale(s, s);
+    ctx.translate(-cx, -(y + lineH / 2));
+    if (c.style === "plain") {
+      ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, cx, y + baseOff);
+    } else {
+      ctx.fillStyle = c.bg || "#fff";
+      roundRect(cx - tw / 2 - padX, y - 1, tw + padX * 2, lineH + 2, radius);
+      ctx.fill();
+      ctx.fillStyle = c.fg || "#000";
+      ctx.fillText(text, cx + (iconW + gap) / 2, y + baseOff);
+      if (icon) {
+        ctx.save();
+        ctx.translate(cx - tw / 2, y + (lineH - iconW) / 2 + 1);
+        ctx.scale(iconW / 24, iconW / 24);
+        ctx.fill(icon);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// A ring that draws itself around something on screen, then breathes.
+function ring(o, t) {
+  const since = t - o.at;
+  const draw = clamp01(since / 0.35);
+  const r = o.r + Math.sin(since * 6) * 2.5;
+  ctx.save();
+  ctx.lineWidth = o.width || 7;
+  ctx.strokeStyle = "#fff";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(o.x, o.y, r, -Math.PI * 0.6, -Math.PI * 0.6 + Math.PI * 2 * easeInOut(draw));
+  ctx.stroke();
+  ctx.restore();
+}
+
+// A small label in a corner, for things like a speed change.
+function badge(o) {
+  ctx.font = `700 ${o.size || 40}px "TikTok Sans"`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  const tw = ctx.measureText(o.text).width;
+  const h = (o.size || 40) * 1.5;
+  ctx.fillStyle = "rgba(0,0,0,0.72)";
+  roundRect(o.x, o.y, tw + 40, h, h / 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillText(o.text, o.x + 20, o.y + h / 2 + 1);
+}
+
+/* ── One frame ────────────────────────────────────────────────────────── */
+async function draw(i) {
+  const t = i / FPS;
+  const { s, take, u, k } = sourceFrame(t);
+  const img = await bitmap(s.take, k);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+
+  const cam = cameraAt(s, u);
+  ctx.setTransform(cam.z, 0, 0, cam.z, W / 2 - cam.z * cam.cx, H / 2 - cam.z * cam.cy);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, BAR, W, (W * img.height) / img.width);
+  statusBar();
+  gestureBar();
+  if (!s.noTaps) finger(take, k);
+  for (const o of CUT.rings || []) if (t >= o.at && t < o.until && o.screen) ring(o, t);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (const o of CUT.rings || []) if (t >= o.at && t < o.until && !o.screen) ring(o, t);
+  for (const b of CUT.badges || []) if (t >= b.at && t < b.until) badge(b);
+  for (const c of CUT.captions || []) if (t >= c.at && t < c.until) caption(c, t);
+}
+
+/* ── Encoding ─────────────────────────────────────────────────────────── */
+async function pickCodec(bitrate) {
+  // High profile first, and the level that admits 1080x1920 at this rate.
+  const level = FPS > 30 ? "2a" : "28";
+  const tries = [];
+  for (const codec of [`avc1.6400${level}`, `avc1.4d00${level}`, `avc1.42e0${level}`]) {
+    for (const hardwareAcceleration of ["prefer-hardware", "no-preference", "prefer-software"]) {
+      tries.push({ codec, hardwareAcceleration });
+    }
+  }
+  for (const tr of tries) {
+    const config = {
+      ...tr, width: W, height: H, bitrate, framerate: FPS,
+      bitrateMode: "variable", latencyMode: "quality", avc: { format: "avc" },
+    };
+    try {
+      const r = await VideoEncoder.isConfigSupported(config);
+      if (r.supported) return config;
+    } catch { /* next */ }
+  }
+  throw new Error("This Chrome cannot encode H.264 at 1080x1920.");
+}
+
+let OUTPUT = null, BYTES = null, SOUND_BYTES = null;
+
+/* ── Sound ─────────────────────────────────────────────────────────────── */
+// Peak and loudness per tenth of a second, since nobody here can listen.
+function loudness(buf) {
+  const L = buf.getChannelData(0), R = buf.getChannelData(1), step = SR / 10;
+  let peak = 0, sum = 0;
+  const env = [];
+  for (let at = 0; at < L.length; at += step) {
+    let p = 0, s = 0, n = 0;
+    for (let i = at; i < Math.min(L.length, at + step); i++) { const v = Math.max(Math.abs(L[i]), Math.abs(R[i])); p = Math.max(p, v); s += L[i] * L[i] + R[i] * R[i]; n += 2; }
+    peak = Math.max(peak, p); sum += s;
+    env.push(Math.round(20 * Math.log10(Math.sqrt(s / n) || 1e-6)));
+  }
+  return { peak: Number(peak.toFixed(3)), rmsDb: Number((10 * Math.log10(sum / (L.length * 2))).toFixed(1)), env };
+}
+
+async function encodeAudio(buf) {
+  const chunks = [];
+  let asc = null, failure = null;
+  const ae = new AudioEncoder({
+    output: (chunk, meta) => {
+      if (meta?.decoderConfig?.description) asc = new Uint8Array(meta.decoderConfig.description);
+      const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data); chunks.push({ data });
+    },
+    error: e => { failure = e; },
+  });
+  ae.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 192000 });
+  const L = buf.getChannelData(0), R = buf.getChannelData(1), N = 1024;
+  for (let at = 0; at < L.length; at += N) {
+    const n = Math.min(N, L.length - at);
+    const planar = new Float32Array(n * 2); planar.set(L.subarray(at, at + n), 0); planar.set(R.subarray(at, at + n), n);
+    ae.encode(new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(at * 1e6 / SR), data: planar }));
+  }
+  await ae.flush(); ae.close();
+  if (failure) throw failure;
+  // AAC-LC, 48 kHz, stereo, if the encoder did not say.
+  if (!asc) asc = Uint8Array.from([0x11, 0x90]);
+  return { sampleRate: SR, channels: 2, bitrate: 192000, asc, samples: chunks };
+}
+
+/* ── Checking the file ────────────────────────────────────────────────────
+   Reads the finished MP4 back the way a player would (its own boxes, not
+   the encoder's leftovers), decodes a few frames from it, and compares them
+   with the same frames drawn fresh. A file that parses but decodes to the
+   wrong picture fails here rather than on someone's phone. */
+function parseMp4(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const boxes = {};
+  const walk = (off, end) => {
+    while (off < end) {
+      const size = dv.getUint32(off);
+      const type = String.fromCharCode(...bytes.subarray(off + 4, off + 8));
+      boxes[type] = { off, size };
+      if (["moov", "trak", "mdia", "minf", "stbl", "dinf"].includes(type)) walk(off + 8, off + size);
+      else if (type === "stsd") walk(off + 16, off + size);
+      else if (type === "avc1") walk(off + 86, off + size);
+      if (size < 8) throw new Error(`bad box ${type} at ${off}`);
+      off += size;
+    }
+  };
+  walk(0, bytes.length);
+  for (const need of ["ftyp", "moov", "mdat", "avcC", "stsz", "stco", "stss", "stts"]) {
+    if (!boxes[need]) throw new Error(`no ${need} box`);
+  }
+  const avcC = bytes.subarray(boxes.avcC.off + 8, boxes.avcC.off + boxes.avcC.size);
+  const n = dv.getUint32(boxes.stsz.off + 16);
+  let at = dv.getUint32(boxes.stco.off + 16);
+  const samples = [];
+  for (let i = 0; i < n; i++) {
+    const size = dv.getUint32(boxes.stsz.off + 20 + 4 * i);
+    samples.push(bytes.subarray(at, at + size));
+    at += size;
+  }
+  if (at !== boxes.mdat.off + boxes.mdat.size) throw new Error("samples do not fill mdat exactly");
+  const keys = new Set();
+  const nk = dv.getUint32(boxes.stss.off + 12);
+  for (let i = 0; i < nk; i++) keys.add(dv.getUint32(boxes.stss.off + 16 + 4 * i) - 1);
+  const hex = b => b.toString(16).padStart(2, "0");
+  return { avcC, samples, keys, codec: `avc1.${hex(avcC[1])}${hex(avcC[2])}${hex(avcC[3])}` };
+}
+
+async function decodeAt(file, target) {
+  let k = target;
+  while (!file.keys.has(k)) k--;
+  return await new Promise((ok, no) => {
+    let got = 0;
+    const want = target - k + 1;
+    const dec = new VideoDecoder({
+      output: f => { got++; if (got === want) createImageBitmap(f).then(ok, no); f.close(); },
+      error: no,
+    });
+    dec.configure({ codec: file.codec, description: file.avcC });
+    for (let i = k; i <= target; i++) {
+      dec.decode(new EncodedVideoChunk({ type: i === k ? "key" : "delta", timestamp: Math.round(i * 1e6 / FPS), data: file.samples[i] }));
+    }
+    dec.flush().then(() => dec.close()).catch(no);
+  });
+}
+
+// Mean difference per channel, 0..255, over a quarter-size copy of each.
+function difference(a, b) {
+  const w = 270, h = 480;
+  const read = img => {
+    const c = new OffscreenCanvas(w, h), x = c.getContext("2d");
+    x.drawImage(img, 0, 0, w, h);
+    return x.getImageData(0, 0, w, h).data;
+  };
+  const p = read(a), q = read(b);
+  let sum = 0;
+  for (let i = 0; i < p.length; i += 4) sum += Math.abs(p[i] - q[i]) + Math.abs(p[i + 1] - q[i + 1]) + Math.abs(p[i + 2] - q[i + 2]);
+  return sum / (w * h * 3);
+}
+
+window.compose = {
+  async load(cut, takes, fps) {
+    CUT = cut; TAKES = takes; FPS = fps;
+    TOTAL = Math.round(layout(cut) * FPS);
+    await document.fonts.load('640 62px "TikTok Sans"');
+    await document.fonts.load('500 40px Roboto');
+    return { frames: TOTAL, seconds: TOTAL / FPS };
+  },
+
+  async still(t) {
+    const i = Math.min(TOTAL - 1, Math.round(t * FPS));
+    await draw(i);
+    return cv.toDataURL("image/png");
+  },
+
+  async render(bitrate) {
+    const config = await pickCodec(bitrate);
+    const samples = [];
+    let decoderConfig = null, failure = null;
+    const encoder = new VideoEncoder({
+      output: (chunk, meta) => {
+        if (meta && meta.decoderConfig) decoderConfig = meta.decoderConfig;
+        const data = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(data);
+        samples.push({ data, key: chunk.type === "key", ts: Math.round(chunk.timestamp * FPS / 1e6) });
+      },
+      error: e => { failure = e; },
+    });
+    encoder.configure(config);
+    const t0 = performance.now();
+    for (let i = 0; i < TOTAL; i++) {
+      if (failure) throw failure;
+      prefetch(i);
+      await draw(i);
+      const frame = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+      // A key frame every second, so a cut into the file lands cleanly.
+      encoder.encode(frame, { keyFrame: i % FPS === 0 });
+      frame.close();
+      while (encoder.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 2));
+    }
+    await encoder.flush();
+    encoder.close();
+    if (failure) throw failure;
+    const video = {
+      width: W, height: H, fps: FPS,
+      avcC: new Uint8Array(decoderConfig.description),
+      colorSpace: decoderConfig.colorSpace,
+      samples,
+    };
+    // The silent file is what verify() reads back; a cut with its own sound
+    // (cut.sound, see sounds.js) is written with the AAC track added.
+    const bytes = muxMp4(video);
+    let sound = null;
+    if (CUT.sound) {
+      const buf = await SCORES[CUT.sound](CUT, CUT.shots.map(s => s.start), TOTAL / FPS);
+      sound = loudness(buf);
+      SOUND_BYTES = muxMp4Sound(video, await encodeAudio(buf));
+    }
+    const dataUrl = await new Promise(ok => {
+      const f = new FileReader();
+      f.onload = () => ok(f.result);
+      f.readAsDataURL(new Blob([SOUND_BYTES || bytes], { type: "video/mp4" }));
+    });
+    OUTPUT = dataUrl.slice(dataUrl.indexOf(",") + 1);
+    BYTES = bytes;
+    return {
+      length: OUTPUT.length, bytes: (SOUND_BYTES || bytes).length, frames: TOTAL,
+      codec: config.codec, hw: config.hardwareAcceleration,
+      seconds: ((performance.now() - t0) / 1000).toFixed(1),
+      keys: samples.filter(s => s.key).length,
+      sound,
+    };
+  },
+
+  slice(at, n) { return OUTPUT.slice(at, at + n); },
+
+  /** Decodes frames back out of the finished file and compares each with a
+   *  fresh drawing of the same frame. Returns the worst difference. */
+  async verify() {
+    const file = parseMp4(BYTES);
+    if (file.samples.length !== TOTAL) throw new Error(`${file.samples.length} frames in the file, ${TOTAL} drawn`);
+    const picks = [0, Math.floor(TOTAL * 0.37), Math.floor(TOTAL * 0.71), TOTAL - 1];
+    const out = [];
+    for (const i of picks) {
+      const decoded = await decodeAt(file, i);
+      await draw(i);
+      out.push({ frame: i, diff: Number(difference(decoded, cv).toFixed(2)) });
+      decoded.close();
+    }
+    return { codec: file.codec, frames: file.samples.length, keys: file.keys.size, checks: out };
+  },
+};
+</script>
+</html>

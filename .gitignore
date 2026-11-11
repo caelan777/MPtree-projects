@@ -66,3 +66,4 @@ Branding/tiktok/*.mp4
 Branding/tiktok/stills/
 # iOS lives on the ios branch, not here
 MPTree-App/ios/
+Branding/tiktok/.cache/

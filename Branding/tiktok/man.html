@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>MPTree TikTok, the drawn jumpscare</title>
+<!--
+  A drawn TikTok, not a recording: a man in bed listening to music, the
+  MPTree Halloween scare, his scared face, then a grin and the music drop.
+  Everything is drawn here as a function of time, in a flat retro style of
+  our own (no stock art). man-render.mjs drives it.
+
+  The music drop is left empty on purpose: the song is added in TikTok's own
+  editor, where it is licensed. This file only carries sound of our own
+  (sounds.js, "man").
+-->
+<style>
+  @font-face { font-family: "TikTok Sans"; src: url(/__fonts/tiktok-sans.woff2) format("woff2"); font-weight: 400 900; }
+  html, body { margin: 0; background: #111; }
+  canvas { display: block; width: 360px; height: 640px; }
+</style>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script type="module">
+import { muxMp4 } from "/__/mp4-sound.js";
+import { SCORES, SR } from "/__/sounds.js";
+
+const W = 1080, H = 1920, FPS = 30;
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+
+// The story, in seconds.
+export const T = {
+  black: 3.0,     // the screen goes dark
+  eyes: 3.25,     // the eyes land
+  scared: 4.35,   // back on him: scared stiff
+  relief: 6.3,    // it was nothing
+  grin: 7.0,      // the grin, and the music drop (added in TikTok)
+  cta: 9.3,       // download MPTree
+  end: 11.3,
+};
+const BEAT = 60 / 118;
+
+const INK = "#2b2b2b", YEL = "#f8e07c", CORAL = "#ff6b66", TEAL = "#5fcfd0", TEAL_D = "#3fa9aa",
+      SKIN = "#f2c29b", SKIN_D = "#d98f6c", PILLOW = "#fff6e6";
+
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const ease = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeOutBack = p => { const c = 1.6; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+const lerp = (a, b, p) => a + (b - a) * p;
+// Seeded wobble, so a render is the same every time.
+const wob = (t, k) => Math.sin(t * 47.3 + k * 12.9) * 0.6 + Math.sin(t * 83.1 + k * 3.7) * 0.4;
+
+function line(w = 7) { ctx.lineWidth = w; ctx.strokeStyle = INK; ctx.lineJoin = "round"; ctx.lineCap = "round"; }
+function fillStroke(fill, w = 7) { ctx.fillStyle = fill; ctx.fill(); line(w); ctx.stroke(); }
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+/* ── The background: wavy bands around his head ─────────────────────────── */
+function background(t, pulse, cx, cy) {
+  ctx.fillStyle = YEL; ctx.fillRect(0, 0, W, H);
+  const n = 9, step = 150;
+  const drift = (t * 40) % (step * 2);
+  for (let i = n; i >= 0; i--) {
+    const r = i * step + drift + pulse * 30;
+    ctx.beginPath();
+    for (let a = 0; a <= 64; a++) {
+      const th = Math.PI + (a / 64) * Math.PI;           // the top half, an arch
+      const w = 1 + 0.05 * Math.sin(th * 5 + t * 1.5 + i);
+      const x = cx + Math.cos(th) * r * 1.05 * w;
+      const y = cy + Math.sin(th) * r * 1.25 * w;
+      a ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.lineTo(cx + r * 1.05, H); ctx.lineTo(cx - r * 1.05, H); ctx.closePath();
+    ctx.fillStyle = (Math.floor((r) / step) % 2) ? CORAL : YEL;
+    ctx.fill();
+  }
+}
+
+/* ── Him ──────────────────────────────────────────────────────────────────
+   f: the face, a mix of states. scared 0..1, relief 0..1, grin 0..1 (the
+   listening face is grin with eyes closed). */
+function musicNote(x, y, s, a, color) {
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.scale(s, s);
+  ctx.beginPath(); ctx.ellipse(0, 0, 22, 16, -0.4, 0, Math.PI * 2); fillStroke(color, 5);
+  ctx.beginPath(); ctx.moveTo(18, -6); ctx.lineTo(18, -80); ctx.quadraticCurveTo(40, -60, 50, -40); line(7); ctx.stroke();
+  ctx.restore();
+}
+
+function body(hx, hy) {
+  // Pillows behind the shoulders.
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    const px = hx + side * 330;
+    ctx.moveTo(px - 140, hy + 470); ctx.quadraticCurveTo(px, hy + 420, px + 140, hy + 470);
+    ctx.quadraticCurveTo(px + 170, hy + 700, px + 140, hy + 930);
+    ctx.quadraticCurveTo(px, hy + 960, px - 140, hy + 930);
+    ctx.quadraticCurveTo(px - 170, hy + 700, px - 140, hy + 470);
+    fillStroke(PILLOW);
+  }
+  // The T-shirt.
+  ctx.beginPath();
+  ctx.moveTo(hx - 80, hy + 255);
+  ctx.quadraticCurveTo(hx - 300, hy + 290, hx - 340, hy + 380);
+  ctx.lineTo(hx - 420, hy + 640); ctx.lineTo(hx - 300, hy + 690);
+  ctx.lineTo(hx - 280, hy + 1100); ctx.lineTo(hx + 280, hy + 1100);
+  ctx.lineTo(hx + 300, hy + 690); ctx.lineTo(hx + 420, hy + 640);
+  ctx.lineTo(hx + 340, hy + 380);
+  ctx.quadraticCurveTo(hx + 300, hy + 290, hx + 80, hy + 255);
+  ctx.closePath();
+  fillStroke(YEL);
+  // Collar.
+  ctx.beginPath(); ctx.moveTo(hx - 90, hy + 250); ctx.quadraticCurveTo(hx, hy + 340, hx + 90, hy + 250);
+  line(22); ctx.stroke(); ctx.strokeStyle = "#fff0b0"; ctx.lineWidth = 12; ctx.stroke();
+}
+
+function arms(hx, hy, phoneY, lift) {
+  for (const side of [-1, 1]) {
+    // Upper arm out of the sleeve, down to the elbow; forearm in to the phone.
+    ctx.beginPath();
+    ctx.moveTo(hx + side * 395, hy + 650);
+    ctx.quadraticCurveTo(hx + side * 380, hy + 860, hx + side * 300, hy + 950);
+    ctx.quadraticCurveTo(hx + side * 200, hy + 900 - lift, hx + side * 110, phoneY + 120);
+    ctx.lineTo(hx + side * 70, phoneY + 30);
+    ctx.quadraticCurveTo(hx + side * 210, hy + 800 - lift, hx + side * 250, hy + 820);
+    ctx.quadraticCurveTo(hx + side * 290, hy + 760, hx + side * 300, hy + 690);
+    ctx.closePath();
+    fillStroke(SKIN);
+  }
+}
+
+function phone(hx, phoneY, glow) {
+  ctx.save();
+  if (glow > 0) {
+    const g = ctx.createRadialGradient(hx, phoneY, 10, hx, phoneY, 520);
+    g.addColorStop(0, `rgba(255,255,255,${0.85 * glow})`); g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(hx - 600, phoneY - 600, 1200, 1200);
+  }
+  rr(hx - 85, phoneY - 150, 170, 300, 30); fillStroke(TEAL);
+  // Camera bump.
+  rr(hx - 62, phoneY - 128, 90, 54, 18); fillStroke(CORAL, 5);
+  for (const dx of [-38, 2]) { ctx.beginPath(); ctx.arc(hx + dx, phoneY - 101, 15, 0, Math.PI * 2); fillStroke(YEL, 4); }
+  ctx.restore();
+}
+
+function hands(hx, phoneY) {
+  for (const side of [-1, 1]) {
+    ctx.save(); ctx.translate(hx + side * 82, phoneY + 40); ctx.scale(side, 1);
+    ctx.beginPath();
+    ctx.moveTo(30, -70); ctx.quadraticCurveTo(-30, -80, -45, -20);
+    ctx.quadraticCurveTo(-55, 60, 0, 95); ctx.quadraticCurveTo(40, 100, 50, 60);
+    ctx.lineTo(55, -40); ctx.closePath();
+    fillStroke(SKIN);
+    // Fingers over the phone's edge.
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath(); ctx.moveTo(-40, -45 + i * 34); ctx.quadraticCurveTo(-75, -38 + i * 34, -70, -22 + i * 34);
+      line(6); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function head(hx, hy, f, t) {
+  const { scared, relief, grin } = f;
+  ctx.save(); ctx.translate(hx, hy);
+  // Neck.
+  ctx.beginPath(); ctx.moveTo(-62, 150); ctx.lineTo(-66, 285); ctx.lineTo(66, 285); ctx.lineTo(62, 150); ctx.closePath();
+  fillStroke(SKIN);
+  ctx.beginPath(); ctx.moveTo(-62, 200); ctx.quadraticCurveTo(0, 260, 62, 200); ctx.strokeStyle = SKIN_D; ctx.lineWidth = 10; ctx.stroke();
+  // Face.
+  ctx.beginPath(); ctx.ellipse(0, 20, 168, 205, 0, 0, Math.PI * 2); fillStroke(SKIN);
+  ctx.save(); ctx.globalAlpha = 0.35;
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * 98, 95, 34, 20, 0, 0, Math.PI * 2); ctx.fillStyle = CORAL; ctx.fill(); }
+  ctx.restore();
+
+  // Hair: a swept cap; scared, it stands on end.
+  ctx.beginPath();
+  ctx.moveTo(-172, -10);
+  ctx.bezierCurveTo(-190, -170, -90, -255, 20, -248);
+  ctx.bezierCurveTo(130, -245, 190, -170, 172, -20);
+  ctx.bezierCurveTo(150, -110, 70, -130, 10, -135);
+  ctx.bezierCurveTo(-60, -140, -150, -110, -172, -10);
+  ctx.closePath(); fillStroke(INK, 6);
+  if (scared > 0.01) {
+    ctx.beginPath();
+    const spikes = 7;
+    ctx.moveTo(-160, -150);
+    for (let i = 0; i <= spikes * 2; i++) {
+      const x = -160 + (320 * i) / (spikes * 2);
+      const top = i % 2 ? -230 - 110 * scared : -200;
+      ctx.lineTo(x + wob(t, i) * 6 * scared, top + Math.abs(x) * 0.25);
+    }
+    ctx.closePath(); fillStroke(INK, 6);
+  }
+
+  // Brows.
+  for (const s of [-1, 1]) {
+    const ex = s * 62;
+    const up = lerp(0, -55, scared);
+    ctx.beginPath();
+    ctx.moveTo(ex - s * 40, -62 + up + scared * -18);
+    ctx.quadraticCurveTo(ex, -78 + up, ex + s * 40, -64 + up + scared * 12);
+    line(13); ctx.stroke();
+  }
+
+  // Eyes.
+  for (const s of [-1, 1]) {
+    const ex = s * 62, ey = -12;
+    if (scared > 0.5) {
+      const jx = wob(t, s) * 3, jy = wob(t, s + 5) * 3;
+      ctx.beginPath(); ctx.ellipse(ex, ey, 44, 48, 0, 0, Math.PI * 2); fillStroke("#fff", 6);
+      ctx.beginPath(); ctx.arc(ex + jx, ey + jy, 10, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
+    } else if (relief > 0.5 && grin < 0.5) {
+      ctx.beginPath(); ctx.ellipse(ex, ey, 34, 18, 0, 0, Math.PI * 2); fillStroke("#fff", 6);
+      ctx.beginPath(); ctx.arc(ex, ey + 2, 11, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill();
+      // Heavy lids: relief.
+      ctx.beginPath(); ctx.moveTo(ex - 36, ey - 6); ctx.lineTo(ex + 36, ey - 6); line(8); ctx.stroke();
+    } else {
+      // Closed and smiling.
+      ctx.beginPath(); ctx.arc(ex, ey + 14, 30, Math.PI * 1.15, Math.PI * 1.85); line(9); ctx.stroke();
+    }
+  }
+
+  // Nose.
+  ctx.beginPath(); ctx.moveTo(6, -30); ctx.quadraticCurveTo(-30, 50, -26, 62); ctx.quadraticCurveTo(0, 82, 28, 62);
+  line(7); ctx.stroke();
+
+  // Mouth.
+  if (scared > 0.5) {
+    const o = 1 + 0.06 * Math.sin(t * 40);
+    ctx.beginPath(); ctx.ellipse(0, 140, 52, 74 * o, 0, 0, Math.PI * 2); fillStroke(INK, 6);
+    ctx.save(); ctx.clip();
+    ctx.beginPath(); ctx.ellipse(0, 200, 40, 28, 0, 0, Math.PI * 2); ctx.fillStyle = CORAL; ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.fillRect(-52, 66, 104, 18);
+    ctx.restore();
+  } else if (grin > 0.5 || relief < 0.5) {
+    const wide = grin > 0.5 ? 1.12 : 1;
+    ctx.beginPath(); ctx.moveTo(-88 * wide, 102); ctx.quadraticCurveTo(0, 230 * (grin > 0.5 ? 1.05 : 1), 88 * wide, 102); ctx.closePath();
+    fillStroke(INK, 6);
+    ctx.save(); ctx.clip(); ctx.fillStyle = "#fff"; ctx.fillRect(-100, 100, 200, 30);
+    line(4); for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(i * 22, 100); ctx.lineTo(i * 22, 130); ctx.stroke(); }
+    ctx.restore();
+  } else {
+    ctx.beginPath(); ctx.moveTo(-50, 128); ctx.quadraticCurveTo(0, 160, 50, 128); line(9); ctx.stroke();
+  }
+
+  // Headphones: band over the hair, a cup on each side.
+  ctx.beginPath(); ctx.arc(0, 10, 212, Math.PI * 1.06, Math.PI * 1.94);
+  line(44); ctx.stroke(); ctx.strokeStyle = TEAL; ctx.lineWidth = 30; ctx.stroke();
+  for (const s of [-1, 1]) {
+    rr(s * 188 - 42, -70, 84, 170, 36); fillStroke(TEAL);
+    rr(s * 188 - 14 + s * -14, -48, 22, 126, 10); fillStroke(YEL, 4);
+  }
+
+  // Scared: sweat and shock lines.
+  if (scared > 0.5) {
+    for (const [x, y, k] of [[150, -120, 0], [-165, -60, 1]]) {
+      const dy = ((t * 260 + k * 80) % 120);
+      ctx.beginPath(); ctx.moveTo(x, y + dy); ctx.quadraticCurveTo(x + 22, y + dy + 40, x, y + dy + 50); ctx.quadraticCurveTo(x - 22, y + dy + 40, x, y + dy);
+      fillStroke("#dff6ff", 5);
+    }
+    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
+      const a = -0.9 + i * 0.45, r0 = 250 + wob(t, i) * 8;
+      ctx.beginPath();
+      ctx.moveTo(s * Math.cos(a) * r0, Math.sin(a) * r0 - 30);
+      ctx.lineTo(s * Math.cos(a) * (r0 + 60), Math.sin(a) * (r0 + 60) - 30);
+      line(10); ctx.stroke();
+    }
+  }
+  if (relief > 0.5 && grin < 0.5 && scared < 0.5) {
+    // One last drop of sweat on the temple.
+    ctx.beginPath(); ctx.moveTo(150, -110); ctx.quadraticCurveTo(172, -70, 150, -60); ctx.quadraticCurveTo(128, -70, 150, -110);
+    fillStroke("#dff6ff", 5);
+  }
+  ctx.restore();
+}
+
+function blanket(t) {
+  ctx.beginPath();
+  ctx.moveTo(-20, 1650);
+  for (let x = 0; x <= W + 40; x += 40) ctx.lineTo(x, 1650 + Math.sin(x / 130 + 0.6) * 26 - Math.sin(x / W * Math.PI) * 60);
+  ctx.lineTo(W + 20, H + 20); ctx.lineTo(-20, H + 20); ctx.closePath();
+  fillStroke(TEAL);
+  ctx.beginPath();
+  ctx.moveTo(60, 1760); ctx.quadraticCurveTo(300, 1700, 520, 1750); ctx.moveTo(620, 1745); ctx.quadraticCurveTo(820, 1700, 1010, 1770);
+  ctx.strokeStyle = TEAL_D; ctx.lineWidth = 10; ctx.stroke();
+}
+
+/* ── The scare itself: MPTree's own eyes and grin ──────────────────────────
+   The paths from HalloweenScare.tsx (a 390 x 844 view box). */
+function scare(t) {
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+  if (t < T.eyes) return;
+  const u = t - T.eyes;
+  const z = lerp(2.1, 1.75, ease(clamp01(u / 0.35))) + 0.05 * u;
+  const shake = Math.max(0, 1 - u / 0.45);
+  const sx = wob(t, 1) * 34 * shake, sy = wob(t, 2) * 26 * shake;
+  ctx.save();
+  ctx.translate(W / 2 + sx, H / 2 + sy);
+  ctx.scale(z * 2.27, z * 2.27);
+  ctx.translate(-195, -430);
+  const eye = new Path2D("M118 380 Q146 352 172 384 Q146 396 118 380 Z M272 380 Q244 352 218 384 Q244 396 272 380 Z");
+  ctx.shadowColor = "#fff"; ctx.shadowBlur = 30;
+  ctx.fillStyle = "#fff"; ctx.fill(eye);
+  ctx.shadowBlur = 0; ctx.fill(eye);
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.arc(147, 379, 4, 0, Math.PI * 2); ctx.arc(243, 379, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(128, 470); ctx.quadraticCurveTo(195, 520, 262, 470);
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.stroke();
+  ctx.restore();
+}
+
+/* ── Captions, in TikTok's own label style ─────────────────────────────── */
+function caption(lines, y, size, born, t) {
+  const p = born <= 0 ? 1 : clamp01((t - born) / 0.2);
+  const s = 0.9 + 0.1 * easeOutBack(p);
+  ctx.save();
+  ctx.font = `640 ${size}px "TikTok Sans"`; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  const lh = Math.round(size * 1.3), padX = Math.round(size * 0.36), r = Math.round(size * 0.26);
+  const m = ctx.measureText("Hg"), base = (lh + m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+  const top = y - (lines.length * lh) / 2;
+  ctx.translate(W / 2, y); ctx.scale(s, s); ctx.translate(-W / 2, -y);
+  ctx.globalAlpha = born <= 0 ? 1 : clamp01((t - born) / 0.07);
+  lines.forEach((text, i) => {
+    const tw = ctx.measureText(text).width, ly = top + i * lh;
+    ctx.fillStyle = "#fff"; rr(W / 2 - tw / 2 - padX, ly - 1, tw + padX * 2, lh + 2, r); ctx.fill();
+    ctx.fillStyle = "#000"; ctx.fillText(text, W / 2, ly + base);
+  });
+  ctx.restore();
+}
+
+/* ── One frame ──────────────────────────────────────────────────────────── */
+function draw(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (t >= T.black && t < T.scared) { scare(t); return; }
+
+  const listening = t < T.black, grinning = t >= T.grin;
+  const scaredP = t >= T.scared && t < T.relief ? 1 : 0;
+  const relief = t >= T.relief ? 1 : 0;
+  const f = { scared: scaredP, relief, grin: grinning ? 1 : 0 };
+
+  // Bobbing to the music: gently while listening, hard after the drop.
+  const beatPhase = (t - (grinning ? T.grin : 0)) / BEAT;
+  const bobAmp = listening ? 10 : grinning ? 26 : 0;
+  const bob = Math.abs(Math.sin(beatPhase * Math.PI)) * bobAmp;
+  const tilt = listening || grinning ? Math.sin(beatPhase * Math.PI) * (grinning ? 0.06 : 0.025) : 0;
+
+  // Scared: he jumps, then shakes, the shake dying away.
+  let jx = 0, jy = 0;
+  if (scaredP) {
+    const u = t - T.scared;
+    jy = -70 * Math.exp(-u * 3) * Math.cos(u * 9) - 20;
+    const shake = 1.6 * Math.exp(-u * 1.2) + 0.3;
+    jx = wob(t, 7) * 14 * shake;
+  }
+  const pulse = grinning ? Math.pow(1 - ((t - T.grin) / BEAT) % 1, 3) : listening ? 0.3 * Math.pow(1 - (t / BEAT) % 1, 3) : 0;
+
+  const hx = 540, hy = 760;
+  background(t * (grinning ? 2.2 : listening ? 1 : 0.2), pulse, hx, hy);
+
+  // The world tilts a touch when he jumps.
+  ctx.save();
+  ctx.translate(jx, jy);
+  if (scaredP) { ctx.translate(540, 1200); ctx.rotate(wob(t, 9) * 0.012); ctx.translate(-540, -1200); }
+  const phoneY = 1380 - (scaredP ? 60 : 0);
+  body(hx, hy);
+  arms(hx, hy, phoneY, scaredP ? 60 : 0);
+  phone(hx, phoneY, listening ? clamp01((t - 2.3) / 0.7) : 0);
+  hands(hx, phoneY);
+  ctx.save();
+  ctx.translate(hx, hy + 260 - bob); ctx.rotate(tilt); ctx.translate(-hx, -(hy + 260));
+  head(hx, hy, f, t);
+  ctx.restore();
+  ctx.restore();
+  blanket(t);
+
+  // Notes rising from the headphones.
+  if (listening || grinning) {
+    const t0 = grinning ? T.grin : 0, n = grinning ? 8 : 4;
+    for (let i = 0; i < n; i++) {
+      const life = 1.8, k = ((t - t0) + i * (life / n)) % life / life;
+      const side = i % 2 ? 1 : -1;
+      const x = hx + side * (250 + k * 120) + Math.sin(k * 6 + i) * 30;
+      const y = hy - 20 - k * 420;
+      musicNote(x, y, grinning ? 1.15 : 0.9, Math.sin(k * Math.PI), i % 3 === 0 ? TEAL : i % 3 === 1 ? CORAL : "#fff");
+    }
+  }
+
+  if (t < T.black) caption(["pov: you're listening to music", "on halloween"], 290, 58, 0, t);
+  if (t >= T.grin && t < T.cta) caption(["happy halloween"], 290, 80, T.grin + 0.1, t);
+  if (t >= T.cta) caption(["download MPTree", "free on the play store"], 300, 66, T.cta, t);
+}
+
+/* ── Encoding ───────────────────────────────────────────────────────────── */
+async function pickCodec(bitrate) {
+  for (const hardwareAcceleration of ["prefer-hardware", "prefer-software"]) {
+    for (const codec of ["avc1.640032", "avc1.4d0032", "avc1.42e032"]) {
+      const config = { codec, width: W, height: H, bitrate, framerate: FPS, hardwareAcceleration, avc: { format: "avc" } };
+      const r = await VideoEncoder.isConfigSupported(config);
+      if (r.supported) return config;
+    }
+  }
+  throw new Error("This Chrome cannot encode H.264 at 1080x1920.");
+}
+
+async function encodeAudio(buf) {
+  const chunks = [];
+  let asc = null, failure = null;
+  const ae = new AudioEncoder({
+    output: (chunk, meta) => {
+      if (meta?.decoderConfig?.description) asc = new Uint8Array(meta.decoderConfig.description);
+      const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data); chunks.push({ data });
+    },
+    error: e => { failure = e; },
+  });
+  ae.configure({ codec: "mp4a.40.2", sampleRate: SR, numberOfChannels: 2, bitrate: 192000 });
+  const L = buf.getChannelData(0), R = buf.getChannelData(1), N = 1024;
+  for (let at = 0; at < L.length; at += N) {
+    const n = Math.min(N, L.length - at);
+    const planar = new Float32Array(n * 2); planar.set(L.subarray(at, at + n), 0); planar.set(R.subarray(at, at + n), n);
+    ae.encode(new AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(at * 1e6 / SR), data: planar }));
+  }
+  await ae.flush(); ae.close();
+  if (failure) throw failure;
+  if (!asc) asc = Uint8Array.from([0x11, 0x90]);
+  return { sampleRate: SR, channels: 2, bitrate: 192000, asc, samples: chunks };
+}
+
+let OUTPUT = "";
+window.man = {
+  async ready() { await document.fonts.load('640 62px "TikTok Sans"'); return T; },
+  still(t) { draw(t); return cv.toDataURL("image/png"); },
+  async render(bitrate) {
+    const total = Math.round(T.end * FPS);
+    const config = await pickCodec(bitrate);
+    const samples = [];
+    let decoderConfig = null, failure = null;
+    const enc = new VideoEncoder({
+      output: (chunk, meta) => {
+        if (meta && meta.decoderConfig) decoderConfig = meta.decoderConfig;
+        const data = new Uint8Array(chunk.byteLength); chunk.copyTo(data);
+        samples.push({ data, key: chunk.type === "key", ts: Math.round(chunk.timestamp * FPS / 1e6) });
+      },
+      error: e => { failure = e; },
+    });
+    enc.configure(config);
+    for (let i = 0; i < total; i++) {
+      if (failure) throw failure;
+      draw(i / FPS);
+      const frame = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+      enc.encode(frame, { keyFrame: i % FPS === 0 });
+      frame.close();
+      while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 2));
+    }
+    await enc.flush(); enc.close();
+    if (failure) throw failure;
+    const buf = await SCORES.man(T, T.end);
+    const L = buf.getChannelData(0); let peak = 0, at = 0;
+    for (let i = 0; i < L.length; i++) if (Math.abs(L[i]) > peak) { peak = Math.abs(L[i]); at = i; }
+    const bytes = muxMp4({ width: W, height: H, fps: FPS, avcC: new Uint8Array(decoderConfig.description),
+                           colorSpace: decoderConfig.colorSpace, samples }, await encodeAudio(buf));
+    const url = await new Promise(ok => { const f = new FileReader(); f.onload = () => ok(f.result); f.readAsDataURL(new Blob([bytes])); });
+    OUTPUT = url.slice(url.indexOf(",") + 1);
+    return { length: OUTPUT.length, bytes: bytes.length, frames: total, codec: config.codec, hw: config.hardwareAcceleration,
+             peak: Number(peak.toFixed(3)), peakAt: Number((at / SR).toFixed(2)) };
+  },
+  slice(at, n) { return OUTPUT.slice(at, at + n); },
+};
+</script>
+</html>
