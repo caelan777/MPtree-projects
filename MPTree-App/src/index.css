@@ -58,3 +58,9 @@ html, body {
 @keyframes mpProDiscSpin { to { transform: rotate(360deg); } }
 .mp-disc-spin { animation: mpProDiscSpin 8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .mp-disc-spin { animation: none; } }
+
+/* The row of every record after buying Pro (ProArt RecordRow): half its
+   width is one full set, so moving by half loops without a jump. */
+@keyframes mpRecordRow { to { transform: translateX(-50%); } }
+.mp-record-row { animation: mpRecordRow var(--mp-row-time, 60s) linear infinite; }
+@media (prefers-reduced-motion: reduce) { .mp-record-row { animation: none; } }

@@ -874,4 +874,8 @@ export const ES: Record<string, string> = {
   "Not in Downloads, not for a Pro day. Just your music.": "Ni en Descargas ni para un día Pro. Solo tu música.",
   "Every device": "Todos tus dispositivos",
   "Your songs, playlists and likes on up to three devices.": "Tus canciones, listas y me gusta en hasta tres dispositivos.",
+  "Ad-free listening, forever": "Escucha sin anuncios, para siempre",
+  "Unlock all player styles and records": "Desbloquea todos los estilos y discos",
+  "Sync your music across all your devices": "Sincroniza tu música en todos tus dispositivos",
+  "Pay once. Yours for good.": "Paga una vez. Tuyo para siempre.",
 };

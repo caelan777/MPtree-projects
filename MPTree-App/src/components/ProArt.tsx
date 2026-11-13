@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Logo } from "./Logo";
+import { SpinningDisc } from "./SpinningDisc";
+import { LANTERN_RECORDS, FLOWER_RECORDS, type VinylSkin } from "../look";
 
 // ─── LITTLE PICTURES OF PRO ──────────────────────────────────────────────────
 // Records and styles drawn in CSS for the Pro page and the notes that offer
@@ -48,19 +50,42 @@ export function StylePhone({ kind, w = 108 }: { kind: "lantern" | "aviela"; w?: 
   );
 }
 
-const ALL: DiscKind[] = ["marble", "lantern", "smoke", "aviela", "vinyl"];
-/** Every record in turn, a couple of seconds each, fading into the next. */
+// Every record the app has, in the order Personalise shows them.
+const RECORDS: VinylSkin[] = ["classic", "white", "smoke", "marble", ...LANTERN_RECORDS, ...FLOWER_RECORDS];
+
+/** Every real record in turn, a couple of seconds each, fading into the
+ *  next. The records are the player's own (SpinningDisc), not drawings. */
 export function CyclingDisc({ size }: { size: number }) {
   const [i, setI] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setI(n => (n + 1) % ALL.length), 2400);
+    const id = setInterval(() => setI(n => (n + 1) % RECORDS.length), 2400);
     return () => clearInterval(id);
   }, []);
   return (
-    <span aria-hidden="true" className="mp-disc-spin" style={{ position: "relative", display: "block", width: size, height: size, flexShrink: 0 }}>
-      {ALL.map((k, n) => (
-        <MiniDisc key={k} kind={k} size={size} style={{ position: "absolute", inset: 0, opacity: n === i ? 1 : 0, transition: "opacity 0.6s" }} />
+    <span aria-hidden="true" style={{ position: "relative", display: "block", width: size, height: size, flexShrink: 0 }}>
+      {RECORDS.map((k, n) => (
+        <span key={k} style={{ position: "absolute", inset: 0, opacity: n === i ? 1 : 0, transition: "opacity 0.6s" }}>
+          {/* Only the one on show and the next are drawn. */}
+          {(n === i || n === (i + 1) % RECORDS.length) && <SpinningDisc size={size} skin={k} spinning />}
+        </span>
       ))}
     </span>
+  );
+}
+
+/** All the records in one row, big and turning, gliding slowly sideways
+ *  without end (the row is there twice, so it loops without a jump). */
+export function RecordRow({ size }: { size: number }) {
+  const one = (copy: number) => RECORDS.map(k => (
+    <span key={`${copy}-${k}`} style={{ flexShrink: 0, paddingRight: 18 }}>
+      <SpinningDisc size={size} skin={k} spinning />
+    </span>
+  ));
+  return (
+    <div aria-hidden="true" style={{ width: "100%", overflow: "hidden", padding: "18px 0" }}>
+      <div className="mp-record-row" style={{ display: "flex", width: "max-content", ["--mp-row-time" as string]: `${RECORDS.length * 3}s` }}>
+        {one(0)}{one(1)}
+      </div>
+    </div>
   );
 }

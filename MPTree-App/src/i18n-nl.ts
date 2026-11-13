@@ -874,4 +874,8 @@ export const NL: Record<string, string> = {
   "Not in Downloads, not for a Pro day. Just your music.": "Niet bij Downloads, niet voor een Pro-dag. Alleen je muziek.",
   "Every device": "Al je apparaten",
   "Your songs, playlists and likes on up to three devices.": "Je nummers, playlists en likes op maximaal drie apparaten.",
+  "Ad-free listening, forever": "Voor altijd luisteren zonder advertenties",
+  "Unlock all player styles and records": "Alle spelerstijlen en platen ontgrendeld",
+  "Sync your music across all your devices": "Je muziek gesynct op al je apparaten",
+  "Pay once. Yours for good.": "Betaal één keer. Voor altijd van jou.",
 };

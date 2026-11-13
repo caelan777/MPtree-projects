@@ -6,7 +6,7 @@ import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
-import { MiniDisc } from "./ProArt";
+import { RecordRow } from "./ProArt";
 import {
   useOwnsPro, useAccountPro, useAdDay, buyPro, restorePro, useProPrice, lockProForTesting,
   watchAdForPro, adFailText, adOkText, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
@@ -50,7 +50,6 @@ const ico = (d: ReactNode) => (
 const ICON_LOOK = ico(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /></>);
 const ICON_SYNC = ico(<><rect x="3" y="4" width="11" height="8" rx="1.5" /><rect x="15" y="9" width="6" height="11" rx="1.5" /><path d="M6 16h6" /></>);
 const ICON_NOADS = ico(<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>);
-const ICON_CLEAN = ico(<><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /></>);
 
 export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenLook, from = "other", T }: ProSheetProps) {
   const sh = makeSH(T);
@@ -116,7 +115,10 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
   // side by side, then no ads, every device, and the film.
   const strip = useRef<HTMLDivElement>(null);
   const [slide, setSlide] = useState(0);
-  const SLIDE_H = 290;
+  // As big as the screen allows with everything else still on it: the page
+  // never scrolls. 290 is the size the pictures were laid out at.
+  const SLIDE_H = Math.round(Math.max(200, Math.min(350, (typeof window !== "undefined" ? window.innerHeight : 800) - 480)));
+  const k = SLIDE_H / 290;
   const shot = (file: string, w: number, h: number, style?: CSSProperties) => (
     <img src={`${import.meta.env.BASE_URL}pro-shots/${file}.jpg`} alt="" draggable={false} style={{
       display: "block", width: w, height: h, objectFit: "cover", objectPosition: "top", borderRadius: 18,
@@ -128,17 +130,17 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
       title: t("Styles and records"), body: t("Lantern, Aviela, marble and more."),
       art: (
         <div style={{ position: "relative", width: "100%", height: SLIDE_H }}>
-          {shot("aviela", 150, 208, { position: "absolute", left: "calc(50% - 175px)", top: 44, opacity: 0.6 })}
-          {shot("marble", 150, 208, { position: "absolute", left: "calc(50% + 25px)", top: 44, opacity: 0.6 })}
-          {shot("lantern", 200, 278, { position: "absolute", left: "calc(50% - 100px)", top: 6, zIndex: 1 })}
+          {shot("aviela", 150 * k, 208 * k, { position: "absolute", left: `calc(50% - ${175 * k}px)`, top: 44 * k, opacity: 0.6 })}
+          {shot("marble", 150 * k, 208 * k, { position: "absolute", left: `calc(50% + ${25 * k}px)`, top: 44 * k, opacity: 0.6 })}
+          {shot("lantern", 200 * k, 278 * k, { position: "absolute", left: `calc(50% - ${100 * k}px)`, top: 6, zIndex: 1 })}
         </div>
       ),
     },
     {
       title: t("No ads"), body: t("Not in Downloads, not for a Pro day. Just your music."),
       art: (
-        <div style={{ position: "relative", width: 210, height: SLIDE_H, margin: "0 auto" }}>
-          {shot("songs", 210, 278, { position: "absolute", top: 6 })}
+        <div style={{ position: "relative", width: 210 * k, height: SLIDE_H, margin: "0 auto" }}>
+          {shot("songs", 210 * k, 278 * k, { position: "absolute", top: 6 })}
           <span style={{
             position: "absolute", right: -14, top: 120, background: T.accent, color: T.playBtnFg, borderRadius: 16,
             padding: "7px 12px", fontSize: 13, fontWeight: 800, boxShadow: "0 6px 18px rgba(0,0,0,0.22)",
@@ -149,7 +151,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
     },
     {
       title: t("Every device"), body: t("Your songs, playlists and likes on up to three devices."),
-      art: <div style={{ height: SLIDE_H, display: "flex", justifyContent: "center", paddingTop: 6, boxSizing: "border-box" }}>{shot("devices", 210, 278)}</div>,
+      art: <div style={{ height: SLIDE_H, display: "flex", justifyContent: "center", paddingTop: 6, boxSizing: "border-box" }}>{shot("devices", 210 * k, 278 * k)}</div>,
     },
     {
       title: t("Watch how Pro works"), body: "0:44",
@@ -175,10 +177,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
   const goSlide = (i: number) => strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: "smooth" });
 
   const lines: { icon: ReactNode; text: string }[] = [
-    { icon: ICON_NOADS, text: t("No ads") },
-    { icon: ICON_LOOK, text: t("Styles, records and colours") },
-    { icon: ICON_SYNC, text: t("Your songs on every device") },
-    { icon: ICON_CLEAN, text: t("Clean up voice notes and clips") },
+    { icon: ICON_NOADS, text: t("Ad-free listening, forever") },
+    { icon: ICON_LOOK, text: t("Unlock all player styles and records") },
+    { icon: ICON_SYNC, text: t("Sync your music across all your devices") },
   ];
 
   const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 2, padding: "10px 14px" };
@@ -201,7 +202,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
       {top}
       <div style={{ ...column, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "0 26px calc(env(safe-area-inset-bottom, 0px) + 22px)" }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <MiniDisc kind="lantern" size={150} spin />
+          <div style={{ width: "calc(100% + 52px)", margin: "0 -26px" }}><RecordRow size={150} /></div>
           <div style={{ fontSize: 28, fontWeight: 800, color: T.text, marginTop: 30 }}>{t("Pro is yours.")}</div>
           <div style={{ fontSize: 14.5, color: T.textSub, marginTop: 8, lineHeight: 1.5 }}>{t("Thank you. Pick a style to start.")}</div>
           <button onClick={onOpenLook} style={{ ...sh.saveBtn, marginTop: 22, width: "auto", padding: "14px 30px", fontFamily: "inherit" }}>{t("Choose a style")}</button>
@@ -225,7 +226,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
         <LoadLine on={(busy !== null && busy !== "ad") || joining} T={T} />
         {top}
 
-        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
         <div style={{ ...column, padding: "0 20px 8px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
             <Logo size={32} color={T.text} />
@@ -256,8 +257,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
             ))}
           </div>
 
-          <div style={{ fontSize: 25, fontWeight: 800, color: T.text, textAlign: "center", marginTop: 20, lineHeight: 1.15, letterSpacing: "-0.01em" }}>
-            {has ? t("Pro is on. Thank you.") : <>{t("Pay once.")}<br />{t("Yours for good.")}</>}
+          <div style={{ fontSize: 23, fontWeight: 800, color: T.text, textAlign: "center", marginTop: 14, lineHeight: 1.15, letterSpacing: "-0.01em" }}>
+            {has ? t("Pro is on. Thank you.") : <>{t("Pay once. Yours for good.")}</>}
           </div>
           {(has || adDay.state === "live") && (
             <div style={{ fontSize: 14, color: T.textSub, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>
@@ -267,9 +268,9 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
             </div>
           )}
 
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 10 }}>
             {lines.map((l, i) => (
-              <div key={l.text} style={{ display: "flex", gap: 12, alignItems: "center", padding: "11px 2px", borderTop: i ? `1px solid ${T.dim}` : "none" }}>
+              <div key={l.text} style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 2px", borderTop: i ? `1px solid ${T.dim}` : "none" }}>
                 <span style={{ width: 28, height: 28, borderRadius: 8, background: T.dim, color: T.text, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{l.icon}</span>
                 <span style={{ fontSize: 15, color: T.text, fontWeight: 600 }}>{l.text}</span>
               </div>
