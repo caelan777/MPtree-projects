@@ -98,6 +98,9 @@ interface Props {
    *  for the header folding or unfolding, so App does not read that scroll as
    *  the finger's and fold the header straight back (the flicker). */
   onInsetJump?:       () => void;
+  /** Called just before this view scrolls by itself (to the playing song), so
+   *  App does not take that scroll for the finger's and fold the header. */
+  onAutoScroll?:      () => void;
   /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
@@ -294,7 +297,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -403,8 +406,18 @@ export const PlaylistsView: React.FC<Props> = ({
     if (!currentSongId) return;
     const open = view === "detail" ? `pl:${activeId}` : `smart:${activeSmartId}`;
     if (playingFrom !== open) return;
+    // The app's own scroll: App must not fold the header for it. Folding
+    // moved the list under the scroll and stopped it short of the song.
+    // Only this list scrolls (scrollIntoView could move the page around it).
     const t = setTimeout(() => {
-      currentRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const el = scrollBodyRef.current, row = currentRowRef.current;
+      if (!el || !row) return;
+      const box = el.getBoundingClientRect(), r = row.getBoundingClientRect();
+      const target = el.scrollTop + r.top - box.top - (el.clientHeight - r.height) / 2;
+      const top = Math.max(0, Math.min(Math.round(target), el.scrollHeight - el.clientHeight));
+      if (Math.abs(top - el.scrollTop) < 2) return;
+      onAutoScroll?.();
+      el.scrollTo({ top, behavior: "smooth" });
     }, 120);
     return () => clearTimeout(t);
   }, [currentSongId, view, playingFrom, activeId, activeSmartId]);

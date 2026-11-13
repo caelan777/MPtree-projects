@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { viewW, viewLeft } from "../utils";
 import { makeSH, cardPalette, isDarkPalette, SHADE_PREVIEW, type T } from "../themes";
 import type { Theme } from "../types";
 import { t, tn } from "../i18n";
@@ -20,6 +21,7 @@ import {
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour, type AppIcon,
 } from "../look";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
+import { ProQuickSheet } from "./ProQuickSheet";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
@@ -348,6 +350,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // Lantern's question, while it is being asked, and how many days Lantern is
   // still shut for after a yes.
   const [asking, setAsking] = useState(false);
+  // Keeping something locked: the small "part of Pro" sheet over the preview.
+  const [quick, setQuick] = useState(false);
   const [shutDays, setShutDays] = useState(0);
   useEffect(() => { loadLanternLock().then(setShutDays).catch(() => {}); }, []);
   // A named style opening out of where it was tapped.
@@ -365,9 +369,9 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   useEffect(() => () => endBackgroundPreview(), []);
 
   // The window's size, which the small copies are a fraction of.
-  const [win, setWin] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [win, setWin] = useState({ w: viewW(), h: window.innerHeight });
   useEffect(() => {
-    const measure = () => setWin({ w: window.innerWidth, h: window.innerHeight });
+    const measure = () => setWin({ w: viewW(), h: window.innerHeight });
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
@@ -621,9 +625,9 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
   /** Where a tap was; the middle of what was tapped when it came from a key. */
   const tappedAt = (e: React.MouseEvent<HTMLElement>): Point => {
-    if (e.clientX || e.clientY) return { x: e.clientX, y: e.clientY };
+    if (e.clientX || e.clientY) return { x: e.clientX - viewLeft(), y: e.clientY };
     const r = e.currentTarget.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    return { x: r.left - viewLeft() + r.width / 2, y: r.top + r.height / 2 };
   };
 
   // ── The background photo ──
@@ -699,7 +703,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         onClick={e => (key === "aviela" ? openAviela(tappedAt(e)) : openLantern(tappedAt(e)))}
         aria-pressed={on}
         style={{
-          padding: 4, borderRadius: 19, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          padding: 4, borderRadius: 19, cursor: "pointer", fontFamily: "inherit", textAlign: "left", 
           background: "transparent", border: `2px solid ${on ? T.accent : "transparent"}`, transition: "border-color 0.15s ease",
         }}>
         {key === "aviela"
@@ -749,7 +753,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           ) : changed && (
             // Short, in two lines: in one, "Keep it, free with an ad" was
             // wider than a small phone and lay over the back arrow.
-            <button onClick={needsPro ? onNeedPro : apply} style={{
+            <button onClick={needsPro ? () => setQuick(true) : apply} style={{
               flexShrink: 0, maxWidth: "70%", padding: needsPro ? "5px 12px" : "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
               borderRadius: 18, fontFamily: "inherit", cursor: "pointer", lineHeight: 1.2, textAlign: "center",
             }}>
@@ -967,8 +971,16 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
             for a day too). */}
         {changed && page === "main" && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
-            <button onClick={needsPro ? onNeedPro : apply} style={sh.saveBtn}>{keepLabel}</button>
+            <button onClick={needsPro ? () => setQuick(true) : apply} style={sh.saveBtn}>{keepLabel}</button>
           </div>
+        )}
+
+        {quick && (
+          <ProQuickSheet T={T} onToast={onToast}
+            name={lanternOn ? "Lantern" : avielaOn ? "Aviela" : null}
+            onGot={() => setQuick(false)}
+            onAll={() => { setQuick(false); onNeedPro(); }}
+            onClose={() => setQuick(false)} />
         )}
 
         {asking && <LanternGate onYes={sayAfraid} onNo={sayNotAfraid} onDone={() => setAsking(false)} />}

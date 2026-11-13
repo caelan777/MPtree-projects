@@ -121,3 +121,50 @@ export function readCoverPhoto(file: File, maxPx = COVER_MAX_PX): Promise<string
     reader.readAsDataURL(file);
   });
 }
+
+// ── Landscape ────────────────────────────────────────────────────────────────
+// On a phone turned sideways the app is a column (index.css), and the body is
+// the frame of everything fixed. Wide enough, the column sits on the right and
+// the room on its left holds the player (SidePlayer), so neither the header
+// nor a player card at the bottom has to share the short height with the
+// list. These give the sizes, for code that measures the window itself.
+export const COLUMN_QUERY = "(orientation: landscape) and (max-height: 600px) and (min-width: 700px)";
+export const COLUMN_W = 600;
+const inColumn = () => typeof window !== "undefined" && !!window.matchMedia?.(COLUMN_QUERY).matches;
+/** The player's room on the left in landscape, or 0. */
+export const sideW = (): number => {
+  if (!inColumn()) return 0;
+  const w = window.innerWidth;
+  return w >= 760 ? Math.min(400, Math.round(w * 0.4)) : 0;
+};
+// Which side the player is on: left by default, dragged to the right if the
+// person wants it there. Kept in the WebView's own storage, which is read at
+// once, because the column has to be laid out before anything else draws.
+const SIDE_KEY = "mptree_side_right";
+let right = (() => { try { return localStorage.getItem(SIDE_KEY) === "1"; } catch { return false; } })();
+/** Whether the player sits right of the list in landscape. */
+export const sideOnRight = (): boolean => right;
+export function setSideOnRight(v: boolean): void {
+  right = v;
+  try { localStorage.setItem(SIDE_KEY, v ? "1" : "0"); } catch { /* left next time */ }
+  applyColumn();
+}
+/** The width the app is drawn in: the window's, or the column's. */
+export const viewW = (): number => {
+  if (!inColumn()) return window.innerWidth;
+  const side = sideW();
+  return side ? window.innerWidth - side : Math.min(COLUMN_W, window.innerWidth);
+};
+/** How far the column starts from the window's left edge (0 when upright). */
+export const viewLeft = (): number => {
+  if (!inColumn()) return 0;
+  const side = sideW();
+  return side ? (right ? 0 : side) : Math.max(0, (window.innerWidth - COLUMN_W) / 2);
+};
+/** Puts the column's size where index.css reads it. */
+export function applyColumn(): void {
+  const root = document.documentElement;
+  if (!inColumn()) { root.style.removeProperty("--mp-col"); root.style.removeProperty("--mp-left"); return; }
+  root.style.setProperty("--mp-col", `${viewW()}px`);
+  root.style.setProperty("--mp-left", `${viewLeft()}px`);
+}

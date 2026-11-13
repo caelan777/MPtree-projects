@@ -58,7 +58,7 @@ export function HalloweenSheet({ treat, onClose, T }: {
 }) {
   const sh = makeSH(T);
   const until = treat
-    ? new Date(treat.until).toLocaleString({ en: "en-GB", nl: "nl-NL", es: "es-ES" }[getLang()], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    ? new Date(treat.until).toLocaleString({ en: "en-GB", nl: "nl-NL", es: "es-ES", ru: "ru-RU" }[getLang()], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
     : "";
   const body = !treat ? t("Sorry for the scare. You have Pro already, so this one is just to say thank you.")
     : treat.kind === "day" ? t("A treat to make up for the scare: 24 hours of Pro, no ad needed.")

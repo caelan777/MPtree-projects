@@ -11,6 +11,8 @@ import { CapacitorHttp } from "@capacitor/core";
 // stack, so the WebView's cross-origin rules do not come into it.
 
 const API = "https://www.googleapis.com";
+/** Drive's simple upload takes up to 5 MB; stay well under it. */
+const SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024;
 
 export type DriveFile = {
   id: string;
@@ -74,6 +76,30 @@ function realDrive(tokens: Tokens): Drive {
     return out as T;
   }
 
+  /** Drive's two-step upload: ask for an upload address, then send the whole
+   *  file to it. No size limit that MPTree comes near. */
+  async function resumableUpload(fileId: string, text: string, retried = false): Promise<void> {
+    const token = await tokens.get();
+    const start = await CapacitorHttp.request({
+      method: "PATCH",
+      url: `${API}/upload/drive/v3/files/${fileId}?uploadType=resumable&fields=id`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": "application/json",
+      },
+      data: {},
+    });
+    if (start.status === 401 && !retried) { await tokens.renew(token); return resumableUpload(fileId, text, true); }
+    const where = start.headers?.Location ?? start.headers?.location;
+    if (start.status < 200 || start.status >= 300 || !where) throw new DriveError(start.status, "resumableStart");
+    const put = await CapacitorHttp.request({
+      method: "PUT", url: where, data: text,
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+    });
+    if (put.status < 200 || put.status >= 300) throw new DriveError(put.status, "resumableUpload");
+  }
+
   return {
     async about() {
       const r = await call<{ user: { displayName: string; emailAddress: string; photoLink?: string } }>(
@@ -103,7 +129,15 @@ function realDrive(tokens: Tokens): Drive {
           { name, parents: ["appDataFolder"], mimeType: "application/json" });
         fileId = made.id;
       }
-      await call("PATCH", `${API}/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, body);
+      // A simple upload stops at 5 MB, and covers.json passes that once a
+      // library has a few dozen photos: then every cover was refused and a
+      // phone signing in got none back. Bigger files go up resumable.
+      const text = JSON.stringify(body);
+      if (text.length < SIMPLE_UPLOAD_MAX) {
+        await call("PATCH", `${API}/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, body);
+      } else {
+        await resumableUpload(fileId, text);
+      }
       return fileId;
     },
     async remove(id) {

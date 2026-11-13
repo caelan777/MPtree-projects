@@ -1,4 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
+import { viewW, sideW, applyColumn, sideOnRight, setSideOnRight } from "./utils";
+import { SidePlayer } from "./components/SidePlayer";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -33,7 +35,9 @@ import { BinView } from "./components/BinView";
 import { MultiSelectBar, SelectCheck, SELECT_TOP_H, SELECT_BOTTOM_H } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { ProSheet } from "./components/ProSheet";
+import { ProSheet, type ProFrom } from "./components/ProSheet";
+import { ListenCard } from "./components/ListenCard";
+import { useListenCard, loadListen, setListening, closeListenCard } from "./listen";
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet } from "./components/LookSheet";
@@ -49,7 +53,7 @@ import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
 import { useBackground, loadBackground } from "./background";
 import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
-import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, giveDay } from "./pro";
+import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, adOkText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { isMissingArtist, extractDominantColor }  from "./utils";
@@ -243,7 +247,17 @@ export default function App() {
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
-  const [widePhone,      setWidePhone]     = useState(() => window.innerWidth >= WIDE_PHONE);
+  // The player's room on the left when the phone is sideways (utils sideW).
+  const [side, setSide] = useState(() => sideW());
+  const [sideRight, setSideRight] = useState(() => sideOnRight());
+  useEffect(() => {
+    const update = () => { applyColumn(); setSide(sideW()); };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => { window.removeEventListener("resize", update); window.removeEventListener("orientationchange", update); };
+  }, []);
+  const [widePhone,      setWidePhone]     = useState(() => viewW() >= WIDE_PHONE);
   // The height of a song row (it follows the Size setting), for the effect
   // that scrolls to the playing song by counting rows.
   const rowHRef = useRef(64);
@@ -288,7 +302,7 @@ export default function App() {
         cardTop: Math.max(0, Math.round(card.getBoundingClientRect().top)),
         innerH:  Math.round(inner.getBoundingClientRect().height),
         extraH:  extra ? Math.round(extra.getBoundingClientRect().height) : 0,
-        vw:      window.innerWidth,
+        vw:      viewW(),
         vh:      window.innerHeight,
       });
     };
@@ -398,19 +412,20 @@ export default function App() {
   const programmaticCap   = useRef(0);
   const beginProgrammaticScroll = useCallback(() => {
     const now = Date.now();
-    programmaticUntil.current = now + 800;
-    programmaticCap.current   = now + 3000;
+    programmaticUntil.current = now + 4000;
+    programmaticCap.current   = now + 4000;
+    window.dispatchEvent(new Event("mptree-autoscroll"));
   }, []);
   // A smooth scroll across a long list (shuffle jumps anywhere) outlasts any
   // fixed wait, and its last events used to fold the header and the player
   // away right after the tap that had opened them. So while the app's own
   // scroll is still producing events, it is still the app's scroll.
-  const programmaticScrolling = () => {
-    const now = Date.now();
-    if (now >= programmaticUntil.current) return false;
-    programmaticUntil.current = Math.min(programmaticCap.current, Math.max(programmaticUntil.current, now + 250));
-    return true;
-  };
+  // It stays the app's until that scroll has come to rest (scrollend), a
+  // finger touches the screen, or four seconds have passed. It used to end
+  // when the events paused for a quarter of a second, and a phone busy with
+  // the new song pauses longer than that: the rest of the scroll then folded
+  // the header away after a shuffle or a skip.
+  const programmaticScrolling = () => Date.now() < programmaticUntil.current;
   // A scroll the app starts, kept until it has arrived. Unfolding the header
   // moves the list's scroll position in the same frame (see the fold's layout
   // effect), and setting scrollTop stops a smooth scroll dead: the scroll-to-top
@@ -427,8 +442,24 @@ export default function App() {
   // A finger on the screen takes over: from there on a scroll is the user's.
   useEffect(() => {
     const takeOver = () => { programmaticUntil.current = 0; pendingScroll.current = null; };
+    // A scroll that has come to rest: the app's own is over. Not while a
+    // fold is still to start one again (pendingScroll), and not in the first
+    // moments: setting scrollTop for the fold ends a scroll of its own.
+    let armedAt = 0;
+    const settled = () => {
+      if (pendingScroll.current) return;
+      const now = Date.now();
+      if (programmaticUntil.current > now && now - armedAt > 200) programmaticUntil.current = now + 150;
+    };
+    const arm = () => { armedAt = Date.now(); };
     window.addEventListener("touchstart", takeOver, { passive: true, capture: true });
-    return () => window.removeEventListener("touchstart", takeOver, { capture: true });
+    window.addEventListener("scrollend", settled, { passive: true, capture: true });
+    window.addEventListener("mptree-autoscroll", arm);
+    return () => {
+      window.removeEventListener("touchstart", takeOver, { capture: true });
+      window.removeEventListener("scrollend", settled, { capture: true });
+      window.removeEventListener("mptree-autoscroll", arm);
+    };
   }, []);
 
   // Bring the chrome back. Playing something — tapping a song, hitting shuffle
@@ -724,10 +755,14 @@ export default function App() {
   // shuffle button. Started from Playlists it spotlit things that were not on
   // screen, so it always goes to Songs with the header open first, and waits
   // for that to have finished moving before measuring anything.
+  // From Discover, Discover closes first (it lies over Songs), and the tour
+  // waits for the wall that takes it away.
   const startTutorial = (delayMs: number) => {
+    const fromDiscover = discoverOpenRef.current;
+    if (fromDiscover) leaveDiscover();
     setPage("songs");
     openChrome();
-    window.setTimeout(() => setShowOnboarding(true), delayMs);
+    window.setTimeout(() => setShowOnboarding(true), fromDiscover ? Math.max(delayMs, WALL_MS + 100) : delayMs);
   };
   // The search field used to unmount when you left the Songs tab, which took the
   // Android keyboard with it. It stays mounted now (see the header card), so the
@@ -826,7 +861,7 @@ export default function App() {
   // on every one of those stalled the main thread on a timer, which is what the
   // spinning record kept catching. Mark it dirty on change; write it only then.
   useEffect(() => { metaRef.current = meta; metaDirtyRef.current = true; }, [meta]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isPlayingRef.current = isPlaying; setListening(isPlaying); }, [isPlaying]);
   useEffect(() => { crossfadeMsRef.current  = crossfadeMs;  }, [crossfadeMs]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
   useEffect(() => { eqEnabledRef.current    = eqEnabled;    }, [eqEnabled]);
@@ -839,7 +874,13 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
-  const [proOpen,     setProOpen]     = useState(false);
+  const [proOpen,     setProOpenState] = useState(false);
+  // Where the Pro page was opened from, for the counter (ProSheet).
+  const [proFrom,     setProFrom]     = useState<ProFrom>("other");
+  const setProOpen = (open: boolean, from: ProFrom = "other") => { setProFrom(from); setProOpenState(open); };
+  // Ten hours of music: a thank-you card at the top of the songs, once.
+  const listenCard = useListenCard();
+  const [listenCardH, setListenCardH] = useState(0);
   // A day of Pro for an ad that is up: MPTree asks for another ad, and pro.ts
   // keeps Pro on until it is answered. After the second "Not now", one last
   // word on how to get Pro back.
@@ -852,7 +893,7 @@ export default function App() {
   };
   const adWatch = async () => {
     const r = await watchAdForPro();
-    if (r === "pro") { setProOffNote(false); showToast(t("Pro is on for 24 hours")); return true; }
+    if (r === "pro" || r === "pro-free") { setProOffNote(false); showToast(adOkText(r)); return true; }
     showToast(adFailText(r));
     return false;
   };
@@ -882,7 +923,7 @@ export default function App() {
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
-  useEffect(() => { loadLook(); loadBackground(); loadPro(); }, []);
+  useEffect(() => { loadLook(); loadBackground(); loadPro(); loadListen(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
@@ -1360,7 +1401,7 @@ export default function App() {
   useEffect(() => {
     const measure = () => {
       if (scrollRef.current) setListViewportH(scrollRef.current.clientHeight);
-      setWidePhone(window.innerWidth >= WIDE_PHONE);
+      setWidePhone(viewW() >= WIDE_PHONE);
     };
     measure();
     window.addEventListener("resize", measure);
@@ -3342,7 +3383,9 @@ export default function App() {
   // Gestures (a thin strip with a handle in the middle): into the strip, just
   // above the handle. No bar at all: 12px.
   const playerBottom = safeB === 0 ? 12 : safeB >= 32 ? safeB + 6 : Math.max(6, safeB - 6);
-  const playerH    = currentSong && !selecting && !playerHidden ? playerBottom - safeB + playerCardH : 0;
+  // Sideways, the player is on the left (SidePlayer) and the card at the
+  // bottom is not drawn, so the list gets the whole height.
+  const playerH    = currentSong && !selecting && !playerHidden && !side ? playerBottom - safeB + playerCardH : 0;
   // The selection bar, on either tab: the Playlists tab pads its songs by this
   // too, or the last ones sat under the bar.
   const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
@@ -3410,7 +3453,9 @@ export default function App() {
   // Songs on their way between devices are shown in Settings, under Account
   // & sync (SettingsSheet), not over the list.
   const showMusicHint = musicHint && !selectMode;
-  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0);
+  // The ten-hour card: not with the music hint, not while picking songs.
+  const showListenCard = listenCard && !pro && !showMusicHint && !selectMode;
+  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0) + (showListenCard ? listenCardH : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
@@ -3444,6 +3489,7 @@ export default function App() {
     <>
       <style>{`
         * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html { background:${TH.bg}; --mp-side:${TH.bg}; }
         body { margin:0; background:${TH.bg}; }
         ::placeholder { color:${TH.muted}; opacity:0.6; }
         input { -webkit-appearance:none; }
@@ -3547,7 +3593,7 @@ export default function App() {
           <div
             ref={headerInnerRef}
             style={{
-              boxSizing: "border-box", width: "calc(100vw - 26px)", padding: "8px 14px 12px",
+              boxSizing: "border-box", width: "calc(var(--mp-col, 100vw) - 26px)", padding: "8px 14px 12px",
               opacity: chromeCollapsed ? 0 : 1,
               // `selecting` too: the card's own "none" does not reach a child
               // that says "auto", so the hidden sort button stayed tappable.
@@ -3958,6 +4004,11 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
+              {showListenCard && (
+                <ListenCard T={TH} onHeight={setListenCardH} onClose={closeListenCard}
+                  onPro={() => { closeListenCard(); setProOpen(true, "listen"); }} />
+              )}
+
               {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
 
               {displayList.length === 0 ? (
@@ -4203,6 +4254,7 @@ export default function App() {
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
+              onAutoScroll={beginProgrammaticScroll}
               onInsetJump={markInsetJump}
               onOpenName={onOpenPlaylistName}
               listSignal={playlistListSignal}
@@ -4240,7 +4292,31 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selecting && !(discoverOpen && discoverActive) && (() => {
+        {side > 0 && (
+          <SidePlayer
+            width={side}
+            colW={viewW()}
+            onRight={sideRight}
+            onSwap={() => { const next = !sideRight; setSideOnRight(next); setSideRight(next); }}
+            song={!!currentSong}
+            title={currentSong ? dispName(currentSong) : ""}
+            artist={currentSong ? dispArtist(currentSong) : ""}
+            photo={currentSong ? nowPlayingPhoto(currentSong) : undefined}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            shuffle={playMode === "shuffle"}
+            onTogglePlay={togglePlay}
+            onSkip={skip}
+            onToggleShuffle={toggleShuffleFromPlayer}
+            onSeek={ms => setCurrentTime(ms)}
+            onSeekStart={() => setDragging(true)}
+            onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
+            onOpen={() => setPlayerExpanded(true)}
+            T={TH}
+          />
+        )}
+        {currentSong && !selecting && !(discoverOpen && discoverActive) && !side && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -4428,7 +4504,7 @@ export default function App() {
             binCount={removedSongs.length}
             pro={pro}
             hidden={lookOpen}
-            onOpenPro={() => setProOpen(true)}
+            onOpenPro={() => setProOpen(true, "settings")}
             onOpenLook={openLook}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
@@ -4514,7 +4590,7 @@ export default function App() {
                 T={TH}
               />
             ) : undefined}
-            onNeedPro={() => setProOpen(true)}
+            onNeedPro={() => setProOpen(true, "look")}
             onToast={showToast}
             onClose={closeLook}
             T={TH} />
@@ -4546,6 +4622,8 @@ export default function App() {
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
+            onOpenLook={() => { setProOpen(false); openLook(); }}
+            from={proFrom}
             T={TH} />
         )}
         {halloween === "scare" && (
@@ -4557,7 +4635,7 @@ export default function App() {
           <HalloweenSheet treat={halloween.treat} onClose={closeHalloween} T={TH} />
         )}
         {showAdPrompt && adStage !== null && (
-          <AdDayPrompt stage={adStage} onWatch={adWatch} onBuy={() => setProOpen(true)} onNotNow={adNotNow} T={TH} />
+          <AdDayPrompt stage={adStage} onWatch={adWatch} onBought={() => { setProOffNote(false); showToast(t("Pro unlocked. Thank you!")); }} onToast={showToast} onNotNow={adNotNow} T={TH} />
         )}
 
         {welcome && (

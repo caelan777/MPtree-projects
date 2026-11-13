@@ -1,7 +1,8 @@
 import { memo, useRef, type PointerEvent as RPointerEvent, type MouseEvent as RMouseEvent } from "react";
 import { Logo } from "./Logo";
 import { t } from "../i18n";
-import { useLook, useVinyl, saveLook, isFlowerRecord, isLanternRecord, type VinylSkin } from "../look";
+import { useLook, useVinyl, saveLook, isFlowerRecord, isLanternRecord, swipeRecords, type VinylSkin } from "../look";
+import { usePro } from "../pro";
 import { lanternRecord, LANTERN_LABEL } from "../lantern";
 import { recordArt, RECORD_LABEL, DARK_RECORDS } from "../flowers";
 
@@ -48,7 +49,9 @@ type SpinningDiscProps = {
   /** Overrides the saved record, for the previews in the Personalise sheet. */
   skin?: VinylSkin;
   /** In the player: a tap turns the record into a picture disc of the cover
-   *  and back. onNoCover is called instead when there is no cover to use. */
+   *  and back, and a swipe left or right goes to the next or previous
+   *  record (the cover is one of them when the song has one). onNoCover is
+   *  called instead when a tap finds no cover to use. */
   tappable?: boolean;
   onNoCover?: () => void;
   /** In the player: holding the record opens the song's photo to change it. */
@@ -96,25 +99,48 @@ export const SpinningDisc = memo(function SpinningDisc({
     if (!customPhoto) { onNoCover?.(); return; }
     saveLook({ photoDisc: !look.photoDisc });
   };
+  // A swipe goes through the records: the cover first when there is one,
+  // then the free ones, and with Pro all the others.
+  const pro = usePro();
+  const nextRecord = (dir: 1 | -1) => {
+    const options: (VinylSkin | "picture")[] = [...(customPhoto ? ["picture" as const] : []), ...swipeRecords(pro)];
+    const i = options.indexOf(skin);
+    const next = options[i < 0 ? (dir > 0 ? 0 : options.length - 1) : (i + dir + options.length) % options.length];
+    navigator.vibrate?.(10);
+    if (next === "picture") saveLook({ photoDisc: true });
+    else saveLook({ vinylDark: next, vinylLight: next, ...(customPhoto ? { photoDisc: false } : {}) });
+  };
+
   // A tap swaps the record and the cover. With onPhoto, holding the record
   // opens the song's photo to change it; moving the finger cancels the hold.
+  // A sideways swipe changes the record, and is then not also a tap.
   const held = useRef(false);
+  const swiped = useRef(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdFrom = useRef({ x: 0, y: 0 });
   const stopHold = () => { if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; } };
-  const holdProps = tappable && onPhoto ? {
+  const pointerProps = tappable ? {
     onPointerDown: (e: RPointerEvent) => {
-      held.current = false; stopHold(); holdFrom.current = { x: e.clientX, y: e.clientY };
-      holdTimer.current = setTimeout(() => { held.current = true; navigator.vibrate?.(15); onPhoto(); }, 500);
+      held.current = false; swiped.current = false; stopHold(); holdFrom.current = { x: e.clientX, y: e.clientY };
+      if (onPhoto) holdTimer.current = setTimeout(() => { held.current = true; navigator.vibrate?.(15); onPhoto(); }, 500);
     },
     onPointerMove: (e: RPointerEvent) => {
       if (Math.abs(e.clientX - holdFrom.current.x) > 10 || Math.abs(e.clientY - holdFrom.current.y) > 10) stopHold();
     },
-    onPointerUp: stopHold, onPointerLeave: stopHold, onPointerCancel: stopHold,
+    onPointerUp: (e: RPointerEvent) => {
+      stopHold();
+      const dx = e.clientX - holdFrom.current.x, dy = e.clientY - holdFrom.current.y;
+      if (!held.current && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        swiped.current = true;
+        nextRecord(dx < 0 ? 1 : -1);
+      }
+    },
+    onPointerLeave: stopHold, onPointerCancel: stopHold,
     onContextMenu: (e: RMouseEvent) => e.preventDefault(),
   } : null;
   const onTap = tappable ? () => {
     if (held.current) { held.current = false; return; }
+    if (swiped.current) { swiped.current = false; return; }
     flipPicture();
   } : undefined;
 
@@ -142,12 +168,14 @@ export const SpinningDisc = memo(function SpinningDisc({
   return (
     <div
       onClick={onTap}
-      {...holdProps}
+      {...pointerProps}
       role={tappable ? "button" : undefined}
       aria-label={tappable ? t("Switch between the record and the cover") : undefined}
       style={{
       width: size, height: size, flexShrink: 0, display: "grid", placeItems: "center",
       position: "relative", borderRadius: "50%", cursor: tappable ? "pointer" : undefined,
+      // Sideways is the record's own swipe; up and down still move the player.
+      touchAction: tappable ? "pan-y" : undefined,
       WebkitTapHighlightColor: "transparent",
       // Static: the shadow stays put while the record turns.
       boxShadow: lantern ? "0 6px 24px rgba(0,0,0,0.4), 0 0 26px rgba(53,224,138,0.22)"
