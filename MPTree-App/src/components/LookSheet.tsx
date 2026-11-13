@@ -21,6 +21,7 @@ import {
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour, type AppIcon,
 } from "../look";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
+import { ProQuickSheet } from "./ProQuickSheet";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
@@ -349,6 +350,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // Lantern's question, while it is being asked, and how many days Lantern is
   // still shut for after a yes.
   const [asking, setAsking] = useState(false);
+  // Keeping something locked: the small "part of Pro" sheet over the preview.
+  const [quick, setQuick] = useState(false);
   const [shutDays, setShutDays] = useState(0);
   useEffect(() => { loadLanternLock().then(setShutDays).catch(() => {}); }, []);
   // A named style opening out of where it was tapped.
@@ -750,7 +753,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
           ) : changed && (
             // Short, in two lines: in one, "Keep it, free with an ad" was
             // wider than a small phone and lay over the back arrow.
-            <button onClick={needsPro ? onNeedPro : apply} style={{
+            <button onClick={needsPro ? () => setQuick(true) : apply} style={{
               flexShrink: 0, maxWidth: "70%", padding: needsPro ? "5px 12px" : "8px 16px", background: T.accent, color: T.playBtnFg, border: "none",
               borderRadius: 18, fontFamily: "inherit", cursor: "pointer", lineHeight: 1.2, textAlign: "center",
             }}>
@@ -968,8 +971,16 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
             for a day too). */}
         {changed && page === "main" && (
           <div style={{ flexShrink: 0, padding: "12px 20px 22px", borderTop: `1px solid ${T.border}` }}>
-            <button onClick={needsPro ? onNeedPro : apply} style={sh.saveBtn}>{keepLabel}</button>
+            <button onClick={needsPro ? () => setQuick(true) : apply} style={sh.saveBtn}>{keepLabel}</button>
           </div>
+        )}
+
+        {quick && (
+          <ProQuickSheet T={T} onToast={onToast}
+            name={lanternOn ? "Lantern" : avielaOn ? "Aviela" : null}
+            onGot={() => setQuick(false)}
+            onAll={() => { setQuick(false); onNeedPro(); }}
+            onClose={() => setQuick(false)} />
         )}
 
         {asking && <LanternGate onYes={sayAfraid} onNo={sayNotAfraid} onDone={() => setAsking(false)} />}

@@ -14,7 +14,11 @@ import { Preferences } from "@capacitor/preferences";
 // is sent from the browser demo.
 
 export type CountEvent = "open" | "tab-songs" | "tab-playlists" | "pro-open" | "pro-buy" | "ad-start" | "ad-done" | "ad-missing"
-  | "discover" | "discover-play" | "discover-download";
+  | "discover" | "discover-play" | "discover-download"
+  // Where the Pro page was opened from, what made someone tap to buy, and the
+  // moments that offer Pro: so it can be seen which of them work.
+  | "pro-open-settings" | "pro-open-look" | "pro-open-day" | "pro-open-listen" | "pro-open-other"
+  | "pro-tap-buy" | "pro-day-over" | "pro-look-sheet" | "listen-card";
 
 const BASE = "https://mp-tree.net/a/";
 const platform = Capacitor.getPlatform();

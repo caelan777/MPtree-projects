@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { Logo } from "./Logo";
@@ -51,8 +51,37 @@ export function SidePlayer({
   // let go past a third of the way across and it changes sides.
   const [dx, setDx] = useState(0);
   const [held, setHeld] = useState(false);
+  // Changing sides: the panel flies from where it was let go to its new
+  // place while the list slides the other way, so nothing jumps.
+  const [flying, setFlying] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const from = useRef<{ panel: number; body: number } | null>(null);
   const drag = useRef<{ x: number; id: number } | null>(null);
   const toward = onRight ? -1 : 1;
+  useLayoutEffect(() => {
+    const f = from.current, el = box.current;
+    if (!f || !el) return;
+    from.current = null;
+    const body = document.body;
+    const ease = "cubic-bezier(0.22, 1, 0.36, 1)", duration = 380;
+    // Both measured before either moves. The list's column moved at once
+    // (applyColumn): start it where it was.
+    const b = f.body - body.getBoundingClientRect().left;
+    // The panel sits in the body, so its own start is net of the body's.
+    const p = f.panel - el.getBoundingClientRect().left;
+    body.animate([{ transform: `translateX(${b}px)` }, { transform: "translateX(0)" }], { duration, easing: ease });
+    const a = el.animate([{ transform: `translateX(${p - b}px)` }, { transform: "translateX(0)" }], { duration, easing: ease });
+    a.onfinish = a.oncancel = () => setFlying(false);
+  }, [onRight]);
+  // On the right the panel ends at the window's edge. The window's width is a
+  // whole number here but can be a fraction on the phone, and that sliver
+  // past the edge let the page scroll sideways and take the player off
+  // screen. The page itself never scrolls in landscape, so put it back.
+  useEffect(() => {
+    const back = () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); };
+    window.addEventListener("scroll", back, { passive: true });
+    return () => window.removeEventListener("scroll", back);
+  }, []);
   const down = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button,input")) return;
     drag.current = { x: e.clientX, id: e.pointerId };
@@ -69,15 +98,22 @@ export function SidePlayer({
     if (!drag.current) return;
     drag.current = null;
     setHeld(false);
-    if (Math.abs(dx) > colW / 3) onSwap();
+    if (Math.abs(dx) > colW / 3 && box.current) {
+      from.current = { panel: box.current.getBoundingClientRect().left, body: document.body.getBoundingClientRect().left };
+      setFlying(true);
+      onSwap();
+    }
     setDx(0);
   };
   const btn: CSSProperties = { background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 8, display: "flex" };
   return (
-    <div style={{
-      position: "fixed", top: 0, bottom: 0, left: onRight ? colW : -width, width, zIndex: dx ? 500 : 95,
+    <div ref={box} style={{
+      // On the right one pixel short of the edge (see above): unseen, as the
+      // page's own colour runs on under it.
+      position: "fixed", top: 0, bottom: 0, left: onRight ? colW : -width, width: onRight ? width - 1 : width,
+      zIndex: dx || flying ? 500 : 95,
       transform: dx ? `translateX(${dx}px)` : undefined,
-      transition: dx || held ? "none" : "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+      transition: dx || held || flying ? "none" : "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
       touchAction: "pan-y",
       // No ground of its own: the page's colour runs on under it (html), so
       // the header card's shadow fades out over it instead of stopping dead

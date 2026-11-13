@@ -8,7 +8,8 @@ import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
-import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON } from "../pro";
+import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON, useProPrice } from "../pro";
+import { MiniDisc } from "./ProArt";
 import { Ads } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
@@ -157,6 +158,7 @@ export function SettingsSheet({
 }: SettingsSheetProps) {
   const sh = makeSH(T);
   const adDay = useAdDay();
+  const price = useProPrice();
   const ownsPro = useOwnsPro();
   const sync = useSync();
   const moving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
@@ -275,15 +277,16 @@ export function SettingsSheet({
               cursor: "pointer", fontFamily: "inherit",
             }}
           >
+            {/* Without Pro, a record turning: what Pro is mostly about. */}
+            {!pro && <MiniDisc kind="marble" size={48} spin />}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
-                {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
+                {pro ? t("MPTree Pro is on") : t("MPTree Pro")}
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {adDay.state === "live" && !ownsPro ? t("Pro for a day, {time} left.", { time: adDayTimeLeft(adDay.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : ADS_ON ? t("Free for a day with an ad, or pay once.")
-                  : t("Records, shades and more. Pay once.")}
+                  : t("Records, styles, sync. {price}, once.", { price })}
               </span>
             </span>
             <IC.ChevronR />

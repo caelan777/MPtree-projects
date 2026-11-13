@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { Ads, Billing, System } from "./plugins";
@@ -429,6 +429,23 @@ export async function proPrice(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// The price, asked of Play once and kept: several screens show it.
+let priceCache: string | null = null;
+let priceAsk: Promise<string | null> | null = null;
+/** The price for a label: Play's own once it has answered, €2,99 until then
+ *  (and in the browser demo and test builds, where there is no Play). */
+export function useProPrice(): string {
+  const [p, setP] = useState(priceCache);
+  useEffect(() => {
+    if (priceCache) return;
+    let live = true;
+    priceAsk ??= proPrice().then(v => { priceCache = v; return v; });
+    priceAsk.then(v => { if (live && v) setP(v); });
+    return () => { live = false; };
+  }, []);
+  return p ?? "€2,99";
 }
 
 /** Test builds only: back to free, to try the locked side again. */

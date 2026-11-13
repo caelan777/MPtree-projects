@@ -35,7 +35,9 @@ import { BinView } from "./components/BinView";
 import { MultiSelectBar, SelectCheck, SELECT_TOP_H, SELECT_BOTTOM_H } from "./components/MultiSelectBar";
 import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { ProSheet } from "./components/ProSheet";
+import { ProSheet, type ProFrom } from "./components/ProSheet";
+import { ListenCard } from "./components/ListenCard";
+import { useListenCard, loadListen, setListening, closeListenCard } from "./listen";
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet } from "./components/LookSheet";
@@ -859,7 +861,7 @@ export default function App() {
   // on every one of those stalled the main thread on a timer, which is what the
   // spinning record kept catching. Mark it dirty on change; write it only then.
   useEffect(() => { metaRef.current = meta; metaDirtyRef.current = true; }, [meta]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isPlayingRef.current = isPlaying; setListening(isPlaying); }, [isPlaying]);
   useEffect(() => { crossfadeMsRef.current  = crossfadeMs;  }, [crossfadeMs]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
   useEffect(() => { eqEnabledRef.current    = eqEnabled;    }, [eqEnabled]);
@@ -872,7 +874,13 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
-  const [proOpen,     setProOpen]     = useState(false);
+  const [proOpen,     setProOpenState] = useState(false);
+  // Where the Pro page was opened from, for the counter (ProSheet).
+  const [proFrom,     setProFrom]     = useState<ProFrom>("other");
+  const setProOpen = (open: boolean, from: ProFrom = "other") => { setProFrom(from); setProOpenState(open); };
+  // Ten hours of music: a thank-you card at the top of the songs, once.
+  const listenCard = useListenCard();
+  const [listenCardH, setListenCardH] = useState(0);
   // A day of Pro for an ad that is up: MPTree asks for another ad, and pro.ts
   // keeps Pro on until it is answered. After the second "Not now", one last
   // word on how to get Pro back.
@@ -915,7 +923,7 @@ export default function App() {
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
-  useEffect(() => { loadLook(); loadBackground(); loadPro(); }, []);
+  useEffect(() => { loadLook(); loadBackground(); loadPro(); loadListen(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
@@ -3445,7 +3453,9 @@ export default function App() {
   // Songs on their way between devices are shown in Settings, under Account
   // & sync (SettingsSheet), not over the list.
   const showMusicHint = musicHint && !selectMode;
-  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0);
+  // The ten-hour card: not with the music hint, not while picking songs.
+  const showListenCard = listenCard && !pro && !showMusicHint && !selectMode;
+  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0) + (showListenCard ? listenCardH : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
@@ -3994,6 +4004,11 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
+              {showListenCard && (
+                <ListenCard T={TH} onHeight={setListenCardH} onClose={closeListenCard}
+                  onPro={() => { closeListenCard(); setProOpen(true, "listen"); }} />
+              )}
+
               {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
 
               {displayList.length === 0 ? (
@@ -4489,7 +4504,7 @@ export default function App() {
             binCount={removedSongs.length}
             pro={pro}
             hidden={lookOpen}
-            onOpenPro={() => setProOpen(true)}
+            onOpenPro={() => setProOpen(true, "settings")}
             onOpenLook={openLook}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
@@ -4575,7 +4590,7 @@ export default function App() {
                 T={TH}
               />
             ) : undefined}
-            onNeedPro={() => setProOpen(true)}
+            onNeedPro={() => setProOpen(true, "look")}
             onToast={showToast}
             onClose={closeLook}
             T={TH} />
@@ -4607,6 +4622,8 @@ export default function App() {
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
+            onOpenLook={() => { setProOpen(false); openLook(); }}
+            from={proFrom}
             T={TH} />
         )}
         {halloween === "scare" && (
@@ -4618,7 +4635,7 @@ export default function App() {
           <HalloweenSheet treat={halloween.treat} onClose={closeHalloween} T={TH} />
         )}
         {showAdPrompt && adStage !== null && (
-          <AdDayPrompt stage={adStage} onWatch={adWatch} onBuy={() => setProOpen(true)} onNotNow={adNotNow} T={TH} />
+          <AdDayPrompt stage={adStage} onWatch={adWatch} onBought={() => { setProOffNote(false); showToast(t("Pro unlocked. Thank you!")); }} onToast={showToast} onNotNow={adNotNow} T={TH} />
         )}
 
         {welcome && (

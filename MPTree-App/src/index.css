@@ -53,3 +53,8 @@ html, body {
     overflow-clip-margin: 40px;
   }
 }
+
+/* The small records on the Pro page and in its notes (ProArt.tsx). */
+@keyframes mpProDiscSpin { to { transform: rotate(360deg); } }
+.mp-disc-spin { animation: mpProDiscSpin 8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .mp-disc-spin { animation: none; } }
