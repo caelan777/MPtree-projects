@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
-import { viewW } from "./utils";
+import { viewW, sideW, applyColumn } from "./utils";
+import { SidePlayer } from "./components/SidePlayer";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -245,6 +246,15 @@ export default function App() {
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
+  // The player's room on the left when the phone is sideways (utils sideW).
+  const [side, setSide] = useState(() => sideW());
+  useEffect(() => {
+    const update = () => { applyColumn(); setSide(sideW()); };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => { window.removeEventListener("resize", update); window.removeEventListener("orientationchange", update); };
+  }, []);
   const [widePhone,      setWidePhone]     = useState(() => viewW() >= WIDE_PHONE);
   // The height of a song row (it follows the Size setting), for the effect
   // that scrolls to the playing song by counting rows.
@@ -923,7 +933,7 @@ export default function App() {
   };
   // Liquid Glass: only while neither Aviela nor Lantern is on.
   const glassOn = look.glass && !styleTint;
-  const TH = glassOn ? glassPalette(tinted(paletteFor(theme, look.dark, look.light)), theme === "dark") : tinted(paletteFor(theme, look.dark, look.light));
+  const TH = glassOn ? glassPalette(tinted(paletteFor(theme, look.dark, look.light)), theme === "dark", look.glassLook.accent) : tinted(paletteFor(theme, look.dark, look.light));
   useEffect(() => {
     const root = document.documentElement;
     if (glassOn) root.setAttribute("data-glass", theme); else root.removeAttribute("data-glass");
@@ -932,7 +942,7 @@ export default function App() {
   // own shade for the rest (Lantern's green), a light one takes the plain dark.
   const discoverTH = { ...(isDarkPalette(TH) ? TH : { ...TH, ...DARK }), bg: "#000000" };
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
-  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : glassOn ? glassBackdrop(theme === "dark") : groundFlowers(look.flowers);
+  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : glassOn ? glassBackdrop(theme === "dark", look.glassLook.accent) : groundFlowers(look.flowers);
   const background = useBackground();
   const statusBarColor = TH.bg;
   useEffect(() => {
@@ -3371,7 +3381,9 @@ export default function App() {
   // Gestures (a thin strip with a handle in the middle): into the strip, just
   // above the handle. No bar at all: 12px.
   const playerBottom = safeB === 0 ? 12 : safeB >= 32 ? safeB + 6 : Math.max(6, safeB - 6);
-  const playerH    = currentSong && !selecting && !playerHidden ? playerBottom - safeB + playerCardH : 0;
+  // Sideways, the player is on the left (SidePlayer) and the card at the
+  // bottom is not drawn, so the list gets the whole height.
+  const playerH    = currentSong && !selecting && !playerHidden && !side ? playerBottom - safeB + playerCardH : 0;
   // The selection bar, on either tab: the Playlists tab pads its songs by this
   // too, or the last ones sat under the bar.
   const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
@@ -4272,7 +4284,29 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selecting && !(discoverOpen && discoverActive) && (() => {
+        {side > 0 && (
+          <SidePlayer
+            width={side}
+            ground={background.photo ? {} : ground}
+            song={!!currentSong}
+            title={currentSong ? dispName(currentSong) : ""}
+            artist={currentSong ? dispArtist(currentSong) : ""}
+            photo={currentSong ? nowPlayingPhoto(currentSong) : undefined}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            shuffle={playMode === "shuffle"}
+            onTogglePlay={togglePlay}
+            onSkip={skip}
+            onToggleShuffle={toggleShuffleFromPlayer}
+            onSeek={ms => setCurrentTime(ms)}
+            onSeekStart={() => setDragging(true)}
+            onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
+            onOpen={() => setPlayerExpanded(true)}
+            T={TH}
+          />
+        )}
+        {currentSong && !selecting && !(discoverOpen && discoverActive) && !side && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
