@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { LoadLine } from "./LoadLine";
 import { count, type CountEvent } from "../counter";
 import { Capacitor } from "@capacitor/core";
@@ -6,7 +6,7 @@ import { makeSH, pageGround, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Logo } from "./Logo";
-import { MiniDisc, StylePhone, type DiscKind } from "./ProArt";
+import { MiniDisc } from "./ProArt";
 import {
   useOwnsPro, useAccountPro, useAdDay, buyPro, restorePro, useProPrice, lockProForTesting,
   watchAdForPro, adFailText, adOkText, adDayTimeLeft, endAdDayForTesting, ADS_ON, PRO_MODE, hasPro,
@@ -49,6 +49,7 @@ const ico = (d: ReactNode) => (
 );
 const ICON_LOOK = ico(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /></>);
 const ICON_SYNC = ico(<><rect x="3" y="4" width="11" height="8" rx="1.5" /><rect x="15" y="9" width="6" height="11" rx="1.5" /><path d="M6 16h6" /></>);
+const ICON_NOADS = ico(<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>);
 const ICON_CLEAN = ico(<><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /></>);
 
 export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenLook, from = "other", T }: ProSheetProps) {
@@ -110,54 +111,60 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
   };
 
   // ── The pictures ─────────────────────────────────────────────────────────
+  // Screenshots of the app itself (public/pro-shots), so what is shown is
+  // what you get. One feature per slide: first the player in three looks
+  // side by side, then no ads, every device, and the film.
   const strip = useRef<HTMLDivElement>(null);
   const [slide, setSlide] = useState(0);
-  const SLIDE_H = 196;
-  const caption = (s: string) => (
-    <div style={{ fontSize: 13, color: T.textSub, textAlign: "center", marginTop: 10, fontWeight: 600 }}>{s}</div>
+  const SLIDE_H = 290;
+  const shot = (file: string, w: number, h: number, style?: CSSProperties) => (
+    <img src={`${import.meta.env.BASE_URL}pro-shots/${file}.jpg`} alt="" draggable={false} style={{
+      display: "block", width: w, height: h, objectFit: "cover", objectPosition: "top", borderRadius: 18,
+      boxShadow: "0 10px 30px rgba(0,0,0,0.16)", ...style,
+    }} />
   );
-  const records: DiscKind[] = ["vinyl", "smoke", "marble", "lantern", "aviela"];
-  const slides: ReactNode[] = [
-    <div key="styles">
-      <div style={{ height: SLIDE_H, display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
-        <StylePhone kind="lantern" w={106} />
-        <StylePhone kind="aviela" w={106} />
-      </div>
-      {caption(t("Lantern and Aviela: the whole app in another style"))}
-    </div>,
-    <div key="records">
-      <div style={{ height: SLIDE_H, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
-        <MiniDisc kind="marble" size={128} spin style={{ boxShadow: "0 12px 30px rgba(0,0,0,0.22)" }} />
-        <div style={{ display: "flex", gap: 8 }}>{records.map(k => <MiniDisc key={k} kind={k} size={30} />)}</div>
-      </div>
-      {caption(t("Records for the player: smoke, marble and more"))}
-    </div>,
-    <div key="sync">
-      <div style={{ height: SLIDE_H, display: "flex", alignItems: "center", justifyContent: "center", gap: 16, color: T.text }}>
-        <span style={{ width: 82, height: 146, borderRadius: 16, border: `2px solid ${T.text}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <MiniDisc kind="vinyl" size={54} spin />
-        </span>
-        <svg width="34" height="20" viewBox="0 0 34 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M3 6h26l-5-4" /><path d="M31 14H5l5 4" />
-        </svg>
-        <span style={{ width: 82, height: 146, borderRadius: 16, border: `2px solid ${T.text}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <MiniDisc kind="vinyl" size={54} spin />
-        </span>
-      </div>
-      {caption(t("Your songs and playlists on every device"))}
-    </div>,
-    <div key="film">
-      <button onClick={() => setFilm(true)} aria-label={t("Watch how Pro works")}
-        style={{ display: "block", width: "100%", height: SLIDE_H, padding: 0, border: "none", background: "transparent", cursor: "pointer" }}>
-        <span style={{ display: "block", position: "relative", height: "100%", aspectRatio: "16 / 9", maxWidth: "100%", margin: "0 auto", borderRadius: 16, overflow: "hidden", border: `1px solid ${T.border}`, background: "#fff" }}>
-          <img src={`${import.meta.env.BASE_URL}pro-video.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          <span style={{ position: "absolute", left: "50%", top: "50%", width: 54, height: 54, marginLeft: -27, marginTop: -27, borderRadius: 27, background: "#0b0b0d", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff" /></svg>
+  const slides: { title: string; body: string; art: ReactNode }[] = [
+    {
+      title: t("Styles and records"), body: t("Lantern, Aviela, marble and more."),
+      art: (
+        <div style={{ position: "relative", width: "100%", height: SLIDE_H }}>
+          {shot("aviela", 150, 208, { position: "absolute", left: "calc(50% - 175px)", top: 44, opacity: 0.6 })}
+          {shot("marble", 150, 208, { position: "absolute", left: "calc(50% + 25px)", top: 44, opacity: 0.6 })}
+          {shot("lantern", 200, 278, { position: "absolute", left: "calc(50% - 100px)", top: 6, zIndex: 1 })}
+        </div>
+      ),
+    },
+    {
+      title: t("No ads"), body: t("Not in Downloads, not for a Pro day. Just your music."),
+      art: (
+        <div style={{ position: "relative", width: 210, height: SLIDE_H, margin: "0 auto" }}>
+          {shot("songs", 210, 278, { position: "absolute", top: 6 })}
+          <span style={{
+            position: "absolute", right: -14, top: 120, background: T.accent, color: T.playBtnFg, borderRadius: 16,
+            padding: "7px 12px", fontSize: 13, fontWeight: 800, boxShadow: "0 6px 18px rgba(0,0,0,0.22)",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>{ICON_NOADS}{t("No ads")}</span>
+        </div>
+      ),
+    },
+    {
+      title: t("Every device"), body: t("Your songs, playlists and likes on up to three devices."),
+      art: <div style={{ height: SLIDE_H, display: "flex", justifyContent: "center", paddingTop: 6, boxSizing: "border-box" }}>{shot("devices", 210, 278)}</div>,
+    },
+    {
+      title: t("Watch how Pro works"), body: "0:44",
+      art: (
+        <button onClick={() => setFilm(true)} aria-label={t("Watch how Pro works")}
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: SLIDE_H, padding: "0 20px", boxSizing: "border-box", border: "none", background: "transparent", cursor: "pointer" }}>
+          <span style={{ display: "block", position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 18, overflow: "hidden", border: `1px solid ${T.border}`, background: "#fff" }}>
+            <img src={`${import.meta.env.BASE_URL}pro-video.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <span style={{ position: "absolute", left: "50%", top: "50%", width: 54, height: 54, marginLeft: -27, marginTop: -27, borderRadius: 27, background: "#0b0b0d", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff" /></svg>
+            </span>
           </span>
-        </span>
-      </button>
-      {caption(`${t("Watch how Pro works")} · 0:44`)}
-    </div>,
+        </button>
+      ),
+    },
   ];
   const onStrip = () => {
     const el = strip.current;
@@ -168,6 +175,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
   const goSlide = (i: number) => strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: "smooth" });
 
   const lines: { icon: ReactNode; text: string }[] = [
+    { icon: ICON_NOADS, text: t("No ads") },
     { icon: ICON_LOOK, text: t("Styles, records and colours") },
     { icon: ICON_SYNC, text: t("Your songs on every device") },
     { icon: ICON_CLEAN, text: t("Clean up voice notes and clips") },
@@ -229,15 +237,19 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
           {/* The pictures, swiped sideways, with dots that can be tapped. */}
           <div ref={strip} onScroll={onStrip} data-hscroll="" style={{
             display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none",
-            overscrollBehaviorX: "contain", marginTop: 18,
+            overscrollBehaviorX: "contain", margin: "10px -20px 0", padding: "0 0 14px",
           }}>
-            {slides.map((s, i) => (
-              <div key={i} style={{ flex: "0 0 100%", scrollSnapAlign: "center", minWidth: 0 }}>{s}</div>
+            {slides.map(sl => (
+              <div key={sl.title} style={{ flex: "0 0 100%", scrollSnapAlign: "center", minWidth: 0, overflow: "hidden" }}>{sl.art}</div>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 12 }}>
-            {slides.map((_, i) => (
-              <button key={i} onClick={() => goSlide(i)} aria-label={`${i + 1}`} style={{
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{slides[slide].title}</div>
+            <div style={{ fontSize: 13, color: T.textSub, marginTop: 2 }}>{slides[slide].body}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 10 }}>
+            {slides.map((sl, i) => (
+              <button key={sl.title} onClick={() => goSlide(i)} aria-label={sl.title} style={{
                 width: i === slide ? 18 : 6, height: 6, borderRadius: 3, border: "none", padding: 0, cursor: "pointer",
                 background: i === slide ? T.text : T.border, transition: "width 0.2s",
               }} />

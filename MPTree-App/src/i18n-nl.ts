@@ -866,4 +866,12 @@ export const NL: Record<string, string> = {
   "See Pro": "Bekijk Pro",
   "MPTree Pro": "MPTree Pro",
   "Records, styles, sync. {price}, once.": "Platen, stijlen, sync. {price}, één keer.",
+  "No ads": "Geen advertenties",
+  "Marble record": "Marmeren plaat",
+  "Smoke record": "Rookplaat",
+  "Styles and records": "Stijlen en platen",
+  "Lantern, Aviela, marble and more.": "Lantern, Aviela, marmer en meer.",
+  "Not in Downloads, not for a Pro day. Just your music.": "Niet bij Downloads, niet voor een Pro-dag. Alleen je muziek.",
+  "Every device": "Al je apparaten",
+  "Your songs, playlists and likes on up to three devices.": "Je nummers, playlists en likes op maximaal drie apparaten.",
 };

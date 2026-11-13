@@ -866,4 +866,12 @@ export const ES: Record<string, string> = {
   "See Pro": "Ver Pro",
   "MPTree Pro": "MPTree Pro",
   "Records, styles, sync. {price}, once.": "Discos, estilos, sincronización. {price}, una vez.",
+  "No ads": "Sin anuncios",
+  "Marble record": "Disco de mármol",
+  "Smoke record": "Disco de humo",
+  "Styles and records": "Estilos y discos",
+  "Lantern, Aviela, marble and more.": "Lantern, Aviela, mármol y más.",
+  "Not in Downloads, not for a Pro day. Just your music.": "Ni en Descargas ni para un día Pro. Solo tu música.",
+  "Every device": "Todos tus dispositivos",
+  "Your songs, playlists and likes on up to three devices.": "Tus canciones, listas y me gusta en hasta tres dispositivos.",
 };

@@ -855,4 +855,12 @@ export const RU: Record<string, string> = {
   "See Pro": "Смотреть Pro",
   "MPTree Pro": "MPTree Pro",
   "Records, styles, sync. {price}, once.": "Пластинки, стили, синхронизация. {price}, один раз.",
+  "No ads": "Без рекламы",
+  "Marble record": "Мраморная пластинка",
+  "Smoke record": "Дымчатая пластинка",
+  "Styles and records": "Стили и пластинки",
+  "Lantern, Aviela, marble and more.": "Lantern, Aviela, мрамор и другое.",
+  "Not in Downloads, not for a Pro day. Just your music.": "Ни в Загрузках, ни за день Pro. Только твоя музыка.",
+  "Every device": "Все устройства",
+  "Your songs, playlists and likes on up to three devices.": "Песни, плейлисты и лайки на трёх устройствах.",
 };
