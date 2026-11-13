@@ -49,6 +49,7 @@ const ico = (d: ReactNode) => (
 );
 const ICON_LOOK = ico(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /></>);
 const ICON_SYNC = ico(<><rect x="3" y="4" width="11" height="8" rx="1.5" /><rect x="15" y="9" width="6" height="11" rx="1.5" /><path d="M6 16h6" /></>);
+const ICON_CLEAN = ico(<><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /></>);
 const ICON_NOADS = ico(<><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></>);
 
 export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenLook, from = "other", T }: ProSheetProps) {
@@ -115,8 +116,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
   // side by side, then no ads, every device, and the film.
   const strip = useRef<HTMLDivElement>(null);
   const [slide, setSlide] = useState(0);
-  // As big as the screen allows with everything else still on it: the page
-  // never scrolls. 290 is the size the pictures were laid out at.
+  // As big as the screen allows with most of the page still in view; the
+  // rest scrolls. 290 is the size the pictures were laid out at.
   const SLIDE_H = Math.round(Math.max(200, Math.min(350, (typeof window !== "undefined" ? window.innerHeight : 800) - 480)));
   const k = SLIDE_H / 290;
   const shot = (file: string, w: number, h: number, style?: CSSProperties) => (
@@ -180,6 +181,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
     { icon: ICON_NOADS, text: t("Ad-free listening, forever") },
     { icon: ICON_LOOK, text: t("Unlock all player styles and records") },
     { icon: ICON_SYNC, text: t("Sync your music across all your devices") },
+    { icon: ICON_CLEAN, text: t("Clean up voice notes and clips") },
   ];
 
   const link = { ...sh.saveBtn, background: "transparent", color: T.muted, fontWeight: 600, fontSize: 14, marginTop: 2, padding: "10px 14px" };
@@ -226,7 +228,7 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
         <LoadLine on={(busy !== null && busy !== "ad") || joining} T={T} />
         {top}
 
-        <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", minHeight: 0 }}>
         <div style={{ ...column, padding: "0 20px 8px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
             <Logo size={32} color={T.text} />
