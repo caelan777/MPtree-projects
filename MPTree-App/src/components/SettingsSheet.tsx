@@ -9,7 +9,7 @@ import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
 import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON, useProPrice } from "../pro";
-import { MiniDisc } from "./ProArt";
+import { CyclingDisc } from "./ProArt";
 import { Ads } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
@@ -278,7 +278,7 @@ export function SettingsSheet({
             }}
           >
             {/* Without Pro, a record turning: what Pro is mostly about. */}
-            {!pro && <MiniDisc kind="marble" size={48} spin />}
+            {!pro && <CyclingDisc size={48} />}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
                 {pro ? t("MPTree Pro is on") : t("MPTree Pro")}

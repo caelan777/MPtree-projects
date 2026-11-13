@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Logo } from "./Logo";
 
@@ -43,6 +44,23 @@ export function StylePhone({ kind, w = 108 }: { kind: "lantern" | "aviela"; w?: 
       <span style={{ display: "block", height: 16, borderRadius: 6, background: lantern ? "#1d2a19" : "#f8cadb" }} />
       <MiniDisc kind={kind} size={w * 0.74} spin style={{ margin: `${w * 0.2}px auto 0` }} />
       <span style={{ display: "block", height: 6, borderRadius: 3, background: lantern ? "#2b3d25" : "#f3b3c9", marginTop: w * 0.17 }} />
+    </span>
+  );
+}
+
+const ALL: DiscKind[] = ["marble", "lantern", "smoke", "aviela", "vinyl"];
+/** Every record in turn, a couple of seconds each, fading into the next. */
+export function CyclingDisc({ size }: { size: number }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setI(n => (n + 1) % ALL.length), 2400);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span aria-hidden="true" className="mp-disc-spin" style={{ position: "relative", display: "block", width: size, height: size, flexShrink: 0 }}>
+      {ALL.map((k, n) => (
+        <MiniDisc key={k} kind={k} size={size} style={{ position: "absolute", inset: 0, opacity: n === i ? 1 : 0, transition: "opacity 0.6s" }} />
+      ))}
     </span>
   );
 }
