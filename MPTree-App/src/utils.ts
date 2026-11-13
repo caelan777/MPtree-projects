@@ -137,6 +137,18 @@ export const sideW = (): number => {
   const w = window.innerWidth;
   return w >= 760 ? Math.min(400, Math.round(w * 0.4)) : 0;
 };
+// Which side the player is on: left by default, dragged to the right if the
+// person wants it there. Kept in the WebView's own storage, which is read at
+// once, because the column has to be laid out before anything else draws.
+const SIDE_KEY = "mptree_side_right";
+let right = (() => { try { return localStorage.getItem(SIDE_KEY) === "1"; } catch { return false; } })();
+/** Whether the player sits right of the list in landscape. */
+export const sideOnRight = (): boolean => right;
+export function setSideOnRight(v: boolean): void {
+  right = v;
+  try { localStorage.setItem(SIDE_KEY, v ? "1" : "0"); } catch { /* left next time */ }
+  applyColumn();
+}
 /** The width the app is drawn in: the window's, or the column's. */
 export const viewW = (): number => {
   if (!inColumn()) return window.innerWidth;
@@ -144,7 +156,11 @@ export const viewW = (): number => {
   return side ? window.innerWidth - side : Math.min(COLUMN_W, window.innerWidth);
 };
 /** How far the column starts from the window's left edge (0 when upright). */
-export const viewLeft = (): number => (inColumn() ? (sideW() || Math.max(0, (window.innerWidth - COLUMN_W) / 2)) : 0);
+export const viewLeft = (): number => {
+  if (!inColumn()) return 0;
+  const side = sideW();
+  return side ? (right ? 0 : side) : Math.max(0, (window.innerWidth - COLUMN_W) / 2);
+};
 /** Puts the column's size where index.css reads it. */
 export function applyColumn(): void {
   const root = document.documentElement;

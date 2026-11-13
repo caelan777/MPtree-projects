@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
-import { viewW, sideW, applyColumn } from "./utils";
+import { viewW, sideW, applyColumn, sideOnRight, setSideOnRight } from "./utils";
 import { SidePlayer } from "./components/SidePlayer";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
@@ -41,7 +41,6 @@ import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet } from "./components/LookSheet";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
-import { glassPalette, glassBackdrop, GLASS_CSS } from "./glass";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
@@ -248,6 +247,7 @@ export default function App() {
   const [listViewportH,  setListViewportH] = useState(0);
   // The player's room on the left when the phone is sideways (utils sideW).
   const [side, setSide] = useState(() => sideW());
+  const [sideRight, setSideRight] = useState(() => sideOnRight());
   useEffect(() => {
     const update = () => { applyColumn(); setSide(sideW()); };
     update();
@@ -931,18 +931,12 @@ export default function App() {
     if (!styleTint) return p;
     return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
   };
-  // Liquid Glass: only while neither Aviela nor Lantern is on.
-  const glassOn = look.glass && !styleTint;
-  const TH = glassOn ? glassPalette(tinted(paletteFor(theme, look.dark, look.light)), theme === "dark", look.glassLook.accent) : tinted(paletteFor(theme, look.dark, look.light));
-  useEffect(() => {
-    const root = document.documentElement;
-    if (glassOn) root.setAttribute("data-glass", theme); else root.removeAttribute("data-glass");
-  }, [glassOn, theme]);
+  const TH = tinted(paletteFor(theme, look.dark, look.light));
   // Discover's palette: the dark one, on pure black. A dark theme keeps its
   // own shade for the rest (Lantern's green), a light one takes the plain dark.
   const discoverTH = { ...(isDarkPalette(TH) ? TH : { ...TH, ...DARK }), bg: "#000000" };
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
-  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : glassOn ? glassBackdrop(theme === "dark", look.glassLook.accent) : groundFlowers(look.flowers);
+  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
   const statusBarColor = TH.bg;
   useEffect(() => {
@@ -3487,7 +3481,6 @@ export default function App() {
         * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         html { background:${TH.bg}; --mp-side:${TH.bg}; }
         body { margin:0; background:${TH.bg}; }
-        ${GLASS_CSS}
         ::placeholder { color:${TH.muted}; opacity:0.6; }
         input { -webkit-appearance:none; }
         .slider { -webkit-appearance:none; width:100%; height:3px; border-radius:2px; background:${TH.sliderBg}; outline:none; margin:0 8px; }
@@ -4287,7 +4280,9 @@ export default function App() {
         {side > 0 && (
           <SidePlayer
             width={side}
-            ground={background.photo ? {} : ground}
+            colW={viewW()}
+            onRight={sideRight}
+            onSwap={() => { const next = !sideRight; setSideOnRight(next); setSideRight(next); }}
             song={!!currentSong}
             title={currentSong ? dispName(currentSong) : ""}
             artist={currentSong ? dispArtist(currentSong) : ""}

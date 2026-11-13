@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { Logo } from "./Logo";
@@ -10,7 +10,8 @@ import type { T } from "../themes";
 // column on the right, and the player takes the room on its left: the record,
 // the song, the time and the buttons, always in sight, where the player card
 // at the bottom used to cover half the list. A tap on the record opens the
-// full player, as the card did.
+// full player, as the card did. Dragged sideways across the list it changes
+// sides with it, for whoever holds the phone the other way round.
 
 const fmt = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -18,12 +19,15 @@ const fmt = (ms: number) => {
 };
 
 export function SidePlayer({
-  width, ground, song, title, artist, photo, isPlaying, currentTime, duration, shuffle,
+  width, colW, onRight, onSwap, song, title, artist, photo, isPlaying, currentTime, duration, shuffle,
   onTogglePlay, onSkip, onToggleShuffle, onSeek, onSeekStart, onSeekEnd, onOpen, T,
 }: {
   width: number;
-  /** The app's ground (a style's flowers, light or liquid) carried on to this side. */
-  ground: CSSProperties;
+  /** The list's column: the player goes past it when it is on the right. */
+  colW: number;
+  onRight: boolean;
+  /** Dragged far enough across: change sides. */
+  onSwap: () => void;
   song: boolean;
   title: string;
   artist: string;
@@ -43,19 +47,53 @@ export function SidePlayer({
 }) {
   const h = typeof window !== "undefined" ? window.innerHeight : 400;
   const disc = Math.max(110, Math.min(width - 96, h - 200));
+  // A drag that starts on the panel (not on a button or the slider) moves it;
+  // let go past a third of the way across and it changes sides.
+  const [dx, setDx] = useState(0);
+  const [held, setHeld] = useState(false);
+  const drag = useRef<{ x: number; id: number } | null>(null);
+  const toward = onRight ? -1 : 1;
+  const down = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button,input")) return;
+    drag.current = { x: e.clientX, id: e.pointerId };
+    setHeld(true);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const move = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    const d = e.clientX - drag.current.x;
+    // Only toward the other side, and no further than across the list.
+    setDx(toward > 0 ? Math.max(0, Math.min(colW, d)) : Math.min(0, Math.max(-colW, d)));
+  };
+  const up = () => {
+    if (!drag.current) return;
+    drag.current = null;
+    setHeld(false);
+    if (Math.abs(dx) > colW / 3) onSwap();
+    setDx(0);
+  };
   const btn: CSSProperties = { background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 8, display: "flex" };
   return (
     <div style={{
-      position: "fixed", top: 0, bottom: 0, left: -width, width, zIndex: 95,
-      backgroundColor: T.bg, ...ground, color: T.text,
+      position: "fixed", top: 0, bottom: 0, left: onRight ? colW : -width, width, zIndex: dx ? 500 : 95,
+      transform: dx ? `translateX(${dx}px)` : undefined,
+      transition: dx || held ? "none" : "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
+      touchAction: "pan-y",
+      // No ground of its own: the page's colour runs on under it (html), so
+      // the header card's shadow fades out over it instead of stopping dead
+      // at the edge of the column.
+      color: T.text,
       display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box",
       padding: "12px 18px",
-    }}>
+    }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       <div style={{
-        width: "100%", height: "100%", borderRadius: 24, background: T.playerBg, border: `1px solid ${T.border}`,
+        width: "100%", height: "100%", borderRadius: 24, position: "relative", cursor: dx ? "grabbing" : "grab",
+        background: T.playerBg, border: `1px solid ${T.border}`,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
-        padding: "14px 16px", boxSizing: "border-box", boxShadow: "0 10px 36px rgba(0,0,0,0.25)",
+        padding: "14px 16px", boxSizing: "border-box", boxShadow: dx ? "0 18px 50px rgba(0,0,0,0.45)" : "0 10px 36px rgba(0,0,0,0.25)",
       }}>
+        {/* The grip: this panel can be dragged to the other side. */}
+        <div aria-hidden="true" style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", width: 36, height: 4, borderRadius: 2, background: T.dim }} />
         {song ? (
           <>
             <div onClick={onOpen} role="button" aria-label={t("Expand player")} style={{ cursor: "pointer" }}>

@@ -19,10 +19,6 @@ export const isFlowerRecord = (v: string): v is FlowerRecord => (FLOWER_RECORDS 
 export const LANTERN_RECORDS = ["lantern", "lantern-rings", "lantern-core", "lantern-dash", "lantern-solid", "lantern-burst"] as const;
 export type LanternRecord = typeof LANTERN_RECORDS[number];
 export const isLanternRecord = (v: string): v is LanternRecord => (LANTERN_RECORDS as readonly string[]).includes(v);
-/** Liquid Glass' accent: the play button, the slider, shuffle and selection.
- *  "mono" is the plain black and white of the rest of MPTree. */
-export const GLASS_ACCENTS = ["mono", "violet", "blue", "pink", "green", "amber"] as const;
-export type GlassAccent = typeof GLASS_ACCENTS[number];
 export type VinylSkin  = "classic" | "white" | "smoke" | "marble" | LanternRecord | FlowerRecord;
 /** How the app itself wears flowers: not at all, or one of Aviela's ways. */
 export const FLOWER_KINDS = ["sprig", "garland", "mark", "bloom", "vine", "corners", "confetti", "lines", "daisies", "meadow"] as const;
@@ -33,7 +29,7 @@ export type Flowers    = "none" | AvielaFlowers;
 export type DarkShade  = "classic" | "graphite" | "lantern";
 /** "lantern" is only ever a header card: the green one on the Lantern page. */
 export type LightShade = "classic" | "paper" | "stone" | "pink" | "sage" | "lantern";
-export const APP_ICONS = ["classic", "light", "vinyl", "stamp", "aviela", "glass", "lantern"] as const;
+export const APP_ICONS = ["classic", "light", "vinyl", "stamp", "aviela", "lantern"] as const;
 export type AppIcon    = typeof APP_ICONS[number];
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
@@ -68,12 +64,6 @@ export type Look = {
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
-  /** Liquid Glass: frosted, see-through cards and player over a soft moving
-   *  light, in black and white. A style of its own, beside Aviela and
-   *  Lantern; on only while neither of them is. */
-  glass: boolean;
-  /** What was last picked on the Liquid Glass page. */
-  glassLook: { accent: GlassAccent };
 };
 
 export const DEFAULT_LOOK: Look = {
@@ -81,8 +71,6 @@ export const DEFAULT_LOOK: Look = {
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: true,
   flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
-  glass: false,
-  glassLook: { accent: "mono" },
 };
 
 /** What anyone gets without Pro. */
@@ -157,13 +145,10 @@ export async function loadLook(): Promise<Look> {
         const colour = LANTERN_COLOURS.includes(l.colour) ? l.colour : DEFAULT_LOOK.lantern.colour;
         look = { ...look, lantern: ok ? { record: l.record, card: l.card, colour } : DEFAULT_LOOK.lantern };
       }
-      if (typeof look.glass !== "boolean") look = { ...look, glass: false };
-      {
-        const g = { ...DEFAULT_LOOK.glassLook, ...look.glassLook };
-        const ok = (GLASS_ACCENTS as readonly string[]).includes(g.accent);
-        look = { ...look, glassLook: ok ? { accent: g.accent } : DEFAULT_LOOK.glassLook };
-      }
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
+      // Test builds 113 and 114 had Liquid Glass; it is gone again.
+      delete (look as Partial<Record<"glass" | "glassLook", unknown>>).glass;
+      delete (look as Partial<Record<"glass" | "glassLook", unknown>>).glassLook;
       // Test builds 2 and 3 had plum and pink for dark mode, and there was an
       // AMOLED black until October 2026, and Lantern's own dark green until
       // later that month: black is the nearest to all of them.
@@ -245,7 +230,7 @@ export function hasLookChanges(): boolean {
 /** Whether a look is made of free things only, so it can be kept without Pro. */
 export function isFreeLook(l: Look): boolean {
   return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
-    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon && !l.glass;
+    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon;
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────

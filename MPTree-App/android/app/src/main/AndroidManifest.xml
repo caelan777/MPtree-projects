@@ -117,19 +117,6 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".IconGlass"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_alt_glass"
-            android:roundIcon="@mipmap/ic_alt_glass"
-            android:label="@string/title_activity_main"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
             android:name=".IconLantern"
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_alt_lantern"

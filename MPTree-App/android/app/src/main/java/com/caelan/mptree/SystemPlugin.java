@@ -177,7 +177,7 @@ public class SystemPlugin extends Plugin {
     // itself because the person asked it to. Playback goes on either way: the
     // music service outlives the window.
 
-    private static final String[] ICONS = { "classic", "light", "vinyl", "stamp", "aviela", "glass", "lantern" };
+    private static final String[] ICONS = { "classic", "light", "vinyl", "stamp", "aviela", "lantern" };
 
     private static final String ICON_PREFS = "mptree_icon";
     private static final String ICON_PENDING = "pending";

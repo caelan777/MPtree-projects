@@ -45,4 +45,11 @@ html, body {
     box-shadow: 0 0 0 100vmax var(--mp-side, #000);
     clip-path: inset(0 -100vmax);
   }
+  /* The app's frame clips what spills over its edge; here that cut the header
+     card's shadow off in a straight line at the side of the column. Clipping
+     a little way out lets the shadow fade out on its own. */
+  [data-app-shell] {
+    overflow: clip !important;
+    overflow-clip-margin: 40px;
+  }
 }
