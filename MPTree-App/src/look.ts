@@ -64,6 +64,10 @@ export type Look = {
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
+  /** Liquid Glass: frosted, see-through cards and player over a soft moving
+   *  light, in black and white. A style of its own, beside Aviela and
+   *  Lantern; on only while neither of them is. */
+  glass: boolean;
 };
 
 export const DEFAULT_LOOK: Look = {
@@ -71,6 +75,7 @@ export const DEFAULT_LOOK: Look = {
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: true,
   flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
+  glass: false,
 };
 
 /** What anyone gets without Pro. */
@@ -145,6 +150,7 @@ export async function loadLook(): Promise<Look> {
         const colour = LANTERN_COLOURS.includes(l.colour) ? l.colour : DEFAULT_LOOK.lantern.colour;
         look = { ...look, lantern: ok ? { record: l.record, card: l.card, colour } : DEFAULT_LOOK.lantern };
       }
+      if (typeof look.glass !== "boolean") look = { ...look, glass: false };
       delete (look as Partial<Record<"vinyl", unknown>>).vinyl;
       // Test builds 2 and 3 had plum and pink for dark mode, and there was an
       // AMOLED black until October 2026, and Lantern's own dark green until
@@ -227,7 +233,7 @@ export function hasLookChanges(): boolean {
 /** Whether a look is made of free things only, so it can be kept without Pro. */
 export function isFreeLook(l: Look): boolean {
   return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
-    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon;
+    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon && !l.glass;
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────

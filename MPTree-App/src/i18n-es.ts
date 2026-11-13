@@ -811,6 +811,7 @@ export const ES: Record<string, string> = {
   "Preview": "Avance",
   "\"{name}\" is in your Songs": "\"{name}\" está en tus Canciones",
   "No connection. Check your internet and try again.": "Sin conexión. Revisa tu internet y vuelve a intentarlo.",
+  "No internet. Your own music still plays; downloads come back when you are online.": "Sin internet. Tu música sigue sonando; las descargas vuelven cuando estés en línea.",
   "Try again": "Reintentar",
   "Nothing found": "No se encontró nada",
   "Load more": "Cargar más",

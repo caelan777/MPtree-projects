@@ -26,3 +26,22 @@ html, body {
   margin: 0;
   border: none;
 }
+/* ── Landscape on a phone ───────────────────────────────────────────────────
+   MPTree is drawn for a phone held upright. Turned sideways, every page was
+   stretched across the whole width: rows a hand-span long, the artist far
+   from the title, sheets as wide as the screen. Now the app stays one column
+   in the middle, the width of a big phone, and the sides take the app's own
+   ground. The transform makes the body the frame for everything fixed in it
+   (the player, the sheets, the menus), so they stay inside the column too. */
+@media (orientation: landscape) and (max-height: 600px) and (min-width: 700px) {
+  :root { --mp-col: 600px; }
+  body {
+    max-width: 600px;
+    margin: 0 auto !important;
+    height: 100svh;
+    overflow: hidden;
+    transform: translateZ(0);
+    box-shadow: 0 0 0 100vmax var(--mp-side, #000);
+    clip-path: inset(0 -100vmax);
+  }
+}

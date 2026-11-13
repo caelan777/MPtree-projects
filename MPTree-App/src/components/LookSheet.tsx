@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { viewW, viewLeft } from "../utils";
 import { makeSH, cardPalette, isDarkPalette, SHADE_PREVIEW, type T } from "../themes";
 import type { Theme } from "../types";
 import { t, tn } from "../i18n";
 import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { LanternGate } from "./LanternGate";
+import { glassBackdrop } from "../glass";
 import { StyleReveal } from "./StyleReveal";
 import { primeLanternVoice } from "../lanternVoice";
 import { usePro, ADS_ON } from "../pro";
@@ -15,6 +17,7 @@ import {
   useBackground, previewBackground, keepBackground, endBackgroundPreview, hasBackgroundChanges, STRENGTH_MIN, STRENGTH_MAX,
 } from "../background";
 import {
+  isFlowerRecord, isLanternRecord,
   useLook, getLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
   lanternAsked, markLanternAsked, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour, type AppIcon,
@@ -272,6 +275,27 @@ function Swatch({ app, card, vinyl, flowers = "none", tone = "white", height = 7
   );
 }
 
+/** Liquid Glass in one tile: soft light, and a frosted card and player on it. */
+function GlassSwatch({ dark, height = 76 }: { dark: boolean; height?: number }) {
+  const ground = glassBackdrop(dark);
+  const pane = dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.55)";
+  const edge = dark ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.95)";
+  const ink = dark ? "#ffffff" : "#111111";
+  const glass = { background: pane, border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.06)"}`, boxShadow: `inset 0 1px 0 ${edge}`, WebkitBackdropFilter: "blur(10px)", backdropFilter: "blur(10px)", boxSizing: "border-box" as const };
+  return (
+    <div style={{ height, borderRadius: 12, backgroundColor: dark ? "#050506" : "#e7e8ec", ...ground, backgroundAttachment: "scroll", backgroundSize: "200% 200%", backgroundPosition: "center", border: `1px solid ${dark ? "#222" : "#d4d5da"}`, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: 7, right: 7, top: 7, height: 24, borderRadius: 8, ...glass }}>
+        <div style={{ position: "absolute", left: 7, top: 8, width: 18, height: 6, borderRadius: 3, background: ink }} />
+      </div>
+      <div style={{ position: "absolute", left: 10, top: 42, width: 46, height: 5, borderRadius: 3, background: ink }} />
+      <div style={{ position: "absolute", left: 10, top: 53, width: 30, height: 4, borderRadius: 2, background: dark ? "#777" : "#888" }} />
+      <div style={{ position: "absolute", left: 7, right: 7, bottom: 6, height: 22, borderRadius: 11, ...glass }}>
+        <div style={{ position: "absolute", right: 4, top: 3, width: 14, height: 14, borderRadius: 7, background: ink }} />
+      </div>
+    </div>
+  );
+}
+
 const Lock = ({ T }: { T: T }) => (
   <span style={{ width: 20, height: 20, borderRadius: 10, background: T.sheetBg, border: `1px solid ${T.border}`, display: "grid", placeItems: "center", color: T.muted, flexShrink: 0 }}>
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
@@ -365,9 +389,9 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   useEffect(() => () => endBackgroundPreview(), []);
 
   // The window's size, which the small copies are a fraction of.
-  const [win, setWin] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [win, setWin] = useState({ w: viewW(), h: window.innerHeight });
   useEffect(() => {
-    const measure = () => setWin({ w: window.innerWidth, h: window.innerHeight });
+    const measure = () => setWin({ w: viewW(), h: window.innerHeight });
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
@@ -535,11 +559,12 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // it brought goes back to plain first, its icon too, and the pick is made on
   // that: otherwise half of Aviela or of Lantern is left standing round the
   // one thing that changed.
+  const glassOn = look.glass && !avielaOn && !lanternOn;
   const plain = (): Partial<Look> => (avielaOn || lanternOn ? {
     flowers: "none", cardDark: "default", cardLight: "default", vinylDark: "classic", vinylLight: "classic",
     ...(dark ? { dark: "classic" as const } : { light: "classic" as const }),
     ...(look.icon === (avielaOn ? "aviela" : "lantern") ? { icon: "classic" as const } : {}),
-  } : {});
+  } : glassOn ? { glass: false } : {});
   const setCard = (c: CardShade) => pick({ ...plain(), cardDark: c, cardLight: c });
   const setVinyl = (v: VinylSkin) => pick({ ...plain(), vinylDark: v, vinylLight: v });
 
@@ -547,7 +572,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // picked for it.
   const wearAviela = (a: Look["aviela"], extra: Partial<Look> = {}) => pick({
     light: "pink", cardDark: a.card, cardLight: a.card,
-    vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a, ...extra,
+    vinylDark: a.record, vinylLight: a.record, flowers: a.flowers, aviela: a, glass: false, ...extra,
   });
   const avielaApp = SHADE_PREVIEW.light("pink");
   const avielaCard = cardPalette(look.aviela.card, avielaApp);
@@ -578,7 +603,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     if (mode !== theme) onSetTheme(mode);
     pick({
       ...(mode === "dark" ? { dark: shade as DarkShade } : { light: shade as LightShade }),
-      cardDark: l.card, cardLight: l.card, vinylDark: l.record, vinylLight: l.record, flowers: "none", lantern: l, ...extra,
+      cardDark: l.card, cardLight: l.card, vinylDark: l.record, vinylLight: l.record, flowers: "none", lantern: l, glass: false, ...extra,
     });
   };
   const lanternApp = paletteOf(look.lantern.colour);
@@ -621,9 +646,9 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
   /** Where a tap was; the middle of what was tapped when it came from a key. */
   const tappedAt = (e: React.MouseEvent<HTMLElement>): Point => {
-    if (e.clientX || e.clientY) return { x: e.clientX, y: e.clientY };
+    if (e.clientX || e.clientY) return { x: e.clientX - viewLeft(), y: e.clientY };
     const r = e.currentTarget.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    return { x: r.left - viewLeft() + r.width / 2, y: r.top + r.height / 2 };
   };
 
   // ── The background photo ──
@@ -691,6 +716,32 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     );
   };
 
+  // Liquid Glass: frosted cards over soft grey light, in the colour the app
+  // is in now. Tapped again it comes off.
+  const toggleGlass = () => pick(glassOn ? { glass: false } : {
+    flowers: "none", cardDark: "default", cardLight: "default",
+    ...(isLanternRecord(look.vinylDark) || isFlowerRecord(look.vinylDark) ? { vinylDark: "classic" as const } : {}),
+    ...(isLanternRecord(look.vinylLight) || isFlowerRecord(look.vinylLight) ? { vinylLight: "classic" as const } : {}),
+    ...(dark ? {} : { light: "classic" as const }),
+    ...(look.icon === "aviela" || look.icon === "lantern" ? { icon: "classic" as const } : {}),
+    glass: true,
+  });
+  const glassTile = () => (
+    <button key="glass" onClick={toggleGlass} aria-pressed={glassOn}
+      style={{
+        padding: 4, borderRadius: 19, cursor: "pointer", fontFamily: "inherit", textAlign: "left", flex: "0 0 calc(50% - 4px)", scrollSnapAlign: "start",
+        background: "transparent", border: `2px solid ${glassOn ? T.accent : "transparent"}`, transition: "border-color 0.15s ease",
+      }}>
+      <GlassSwatch dark={dark} height={104} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "8px 4px 2px" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: glassOn ? T.text : T.textSub }}>Liquid Glass</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, color: T.muted }}>
+          {!pro && <Lock T={T} />}
+        </span>
+      </div>
+    </button>
+  );
+
   const styleTile = (key: "aviela" | "lantern") => {
     const on = key === "aviela" ? avielaOn : lanternOn;
     const shut = key === "lantern" && pro && shutDays > 0 && !lanternOn;
@@ -699,7 +750,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         onClick={e => (key === "aviela" ? openAviela(tappedAt(e)) : openLantern(tappedAt(e)))}
         aria-pressed={on}
         style={{
-          padding: 4, borderRadius: 19, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          padding: 4, borderRadius: 19, cursor: "pointer", fontFamily: "inherit", textAlign: "left", flex: "0 0 calc(50% - 4px)", scrollSnapAlign: "start",
           background: "transparent", border: `2px solid ${on ? T.accent : "transparent"}`, transition: "border-color 0.15s ease",
         }}>
         {key === "aviela"
@@ -789,14 +840,16 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "4px 4px 8px" }}>
                   <span style={{ ...sh.lbl, margin: 0 }}>{t("Custom styles")}</span>
                   {/* Only while one is on: the way back to no style at all. */}
-                  {(avielaOn || lanternOn) && (
+                  {(avielaOn || lanternOn || glassOn) && (
                     <button onClick={() => pick(plain())} style={{ background: "transparent", border: "none", padding: "2px 0", color: T.muted, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline" }}>
                       {t("Take the style off")}
                     </button>
                   )}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {/* Two at a time; Lantern is a swipe to the right. */}
+                <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", margin: "0 -4px", padding: "0 4px" }}>
                   {styleTile("aviela")}
+                  {glassTile()}
                   {styleTile("lantern")}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 16 }}>

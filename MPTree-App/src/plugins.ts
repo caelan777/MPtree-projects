@@ -134,6 +134,10 @@ export type AdsPlugin = {
   /** Whether Settings must offer a way to change the consent answer. */
   privacyOptions(): Promise<{ required: boolean }>;
   showPrivacyOptions(): Promise<void>;
+  /** The native ad on Discover: drawn by Android over a gap the page leaves. */
+  loadNative(options: { adUnitId: string; colours: Record<string, string> }): Promise<{ loaded: boolean }>;
+  placeNative(options: { visible: boolean; x?: number; y?: number; w?: number; h?: number; clipTop?: number; clipBottom?: number }): Promise<void>;
+  destroyNative(): Promise<void>;
 };
 
 /** Sign in with Google, for the MPTree account. See AccountPlugin.java. */
@@ -201,6 +205,9 @@ const AdsWeb: AdsPlugin = {
   showRewarded:       async () => ({ rewarded: false, reason: "failed" }),
   privacyOptions:     async () => ({ required: false }),
   showPrivacyOptions: async () => {},
+  loadNative:         async () => ({ loaded: false }),
+  placeNative:        async () => {},
+  destroyNative:      async () => {},
 };
 
 // No Google sign-in in a browser. On the dev server a stand-in account can be

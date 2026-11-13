@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { viewW } from "../utils";
 import { LANTERN_GREEN } from "../lantern";
 
 // ─── STYLE REVEAL ────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ export function StyleReveal({ kind, at, onCovered, onDone }: { kind: Kind; at: P
     return () => { clearTimeout(a); clearTimeout(c); };
   }, [cover, still]);
 
-  const w = window.innerWidth, h = window.innerHeight;
+  const w = viewW(), h = window.innerHeight;
   const { x, y } = at;
   // Far enough to reach the furthest corner from the tap.
   const R = Math.ceil(Math.hypot(Math.max(x, w - x), Math.max(y, h - y))) + 30;

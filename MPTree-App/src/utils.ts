@@ -121,3 +121,15 @@ export function readCoverPhoto(file: File, maxPx = COVER_MAX_PX): Promise<string
     reader.readAsDataURL(file);
   });
 }
+
+// ── Landscape column ─────────────────────────────────────────────────────────
+// On a phone turned sideways the app is one column in the middle (index.css),
+// and the body is the frame of everything fixed. These give the column's width
+// and where it starts, for code that measures the window itself.
+export const COLUMN_QUERY = "(orientation: landscape) and (max-height: 600px) and (min-width: 700px)";
+export const COLUMN_W = 600;
+const inColumn = () => typeof window !== "undefined" && !!window.matchMedia?.(COLUMN_QUERY).matches;
+/** The width the app is drawn in: the window's, or the column's. */
+export const viewW = (): number => (inColumn() ? Math.min(COLUMN_W, window.innerWidth) : window.innerWidth);
+/** How far the column starts from the window's left edge (0 when upright). */
+export const viewLeft = (): number => (inColumn() ? Math.max(0, (window.innerWidth - COLUMN_W) / 2) : 0);

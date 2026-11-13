@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { viewW } from "../utils";
 import type { T } from "../themes";
 import { t } from "../i18n";
 
@@ -35,8 +36,8 @@ export function CropSheet({ src, shape = "cover", onUse, onCancel, T }: CropShee
   const cover = shape === "cover";
   // How tall the window is for its width: square for a cover, the screen's
   // own shape for a background.
-  const aspect = cover ? 1 : window.innerHeight / window.innerWidth;
-  const side = Math.round(Math.min(window.innerWidth - 72, (window.innerHeight * (cover ? 0.48 : 0.58)) / aspect, 360));
+  const aspect = cover ? 1 : window.innerHeight / viewW();
+  const side = Math.round(Math.min(viewW() - 72, (window.innerHeight * (cover ? 0.48 : 0.58)) / aspect, 360));
   const tall = Math.round(side * aspect);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 });

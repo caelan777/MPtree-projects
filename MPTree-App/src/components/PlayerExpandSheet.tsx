@@ -1,4 +1,5 @@
 import { useState, useRef, memo } from "react";
+import { viewW, COLUMN_QUERY } from "../utils";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
@@ -366,8 +367,11 @@ export function PlayerExpandSheet({
 
   // The record at the size it always had. The player is as tall as what it
   // holds, so nothing is stretched to fill a screen.
-  const winW = typeof window !== "undefined" ? window.innerWidth : 375;
-  const discSize = Math.min(268, winW - 84);
+  const winW = typeof window !== "undefined" ? viewW() : 375;
+  // Sideways on a phone the record goes left of the title and the controls,
+  // sized to the height there is, so the whole player fits on the screen.
+  const land = typeof window !== "undefined" && !!window.matchMedia?.(COLUMN_QUERY).matches;
+  const discSize = land ? Math.max(140, Math.min(230, window.innerHeight - 150)) : Math.min(268, winW - 84);
 
   /** One part of the bar under the player. The bar is drawn like a segmented
    *  control: a rounded track, the parts inside it rounded on their outer
@@ -552,14 +556,15 @@ export function PlayerExpandSheet({
             background: T.card, borderRadius: 14, margin: "4px 16px 0", padding: "14px 14px 12px",
             border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
             flexShrink: 0,
+            ...(land ? { display: "grid", gridTemplateColumns: `${discSize}px minmax(0, 1fr)`, columnGap: 22, alignItems: "center", alignContent: "center" } : null),
           }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
+            <div style={land ? { display: "contents" } : { display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
               {lyricsOpen ? (
-                <div data-own-drag="">
+                <div data-own-drag="" style={land ? { gridColumn: 1, gridRow: "1 / span 3" } : undefined}>
                   <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
                 </div>
               ) : (
-                <div style={{ position: "relative" }}>
+                <div style={{ position: "relative", ...(land ? { gridColumn: 1, gridRow: "1 / span 3" } : null) }}>
                   <SpinningDisc
                     size={discSize}
                     spinning={isPlaying}
@@ -571,7 +576,7 @@ export function PlayerExpandSheet({
                   />
                 </div>
               )}
-              <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
+              <div style={{ width: "100%", textAlign: "center", minWidth: 0, ...(land ? { gridColumn: 2, gridRow: 1, alignSelf: "end", marginBottom: 16 } : null) }}>
                 <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                   {dispName}
                 </div>
@@ -588,7 +593,7 @@ export function PlayerExpandSheet({
             </div>
 
             {/* Timeline */}
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6, ...(land ? { gridColumn: 2, gridRow: 2 } : null) }}>
               <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
               <input
                 className="slider" type="range" min={0} max={duration || 100} value={currentTime}
@@ -601,7 +606,7 @@ export function PlayerExpandSheet({
             </div>
 
             {/* Transport */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10, ...(land ? { gridColumn: 2, gridRow: 3, alignSelf: "start" } : null) }}>
               {/* Shuffle and repeat used to be one button that went round
                   off, shuffle, repeat: reaching repeat meant shuffling first.
                   Each has its own now, at either end, with a dot when on. */}

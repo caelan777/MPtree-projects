@@ -210,6 +210,13 @@ const AD_UNIT =
   PRO_MODE === "free" ? "ca-app-pub-3940256099942544/5224354917"
   : PRO_MODE === "play" ? "ca-app-pub-3909703327280410/3472642383"
   : "";
+/** The native ad under Popular this week on Discover: Google's test unit in a
+ *  test build, and in the Play build MPTree's own native unit once it is made
+ *  in AdMob (Ad units > Native advanced). Empty: no ad on that page. */
+export const NATIVE_UNIT =
+  PRO_MODE === "free" ? "ca-app-pub-3940256099942544/2247696110"
+  : PRO_MODE === "play" ? ""
+  : "";
 /** Whether this build can show the ad at all (not in a browser). */
 export const ADS_ON = AD_UNIT !== "" && Capacitor.getPlatform() === "android";
 /** Whether to ask for another ad when the day is up. In the dev server too,

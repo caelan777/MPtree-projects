@@ -811,6 +811,7 @@ export const NL: Record<string, string> = {
   "Preview": "Voorproefje",
   "\"{name}\" is in your Songs": "\"{name}\" staat in je Songs",
   "No connection. Check your internet and try again.": "Geen verbinding. Check je internet en probeer het opnieuw.",
+  "No internet. Your own music still plays; downloads come back when you are online.": "Geen internet. Je eigen muziek speelt gewoon door; downloads komen terug zodra je online bent.",
   "Try again": "Opnieuw",
   "Nothing found": "Niets gevonden",
   "Load more": "Meer laden",

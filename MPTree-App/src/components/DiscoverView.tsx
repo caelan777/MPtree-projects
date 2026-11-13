@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { DiscoverAd } from "./DiscoverAd";
+import { viewW } from "../utils";
 import { createPortal } from "react-dom";
 import { Browser } from "@capacitor/browser";
 import { Preferences } from "@capacitor/preferences";
@@ -100,7 +102,7 @@ function DiscoverViewInner({
   // `loading`: asked to play, no sound yet (starting, or buffering).
   const [preview, setPreview] = useState<Preview | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const small = typeof window !== "undefined" && window.innerWidth < 390;
+  const small = typeof window !== "undefined" && viewW() < 390;
 
   // The song that came forward. `fly` is where Songs is, once it is saved.
   const [card, setCard] = useState<null | { track: FreeTrack; fly?: { x: number; y: number } }>(null);
@@ -163,6 +165,23 @@ function DiscoverViewInner({
         .catch(() => setShelves(prev => ({ ...prev, [s.key]: "error" })));
     });
   }, []);
+
+  // Whether the phone has internet. The page says so straight away instead of
+  // showing grey rows that never fill, and loads again once it is back.
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
+  const shelvesRef = useRef(shelves);
+  useEffect(() => { shelvesRef.current = shelves; }, [shelves]);
+  useEffect(() => {
+    const down = () => setOffline(true);
+    const up = () => {
+      setOffline(false);
+      const s = shelvesRef.current;
+      if ([POPULAR, ...SHELVES].some(x => s[x.key] === "error" || s[x.key] === undefined)) loadAll();
+    };
+    window.addEventListener("offline", down);
+    window.addEventListener("online", up);
+    return () => { window.removeEventListener("offline", down); window.removeEventListener("online", up); };
+  }, [loadAll]);
 
   const started = useRef(false);
   useEffect(() => {
@@ -626,6 +645,9 @@ function DiscoverViewInner({
   // Drawn again only when something on it changes: not on every render of
   // App, and not on each tick of the playing song's clock.
   const previewKey = preview ? `${preview.track.id}|${preview.playing}|${preview.loading}` : "";
+  // The ad's gap shows only on the page's home, with nothing over it.
+  const adActive = open && !list && !card;
+  const adBottom = preview ? playerBottom + 62 : bottomInset;
   const homeView = useMemo(() => (
           <div>
             {/* More music elsewhere: the sites themselves, never a search on
@@ -635,10 +657,12 @@ function DiscoverViewInner({
               {siteCard(t("Buy music on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
             </div>
             <div style={{ padding: "10px 16px 0" }}>{ownCard()}</div>
-            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
+            {popularSection()}
+            <DiscoverAd active={adActive} topInset={topInset} bottomInset={adBottom} T={T} />
+            {artistsSection()}{SHELVES.map(s => shelf(s))}
           </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [shelves, saved, dl, libraryNames, previewKey, small, T, ownLink]);
+  ), [shelves, saved, dl, libraryNames, previewKey, small, T, ownLink, adActive, topInset, adBottom]);
   const listView = useMemo(() => !list ? null : (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
@@ -697,7 +721,13 @@ function DiscoverViewInner({
         style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? playerBottom + 62 + 24 : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
         <div style={{ transform: shift || !scrolled ? `translateY(${shift}px)` : "none", transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
-        {list ? listView : allFailed ? (
+        {offline && (
+          <div role="status" style={{ margin: "4px 16px 10px", padding: "10px 14px", borderRadius: 12, background: T.card, border: `1px solid ${T.border}`, color: T.text, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 10 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 13a10 10 0 0 1 5.24-2.76"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+            {t("No internet. Your own music still plays; downloads come back when you are online.")}
+          </div>
+        )}
+        {list ? listView : allFailed && !offline ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             {t("No connection. Check your internet and try again.")}
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
@@ -895,7 +925,7 @@ const TORN = "polygon(0 12px, 9% 34px, 18% 4px, 27% 30px, 36% 8px, 45% 32px, 54%
 function Wall({ up }: { up: boolean }) {
   const cols = 6;
   const tiles = useMemo(() => {
-    const size = window.innerWidth / cols;
+    const size = viewW() / cols;
     const rows = Math.ceil((window.innerHeight + 80) / size) + 1;
     return Array.from({ length: rows * cols }, (_, i) => SLEEVES[(i * 7 + (i >> 3)) % SLEEVES.length]);
   }, []);

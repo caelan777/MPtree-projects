@@ -800,6 +800,7 @@ export const RU: Record<string, string> = {
   "Preview": "Прослушать",
   "\"{name}\" is in your Songs": "«{name}» есть в ваших песнях",
   "No connection. Check your internet and try again.": "Нет соединения. Проверьте интернет и попробуйте снова.",
+  "No internet. Your own music still plays; downloads come back when you are online.": "Нет интернета. Ваша музыка играет как обычно; загрузки вернутся, когда появится сеть.",
   "Try again": "Попробовать снова",
   "Nothing found": "Ничего не найдено",
   "Load more": "Загрузить ещё",

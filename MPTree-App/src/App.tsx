@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
+import { viewW } from "./utils";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -39,6 +40,7 @@ import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet } from "./components/LookSheet";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
+import { glassPalette, glassBackdrop, GLASS_CSS } from "./glass";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
@@ -243,7 +245,7 @@ export default function App() {
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
-  const [widePhone,      setWidePhone]     = useState(() => window.innerWidth >= WIDE_PHONE);
+  const [widePhone,      setWidePhone]     = useState(() => viewW() >= WIDE_PHONE);
   // The height of a song row (it follows the Size setting), for the effect
   // that scrolls to the playing song by counting rows.
   const rowHRef = useRef(64);
@@ -288,7 +290,7 @@ export default function App() {
         cardTop: Math.max(0, Math.round(card.getBoundingClientRect().top)),
         innerH:  Math.round(inner.getBoundingClientRect().height),
         extraH:  extra ? Math.round(extra.getBoundingClientRect().height) : 0,
-        vw:      window.innerWidth,
+        vw:      viewW(),
         vh:      window.innerHeight,
       });
     };
@@ -919,12 +921,18 @@ export default function App() {
     if (!styleTint) return p;
     return { ...p, violet: styleTint, ...(styleTint === LANTERN_GREEN ? lanternAccent(p) : null) };
   };
-  const TH = tinted(paletteFor(theme, look.dark, look.light));
+  // Liquid Glass: only while neither Aviela nor Lantern is on.
+  const glassOn = look.glass && !styleTint;
+  const TH = glassOn ? glassPalette(tinted(paletteFor(theme, look.dark, look.light)), theme === "dark") : tinted(paletteFor(theme, look.dark, look.light));
+  useEffect(() => {
+    const root = document.documentElement;
+    if (glassOn) root.setAttribute("data-glass", theme); else root.removeAttribute("data-glass");
+  }, [glassOn, theme]);
   // Discover's palette: the dark one, on pure black. A dark theme keeps its
   // own shade for the rest (Lantern's green), a light one takes the plain dark.
   const discoverTH = { ...(isDarkPalette(TH) ? TH : { ...TH, ...DARK }), bg: "#000000" };
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
-  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
+  const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : glassOn ? glassBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
   const statusBarColor = TH.bg;
   useEffect(() => {
@@ -1381,7 +1389,7 @@ export default function App() {
   useEffect(() => {
     const measure = () => {
       if (scrollRef.current) setListViewportH(scrollRef.current.clientHeight);
-      setWidePhone(window.innerWidth >= WIDE_PHONE);
+      setWidePhone(viewW() >= WIDE_PHONE);
     };
     measure();
     window.addEventListener("resize", measure);
@@ -3465,7 +3473,9 @@ export default function App() {
     <>
       <style>{`
         * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html { background:${TH.bg}; --mp-side:${TH.bg}; }
         body { margin:0; background:${TH.bg}; }
+        ${GLASS_CSS}
         ::placeholder { color:${TH.muted}; opacity:0.6; }
         input { -webkit-appearance:none; }
         .slider { -webkit-appearance:none; width:100%; height:3px; border-radius:2px; background:${TH.sliderBg}; outline:none; margin:0 8px; }
@@ -3568,7 +3578,7 @@ export default function App() {
           <div
             ref={headerInnerRef}
             style={{
-              boxSizing: "border-box", width: "calc(100vw - 26px)", padding: "8px 14px 12px",
+              boxSizing: "border-box", width: "calc(var(--mp-col, 100vw) - 26px)", padding: "8px 14px 12px",
               opacity: chromeCollapsed ? 0 : 1,
               // `selecting` too: the card's own "none" does not reach a child
               // that says "auto", so the hidden sort button stayed tappable.
