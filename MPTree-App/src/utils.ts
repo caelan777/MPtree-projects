@@ -168,3 +168,11 @@ export function applyColumn(): void {
   root.style.setProperty("--mp-col", `${viewW()}px`);
   root.style.setProperty("--mp-left", `${viewLeft()}px`);
 }
+
+/** Songs by id, for looking many up at once without a search through the
+ *  whole library for each. The first song of an id wins, as with find(). */
+export function indexById<S extends { id: string }>(list: readonly S[]): Map<string, S> {
+  const m = new Map<string, S>();
+  for (const s of list) if (!m.has(s.id)) m.set(s.id, s);
+  return m;
+}

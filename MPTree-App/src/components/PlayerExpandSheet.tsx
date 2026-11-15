@@ -372,6 +372,12 @@ export function PlayerExpandSheet({
   // sized to the height there is, so the whole player fits on the screen.
   const land = typeof window !== "undefined" && !!window.matchMedia?.(COLUMN_QUERY).matches;
   const discSize = land ? Math.max(140, Math.min(230, window.innerHeight - 150)) : Math.min(268, winW - 84);
+  // Height of the record and title together, so the lyrics can take exactly
+  // that room: opening them moves nothing else in the card.
+  const [topH, setTopH] = useState(0);
+  const measureTop = (el: HTMLDivElement | null) => {
+    if (el && !land && el.offsetHeight && el.offsetHeight !== topH) setTopH(el.offsetHeight);
+  };
 
   /** One part of the bar under the player. The bar is drawn like a segmented
    *  control: a rounded track, the parts inside it rounded on their outer
@@ -558,10 +564,20 @@ export function PlayerExpandSheet({
             flexShrink: 0,
             ...(land ? { display: "grid", gridTemplateColumns: `${discSize}px minmax(0, 1fr)`, columnGap: 22, alignItems: "center", alignContent: "center" } : null),
           }}>
-            <div style={land ? { display: "contents" } : { display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
+            {/* Portrait: the words take the whole top of the card, record and
+                title both, at the height the record had, so the timeline and
+                the buttons stay exactly where they were. */}
+            {lyricsOpen && !land ? (
+              <div data-own-drag="" style={{ marginBottom: 14, marginTop: 6, height: topH || discSize + 80 }}>
+                <LyricsPanel text={lyrics ?? ""} title={dispName} artist={dispArtist} onEdit={onAddLyrics} T={T} />
+              </div>
+            ) : (
+            <div ref={measureTop} style={land ? { display: "contents" } : { display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
               {lyricsOpen ? (
                 <div data-own-drag="" style={land ? { gridColumn: 1, gridRow: "1 / span 3" } : undefined}>
-                  <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
+                  <div style={{ width: discSize, height: discSize }}>
+                    <LyricsPanel text={lyrics ?? ""} onEdit={onAddLyrics} T={T} />
+                  </div>
                 </div>
               ) : (
                 <div style={{ position: "relative", ...(land ? { gridColumn: 1, gridRow: "1 / span 3" } : null) }}>
@@ -591,6 +607,7 @@ export function PlayerExpandSheet({
                 </div>
               </div>
             </div>
+            )}
 
             {/* Timeline */}
             <div style={{ display: "flex", alignItems: "center", marginBottom: 6, ...(land ? { gridColumn: 2, gridRow: 2 } : null) }}>
@@ -606,7 +623,7 @@ export function PlayerExpandSheet({
             </div>
 
             {/* Transport */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10, ...(land ? { gridColumn: 2, gridRow: 3, alignSelf: "start" } : null) }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: land ? 6 : 18, marginTop: 10, ...(land ? { gridColumn: 2, gridRow: 3, alignSelf: "start" } : null) }}>
               {/* Shuffle and repeat used to be one button that went round
                   off, shuffle, repeat: reaching repeat meant shuffling first.
                   Each has its own now, at either end, with a dot when on. */}
@@ -780,34 +797,48 @@ export function PlayerExpandSheet({
  * whatever you pasted, so there are no timings to follow and pretending
  * otherwise would just be a panel that never moves.
  */
-function LyricsPanel({ text, size, onEdit, T }: {
-  text: string; size: number; onEdit: () => void; T: T;
+function LyricsPanel({ text, title, artist, onEdit, T }: {
+  text: string; title?: string; artist?: string; onEdit: () => void; T: T;
 }) {
+  // With a title it is the portrait card (design L1): the song on one small
+  // line above the words, a hairline under it, no box of its own. Without, it
+  // is the square in landscape's record column.
+  const full = title !== undefined;
   return (
     <div style={{
-      width: size, height: size, flexShrink: 0,
-      borderRadius: 16, background: T.dim,
+      width: "100%", height: "100%",
+      borderRadius: full ? 0 : 16, background: full ? "transparent" : T.dim,
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 14px 6px", flexShrink: 0,
+        display: "flex", alignItems: "baseline", gap: 8,
+        padding: full ? "0 2px 9px" : "10px 14px 6px", flexShrink: 0,
+        borderBottom: full ? `1px solid ${T.border}` : "none",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
-          {t("Lyrics")}
-        </span>
+        {full ? (
+          <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: T.accent }}>{title}</span>
+            {artist ? <span style={{ fontSize: 12.5, color: T.textSub, marginLeft: 8 }}>{artist}</span> : null}
+          </span>
+        ) : (
+          <span style={{ flex: 1, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
+            {t("Lyrics")}
+          </span>
+        )}
         <button
           onClick={onEdit}
-          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2 }}
+          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2, flexShrink: 0 }}
         >
           {t("Edit")}
         </button>
       </div>
       <div style={{
         flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch",
-        padding: "0 16px 14px",
-        fontSize: 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+        padding: full ? "12px 4px 52px" : "0 16px 14px",
+        fontSize: full ? 16 : 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+        // The last lines fade out, so it reads as more below rather than cut off.
+        ...(full ? { WebkitMaskImage: "linear-gradient(#000 85%, transparent)", maskImage: "linear-gradient(#000 85%, transparent)" } : null),
       }}>
         {text.trim()}
       </div>

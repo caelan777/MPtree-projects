@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
-import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX } from "../utils";
-import { CropSheet } from "./CropSheet";
+import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX, indexById } from "../utils";
+import { CropSheet } from "../lazySheets";
 import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
@@ -14,6 +14,7 @@ import { IC } from "./Icons";
 import type { T } from "../themes";
 import { useVinyl } from "../look";
 import { t as tr, tn } from "../i18n";
+import { Preferences } from "@capacitor/preferences";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,8 @@ interface Props {
 /** Shared icon tile: playlist list rows, the detail header, and the fallback
  *  when a playlist has no cover photo. Top level, so it keeps its identity
  *  across renders instead of being rebuilt as a new type each time. */
+const PL_TILES_KEY = "mptree_pl_tiles";
+
 function PlaylistArt({ photo, size, iconSize, onClick, playing, T: t }: {
   photo?: string; size: number; iconSize?: number; onClick?: () => void;
   /** The music is playing from this playlist: "on" moves the bars, "paused"
@@ -326,6 +329,21 @@ export const PlaylistsView: React.FC<Props> = ({
   // Moving playlists: on from "Reorder", or by holding a playlist. Each row
   // then has a handle; dragging it moves the playlist, and the order is kept.
   const [reordering,      setReordering]     = useState(false);
+  // My playlists as rows or as big tiles like the auto playlists. Kept across
+  // restarts, and with the other settings in sync and backups (storage.ts).
+  const [tiles, setTiles] = useState(false);
+  useEffect(() => {
+    Preferences.get({ key: PL_TILES_KEY }).then(r => setTiles(r.value === "1")).catch(() => {});
+  }, []);
+  const toggleTiles = () => {
+    const next = !tiles;
+    onHaptic?.();
+    setTiles(next);
+    Preferences.set({ key: PL_TILES_KEY, value: next ? "1" : "0" }).catch(() => {});
+  };
+  // Looked up per playlist on every render: a Map, not a search through every song.
+  const songById = useMemo(() => indexById(songs), [songs]);
+  const songsOf = (pl: Playlist) => pl.songIds.map(id => songById.get(id)).filter((s): s is Song => !!s);
   const [plDrag,          setPlDrag]         = useState<{ from: number; over: number } | null>(null);
   const plRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const plPress   = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; held: boolean }>({ timer: null, x: 0, y: 0, held: false });
@@ -1135,6 +1153,27 @@ export const PlaylistsView: React.FC<Props> = ({
               </span>
               {/* Making a playlist, where Reorder used to be. Moving them is
                   still a hold on a playlist; while that is on, this is Done. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {/* Organize: rows or big tiles. Gone while moving playlists,
+                  which always happens in rows. */}
+              {playlists.length > 0 && !reordering && (
+                <button
+                  onClick={toggleTiles}
+                  aria-label={tiles ? tr("Show playlists as a list") : tr("Show playlists as tiles")}
+                  aria-pressed={tiles}
+                  style={{
+                    background: "transparent", color: t.text, border: `1px solid ${t.border}`, borderRadius: 16,
+                    height: 30, width: 38, display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", flexShrink: 0, padding: 0,
+                  }}
+                >
+                  {tiles ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (reordering) { onHaptic?.(); setReordering(false); return; }
@@ -1147,11 +1186,85 @@ export const PlaylistsView: React.FC<Props> = ({
               >
                 {reordering ? tr("Done") : tr("+ New playlist")}
               </button>
+              </div>
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
                 <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New playlist\" to make your first one")}</div>
+              </div>
+            ) : tiles && !reordering ? (
+              /* Big tiles, the auto playlists' cards for your own. A hold
+                 still starts moving them, which switches back to rows. */
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "10px 16px 8px" }}>
+                {playlists.map(pl => {
+                  const count = pl.songIds.filter(id => songById.has(id)).length;
+                  const playingHere = playingFrom === `pl:${pl.id}`;
+                  const photo = pl.coverPhoto;
+                  return (
+                    <div
+                      key={pl.id}
+                      onClick={e => {
+                        if (plPress.current.held) { plPress.current.held = false; return; }
+                        openFrom(e.currentTarget); setActiveId(pl.id); setView("detail");
+                      }}
+                      onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchEnd={plPressEnd}
+                      onMouseDown={e => plPressStart(e.clientX, e.clientY)}
+                      onMouseMove={e => plPressMove(e.clientX, e.clientY)}
+                      onMouseUp={plPressEnd}
+                      onMouseLeave={plPressEnd}
+                      style={{
+                        position: "relative", height: 160, borderRadius: 16, padding: 16,
+                        background: photo ? `center/cover no-repeat url(${photo})` : t.card,
+                        border: `1px solid ${playingHere ? t.accent : t.border}`,
+                        color: photo ? "#ffffff" : t.text,
+                        display: "flex", flexDirection: "column", justifyContent: "space-between",
+                        cursor: "pointer", overflow: "hidden", userSelect: "none",
+                      }}
+                    >
+                      {photo ? (
+                        // Dark at the top and bottom, so the name and the count read on any photo.
+                        <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0) 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6))" }} />
+                      ) : (
+                        <div aria-hidden="true" style={{ position: "absolute", top: 14, right: 14, opacity: 0.16, lineHeight: 0 }}>
+                          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={t.text} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                        </div>
+                      )}
+                      <div style={{
+                        position: "relative", fontSize: 16, fontWeight: 700, lineHeight: 1.25, paddingRight: photo ? 0 : 46,
+                        overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word",
+                      }}>
+                        {pl.name}
+                      </div>
+                      <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: photo ? "rgba(255,255,255,0.82)" : t.muted, paddingRight: 44 }}>
+                        {tn(count, "{n} song", "{n} songs")}
+                      </div>
+                      {playingHere ? (
+                        <div aria-label={tr("Playing from this playlist")} style={{
+                          position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
+                          background: t.accent, display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <PlayingBars size={34} color={t.playBtnFg} still={!isPlaying} />
+                        </div>
+                      ) : count > 0 && (
+                        <button
+                          aria-label={tr("Play")}
+                          onTouchStart={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); onPlayPlaylist(songsOf(pl), false, `pl:${pl.id}`); }}
+                          style={{
+                            position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
+                            background: t.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill={t.playBtnFg} aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div
@@ -1160,7 +1273,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 onTouchCancel={plDrag ? plDragEnd : undefined}
               >
               {playlists.map((pl, i) => {
-                const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
+                const count = pl.songIds.filter(id => songById.has(id)).length;
                 const isDragging = plDrag?.from === i;
                 const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
                 return (
@@ -1217,8 +1330,7 @@ export const PlaylistsView: React.FC<Props> = ({
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          const ps = pl.songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => !!s);
-                          onPlayPlaylist(ps, false, `pl:${pl.id}`);
+                          onPlayPlaylist(songsOf(pl), false, `pl:${pl.id}`);
                         }}
                         style={{ background: t.accent, border: "none", width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                       >

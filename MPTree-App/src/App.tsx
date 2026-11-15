@@ -26,21 +26,19 @@ import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { MusicHint, MusicHowSheet, HintArrow } from "./components/MusicHint";
 import { countDaily } from "./counter";
-import { CutTrackSheet } from "./components/CutTrackSheet";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
 import { applyLang, isLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
 import { MultiSelectBar, SelectCheck, SELECT_TOP_H, SELECT_BOTTOM_H } from "./components/MultiSelectBar";
-import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ProSheet, type ProFrom } from "./components/ProSheet";
 import { ListenCard } from "./components/ListenCard";
 import { useListenCard, loadListen, setListening, closeListenCard } from "./listen";
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
-import { LookSheet } from "./components/LookSheet";
+import { LookSheet, BackupSheet, CutTrackSheet, EQSheet, preloadSheets } from "./lazySheets";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
@@ -56,13 +54,12 @@ import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack
 import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, adOkText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
-import { isMissingArtist, extractDominantColor }  from "./utils";
+import { isMissingArtist, extractDominantColor, indexById }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { DiscoverView, DiscoverIcon, NewBadge, WALL_MS } from "./components/DiscoverView";
 import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
-import { BackupSheet }      from "./components/BackupSheet";
 import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
 import type { Playlist, SmartPlaylist } from "./types";
 import { useMultiSelect } from "./hooks/useMultiSelect";
@@ -346,6 +343,16 @@ export default function App() {
   const insetJumpRef = useRef(false);
   // The Playlists tab moves its own list the same way, and says so through this.
   const markInsetJump = useCallback(() => { insetJumpRef.current = true; }, []);
+
+  // The sheets kept out of the start-up code (lazySheets.ts) are fetched once
+  // the app has settled, so opening one later never waits.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+      if (idle) idle(preloadSheets); else preloadSheets();
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, []);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
@@ -1063,7 +1070,8 @@ export default function App() {
     if (!src) return;
     setPlaySource(src);
     const pl = src.startsWith("pl:") ? storedPlaylistsRef.current.find(p => `pl:${p.id}` === src) : undefined;
-    const own = pl ? pl.songIds.map(id => saved.find(s => s.id === id)).filter((s): s is Song => !!s) : [];
+    const savedById = indexById(saved);
+    const own = pl ? pl.songIds.map(id => savedById.get(id)).filter((s): s is Song => !!s) : [];
     playContextRef.current = own.length ? own : saved;
   };
 
@@ -1748,7 +1756,8 @@ export default function App() {
   // ticked. Splicing into the queue (not just recording ids) matters for the
   // reason given above: native advances on its own and never reads playNextQueue.
   const handlePlayManyNext = useCallback((ids: string[]) => {
-    const chosen = displayListRef.current.filter(s => ids.includes(s.id));
+    const want = new Set(ids);
+    const chosen = displayListRef.current.filter(s => want.has(s.id));
     if (!chosen.length) return;
 
     const cur = curRef.current;
@@ -1880,9 +1889,9 @@ export default function App() {
    *  whatever was put on "Play next", then the rest. Changing the mode never
    *  loses or reorders what someone lined up by hand. */
   const requeue = (cur: Song, rest: Song[]) => {
-    const all = queueRef.current;
+    const all = indexById(queueRef.current);
     const lined = playNextQueueRef.current
-      .map(id => all.find(s => s.id === id))
+      .map(id => all.get(id))
       .filter((s): s is Song => !!s && s.id !== cur.id);
     const held = new Set([cur.id, ...lined.map(s => s.id)]);
     const q = [cur, ...lined, ...rest.filter(s => !held.has(s.id))];
@@ -2066,13 +2075,13 @@ export default function App() {
         bin: opts.bin, settings: opts.settings,
       },
       settings: opts.settings ? await collectSettings() : undefined,
-      playlists: !opts.playlists ? [] : playlists.map(pl => ({
+      playlists: !opts.playlists ? [] : (songsById => playlists.map(pl => ({
         id:         pl.id,
         name:       pl.name,
         createdAt:  pl.createdAt,
         coverPhoto: opts.covers ? pl.coverPhoto : undefined,
         songs:      pl.songIds
-          .map(id => songs.find(s => s.id === id))
+          .map(id => songsById.get(id))
           .filter((s): s is Song => s != null)
           .map(s => ({
             id:       s.id,
@@ -2081,7 +2090,7 @@ export default function App() {
             path:     s.uri,
             duration: s.duration,
           })),
-      })),
+      })))(indexById(songs)),
       meta: metaOut,
       removedSongs: !opts.bin ? [] : removedSongs.map(s => ({
         id:        s.id,
@@ -2608,7 +2617,8 @@ export default function App() {
   }, []);
 
   const shuffleMany = useCallback((ids: string[]) => {
-    const chosen = songs.filter(s => ids.includes(s.id));
+    const want = new Set(ids);
+    const chosen = songs.filter(s => want.has(s.id));
     if (!chosen.length) return;
     const shuffled = [...chosen].sort(() => Math.random() - 0.5);
     setPlayMode("shuffle");
@@ -2866,7 +2876,8 @@ export default function App() {
    *  a stretch of another file, so it has no file of its own to send. */
   const SHARE_MAX = 50;
   const shareSongs = useCallback(async (ids: string[], title?: string) => {
-    const picked = ids.map(id => songsRef.current.find(s => s.id === id)).filter((s): s is Song => !!s);
+    const byId = indexById(songsRef.current);
+    const picked = ids.map(id => byId.get(id)).filter((s): s is Song => !!s);
     const files = picked.filter(s => !s.isCut);
     const skipped = picked.length - files.length;
     if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
@@ -3425,6 +3436,19 @@ export default function App() {
     if (nowPlayingArt && nowPlayingArt.id === s.id) return nowPlayingArt.url;
     return undefined;
   };
+
+  // Landscape with the full player open: the side column lists what plays
+  // next (SidePlayer). The first hundred; the full player has the rest.
+  const sideQueue = useMemo(() => {
+    if (!playerExpanded || !currentSong || !side) return [];
+    const at = queue.findIndex(s => s.id === currentSong.id);
+    const pinned = new Set(playNextQueue);
+    return (at >= 0 ? queue.slice(at + 1, at + 101) : []).map(s => ({
+      id: s.id, title: dispName(s), artist: dispArtist(s), photo: getMeta(s).customPhoto,
+      path: s.uri, albumId: s.albumId, pinned: pinned.has(s.id),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerExpanded, currentSong, side, queue, playNextQueue, meta]);
 
 
   // ── List virtualization ───────────────────────────────────────────────────
@@ -4011,7 +4035,22 @@ export default function App() {
 
               {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
 
-              {displayList.length === 0 ? (
+              {displayList.length === 0 && search.trim() ? (
+                // Searched and nothing matched: say so, and offer the free
+                // music search with the same words.
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted, textAlign: "center" }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <div style={{ marginTop: 12, color: TH.text, fontWeight: 600, wordBreak: "break-word" }}>{t("No results for \"{q}\"", { q: search.trim() })}</div>
+                  {HAS_DISCOVER && (
+                    <button
+                      onClick={() => { hapticImpact("light"); openDiscover(); setDq(search.trim()); setDqSignal(n => n + 1); }}
+                      style={{ marginTop: 18, background: TH.accent, color: TH.playBtnFg, border: "none", borderRadius: 20, padding: "9px 18px", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
+                    >
+                      {t("Search free music")}
+                    </button>
+                  )}
+                </div>
+              ) : displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
                   <IC.Heart filled={false} size={28} />
                   <div style={{ marginTop: 12 }}>{t("No songs found")}</div>
@@ -4313,6 +4352,8 @@ export default function App() {
             onSeekStart={() => setDragging(true)}
             onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
             onOpen={() => setPlayerExpanded(true)}
+            queue={playerExpanded && currentSong ? sideQueue : null}
+            onPlayQueued={id => { const s = queueRef.current.find(x => x.id === id); if (s) playFromQueue(s); }}
             T={TH}
           />
         )}
@@ -4682,7 +4723,10 @@ export default function App() {
           />
         )}
 
-        {/* ═══ BACKUP SHEET ════════════════════════════════════════════════ */}
+        {/* Mounted only while open: closed it drew nothing, but still mapped
+            the whole library into a list on every render. */}
+        {backupSheet.kind !== "closed" && (
+        /* Backup sheet */
         <BackupSheet
           songs={songs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
           binSongs={removedSongs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
@@ -4697,6 +4741,7 @@ export default function App() {
           onClose={closeBackupSheet}
           T={TH}
         />
+        )}
 
         {/* Hidden file input for import — outside BackupSheet so it persists */}
         <input

@@ -11,7 +11,7 @@ import { primeLanternVoice } from "../lanternVoice";
 import { usePro, ADS_ON } from "../pro";
 import { System } from "../plugins";
 import { MARK_PATH } from "./Logo";
-import { CropSheet } from "./CropSheet";
+import { CropSheet } from "../lazySheets";
 import {
   useBackground, previewBackground, keepBackground, endBackgroundPreview, hasBackgroundChanges, STRENGTH_MIN, STRENGTH_MAX,
 } from "../background";

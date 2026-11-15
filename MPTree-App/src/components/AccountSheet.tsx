@@ -8,9 +8,10 @@ import { Loading } from "./Loading";
 import { Switch } from "./Switch";
 import { useAccountPro, useAdDay, hasPro } from "../pro";
 import {
-  useSync, signIn, signOut, cancelJoin, removeDevice, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles,
+  useSync, signIn, signOut, cancelJoin, removeDevice, errorDetail, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles,
   MOBILE_DAILY, type SyncState, type Device, type TestStep,
 } from "../sync/engine";
+import { isDriveFull } from "../sync/drive";
 
 // ─── ACCOUNT & SYNC ──────────────────────────────────────────────────────────
 // The one page about the MPTree account. Short sentences, one idea each: it
@@ -68,13 +69,17 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     setBusy(true);
     const r = await signIn();
     setBusy(false);
-    if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
+    if (r === "full") onToast(t("Your Google storage is full. Make room in Google Drive, then try again."));
+    else if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
     else if (r === "ok" && !had && hasPro()) onToast(t("MPTree Pro is on, from your account"));
   };
   const doRemove = async (d: Device) => {
     setBusy(true); setRemoving(d.id);
     try { await removeDevice(d.id); onToast(t("{name} is off your account", { name: d.name })); }
-    catch { onToast(t("Could not reach Google Drive. Try again in a moment.")); }
+    catch (e) {
+      onToast(isDriveFull(e) ? t("Your Google storage is full. Make room in Google Drive, then try again.")
+        : `${t("Could not reach Google Drive. Try again in a moment.")} (${errorDetail(e)})`);
+    }
     setBusy(false); setRemoving(null);
   };
   const doSignOut = async () => {
@@ -161,6 +166,7 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
     const library = s.problem === "offline" ? t("Waiting for internet")
       : s.problem === "signin" ? t("Sign in again to keep syncing")
       : s.problem === "drive" ? t("Could not reach Google Drive. Trying again soon.")
+      : s.problem === "full" ? t("Your Google storage is full")
       : saved ? t("Saved {when}", { when: ago(s.lastSaved!) })
       : t("Saving…");
     const row = {
@@ -323,6 +329,9 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, T }: Props) {
           {pro ? t("MPTree only gets its own hidden folder in your Google Drive.")
             : t("Part of MPTree Pro. Sign in first: if your account has Pro, this device has it too.")}
         </div>
+        {(s.problem === "signin" || s.problem === "full") && s.problemDetail && !busy && (
+          <div style={{ fontSize: 11.5, color: T.muted, textAlign: "center", marginTop: 8, lineHeight: 1.4, userSelect: "text", wordBreak: "break-word" }}>{s.problemDetail}</div>
+        )}
       </>
     );
   }
@@ -389,6 +398,7 @@ function SyncCard({ s, T }: { s: SyncState; T: T }) {
   else if (s.problem === "offline") head = t("Waiting for internet");
   else if (s.problem === "signin") head = t("Sign in again to keep syncing");
   else if (s.problem === "drive") { head = t("Could not reach Google Drive"); sub = t("Trying again soon."); }
+  else if (s.problem === "full") { head = t("Your Google storage is full"); sub = t("Make room in Google Drive to keep syncing."); }
   else if (g.moving) {
     flow = g.moving.dir;
     head = g.moving.dir === "in"

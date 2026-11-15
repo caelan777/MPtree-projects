@@ -89,7 +89,8 @@ export function ProSheet({ onClose, onToast, onOpenStore, onOpenAccount, onOpenL
     setBusy("signin");
     const r = await signIn();
     setBusy(null);
-    if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
+    if (r === "full") onToast(t("Your Google storage is full. Make room in Google Drive, then try again."));
+    else if (r === "failed") onToast(t("Could not sign in. Check your connection and try again."));
     // Three devices on the account already: the account page lets one go.
     else if (r === "limit") onOpenAccount();
     else if (r === "ok" && hasPro()) onToast(t("MPTree Pro is on, from your account"));

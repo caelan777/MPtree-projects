@@ -3,7 +3,7 @@ import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { readCoverPhoto, CROP_SOURCE_PX } from "../utils";
-import { CropSheet } from "./CropSheet";
+import { CropSheet } from "../lazySheets";
 
 // ─── EDIT SHEET ──────────────────────────────────────────────────────────────
 //

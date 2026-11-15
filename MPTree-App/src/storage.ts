@@ -229,7 +229,7 @@ export interface BackupParts {
 const SETTINGS_KEYS = [
   "mptree_ui_size", "mptree_lang", "mptree_update_notices",
   "mptree_mix_others", "mptree_auto_collapse",
-  "mptree_look",
+  "mptree_look", "mptree_pl_tiles",
 ];
 const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "repeat", "repeatAll", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
 

@@ -32,8 +32,17 @@ export class DriveError extends Error {
   }
 }
 
+/** The person's Google storage is full: Drive takes nothing more from anyone,
+ *  MPTree included, until they make room. Rate limits are not this. */
+export function isDriveFull(e: unknown): boolean {
+  const err = e as { reason?: string; message?: string } | null;
+  return /storageQuotaExceeded|storage quota/i.test(`${err?.reason ?? ""} ${err?.message ?? ""}`);
+}
+
 export type Drive = {
   about(): Promise<{ email: string; name: string; photo?: string }>;
+  /** Free bytes in the person's Google storage, or null when it has no limit. */
+  space(): Promise<number | null>;
   list(): Promise<DriveFile[]>;
   read<T>(id: string): Promise<T>;
   /** Creates the file when id is absent. Resolves its id. */
@@ -106,6 +115,13 @@ function realDrive(tokens: Tokens): Drive {
         "GET", `${API}/drive/v3/about?fields=user(displayName,emailAddress,photoLink)`);
       return { email: r.user.emailAddress, name: r.user.displayName, photo: r.user.photoLink };
     },
+    async space() {
+      const r = await call<{ storageQuota?: { limit?: string; usage?: string } }>(
+        "GET", `${API}/drive/v3/about?fields=storageQuota(limit,usage)`);
+      const limit = Number(r.storageQuota?.limit);
+      if (!limit) return null;
+      return Math.max(0, limit - Number(r.storageQuota?.usage ?? 0));
+    },
     async list() {
       const files: DriveFile[] = [];
       let page = "";
@@ -133,10 +149,17 @@ function realDrive(tokens: Tokens): Drive {
       // library has a few dozen photos: then every cover was refused and a
       // phone signing in got none back. Bigger files go up resumable.
       const text = JSON.stringify(body);
-      if (text.length < SIMPLE_UPLOAD_MAX) {
-        await call("PATCH", `${API}/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, body);
-      } else {
-        await resumableUpload(fileId, text);
+      try {
+        if (text.length < SIMPLE_UPLOAD_MAX) {
+          await call("PATCH", `${API}/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, body);
+        } else {
+          await resumableUpload(fileId, text);
+        }
+      } catch (e) {
+        // A file just made but left empty (storage full, say) would be read
+        // as the newest of its name: it goes again.
+        if (!id) await call("DELETE", `${API}/drive/v3/files/${fileId}`).catch(() => {});
+        throw e;
       }
       return fileId;
     },
@@ -159,6 +182,7 @@ function devDrive(): Drive {
   const save = (s: DevStore) => fetch("/__dev_drive", { method: "POST", body: JSON.stringify(s) });
   return {
     async about() { return { email: "dev@example.com", name: "Dev" }; },
+    async space() { return null; },
     async list() {
       return Object.values(await load()).map(f => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime, size: f.size, appProperties: f.appProperties }));
     },
