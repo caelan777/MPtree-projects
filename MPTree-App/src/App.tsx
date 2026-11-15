@@ -39,6 +39,7 @@ import { useListenCard, loadListen, setListening, closeListenCard } from "./list
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet, BackupSheet, CutTrackSheet, EQSheet, preloadSheets } from "./lazySheets";
+import { NextUpPanel } from "./components/NextUpPanel";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
@@ -233,6 +234,8 @@ export default function App() {
   const [cutSong,        setCutSong]       = useState<Song | null>(null);
   const [cutDuration,    setCutDuration]   = useState(0);
   const [playerExpanded, setPlayerExpanded]= useState(false);
+  /** Landscape: Next up open over the list, from a tap on the side player. */
+  const [nextUpOpen, setNextUpOpen] = useState(false);
   const [toast,          setToast]         = useState<{ msg: string; action?: ToastAction } | null>(null);
   const [currentTime,    setCurrentTime]   = useState(0);
   const [duration,       setDuration]      = useState(0);
@@ -3129,6 +3132,7 @@ export default function App() {
       if (binManyIds)          { setBinManyIds(null); return; }
       if (editSong)            { setEditSong(null); return; }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
+      if (nextUpOpen)          { setNextUpOpen(false); return; }
       if (updateInfo)          { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); return; }
       if (filterOpen)          { setFilterOpen(false); return; }
       if (chromeMenuOpen)      { setChromeMenuOpen(false); return; }
@@ -3437,10 +3441,10 @@ export default function App() {
     return undefined;
   };
 
-  // Landscape with the full player open: the side column lists what plays
-  // next (SidePlayer). The first hundred; the full player has the rest.
+  // Landscape: a tap on the side player lists what plays next over the
+  // list's column (NextUpPanel). The first hundred; the full player has the rest.
   const sideQueue = useMemo(() => {
-    if (!playerExpanded || !currentSong || !side) return [];
+    if (!nextUpOpen || !currentSong || !side) return [];
     const at = queue.findIndex(s => s.id === currentSong.id);
     const pinned = new Set(playNextQueue);
     return (at >= 0 ? queue.slice(at + 1, at + 101) : []).map(s => ({
@@ -3448,7 +3452,7 @@ export default function App() {
       path: s.uri, albumId: s.albumId, pinned: pinned.has(s.id),
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playerExpanded, currentSong, side, queue, playNextQueue, meta]);
+  }, [nextUpOpen, currentSong, side, queue, playNextQueue, meta]);
 
 
   // ── List virtualization ───────────────────────────────────────────────────
@@ -4351,9 +4355,17 @@ export default function App() {
             onSeek={ms => setCurrentTime(ms)}
             onSeekStart={() => setDragging(true)}
             onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
-            onOpen={() => setPlayerExpanded(true)}
-            queue={playerExpanded && currentSong ? sideQueue : null}
-            onPlayQueued={id => { const s = queueRef.current.find(x => x.id === id); if (s) playFromQueue(s); }}
+            onOpen={() => { hapticImpact("light"); setNextUpOpen(o => !o); }}
+            T={TH}
+          />
+        )}
+        {side > 0 && nextUpOpen && currentSong && (
+          <NextUpPanel
+            items={sideQueue}
+            onPlay={id => { const s = queueRef.current.find(x => x.id === id); if (s) playFromQueue(s); }}
+            onMove={moveInQueue}
+            onFullPlayer={() => { setNextUpOpen(false); setPlayerExpanded(true); }}
+            onClose={() => setNextUpOpen(false)}
             T={TH}
           />
         )}

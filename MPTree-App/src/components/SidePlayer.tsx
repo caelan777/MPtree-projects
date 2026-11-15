@@ -2,8 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { IC } from "./Icons";
 import { SpinningDisc } from "./SpinningDisc";
 import { Logo } from "./Logo";
-import { AlbumArt } from "./AlbumArt";
-import { t, tn } from "../i18n";
+import { t } from "../i18n";
 import type { T } from "../themes";
 
 // ─── THE PLAYER ON THE SIDE ──────────────────────────────────────────────────
@@ -14,11 +13,8 @@ import type { T } from "../themes";
 // full player, as the card did. Dragged sideways across the list it changes
 // sides with it, for whoever holds the phone the other way round.
 //
-// While the full player is open it covers the list's column with the same
-// record, title and buttons. This column would only repeat them, so it shows
-// what plays next instead, and a tap on a song plays it.
-
-export type SideQueueItem = { id: string; title: string; artist: string; photo?: string; path?: string; albumId?: number; pinned?: boolean };
+// A tap on it opens Next up over the list's column (NextUpPanel); the full
+// player is one tap further, from there.
 
 const fmt = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -27,7 +23,7 @@ const fmt = (ms: number) => {
 
 export function SidePlayer({
   width, colW, onRight, onSwap, song, title, artist, photo, isPlaying, currentTime, duration, shuffle,
-  onTogglePlay, onSkip, onToggleShuffle, onSeek, onSeekStart, onSeekEnd, onOpen, queue, onPlayQueued, T,
+  onTogglePlay, onSkip, onToggleShuffle, onSeek, onSeekStart, onSeekEnd, onOpen, T,
 }: {
   width: number;
   /** The list's column: the player goes past it when it is on the right. */
@@ -50,9 +46,6 @@ export function SidePlayer({
   onSeekStart: () => void;
   onSeekEnd: (ms: number) => void;
   onOpen: () => void;
-  /** Set while the full player is open: the songs after this one. */
-  queue?: SideQueueItem[] | null;
-  onPlayQueued?: (id: string) => void;
   T: T;
 }) {
   const h = typeof window !== "undefined" ? window.innerHeight : 400;
@@ -93,7 +86,7 @@ export function SidePlayer({
     return () => window.removeEventListener("scroll", back);
   }, []);
   const down = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button,input,[data-side-queue]")) return;
+    if ((e.target as HTMLElement).closest("button,input")) return;
     drag.current = { x: e.clientX, id: e.pointerId };
     setHeld(true);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -140,41 +133,9 @@ export function SidePlayer({
       }}>
         {/* The grip: this panel can be dragged to the other side. */}
         <div aria-hidden="true" style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", width: 36, height: 4, borderRadius: 2, background: T.dim }} />
-        {song && queue ? (
-          <div data-side-queue="" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", minHeight: 0, paddingTop: 6 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "4px 2px 10px", flexShrink: 0 }}>
-              <span style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{t("Next up")}</span>
-              {queue.length > 0 && <span style={{ fontSize: 12, color: T.muted }}>{tn(queue.length, "{n} song", "{n} songs")}</span>}
-            </div>
-            {queue.length === 0 ? (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: 14, color: T.muted, padding: "0 12px", lineHeight: 1.5 }}>
-                {t("Nothing lined up after this song.")}
-              </div>
-            ) : (
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", margin: "0 -6px", padding: "0 6px 6px" }}>
-                {queue.map(q => (
-                  <button
-                    key={q.id}
-                    onClick={() => onPlayQueued?.(q.id)}
-                    style={{
-                      width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "7px 6px", borderRadius: 12,
-                      background: "transparent", border: "none", color: T.text, cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                    }}
-                  >
-                    <AlbumArt title={q.title} size={40} customPhoto={q.photo} songPath={q.path} albumId={q.albumId} T={T} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.title}</span>
-                      <span style={{ display: "block", fontSize: 12, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.artist || t("Unknown Artist")}</span>
-                    </span>
-                    {q.pinned && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, letterSpacing: "0.04em", flexShrink: 0 }}>{t("Play next").toUpperCase()}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : song ? (
+        {song ? (
           <>
-            <div onClick={onOpen} role="button" aria-label={t("Expand player")} style={{ cursor: "pointer" }}>
+            <div onClick={onOpen} role="button" aria-label={t("Next up")} style={{ cursor: "pointer" }}>
               <SpinningDisc size={disc} spinning={isPlaying} title={title} customPhoto={photo} />
             </div>
             <div onClick={onOpen} style={{ width: "100%", textAlign: "center", minWidth: 0, cursor: "pointer" }}>
