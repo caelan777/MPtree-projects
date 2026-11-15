@@ -245,7 +245,6 @@ export const RU: Record<string, string> = {
   "Skip this song": "Пропустить эту песню",
   "Previous": "Назад",
   "Next up": "Далее в очереди",
-  "Open player": "Открыть плеер",
   "Nothing lined up after this song.": "После этой песни ничего нет.",
   "{n} song lined up.": "В очереди {n} песня.",
   "{n} songs lined up.": "В очереди {n} песня.|В очереди {n} песни.|В очереди {n} песен.",

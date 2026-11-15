@@ -8,20 +8,18 @@ import type { T } from "../themes";
 // Landscape only. A tap on the player in the side column opens what plays
 // next over the list's column, so the player stays in sight while you look.
 // A tap on a song plays it; the grip on the right moves it up or down the
-// queue, as in the full player. The button at the top opens the full player
-// (lyrics, like, speed), which the tap on the player used to do.
+// queue, as in the full player.
 
 export type NextUpItem = { id: string; title: string; artist: string; photo?: string; path?: string; albumId?: number; pinned?: boolean };
 
 /** Every row is this tall, so a drag can tell where it is by its distance. */
 const ROW = 60;
 
-export function NextUpPanel({ items, onPlay, onMove, onFullPlayer, onClose, T }: {
+export function NextUpPanel({ items, onPlay, onMove, onClose, T }: {
   items: NextUpItem[];
   onPlay: (id: string) => void;
   /** Moves the song at `from` to `to`, both counted from the first song up next. */
   onMove: (from: number, to: number) => void;
-  onFullPlayer: () => void;
   onClose: () => void;
   T: T;
 }) {
@@ -75,7 +73,6 @@ export function NextUpPanel({ items, onPlay, onMove, onFullPlayer, onClose, T }:
           <span style={{ fontSize: 20, fontWeight: 800 }}>{t("Next up")}</span>
           {items.length > 0 && <span style={{ fontSize: 12, color: T.muted, marginLeft: 10 }}>{tn(items.length, "{n} song", "{n} songs")}</span>}
         </span>
-        <button onClick={onFullPlayer} style={iconBtn}>{t("Open player")}</button>
         <button onClick={onClose} aria-label={t("Close")} style={iconBtn}><IC.Close /></button>
       </div>
       {items.length === 0 ? (

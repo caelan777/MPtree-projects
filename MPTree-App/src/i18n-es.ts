@@ -245,7 +245,6 @@ export const ES: Record<string, string> = {
   "Skip this song": "Saltar esta canción",
   "Previous": "Anterior",
   "Next up": "A continuación",
-  "Open player": "Abrir reproductor",
   "Nothing lined up after this song.": "No hay nada más después de esta canción.",
   "{n} song lined up.": "{n} canción en cola.",
   "{n} songs lined up.": "{n} canciones en cola.",

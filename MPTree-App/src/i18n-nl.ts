@@ -245,7 +245,6 @@ export const NL: Record<string, string> = {
   "Skip this song": "Dit nummer overslaan",
   "Previous": "Vorige",
   "Next up": "Hierna",
-  "Open player": "Speler openen",
   "Nothing lined up after this song.": "Na dit nummer staat er niets klaar.",
   "{n} song lined up.": "{n} nummer staat klaar.",
   "{n} songs lined up.": "{n} nummers staan klaar.",

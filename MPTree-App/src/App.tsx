@@ -4356,6 +4356,8 @@ export default function App() {
             onSeekStart={() => setDragging(true)}
             onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
             onOpen={() => { hapticImpact("light"); setNextUpOpen(o => !o); }}
+            onSwipeUp={() => { if (currentSong) { hapticImpact("light"); setNextUpOpen(true); } }}
+            onSwipeDown={() => setNextUpOpen(false)}
             T={TH}
           />
         )}
@@ -4364,7 +4366,6 @@ export default function App() {
             items={sideQueue}
             onPlay={id => { const s = queueRef.current.find(x => x.id === id); if (s) playFromQueue(s); }}
             onMove={moveInQueue}
-            onFullPlayer={() => { setNextUpOpen(false); setPlayerExpanded(true); }}
             onClose={() => setNextUpOpen(false)}
             T={TH}
           />

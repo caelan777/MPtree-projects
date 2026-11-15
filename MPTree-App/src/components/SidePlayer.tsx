@@ -23,7 +23,7 @@ const fmt = (ms: number) => {
 
 export function SidePlayer({
   width, colW, onRight, onSwap, song, title, artist, photo, isPlaying, currentTime, duration, shuffle,
-  onTogglePlay, onSkip, onToggleShuffle, onSeek, onSeekStart, onSeekEnd, onOpen, T,
+  onTogglePlay, onSkip, onToggleShuffle, onSeek, onSeekStart, onSeekEnd, onOpen, onSwipeUp, onSwipeDown, T,
 }: {
   width: number;
   /** The list's column: the player goes past it when it is on the right. */
@@ -46,6 +46,9 @@ export function SidePlayer({
   onSeekStart: () => void;
   onSeekEnd: (ms: number) => void;
   onOpen: () => void;
+  /** Swiped up on the panel: Next up opens. Down: it closes. */
+  onSwipeUp?: () => void;
+  onSwipeDown?: () => void;
   T: T;
 }) {
   const h = typeof window !== "undefined" ? window.innerHeight : 400;
@@ -59,7 +62,9 @@ export function SidePlayer({
   const [flying, setFlying] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const from = useRef<{ panel: number; body: number } | null>(null);
-  const drag = useRef<{ x: number; id: number } | null>(null);
+  // A drag goes one way: sideways moves the panel, up or down opens or
+  // closes Next up. The first few pixels decide which.
+  const drag = useRef<{ x: number; y: number; id: number; axis: "x" | "y" | null; dy: number } | null>(null);
   const toward = onRight ? -1 : 1;
   useLayoutEffect(() => {
     const f = from.current, el = box.current;
@@ -87,20 +92,34 @@ export function SidePlayer({
   }, []);
   const down = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button,input")) return;
-    drag.current = { x: e.clientX, id: e.pointerId };
-    setHeld(true);
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // Not captured yet: a tap has to reach the record (Next up). Only a real
+    // drag takes the pointer, in move.
+    drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId, axis: null, dy: 0 };
   };
   const move = (e: React.PointerEvent) => {
-    if (!drag.current) return;
-    const d = e.clientX - drag.current.x;
+    const g = drag.current;
+    if (!g) return;
+    const d = e.clientX - g.x, v = e.clientY - g.y;
+    if (!g.axis && Math.abs(d) + Math.abs(v) > 10) {
+      g.axis = Math.abs(v) > Math.abs(d) ? "y" : "x";
+      try { (e.currentTarget as HTMLElement).setPointerCapture(g.id); } catch { /* gone already */ }
+      if (g.axis === "x") setHeld(true);
+    }
+    if (g.axis === "y") { g.dy = v; return; }
+    if (g.axis !== "x") return;
     // Only toward the other side, and no further than across the list.
     setDx(toward > 0 ? Math.max(0, Math.min(colW, d)) : Math.min(0, Math.max(-colW, d)));
   };
   const up = () => {
-    if (!drag.current) return;
+    const g = drag.current;
+    if (!g) return;
     drag.current = null;
     setHeld(false);
+    if (g.axis === "y") {
+      if (g.dy < -40) onSwipeUp?.();
+      else if (g.dy > 40) onSwipeDown?.();
+      return;
+    }
     if (Math.abs(dx) > colW / 3 && box.current) {
       from.current = { panel: box.current.getBoundingClientRect().left, body: document.body.getBoundingClientRect().left };
       setFlying(true);
@@ -117,7 +136,7 @@ export function SidePlayer({
       zIndex: dx || flying ? 500 : 95,
       transform: dx ? `translateX(${dx}px)` : undefined,
       transition: dx || held || flying ? "none" : "transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)",
-      touchAction: "pan-y",
+      touchAction: "none",
       // No ground of its own: the page's colour runs on under it (html), so
       // the header card's shadow fades out over it instead of stopping dead
       // at the edge of the column.
