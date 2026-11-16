@@ -46,7 +46,7 @@ import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
-  prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
+  prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, ROOM_MARGIN, type Host,
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
@@ -735,6 +735,8 @@ export default function App() {
   const discoverOpenRef = useRef(false);
   discoverOpenRef.current = discoverOpen;
   const discoverBackRef = useRef<(() => boolean) | null>(null);
+  /** Account & sync's own Back: a window on it, or How sync works, first. */
+  const accountBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
   const discoverPanelRef = useRef<HTMLDivElement | null>(null);
   const openDiscover = () => {
@@ -3118,7 +3120,7 @@ export default function App() {
       if (halloween)           { if (halloween !== "scare") closeHalloween(); return; }
       if (proOpen)             { setProOpen(false); return; }
       if (showAdPrompt)        { adNotNow(); return; }
-      if (accountOpen)         { setAccountOpen(false); return; }
+      if (accountOpen)         { if (!accountBackRef.current?.()) setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
       if (musicHowOpen)        { setMusicHowOpen(false); return; }
@@ -4140,16 +4142,21 @@ export default function App() {
                 <div style={{ padding: "18px 0 8px" }}>
                   <div style={{ padding: "0 19px 8px", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: TH.muted }}>
-                      {t("Not on this device yet")}
+                      {t("Coming from your other devices")}
                     </span>
                     <span style={{ fontSize: 12, color: TH.muted }}>{sync.songs.absent.length}</span>
                   </div>
                   <div style={{ padding: "0 19px 10px", fontSize: 12.5, color: TH.muted, lineHeight: 1.45 }}>
-                    {sync.songs.note === "phone-full"
-                      ? t("Not enough room. Free up {size} to get them all.", { size: fmtBytes(Math.max(0, (sync.songs.needBytes ?? 0) - Math.max(0, (sync.songs.freeBytes ?? 0) - 500 * 1024 * 1024))) })
-                      : sync.songs.note === "wifi" ? t("They come in on wifi.")
-                      : sync.songs.waitingOn.length ? t("Still on {phones}. Open MPTree there to bring them here.", { phones: sync.songs.waitingOn.join(", ") })
-                      : t("On their way.")}
+                    {sync.problem === "offline" ? t("Paused: no internet.")
+                      : sync.problem === "drive" ? t("Paused: Google Drive can't be reached.")
+                      : sync.problem === "full" ? t("Paused: your Google storage is full.")
+                      : sync.problem === "signin" ? t("Paused: sign in again under Account & sync.")
+                      : sync.songs.note === "phone-full"
+                      ? t("Not enough room. Free up {size} to get them all.", { size: fmtBytes(Math.max(0, (sync.songs.needBytes ?? 0) - Math.max(0, (sync.songs.freeBytes ?? 0) - ROOM_MARGIN))) })
+                      : sync.songs.note === "wifi" ? t("They come in when you're on wifi.")
+                      : sync.songs.note === "mobile-limit" ? t("Today's mobile data is used. They come in on wifi, or tomorrow.")
+                      : sync.songs.waitingOn.length ? t("Still on {phones}. Open MPTree there to send them.", { phones: sync.songs.waitingOn.join(", ") })
+                      : t("On their way. Keep MPTree open until they're here.")}
                   </div>
                   {sync.songs.absent.slice(0, 200).map(a => (
                     <div key={a.fp} style={{ display: "flex", alignItems: "center", gap: 10, height: ROW_H, padding: "0 16px 0 19px", boxSizing: "border-box", opacity: 0.42 }}>
@@ -4668,6 +4675,7 @@ export default function App() {
             onOpenPro={() => setProOpen(true)}
             onClose={() => setAccountOpen(false)}
             onToast={showToast}
+            backRef={accountBackRef}
             T={TH} />
         )}
         {proOpen && (

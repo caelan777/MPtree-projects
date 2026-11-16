@@ -50,7 +50,7 @@ import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type
 // Nothing runs while the app is in the background: Android freezes the WebView
 // there, which is fine, because both phones being open is the point.
 
-const MAX_DEVICES = 3;
+export const MAX_DEVICES = 3;
 const DEVICES = "devices.json";
 const LIB = "library.json";
 const COVERS = "covers.json";
@@ -103,8 +103,8 @@ const RELAY_BUDGET = 1024 * 1024 * 1024;
 const RELAY_MAX_AGE = 30 * 24 * 60 * 60_000;
 /** After a direct connection fails, use Drive for this long. */
 const DIRECT_PAUSE = 10 * 60_000;
-/** Always left free on a phone. */
-const ROOM_MARGIN = 500 * 1024 * 1024;
+/** Always left free on a phone. The account page says so. */
+export const ROOM_MARGIN = 500 * 1024 * 1024;
 /** At most this much over mobile data a day, when that is allowed at all. */
 export const MOBILE_DAILY = 500 * 1024 * 1024;
 /** A phone of the same name not used for this long is replaced on joining. */
@@ -351,7 +351,7 @@ async function makeRoom(): Promise<boolean> {
 }
 /** Left free in the person's Google storage: songs only go through Drive
  *  while it has at least this much room besides, so MPTree never fills it. */
-const DRIVE_KEEP_FREE = 1024 * 1024 * 1024;
+export const DRIVE_KEEP_FREE = 1024 * 1024 * 1024;
 
 async function removeFile(name: string): Promise<void> {
   const f = files.get(name);
@@ -703,6 +703,12 @@ function kick(ms: number) {
   clearTimeout(libTimer);
   libDue = due;
   libTimer = setTimeout(() => { libDue = 0; void libraryCycle(); }, ms);
+}
+
+/** "Try now" on the account page: the next round straight away, instead of
+ *  within the minute it would come by itself. */
+export function retryNow(): void {
+  kick(0);
 }
 
 /** A round every minute while the app is open and signed in, so a change made

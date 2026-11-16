@@ -13,6 +13,7 @@ import { CyclingDisc } from "./ProArt";
 import { Ads } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
+import { syncStatus, syncSummary } from "../sync/status";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -299,21 +300,16 @@ export function SettingsSheet({
             onClick={onOpenAccount}
             icon={<CloudIcon />}
             label={t("Account & sync")}
-            sub={sync.phase === "on"
-              ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
-              : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
+            sub={syncSummary(sync, pro)}
             tag={!pro && <ProTag T={T} />}
           />
           {/* While a song is on its way from or to another device. */}
           {moving && (
-            <div style={{ padding: "10px 16px 12px", borderTop: `1px solid ${T.border}` }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
-                <span style={{ fontWeight: 700, color: T.text, flexShrink: 0 }}>{t("Syncing songs between your devices")}</span>
-                <span style={{ color: T.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{moving.name}</span>
-              </div>
-              <div style={{ height: 3, background: T.border, borderRadius: 2, marginTop: 7, overflow: "hidden" }}>
+            <div style={{ padding: "8px 16px 12px 52px" }}>
+              <div style={{ height: 3, background: T.border, borderRadius: 2, overflow: "hidden" }}>
                 <div style={{ width: `${moving.total > 0 ? Math.min(100, Math.round(moving.done / moving.total * 100)) : 0}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
               </div>
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 6 }}>{syncStatus(sync).progress?.note}</div>
             </div>
           )}
         </Section>
