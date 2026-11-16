@@ -38,7 +38,7 @@ import { ListenCard } from "./components/ListenCard";
 import { useListenCard, loadListen, setListening, closeListenCard } from "./listen";
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
-import { LookSheet, BackupSheet, CutTrackSheet, EQSheet, preloadSheets } from "./lazySheets";
+import { LookSheet, BackupSheet, CutTrackSheet, EQSheet, preloadSheets, lookReady, loadLookSheet } from "./lazySheets";
 import { NextUpPanel } from "./components/NextUpPanel";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
 import { lanternBackdrop } from "./lanternFigure";
@@ -919,21 +919,28 @@ export default function App() {
     setSettingsOpen(true);
   };
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
+  const [accountOpen, setAccountOpen] = useState(false);
   const [lookOpen,    setLookOpen]    = useState(false);
   // Personalize shows the app behind it, changing as you choose. Discover is
   // left out of that (it flickered there): it steps aside while Personalize
   // is open and comes back when it closes.
   const lookFromDiscover = useRef(false);
+  // Whether Personalise's code is read, so it can cover Settings at once.
+  const [lookLoaded, setLookLoaded] = useState(lookReady);
   const openLook = () => {
     if (discoverOpenRef.current) { lookFromDiscover.current = true; setDiscoverOpen(false); }
+    // Personalise goes over everything: Account & sync too, which was left
+    // open above it after buying Pro from there.
+    setAccountOpen(false);
     setLookOpen(true);
+    // A beat after the code is read, so Personalise has drawn before Settings goes.
+    if (!lookReady()) loadLookSheet().then(() => setTimeout(() => setLookLoaded(true), 60)).catch(() => setLookLoaded(true));
   };
   const closeLook = () => {
     setLookOpen(false);
     if (lookFromDiscover.current) { lookFromDiscover.current = false; setDiscoverOpen(true); }
   };
   const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
   useEffect(() => { loadLook(); loadBackground(); loadPro(); loadListen(); }, []);
 
@@ -4564,7 +4571,7 @@ export default function App() {
           <SettingsSheet
             binCount={removedSongs.length}
             pro={pro}
-            hidden={lookOpen}
+            hidden={lookOpen && lookLoaded}
             onOpenPro={() => setProOpen(true, "settings")}
             onOpenLook={openLook}
             onOpenAccount={() => setAccountOpen(true)}
@@ -4672,7 +4679,6 @@ export default function App() {
         {accountOpen && (
           <AccountSheet
             pro={pro}
-            onOpenPro={() => setProOpen(true)}
             onClose={() => setAccountOpen(false)}
             onToast={showToast}
             backRef={accountBackRef}

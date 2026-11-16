@@ -8,7 +8,8 @@ import { IC } from "./Icons";
 import { Loading } from "./Loading";
 import { Switch } from "./Switch";
 import { floatCard } from "./cardStyles";
-import { useAccountPro, useAdDay, hasPro, ownsPro } from "../pro";
+import { useAccountPro, useAdDay, hasPro, ownsPro, buyPro, useProPrice, watchAdForPro, adOkText, adFailText, ADS_ON, PRO_MODE } from "../pro";
+import { count } from "../counter";
 import {
   useSync, signIn, signOut, cancelJoin, removeDevice, errorDetail, renameDevice, dismissRemoved, setMobileData, testPhone, deleteDoubles, retryNow,
   MAX_DEVICES, MOBILE_DAILY, DRIVE_KEEP_FREE, type SyncState, type Device, type TestStep,
@@ -61,7 +62,6 @@ const Icon = ({ n, size = 18 }: { n: IconName; size?: number }) => <Svg size={si
 
 type Props = {
   pro: boolean;
-  onOpenPro: () => void;
   onClose: () => void;
   onToast: (msg: string) => void;
   /** Android's Back: a window or How sync works closes first. */
@@ -96,9 +96,9 @@ type Sheet = null
   | { kind: "device"; id: string; step: "menu" | "rename" | "remove" }
   | { kind: "add" }
   | { kind: "signout" }
-  | { kind: "welcome"; proNow: boolean };
+  | { kind: "welcome"; proNow: boolean; bought?: boolean };
 
-export function AccountSheet({ pro, onOpenPro, onClose, onToast, backRef, T }: Props) {
+export function AccountSheet({ pro, onClose, onToast, backRef, T }: Props) {
   const sh = makeSH(T);
   const s = useSync();
   const [busy, setBusy] = useState(false);
@@ -186,6 +186,24 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, backRef, T }: P
     try { await testPhone(step); onToast(done); }
     catch (e) { onToast(`${t("Could not reach Google Drive. Try again in a moment.")} (${errorDetail(e)})`); }
     setBusy(false);
+  };
+  const price = useProPrice();
+  /** Buys Pro for the account signed in here, as the Pro page does. */
+  const doBuy = async () => {
+    count("pro-tap-buy");
+    setBusy(true);
+    const r = await buyPro(s.account?.email);
+    setBusy(false);
+    if (r === "owned") setSheet({ kind: "welcome", proNow: false, bought: true });
+    else if (r === "pending") onToast(t("Payment pending. Pro unlocks as soon as it goes through."));
+    else if (r === "failed") onToast(t("Google Play could not be reached. Try again in a moment."));
+  };
+  /** A day of Pro for one ad, as on the Pro page. */
+  const doAdDay = async () => {
+    setBusy(true);
+    const r = await watchAdForPro();
+    setBusy(false);
+    onToast(r === "pro" || r === "pro-free" ? adOkText(r) : adFailText(r));
   };
   const openStorage = () => { Browser.open({ url: STORAGE_URL }).catch(() => {}); };
   const startSignOut = () => { setRemoveReceived(false); setSheet({ kind: "signout" }); };
@@ -286,30 +304,37 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, backRef, T }: P
       <button onClick={dismissRemoved} style={link}>{t("OK")}</button>
     </>;
   } else if (s.phase === "on" && s.pausedNoPro) {
+    // What Pro changes, side by side: how it is now, and how it is with Pro.
+    const side = (head: string, lines: string[], on: boolean) => (
+      <div style={{ flex: 1, minWidth: 0, background: ground, borderRadius: 16, padding: "14px 12px", textAlign: "left", boxSizing: "border-box", border: on ? `1px solid ${T.muted}` : "1px solid transparent" }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: on ? T.text : T.muted, marginBottom: 10 }}>{head}</div>
+        {lines.map(l => <div key={l} style={{ fontSize: 13.5, lineHeight: 1.45, color: on ? T.text : T.textSub, marginBottom: 8 }}>{l}</div>)}
+      </div>
+    );
     body = <>
       {accountRow}
       {centered(<>
         <SyncPicture T={T} mode="pause" />
         {big(t("Sync is part of MPTree Pro"))}
-        {lead(t("You're signed in, but nothing syncs yet. The songs and playlists on this device stay as they are."))}
-        <Checks T={T} items={[
-          { text: t("Songs, playlists and likes on up to {n} devices", { n: MAX }) },
-          { text: t("One payment, no subscription") },
-        ]} />
+        {lead(t("You're signed in. Here is what Pro changes."))}
+        <div style={{ display: "flex", gap: 10, width: "100%", marginTop: 20 }}>
+          {side(t("Now"), [t("Each device keeps only its own songs"), t("Playlists differ per device"), t("Nothing is sent")], false)}
+          {side(t("With Pro"), [t("Every device gets all your songs"), t("Same playlists and likes"), t("Up to {n} devices", { n: MAX })], true)}
+        </div>
       </>)}
     </>;
     bottom = <>
-      <button onClick={onOpenPro} style={btn}>{t("See MPTree Pro")}</button>
-      <div style={hint}>{t("Pro on another Google account? Sign out, then sign in with that one.")}</div>
+      <button onClick={doBuy} disabled={busy} style={{ ...btn, opacity: busy ? 0.6 : 1 }}>
+        {PRO_MODE === "free" ? `${t("Get Pro · {price}, once", { price })} (${t("test build")})` : t("Get Pro · {price}, once", { price })}
+      </button>
+      {ADS_ON && adDay.state !== "live" && (
+        <button onClick={doAdDay} disabled={busy} style={{ ...link, fontSize: 13, marginTop: 6, minHeight: 36 }}>{t("Or try it free for a day, with one ad.")}</button>
+      )}
       <button onClick={startSignOut} style={link}>{t("Sign out on this device")}</button>
     </>;
   } else if (s.phase === "on") {
     const st = syncStatus(s);
     const g = s.songs;
-    const saved = !s.problem && !s.saving && !!s.lastSaved;
-    const library = s.problem ? (s.lastSaved ? t("Last saved {when}", { when: ago(s.lastSaved) }) : t("Not saved yet"))
-      : saved ? t("Same on every device · saved {when}", { when: ago(s.lastSaved!) })
-      : t("Saving…");
     const row = {
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%",
       padding: "14px 2px", background: "transparent", borderStyle: "solid", borderColor: T.border, borderWidth: "1px 0 0",
@@ -354,17 +379,12 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, backRef, T }: P
           </span>
           <span style={{ fontSize: 17, fontWeight: 800, flexShrink: 0 }}>{g.here}</span>
         </div>
-        <div style={row}>
-          <span style={{ minWidth: 0 }}>
-            <span style={rowTitle}>{t("Playlists, likes and settings")}</span>
-            <span style={rowSub}>{library}</span>
-          </span>
-          {saved && <span style={{ display: "flex", flexShrink: 0 }}>{IC.Check(T.text)}</span>}
-        </div>
         <button onClick={() => setMobileData(!s.mobileData)} style={{ ...row, cursor: "pointer" }} role="switch" aria-checked={s.mobileData}>
           <span style={{ minWidth: 0 }}>
-            <span style={rowTitle}>{t("Use mobile data for songs")}</span>
-            <span style={rowSub}>{t("Up to {size} a day. When off, songs wait for wifi.", { size: fmtBytes(MOBILE_DAILY) })}</span>
+            <span style={rowTitle}>{t("Sync songs without wifi")}</span>
+            <span style={rowSub}>{s.mobileData
+              ? t("Now also on mobile data, at most {size} a day.", { size: fmtBytes(MOBILE_DAILY) })
+              : t("Now only on wifi, so it costs no mobile data.")}</span>
           </span>
           <Switch on={s.mobileData} T={T} />
         </button>
@@ -491,11 +511,11 @@ export function AccountSheet({ pro, onOpenPro, onClose, onToast, backRef, T }: P
       )}
       {sheet?.kind === "welcome" && (
         <Float onClose={() => setSheet(null)} T={T}>
-          <SheetTitle T={T}>{t("You're signed in")}</SheetTitle>
+          <SheetTitle T={T}>{sheet.bought ? t("Pro is yours.") : t("You're signed in")}</SheetTitle>
           <Steps T={T} items={[
             t("Your playlists and likes are combined with the ones already in your account. Nothing is lost."),
-            t("Songs move while MPTree is open on screen. Android pauses it in the background."),
-            withBold(t("Songs from your other devices are saved in {folder}."), "{folder}", "Music/MPTree"),
+            t("Your songs copy to your other devices while MPTree is open on them. When you close the app, it waits until you open it again."),
+            t("Songs from your other devices show up in your song list, just like your own."),
           ]} />
           {sheet.proNow && <div style={{ fontSize: 13.5, color: T.textSub, lineHeight: 1.5, margin: "2px 2px 14px" }}>{t("MPTree Pro is on, from your account")}</div>}
           <button onClick={() => setSheet(null)} style={{ ...btn, marginTop: 4 }}>{t("Got it")}</button>
@@ -665,7 +685,7 @@ function DeviceSheet({ d, me, step, busy, removing, onStep, onClose, onRename, o
 function HowItWorks({ T }: { T: T }) {
   const parts: [IconName, string, string][] = [
     ["list", t("Playlists, likes and settings"), t("Saved in your Google Drive. Your other devices get the changes within a minute while MPTree is open there. Language, text size, sound and the app icon stay set per device.")],
-    ["music", t("Songs"), t("Songs are copied from device to device. With MPTree open on both, they go straight across. If not, they wait in your Google Drive until the other device takes them, and are then deleted from Drive. Songs from your other devices are saved in Music/MPTree.")],
+    ["music", t("Songs"), t("Songs are copied from device to device. With MPTree open on both, they go straight across. If not, they wait in your Google Drive until the other device takes them, and are then deleted from Drive. They show up in your song list like your own; the files are in the MPTree folder, inside Music.")],
     ["eye", t("Keep MPTree open"), t("Android pauses apps in the background, so songs only move while MPTree is open on screen. Your screen stays on while a song is on its way.")],
     ["cell", t("Wifi and mobile data"), t("Playlists and likes always sync. Songs wait for wifi, unless you allow mobile data: then up to {size} a day.", { size: fmtBytes(MOBILE_DAILY) })],
     ["trash", t("Deleting songs"), t("Move a song to the bin, and it's in the bin on every device. Delete it permanently, and it's only gone from this device. Your other devices keep it, and you can get it back from the bin.")],

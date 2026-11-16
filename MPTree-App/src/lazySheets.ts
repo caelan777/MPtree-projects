@@ -17,7 +17,15 @@ function sheet<C extends ComponentType<any>>(load: () => Promise<C>) {
   };
 }
 
-const loadLook   = () => import("./components/LookSheet").then(m => m.LookSheet);
+let lookHere = false;
+const loadLook   = () => import("./components/LookSheet").then(m => { lookHere = true; return m.LookSheet; });
+
+/** Personalise is read and can show at once. Until then Settings stays in
+ *  view behind it: hiding Settings first showed the songs for a moment when
+ *  Personalise was opened in the first seconds after start-up. */
+export const lookReady = () => lookHere;
+/** Reads Personalise now, for when it is about to be opened. */
+export const loadLookSheet = () => loadLook().then(() => {});
 const loadBackup = () => import("./components/BackupSheet").then(m => m.BackupSheet);
 const loadCut    = () => import("./components/CutTrackSheet").then(m => m.CutTrackSheet);
 const loadEQ     = () => import("./components/EQSheet").then(m => m.EQSheet);
