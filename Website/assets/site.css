@@ -97,6 +97,7 @@ a { color: inherit; text-decoration: none; }
 /* ── Hero. The record is the background layer, the copy sits over it. ─── */
 .hero {
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   min-height: 78vh;
@@ -138,32 +139,25 @@ a { color: inherit; text-decoration: none; }
 }
 .cta { margin-top: 32px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cta-center { justify-content: center; }
-/* Google's official badge, unchanged apart from its empty border trimmed.
-   Same height as the large buttons beside it. */
-.play-badge { display: inline-block; border-radius: 9px; transition: opacity var(--mp-motion-fast) var(--mp-ease); }
-.play-badge:hover { opacity: 0.86; }
-.play-badge img { height: 54px; width: auto; }
+/* Official store badges (Google Play, Microsoft Store), unchanged apart from
+   empty borders trimmed. Same height as the large buttons. */
+.store-badge { display: inline-block; transition: opacity var(--mp-motion-fast) var(--mp-ease); }
+.store-badge:hover { opacity: 0.86; }
+.store-badge img { height: 54px; width: auto; }
 .cta-sub { margin: 14px 0 0; font-size: var(--mp-text-small); color: var(--mp-muted); }
 
 /* The record. Sits behind the copy, bleeding off the right edge, turning on
    its spindle. The source image is a true top-down record whose centre is the
    image centre, so rotating about that centre reads as a record playing
    rather than an object tumbling. */
-/* Fixed to the window, so the record stays where it is while the page scrolls
-   over it, and keeps turning. It sits under everything (z-index -1); the
-   feature cards have their own black ground and cover it. site.js lowers
-   --fade once the reader is past the hero, so text further down stays easy
-   to read. --base is the record's full strength (dimmer on a phone). */
 .hero-disc {
-  position: fixed;
-  z-index: -1;
+  position: absolute;
+  z-index: 0;
   top: 50%;
-  right: max(-10vw, calc((100vw - 1680px) / 2 - 168px));
+  right: -10%;
   width: min(960px, 96vw);
   aspect-ratio: 1;
   transform: translateY(-50%);
-  --base: 1;
-  opacity: calc(var(--base) * var(--fade, 1));
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -470,12 +464,10 @@ a { color: inherit; text-decoration: none; }
      headline keeps its contrast. It is lifted and pushed right so the white
      label never lands behind the download button. */
   .hero-disc {
-    /* Fixed on a phone too: the centre sits just past the right edge, so
-       the white label never lands behind the text. */
-    top: 46%;
-    right: -72vw;
+    top: 34%;
+    right: -46%;
     width: 124vw;
-    --base: 0.38;
+    opacity: 0.38;
   }
   .section { padding: 56px 24px; }
   .bar-nav { gap: 14px; }
@@ -489,16 +481,16 @@ a { color: inherit; text-decoration: none; }
   .grid { grid-template-columns: 1fr; }
   .get { padding: 32px 20px; }
   .cta .btn { width: 100%; justify-content: center; }
-  .cta .play-badge { display: flex; justify-content: center; width: 100%; }
-  .cta .play-badge img { height: 60px; }
+  .cta .store-badge { display: flex; justify-content: center; width: 100%; }
+  .cta .store-badge img { height: 60px; }
 
   /* ── A phone gets the short version ─────────────────────────────────
      Most of what makes the page busy on a small screen is things a phone
      cannot use (the Windows build) or does not need said twice. They are
      hidden here, not removed: a wide screen still shows all of it. */
-  .wide-only { display: none; }
+  .wide-only, .cta .store-badge.wide-only { display: none; }
   .hero { padding: 44px 0 52px; }
-  .hero-disc { --base: 0.24; }
+  .hero-disc { opacity: 0.24; }
   .section { padding: 44px 20px; }
   /* Windows cannot be installed from a phone, so its buttons and its
      picture go. The line under "Get MPTree" still says it exists. */
