@@ -10,6 +10,20 @@
    * animation frame per scroll burst to keep it cheap.
    */
   var disc = document.querySelector(".disc");
+  var holder = document.querySelector(".hero-disc");
+  var hero = document.querySelector(".hero");
+  /* The record is fixed to the window. Past the hero it fades to a quarter,
+     so it stays as a backdrop without fighting the text. */
+  function fade(y) {
+    if (!holder || !hero) return;
+    var h = hero.offsetHeight || 1;
+    var t = Math.min(1, Math.max(0, (y - h * 0.35) / (h * 0.55)));
+    holder.style.setProperty("--fade", (1 - 0.75 * t).toFixed(3));
+  }
+  if (reduceMotion) {
+    fade(window.scrollY || 0);
+    window.addEventListener("scroll", function () { fade(window.scrollY || 0); }, { passive: true });
+  }
   if (disc && !reduceMotion) {
     var DEGREES_PER_PIXEL = 0.18;
     var ticking = false;
@@ -18,6 +32,7 @@
       ticking = false;
       var y = window.scrollY || window.pageYOffset || 0;
       disc.style.setProperty("--rot", (y * DEGREES_PER_PIXEL).toFixed(2) + "deg");
+      fade(y);
     }
 
     window.addEventListener("scroll", function () {
