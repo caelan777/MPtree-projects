@@ -53,6 +53,8 @@ a { color: inherit; text-decoration: none; }
 }
 .btn:hover { opacity: 0.86; }
 .btn-sm { padding: 8px 14px; font-size: var(--mp-text-small); }
+/* The one coloured button: the app's violet, the same #7C3AED as shuffle. */
+.btn-violet { background: #7C3AED; border-color: #7C3AED; color: #fff; display: inline-flex; align-items: center; gap: 7px; box-shadow: 0 0 18px rgba(124, 58, 237, 0.45); }
 .btn-lg { padding: 15px 24px; font-size: 16px; }
 
 /* Secondary button: outlined, so it never competes with the solid Download button. */
