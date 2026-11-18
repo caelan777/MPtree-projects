@@ -10,7 +10,7 @@ name: iPhone build
 on:
   push:
     branches: [ios]
-    paths: [MPTree-App/**, .github/workflows/ios.yml]
+    paths: [MPTree-App/**, .github/workflows/ios.yml, .github/sim-tour.py]
   workflow_dispatch:
 
 permissions:
@@ -103,18 +103,37 @@ jobs:
             -derivedDataPath simbuild \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Start it and take screenshots
+      - name: Tools to tap with
+        working-directory: .
         run: |
-          mkdir -p shots
+          brew tap facebook/fb
+          brew install idb-companion
+          pip3 install --break-system-packages fb-idb
+
+      - name: Start it, add test songs, tap through it
+        run: |
+          mkdir -p shots songs
           DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16')))")
           xcrun simctl boot "$DEV"
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl privacy "$DEV" grant media-library com.caelan.mptree || true
           xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/App.app
+          # Three short tones as songs, in the app's own folder (Files, MPTree).
+          python3 -c "
+          import math,struct,wave
+          for i,(name,f) in enumerate([('Test Song One',440),('Test Song Two',523),('Test Song Three',659)]):
+              w=wave.open(f'songs/{name}.wav','w'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050)
+              w.writeframes(b''.join(struct.pack('<h',int(8000*math.sin(2*math.pi*f*t/22050))) for t in range(22050*20)))
+          "
+          DOCS="$(xcrun simctl get_app_container "$DEV" com.caelan.mptree data)/Documents"
+          mkdir -p "$DOCS"
+          for f in songs/*.wav; do afconvert -f m4af -d aac "$f" "$DOCS/$(basename "${f%.wav}").m4a"; done
+          ls -l "$DOCS"
+          idb_companion --udid "$DEV" > shots/companion.log 2>&1 &
+          sleep 5
+          idb connect "$DEV" || true
           xcrun simctl launch --console-pty "$DEV" com.caelan.mptree > shots/console.log 2>&1 &
-          for t in 5 12 25; do sleep $((t > 5 ? 7 : 5)); xcrun simctl io "$DEV" screenshot "shots/after-${t}s.png"; done
-          sleep 10; xcrun simctl io "$DEV" screenshot shots/after-35s.png
-          xcrun simctl spawn "$DEV" log show --last 2m --predicate 'process == "App"' --style compact > shots/system.log 2>&1 || true
+          python3 ../.github/sim-tour.py "$DEV" shots | tee shots/tour.log
           ls -l shots
 
       - uses: actions/upload-artifact@v4
