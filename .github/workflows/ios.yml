@@ -10,7 +10,7 @@ name: iPhone build
 on:
   push:
     branches: [ios]
-    paths: [MPTree-App/**, .github/workflows/ios.yml, .github/sim-tour.py]
+    paths: [MPTree-App/**, .github/workflows/ios.yml]
   workflow_dispatch:
 
 permissions:
@@ -89,7 +89,7 @@ jobs:
       - name: Web app
         run: |
           npm ci
-          npm run build:ios
+          VITE_SIM_TOUR=1 npm run build:ios
           npx cap sync ios
 
       - name: Build for the simulator
@@ -102,14 +102,6 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath simbuild \
             CODE_SIGNING_ALLOWED=NO
-
-      - name: Tools to tap with
-        working-directory: .
-        run: |
-          brew tap facebook/fb
-          brew trust facebook/fb
-          brew install idb-companion
-          pip3 install --break-system-packages fb-idb
 
       - name: Start it, add test songs, tap through it
         run: |
@@ -130,11 +122,14 @@ jobs:
           mkdir -p "$DOCS"
           for f in songs/*.wav; do afconvert -f m4af -d aac "$f" "$DOCS/$(basename "${f%.wav}").m4a"; done
           ls -l "$DOCS"
-          idb_companion --udid "$DEV" > shots/companion.log 2>&1 &
-          sleep 5
-          idb connect "$DEV" || true
           xcrun simctl launch --console-pty "$DEV" com.caelan.mptree > shots/console.log 2>&1 &
-          python3 ../.github/sim-tour.py "$DEV" shots | tee shots/tour.log
+          T0=$(date +%s)
+          for p in 12:welcome 20:after-next 27:songs 34:songs-2 43:playing 53:player 63:player-closed; do
+            at=${p%%:*}; name=${p#*:}
+            while [ $(( $(date +%s) - T0 )) -lt $at ]; do sleep 1; done
+            xcrun simctl io "$DEV" screenshot "shots/$at-$name.png"
+          done
+          grep "\[tour\]" shots/console.log || true
           ls -l shots
 
       - uses: actions/upload-artifact@v4
