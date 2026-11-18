@@ -124,11 +124,14 @@ jobs:
           ls -l "$DOCS"
           xcrun simctl launch --console-pty "$DEV" com.caelan.mptree > shots/console.log 2>&1 &
           T0=$(date +%s)
-          for p in 12:welcome 20:after-next 27:songs 34:songs-2 43:playing 53:player 63:player-closed; do
-            at=${p%%:*}; name=${p#*:}
-            while [ $(( $(date +%s) - T0 )) -lt $at ]; do sleep 1; done
-            xcrun simctl io "$DEV" screenshot "shots/$at-$name.png"
+          shot() { xcrun simctl io "$DEV" screenshot "shots/$1.png" >/dev/null 2>&1; echo "$1 at $(( $(date +%s) - T0 ))s"; }
+          sleep 12; shot 0-welcome
+          # One screenshot 3 s after each tap the app makes (simTour.ts).
+          for k in 1 2 3 4 5 6; do
+            until [ "$(grep -ac 'tour\] ' shots/console.log)" -gt $k ]; do sleep 1; done
+            sleep 3; shot "$k-$(grep -a 'tour\] ' shots/console.log | sed -n "$((k+1))p" | sed 's/.*tour\] //; s/[^A-Za-z]/-/g')"
           done
+          sleep 15; shot 7-after-the-song
           grep "\[tour\]" shots/console.log || true
           ls -l shots
 
