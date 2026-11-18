@@ -428,6 +428,45 @@ public class SyncPlugin extends Plugin {
         });
     }
 
+    /** Downloads a file the source offers for download (Discover) into the
+     *  temp file for tid, following its redirect. Resolves { size };
+     *  finishFile then publishes it. */
+    @PluginMethod
+    public void urlDownload(PluginCall call) {
+        String url = call.getString("url");
+        String tid = call.getString("tid");
+        if (url == null || !url.startsWith("https://")) { call.reject("Only https", "BAD_URL"); return; }
+        io.execute(() -> {
+            HttpURLConnection c = null;
+            try {
+                c = (HttpURLConnection) new URL(url).openConnection();
+                c.setInstanceFollowRedirects(true);
+                c.setConnectTimeout(20000);
+                c.setReadTimeout(30000);
+                int code = c.getResponseCode();
+                if (code != 200) { failHttp(call, c, code); return; }
+                long total = c.getContentLengthLong();
+                File tmp = tempFile(tid);
+                try (InputStream is = c.getInputStream(); OutputStream os = new FileOutputStream(tmp)) {
+                    copy(is, os, tid, total);
+                }
+                if (total > 0 && tmp.length() != total) {
+                    tmp.delete();
+                    call.reject("Incomplete", "INCOMPLETE");
+                    return;
+                }
+                JSObject r = new JSObject();
+                r.put("size", tmp.length());
+                call.resolve(r);
+            } catch (Exception e) {
+                tempFile(tid).delete();
+                call.reject(isFull(e) ? "ENOSPC" : "Download failed: " + e.getMessage(), isFull(e) ? "FULL" : "NETWORK");
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        });
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
     private void copy(InputStream is, OutputStream os, String tid, long total) throws Exception {
         byte[] buf = new byte[64 * 1024];

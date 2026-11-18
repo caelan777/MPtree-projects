@@ -11,10 +11,27 @@ import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
 import android.content.Intent;
+import android.content.ClipData;
+import androidx.core.content.FileProvider;
+import com.getcapacitor.JSArray;
+import java.util.ArrayList;
 import android.net.Uri;
 import android.os.Build;
 import android.webkit.WebSettings;
+import android.graphics.Color;
+import android.view.Window;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -291,5 +308,250 @@ public class SystemPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Could not add the shortcut", e);
         }
+    }
+
+    // ── Sharing a song with its name, artist and cover ──────────────────────
+    // A name, artist or cover set in MPTree lives in MPTree only, not in the
+    // file, so sharing the file itself loses them. This makes a copy in the
+    // cache named "Artist - Title.ext" and, for an mp3, with the title, artist
+    // and cover written into its ID3 tag; the other tags in it are kept. Other
+    // formats get the name only. The cache folder is emptied each time.
+    /** The navigation bar: its colour (older Android; newer ones draw the page
+     *  behind it) and dark or light buttons, to suit the theme. */
+    @PluginMethod
+    public void setNavBar(PluginCall call) {
+        boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
+        String color = call.getString("color");
+        getActivity().runOnUiThread(() -> {
+            try {
+                Window w = getActivity().getWindow();
+                if (color != null) {
+                    try { w.setNavigationBarColor(Color.parseColor(color)); } catch (IllegalArgumentException ignored) { }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) w.setNavigationBarContrastEnforced(false);
+                WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                c.setAppearanceLightNavigationBars(light);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("nav bar: " + e.getMessage());
+            }
+        });
+    }
+
+    // ── The share sheet, for songs ──────────────────────────────────────────
+    // Songs go out as what they are, audio, so whoever gets them can play
+    // them. WhatsApp makes an audio message of a song, which shows no name, so
+    // the names go along as text ("Artist - Title", one per line). Sent as a
+    // plain file instead (build 100) it kept its name but could not be opened.
+    @PluginMethod
+    public void shareFiles(PluginCall call) {
+        JSArray list = call.getArray("paths");
+        String title = call.getString("title", "");
+        String dialogTitle = call.getString("dialogTitle", "");
+        String text = call.getString("text", "");
+        try {
+            ArrayList<Uri> uris = new ArrayList<>();
+            ArrayList<String> types = new ArrayList<>();
+            String authority = getContext().getPackageName() + ".shareprovider";
+            for (int i = 0; list != null && i < list.length(); i++) {
+                String p = list.getString(i);
+                if (p.startsWith("content://")) {
+                    Uri u = Uri.parse(p);
+                    uris.add(u);
+                    types.add(getContext().getContentResolver().getType(u));
+                    continue;
+                }
+                if (p.startsWith("file://")) p = Uri.parse(p).getPath();
+                uris.add(FileProvider.getUriForFile(getContext(), authority, new File(p)));
+                int dot = p.lastIndexOf('.');
+                types.add(dot < 0 ? null : android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(p.substring(dot + 1).toLowerCase(Locale.ROOT)));
+            }
+            if (uris.isEmpty()) { call.reject("nothing to share"); return; }
+            Intent send;
+            if (uris.size() == 1) {
+                send = new Intent(Intent.ACTION_SEND);
+                send.putExtra(Intent.EXTRA_STREAM, uris.get(0));
+            } else {
+                send = new Intent(Intent.ACTION_SEND_MULTIPLE);
+                send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
+            }
+            // One type for all: the same one, else "audio/*", else anything.
+            String type = types.get(0);
+            for (String ty : types) {
+                if (type == null || ty == null) { type = null; break; }
+                if (!type.equals(ty)) type = type.startsWith("audio/") && ty.startsWith("audio/") ? "audio/*" : "*/*";
+            }
+            send.setType(type == null ? "audio/*" : type);
+            if (!title.isEmpty()) send.putExtra(Intent.EXTRA_TITLE, title);
+            if (!text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
+            ClipData clip = ClipData.newRawUri(title, uris.get(0));
+            for (int i = 1; i < uris.size(); i++) clip.addItem(new ClipData.Item(uris.get(i)));
+            send.setClipData(clip);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, dialogTitle.isEmpty() ? null : dialogTitle);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("share failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void prepareShare(PluginCall call) {
+        String path = call.getString("path");
+        // Several songs at once: the first call empties the folder, the others add.
+        boolean clear = !Boolean.FALSE.equals(call.getBoolean("clear", true));
+        String title = call.getString("title", "");
+        String artist = call.getString("artist", "");
+        String cover = call.getString("cover");
+        if (path == null) { call.reject("no path"); return; }
+        new Thread(() -> {
+            try {
+                File src = new File(path);
+                File dir = new File(getContext().getCacheDir(), "share");
+                if (clear) {
+                    File[] old = dir.listFiles();
+                    if (old != null) for (File f : old) f.delete();
+                }
+                dir.mkdirs();
+                String name = src.getName();
+                int dot = name.lastIndexOf('.');
+                String ext = dot >= 0 ? name.substring(dot).toLowerCase(Locale.ROOT) : "";
+                String base = (artist.isEmpty() ? title : artist + " - " + title).replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "").trim();
+                if (base.isEmpty()) base = dot >= 0 ? name.substring(0, dot) : name;
+                if (base.length() > 120) base = base.substring(0, 120).trim();
+                File out = new File(dir, base + ext);
+                // Two songs with the same name: "Name (2)".
+                for (int n = 2; out.exists(); n++) out = new File(dir, base + " (" + n + ")" + ext);
+                boolean tagged = ext.equals(".mp3") && writeMp3(src, out, title, artist, decodeCover(cover));
+                if (!tagged) { out.delete(); appendRange(src, out, 0, src.length()); }
+                JSObject ret = new JSObject();
+                ret.put("path", out.getAbsolutePath());
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("share copy failed: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    /** { mime, picture } from a data: URL, or null. */
+    private static byte[][] decodeCover(String cover) {
+        if (cover == null || !cover.startsWith("data:")) return null;
+        int comma = cover.indexOf(',');
+        int semi = cover.indexOf(';');
+        if (comma < 0 || semi < 0 || semi > comma) return null;
+        byte[] mime = cover.substring(5, semi).getBytes(StandardCharsets.ISO_8859_1);
+        return new byte[][] { mime, Base64.decode(cover.substring(comma + 1), Base64.DEFAULT) };
+    }
+
+    private static void appendRange(File src, File out, long from, long len) throws IOException {
+        try (RandomAccessFile in = new RandomAccessFile(src, "r");
+             OutputStream os = new BufferedOutputStream(new FileOutputStream(out, true))) {
+            in.seek(from);
+            byte[] buf = new byte[65536];
+            long left = len;
+            while (left > 0) {
+                int n = in.read(buf, 0, (int) Math.min(buf.length, left));
+                if (n < 0) break;
+                os.write(buf, 0, n);
+                left -= n;
+            }
+        }
+    }
+
+    private static int syncsafe(byte[] b, int o) {
+        return ((b[o] & 0x7f) << 21) | ((b[o + 1] & 0x7f) << 14) | ((b[o + 2] & 0x7f) << 7) | (b[o + 3] & 0x7f);
+    }
+
+    private static int plain(byte[] b, int o) {
+        return ((b[o] & 0xff) << 24) | ((b[o + 1] & 0xff) << 16) | ((b[o + 2] & 0xff) << 8) | (b[o + 3] & 0xff);
+    }
+
+    private static void putSize(ByteArrayOutputStream o, int n, boolean safe) {
+        if (safe) { o.write((n >> 21) & 0x7f); o.write((n >> 14) & 0x7f); o.write((n >> 7) & 0x7f); o.write(n & 0x7f); }
+        else { o.write(n >>> 24); o.write((n >> 16) & 0xff); o.write((n >> 8) & 0xff); o.write(n & 0xff); }
+    }
+
+    private static void frame(ByteArrayOutputStream o, String id, byte[] data, boolean safe) {
+        o.write(id.getBytes(StandardCharsets.ISO_8859_1), 0, 4);
+        putSize(o, data.length, safe);
+        o.write(0); o.write(0);
+        o.write(data, 0, data.length);
+    }
+
+    /** A text frame's body: UTF-16 with its byte order mark. */
+    private static byte[] text(String s) {
+        byte[] t = s.getBytes(StandardCharsets.UTF_16);
+        byte[] d = new byte[t.length + 1];
+        d[0] = 1;
+        System.arraycopy(t, 0, d, 1, t.length);
+        return d;
+    }
+
+    /** False when the file's own tag is a kind this does not rewrite (v2.2,
+     *  unsynchronised, extended header): the caller then sends a plain copy. */
+    private static boolean writeMp3(File src, File out, String title, String artist, byte[][] cover) throws IOException {
+        long fileLen = src.length();
+        int major = 3;
+        long audioFrom = 0;
+        long audioEnd = fileLen;
+        ByteArrayOutputStream kept = new ByteArrayOutputStream();
+        try (RandomAccessFile in = new RandomAccessFile(src, "r")) {
+            byte[] head = new byte[10];
+            if (fileLen >= 10) in.readFully(head);
+            if (fileLen >= 10 && head[0] == 'I' && head[1] == 'D' && head[2] == '3') {
+                major = head[3];
+                int flags = head[5] & 0xff;
+                int size = syncsafe(head, 6);
+                if ((major != 3 && major != 4) || (flags & 0xc0) != 0 || size > 16 * 1024 * 1024) return false;
+                audioFrom = 10 + size + ((flags & 0x10) != 0 ? 10 : 0);
+                byte[] tag = new byte[size];
+                in.readFully(tag);
+                int p = 0;
+                while (p + 10 <= size && tag[p] != 0) {
+                    String id = new String(tag, p, 4, StandardCharsets.ISO_8859_1);
+                    int fs = major == 4 ? syncsafe(tag, p + 4) : plain(tag, p + 4);
+                    if (fs < 0 || p + 10 + fs > size) break;
+                    boolean drop = id.equals("TIT2") || id.equals("TPE1") || (cover != null && id.equals("APIC"));
+                    if (!drop) kept.write(tag, p, 10 + fs);
+                    p += 10 + fs;
+                }
+            }
+            // An old ID3v1 tag at the end would still give the file's own title.
+            if (fileLen - audioFrom >= 128) {
+                byte[] v1 = new byte[3];
+                in.seek(fileLen - 128);
+                in.readFully(v1);
+                if (v1[0] == 'T' && v1[1] == 'A' && v1[2] == 'G') audioEnd = fileLen - 128;
+            }
+        }
+        boolean safe = major == 4;
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        if (!title.isEmpty()) frame(body, "TIT2", text(title), safe);
+        if (!artist.isEmpty()) frame(body, "TPE1", text(artist), safe);
+        if (cover != null) {
+            ByteArrayOutputStream a = new ByteArrayOutputStream();
+            a.write(0);
+            a.write(cover[0], 0, cover[0].length);
+            a.write(0);
+            a.write(3);
+            a.write(0);
+            a.write(cover[1], 0, cover[1].length);
+            frame(body, "APIC", a.toByteArray(), safe);
+        }
+        byte[] k = kept.toByteArray();
+        body.write(k, 0, k.length);
+        int padding = 256;
+        ByteArrayOutputStream h = new ByteArrayOutputStream();
+        h.write('I'); h.write('D'); h.write('3'); h.write(major); h.write(0); h.write(0);
+        putSize(h, body.size() + padding, true);
+        try (FileOutputStream os = new FileOutputStream(out)) {
+            h.writeTo(os);
+            body.writeTo(os);
+            os.write(new byte[padding]);
+        }
+        appendRange(src, out, audioFrom, audioEnd - audioFrom);
+        return true;
     }
 }

@@ -27,7 +27,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Does MPTree need the internet?",
-    a: "No. It plays what is on your phone and works in flight mode. The only thing it ever looks up is whether a newer version is out, and you can turn that off in Settings.",
+    a: "Only for Discover. Everything else plays what is on your phone and works in flight mode. Discover needs a connection to find and download free music, and MPTree also looks up whether a newer version is out, which you can turn off in Settings.",
   },
   {
     q: "Can my music keep playing while I watch videos in another app?",

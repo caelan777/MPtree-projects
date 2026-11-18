@@ -1,5 +1,6 @@
 import { NL } from "./i18n-nl";
 import { ES } from "./i18n-es";
+import { RU } from "./i18n-ru";
 
 // ─── LANGUAGE ────────────────────────────────────────────────────────────────
 // Every piece of text the app shows goes through t(), keyed on the English
@@ -11,7 +12,8 @@ import { ES } from "./i18n-es";
 //
 // English keys keep the component code readable, and a sentence nobody has
 // translated yet falls back to English instead of to a blank or to a key name.
-// Each other language lives in its own file (i18n-nl.ts, i18n-es.ts), one
+// Each other language lives in its own file (i18n-nl.ts, i18n-es.ts,
+// i18n-ru.ts), one
 // entry per English sentence. A new language is a file like those, a line in
 // LANGS, LANG_NAMES and TABLES here, and a flag in LanguageSheet.tsx.
 //
@@ -19,16 +21,16 @@ import { ES } from "./i18n-es";
 // whole tree when it changes (see setLanguage in App.tsx), and the two memo()
 // components hold no text, so nothing can be left behind in the old language.
 
-export type Lang = "en" | "nl" | "es";
+export type Lang = "en" | "nl" | "es" | "ru";
 export type LangPref = "auto" | Lang;
 
 /** In the order the language picker shows them. */
-export const LANGS: Lang[] = ["en", "nl", "es"];
+export const LANGS: Lang[] = ["en", "nl", "es", "ru"];
 /** Each language named in itself. */
-export const LANG_NAMES: Record<Lang, string> = { en: "English", nl: "Nederlands", es: "Español" };
+export const LANG_NAMES: Record<Lang, string> = { en: "English", nl: "Nederlands", es: "Español", ru: "Русский" };
 export const isLang = (v: unknown): v is Lang => LANGS.includes(v as Lang);
 
-const TABLES: Partial<Record<Lang, Record<string, string>>> = { nl: NL, es: ES };
+const TABLES: Partial<Record<Lang, Record<string, string>>> = { nl: NL, es: ES, ru: RU };
 
 /** The phone's own language, narrowed to one MPTree has. */
 export function phoneLang(): Lang {
@@ -69,11 +71,23 @@ export function t(en: string, vars?: Record<string, string | number>): string {
     if (own !== undefined) s = own;
     else if (import.meta.env.DEV) missing.add(en);
   }
+  // Russian has three forms for a count: "one|few|many" (1, 2 to 4, 5 and up).
+  if (s.includes("|") && vars && typeof vars.n === "number") s = pluralForm(s, vars.n);
   if (!vars) return s;
   return s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-/** One and other. English, Dutch and Spanish agree on where the line is. */
+const ruRules = typeof Intl !== "undefined" ? new Intl.PluralRules("ru") : null;
+/** "one|few|many" for n: 1, 21 → one; 2, 3, 24 → few; 5, 11, 100 → many. */
+function pluralForm(forms: string, n: number): string {
+  const f = forms.split("|");
+  if (f.length < 3) return f[f.length - 1];
+  const r = ruRules?.select(n) ?? (n === 1 ? "one" : "many");
+  return r === "one" ? f[0] : r === "few" ? f[1] : f[2];
+}
+
+/** One and other. English, Dutch and Spanish agree on where the line is;
+ *  Russian's "other" sentence carries its three forms, and t() picks one. */
 export function tn(n: number, one: string, other: string, vars?: Record<string, string | number>): string {
   return t(n === 1 ? one : other, { n, ...vars });
 }

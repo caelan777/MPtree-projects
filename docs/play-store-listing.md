@@ -8,6 +8,51 @@ Privacy policy URL to use in the console: **https://mp-tree.net/privacy**
 
 ---
 
+## Release notes for 1.3.7 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.7.aab`
+(versionCode 137, built 2026-11-05 with `npm run build:play` from `main` after merging `discover`;
+the next bundle or test build is 138). Test builds 87 to 104. **Something new to declare:** Discover sends
+search words to Audius and the Internet Archive and streams and downloads songs from them
+(https://mp-tree.net/privacy#discover). In the Data safety form: App activity, In-app search history,
+collected, not shared, for app functionality, encrypted in transit. Ontdekken is hidden on the iPhone.
+
+```
+<en-GB>
+New: Discover. Tap the download button next to Playlists for music that its makers allow you to share, from Audius and the Internet Archive. Browse popular songs, artists and genres, play a whole song first, and download it straight into your Songs. Search both sources from the header. You can now share a whole playlist, the navigation bar stays visible with the player just above it, and a player you fold away stays folded.
+</en-GB>
+<nl-NL>
+Nieuw: Ontdekken. Tik op de downloadknop naast Playlists voor muziek die de makers laten delen, van Audius en het Internet Archive. Blader door populaire nummers, artiesten en genres, luister eerst een heel nummer en download het meteen naar je Liedjes. Zoek in beide bronnen vanuit de kop. Je kunt nu ook een hele playlist delen, de navigatiebalk blijft zichtbaar met de speler er net boven, en een ingeklapte speler blijft ingeklapt.
+</nl-NL>
+<es-ES>
+Nuevo: Descubrir. Toca el botón de descarga junto a Listas para ver música que sus autores dejan compartir, de Audius y el Internet Archive. Explora canciones, artistas y géneros populares, escucha una canción entera antes y descárgala directamente a tus Canciones. Busca en ambas fuentes desde la cabecera. Ahora también puedes compartir una lista entera, la barra de navegación se queda visible con el reproductor justo encima y un reproductor plegado se queda plegado.
+</es-ES>
+```
+
+---
+
+## Release notes for 1.3.6 (max 500 characters each)
+
+The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.6.aab`
+(versionCode 118, built 2026-11-02 with `npm run build:play` from `main` after merging `fixes-startup-swipe`;
+the next bundle or test build is 119). Test builds 83 to 86. **Something new to declare:** the anonymous
+counter (`src/counter.ts`, https://mp-tree.net/privacy#counter) counts app opens, tabs used and Pro and ad moments,
+without any id. Update the Data safety form in Play Console before or with this release.
+
+```
+<en-GB>
+Your songs load while the logo plays. A shared song carries its name, artist and cover. Hold a playlist and tap its X to delete it, with Undo. Tap the record to switch it with the photo, hold it to change the photo. The photo you choose shows on the lock screen. Everything moves faster, and the player opens and closes with a shorter swipe. New here? A card in Songs explains how to add music. Fixed a screen that could freeze after a very short swipe.
+</en-GB>
+<nl-NL>
+Je liedjes laden terwijl het logo speelt. Een gedeeld liedje heeft zijn naam, artiest en hoes. Houd een playlist vast en tik op het kruisje om hem te verwijderen, met Ongedaan maken. Tik op de plaat om te wisselen met de foto, houd hem vast om de foto te veranderen. Je gekozen foto staat op het vergrendelscherm. Alles gaat sneller en de speler opent en sluit met een kortere veeg. Nieuw? Een kaart bij Liedjes legt uit hoe je muziek toevoegt. Een vastloper na een korte veeg is opgelost.
+</nl-NL>
+<es-ES>
+Tus canciones cargan mientras suena el logo. Una canción compartida lleva su nombre, artista y portada. Mantén pulsada una lista y toca su X para borrarla, con Deshacer. Toca el disco para cambiar a la foto, mantenlo para cambiar la foto. La foto que elijas sale en la pantalla de bloqueo. Todo va más rápido y el reproductor se abre y cierra con un gesto más corto. ¿Eres nuevo? Una tarjeta en Canciones explica cómo añadir música. Arreglado un bloqueo tras un gesto muy corto.
+</es-ES>
+```
+
+---
+
 ## Release notes for 1.3.5 (max 500 characters each)
 
 The AAB is `MPTree-App/android/app/build/outputs/bundle/release/MPTree-1.3.5.aab`
@@ -483,6 +528,90 @@ MPTree is a player for audio files you already have on your device. It is perfec
 keep your own music collection and want a fast, clean, private way to listen to it.
 
 Free, no catch. Just your music, on your devices.
+```
+
+---
+
+## Store listing in Russian (ru-RU)
+
+Added November 2026, with the Russian app. Play Console → Store presence → Main store
+listing → Manage translations → Russian. Written fresh rather than translated line by
+line: it names Discover, and it says "anonymous counter" where the English still says
+"no analytics" (the English needs that fix too).
+
+### App name (max 30 characters)
+
+```
+MPTree: офлайн-плеер музыки
+```
+(27 characters)
+
+### Short description (max 80 characters)
+
+```
+Плеер для музыки на вашем телефоне. Без интернета, без подписки, без слежки.
+```
+(76 characters)
+
+### Full description (max 4000 characters)
+
+```
+MPTree играет музыку, которая уже есть на вашем телефоне. Без стриминга, без подписки и
+без интернета. Это бесплатно, и то, что вы слушаете, никуда не отправляется.
+
+Откройте MPTree, разрешите ему найти аудиофайлы, и вся медиатека готова. Это вся
+настройка.
+
+ЧТО ВНУТРИ
+
+Работает без интернета
+Музыка играет без связи: в метро, в самолёте, где угодно.
+
+Бесплатная музыка в «Обзоре»
+Нет своих песен? В «Обзоре» есть бесплатная музыка с Audius и Internet Archive: только
+то, что исполнители сами разрешают скачивать. Послушайте, скачайте одним нажатием, и
+песня останется на телефоне.
+
+Автоплейлисты
+Избранное, Недавно играли, Чаще всего и Последние добавленные обновляются сами.
+
+Эквалайзер и плавный переход
+Настройте звук встроенным эквалайзером, смешивайте треки на стыке и меняйте скорость.
+
+Обрезка треков
+Обрежьте любую песню и сохраните результат как новый файл. Оригинал не меняется.
+
+Виджет и управление
+Управляйте музыкой с экрана блокировки, из уведомлений и с виджета. Музыка играет и с
+выключенным экраном.
+
+Резервные копии
+Сохраните плейлисты, обложки и музыку в одну папку и восстановите позже или на новом
+телефоне.
+
+MPTREE PRO
+
+Один платёж, без подписки. Pro добавляет стили Aviela и Lantern, пластинки, цвета и
+значки и никогда не отнимает бесплатные функции. Хотите попробовать? Нажмите «Смотреть
+рекламу», и Pro включится на 24 часа. Если рекламы для вас нет, день Pro всё равно
+включится.
+
+С Pro можно войти через Google и пользоваться MPTree на трёх устройствах. Плейлисты,
+лайки и настройки на всех одинаковые, а песни сами переходят с одного устройства на
+другое. Всё хранится в вашем собственном Google Диске, а не у нас.
+
+ПРИВАТНОСТЬ
+
+В MPTree нет слежки. Есть только анонимный счётчик: он узнаёт, сколько людей открыли
+приложение за день, без ID, без cookie и без данных о ваших песнях. Реклама показывается,
+только когда вы сами просите. Вход в аккаунт необязателен. Полная политика
+конфиденциальности: mp-tree.net/privacy (на английском).
+
+ДЛЯ ВАШЕЙ МУЗЫКИ
+
+MPTree играет аудиофайлы, которые у вас уже есть. Быстро, чисто и только для вас.
+
+Бесплатно и без подвоха. Просто ваша музыка на ваших устройствах.
 ```
 
 ---

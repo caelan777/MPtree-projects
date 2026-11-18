@@ -26,3 +26,41 @@ html, body {
   margin: 0;
   border: none;
 }
+/* ── Landscape on a phone ───────────────────────────────────────────────────
+   MPTree is drawn for a phone held upright. Turned sideways, every page was
+   stretched across the whole width. Now the app is one column: on the right
+   with the player in the room on its left (SidePlayer), or in the middle on a
+   narrower phone. utils.ts applyColumn sets its width and where it starts.
+   The transform makes the body the frame for everything fixed in it (sheets,
+   menus, the side player), so they stay with the column; the clip-path lets
+   the side player draw to the left of it. */
+@media (orientation: landscape) and (max-height: 600px) and (min-width: 700px) {
+  body {
+    width: var(--mp-col, 600px);
+    max-width: none;
+    margin: 0 0 0 var(--mp-left, auto) !important;
+    height: 100svh;
+    overflow: hidden;
+    transform: translateZ(0);
+    box-shadow: 0 0 0 100vmax var(--mp-side, #000);
+    clip-path: inset(0 -100vmax);
+  }
+  /* The app's frame clips what spills over its edge; here that cut the header
+     card's shadow off in a straight line at the side of the column. Clipping
+     a little way out lets the shadow fade out on its own. */
+  [data-app-shell] {
+    overflow: clip !important;
+    overflow-clip-margin: 40px;
+  }
+}
+
+/* The small records on the Pro page and in its notes (ProArt.tsx). */
+@keyframes mpProDiscSpin { to { transform: rotate(360deg); } }
+.mp-disc-spin { animation: mpProDiscSpin 8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .mp-disc-spin { animation: none; } }
+
+/* The row of every record after buying Pro (ProArt RecordRow): half its
+   width is one full set, so moving by half loops without a jump. */
+@keyframes mpRecordRow { to { transform: translateX(-50%); } }
+.mp-record-row { animation: mpRecordRow var(--mp-row-time, 60s) linear infinite; }
+@media (prefers-reduced-motion: reduce) { .mp-record-row { animation: none; } }

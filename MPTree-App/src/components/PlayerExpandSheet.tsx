@@ -1,4 +1,5 @@
 import { useState, useRef, memo } from "react";
+import { viewW, COLUMN_QUERY } from "../utils";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
@@ -122,6 +123,8 @@ type PlayerExpandSheetProps = {
   onNoCover?: () => void;
   /** A tap on the record: change the song's photo. */
   onChangePhoto?: () => void;
+  /** The small button on the record: opens the record skins. Tapping the
+   *  record itself still turns it between photo and record. */
   onClose: () => void;
   /** 0..1 while the mini-player drag is pulling the sheet up (null = normal). */
   dragProgress?: number | null;
@@ -220,7 +223,7 @@ export function PlayerExpandSheet({
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
-    setTimeout(onClose, 240); // matches .pes-sheet-out duration
+    setTimeout(onClose, 180); // matches .pes-sheet-out duration
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -239,11 +242,11 @@ export function PlayerExpandSheet({
   };
   const openUpNext = () => {
     setUpSnap(true); setUpOpen(true); setUpPull(0);
-    setTimeout(() => setUpSnap(false), 300);
+    setTimeout(() => setUpSnap(false), 240);
   };
   const closeUpNext = () => {
     setUpSnap(true); setUpOpen(false); setUpPull(0);
-    setTimeout(() => setUpSnap(false), 300);
+    setTimeout(() => setUpSnap(false), 240);
   };
 
   // ── Drags ─────────────────────────────────────────────────────────────────
@@ -253,7 +256,7 @@ export function PlayerExpandSheet({
   // direction once, after the first few pixels, and then follows the finger.
   const [closeDragY, setCloseDragY] = useState(0);
   const [closeSnap, setCloseSnap]   = useState(false);
-  const drag = useRef<{ y: number; x: number; mode: null | "close" | "up" | "back" | "none"; on: "player" | "page"; inList: boolean } | null>(null);
+  const drag = useRef<{ y: number; x: number; t: number; mode: null | "close" | "up" | "back" | "none"; on: "player" | "page"; inList: boolean } | null>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const vh = () => window.innerHeight || 800;
 
@@ -262,7 +265,7 @@ export function PlayerExpandSheet({
     const el = e.target as HTMLElement;
     // The timeline, the lyrics and a row's handle have drags of their own.
     if (el.closest("input, [data-own-drag]")) { drag.current = null; return; }
-    drag.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, mode: null, on, inList: !!el.closest("[data-up-list]") };
+    drag.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, t: Date.now(), mode: null, on, inList: !!el.closest("[data-up-list]") };
     setCloseSnap(false);
   };
   const dragMove = (e: React.TouchEvent) => {
@@ -293,22 +296,25 @@ export function PlayerExpandSheet({
     const d = drag.current;
     drag.current = null;
     if (!d || !d.mode || d.mode === "none") return;
+    // A quick flick counts as much as a long drag.
+    const moved = d.mode === "close" ? closeDragY : upPull;
+    const flick = moved > 24 && moved / Math.max(1, Date.now() - d.t) > 0.35;
     if (d.mode === "close") {
-      if (closeDragY > vh() * 0.22) {
+      if (closeDragY > vh() * 0.12 || flick) {
         if (closingRef.current) return;
         closingRef.current = true;
         setCloseSnap(true);
         setCloseDragY(vh());         // glide the rest of the way down
-        setTimeout(onClose, 260);
+        setTimeout(onClose, 230);    // just after the 0.22 s glide, never mid-way
       } else {
         setCloseSnap(true);
         setCloseDragY(0);            // snap back up
-        setTimeout(() => setCloseSnap(false), 280);
+        setTimeout(() => setCloseSnap(false), 220);
       }
     } else if (d.mode === "up") {
-      if (upPull > vh() * 0.15) openUpNext(); else closeUpNext();
+      if (upPull > vh() * 0.08 || flick) openUpNext(); else closeUpNext();
     } else if (d.mode === "back") {
-      if (upPull > vh() * 0.15) closeUpNext(); else openUpNext();
+      if (upPull > vh() * 0.1 || flick) closeUpNext(); else openUpNext();
     }
   };
 
@@ -361,8 +367,17 @@ export function PlayerExpandSheet({
 
   // The record at the size it always had. The player is as tall as what it
   // holds, so nothing is stretched to fill a screen.
-  const winW = typeof window !== "undefined" ? window.innerWidth : 375;
-  const discSize = Math.min(268, winW - 84);
+  const winW = typeof window !== "undefined" ? viewW() : 375;
+  // Sideways on a phone the record goes left of the title and the controls,
+  // sized to the height there is, so the whole player fits on the screen.
+  const land = typeof window !== "undefined" && !!window.matchMedia?.(COLUMN_QUERY).matches;
+  const discSize = land ? Math.max(140, Math.min(230, window.innerHeight - 150)) : Math.min(268, winW - 84);
+  // Height of the record and title together, so the lyrics can take exactly
+  // that room: opening them moves nothing else in the card.
+  const [topH, setTopH] = useState(0);
+  const measureTop = (el: HTMLDivElement | null) => {
+    if (el && !land && el.offsetHeight && el.offsetHeight !== topH) setTopH(el.offsetHeight);
+  };
 
   /** One part of the bar under the player. The bar is drawn like a segmented
    *  control: a rounded track, the parts inside it rounded on their outer
@@ -469,8 +484,8 @@ export function PlayerExpandSheet({
            need "both" to hold their final state until unmount. */
         .pes-overlay-in  { animation: pesFadeIn 0.22s ease backwards; }
         .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
-        .pes-sheet-in    { animation: pesSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-        .pes-sheet-out   { animation: pesSlideDown 0.24s ease-in both; }
+        .pes-sheet-in    { animation: pesSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+        .pes-sheet-out   { animation: pesSlideDown 0.18s ease-in both; }
         @media (prefers-reduced-motion: reduce) {
           .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
         }
@@ -489,7 +504,7 @@ export function PlayerExpandSheet({
           borderRadius: "20px 20px 0 0",
           overflow: "hidden",
           transform: sheetTransform,
-          transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+          transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
@@ -547,24 +562,37 @@ export function PlayerExpandSheet({
             background: T.card, borderRadius: 14, margin: "4px 16px 0", padding: "14px 14px 12px",
             border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
             flexShrink: 0,
+            ...(land ? { display: "grid", gridTemplateColumns: `${discSize}px minmax(0, 1fr)`, columnGap: 22, alignItems: "center", alignContent: "center" } : null),
           }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
+            {/* Portrait: the words take the whole top of the card, record and
+                title both, at the height the record had, so the timeline and
+                the buttons stay exactly where they were. */}
+            {lyricsOpen && !land ? (
+              <div data-own-drag="" style={{ marginBottom: 14, marginTop: 6, height: topH || discSize + 80 }}>
+                <LyricsPanel text={lyrics ?? ""} title={dispName} artist={dispArtist} onEdit={onAddLyrics} T={T} />
+              </div>
+            ) : (
+            <div ref={measureTop} style={land ? { display: "contents" } : { display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
               {lyricsOpen ? (
-                <div data-own-drag="">
-                  <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
+                <div data-own-drag="" style={land ? { gridColumn: 1, gridRow: "1 / span 3" } : undefined}>
+                  <div style={{ width: discSize, height: discSize }}>
+                    <LyricsPanel text={lyrics ?? ""} onEdit={onAddLyrics} T={T} />
+                  </div>
                 </div>
               ) : (
-                <SpinningDisc
-                  size={discSize}
-                  spinning={isPlaying}
-                  title={dispName}
-                  customPhoto={customPhoto}
-                  tappable
-                  onNoCover={onNoCover}
-                  onPhoto={onChangePhoto}
-                />
+                <div style={{ position: "relative", ...(land ? { gridColumn: 1, gridRow: "1 / span 3" } : null) }}>
+                  <SpinningDisc
+                    size={discSize}
+                    spinning={isPlaying}
+                    title={dispName}
+                    customPhoto={customPhoto}
+                    tappable
+                    onNoCover={onNoCover}
+                    onPhoto={onChangePhoto}
+                  />
+                </div>
               )}
-              <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
+              <div style={{ width: "100%", textAlign: "center", minWidth: 0, ...(land ? { gridColumn: 2, gridRow: 1, alignSelf: "end", marginBottom: 16 } : null) }}>
                 <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                   {dispName}
                 </div>
@@ -579,9 +607,10 @@ export function PlayerExpandSheet({
                 </div>
               </div>
             </div>
+            )}
 
             {/* Timeline */}
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 6, ...(land ? { gridColumn: 2, gridRow: 2 } : null) }}>
               <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
               <input
                 className="slider" type="range" min={0} max={duration || 100} value={currentTime}
@@ -594,7 +623,7 @@ export function PlayerExpandSheet({
             </div>
 
             {/* Transport */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: land ? 6 : 18, marginTop: 10, ...(land ? { gridColumn: 2, gridRow: 3, alignSelf: "start" } : null) }}>
               {/* Shuffle and repeat used to be one button that went round
                   off, shuffle, repeat: reaching repeat meant shuffling first.
                   Each has its own now, at either end, with a dot when on. */}
@@ -698,7 +727,7 @@ export function PlayerExpandSheet({
             boxShadow: upOpen || upPull > 0 ? "0 -8px 30px rgba(0,0,0,0.35)" : "none",
             display: "flex", flexDirection: "column",
             transform: upTransform,
-            transition: upMoving ? "none" : "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+            transition: upMoving ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
             visibility: upOpen || upPull > 0 || upSnap ? "visible" : "hidden",
           }}
         >
@@ -768,34 +797,48 @@ export function PlayerExpandSheet({
  * whatever you pasted, so there are no timings to follow and pretending
  * otherwise would just be a panel that never moves.
  */
-function LyricsPanel({ text, size, onEdit, T }: {
-  text: string; size: number; onEdit: () => void; T: T;
+function LyricsPanel({ text, title, artist, onEdit, T }: {
+  text: string; title?: string; artist?: string; onEdit: () => void; T: T;
 }) {
+  // With a title it is the portrait card (design L1): the song on one small
+  // line above the words, a hairline under it, no box of its own. Without, it
+  // is the square in landscape's record column.
+  const full = title !== undefined;
   return (
     <div style={{
-      width: size, height: size, flexShrink: 0,
-      borderRadius: 16, background: T.dim,
+      width: "100%", height: "100%",
+      borderRadius: full ? 0 : 16, background: full ? "transparent" : T.dim,
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 14px 6px", flexShrink: 0,
+        display: "flex", alignItems: "baseline", gap: 8,
+        padding: full ? "0 2px 9px" : "10px 14px 6px", flexShrink: 0,
+        borderBottom: full ? `1px solid ${T.border}` : "none",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
-          {t("Lyrics")}
-        </span>
+        {full ? (
+          <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: T.accent }}>{title}</span>
+            {artist ? <span style={{ fontSize: 12.5, color: T.textSub, marginLeft: 8 }}>{artist}</span> : null}
+          </span>
+        ) : (
+          <span style={{ flex: 1, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
+            {t("Lyrics")}
+          </span>
+        )}
         <button
           onClick={onEdit}
-          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2 }}
+          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2, flexShrink: 0 }}
         >
           {t("Edit")}
         </button>
       </div>
       <div style={{
         flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch",
-        padding: "0 16px 14px",
-        fontSize: 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+        padding: full ? "12px 4px 52px" : "0 16px 14px",
+        fontSize: full ? 16 : 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+        // The last lines fade out, so it reads as more below rather than cut off.
+        ...(full ? { WebkitMaskImage: "linear-gradient(#000 85%, transparent)", maskImage: "linear-gradient(#000 85%, transparent)" } : null),
       }}>
         {text.trim()}
       </div>

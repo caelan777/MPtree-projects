@@ -8,10 +8,12 @@ import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
-import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON } from "../pro";
+import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON, useProPrice } from "../pro";
+import { CyclingDisc } from "./ProArt";
 import { Ads, IS_IOS, SIGN_IN_HERE } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
+import { syncStatus, syncSummary } from "../sync/status";
 import { FolderIcon, NoteIcon } from "./IosLibrary";
 
 export type UiSize = "small" | "medium" | "large";
@@ -161,8 +163,10 @@ export function SettingsSheet({
 }: SettingsSheetProps) {
   const sh = makeSH(T);
   const adDay = useAdDay();
+  const price = useProPrice();
   const ownsPro = useOwnsPro();
   const sync = useSync();
+  const moving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
   // The countdown on the Pro card moves while Settings is open.
   const [, tick] = useState(0);
   useEffect(() => {
@@ -278,15 +282,16 @@ export function SettingsSheet({
               cursor: "pointer", fontFamily: "inherit",
             }}
           >
+            {/* Without Pro, a record turning: what Pro is mostly about. */}
+            {!pro && <CyclingDisc size={48} />}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
-                {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
+                {pro ? t("MPTree Pro is on") : t("MPTree Pro")}
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {adDay.state === "live" && !ownsPro ? t("Pro for a day, {time} left.", { time: adDayTimeLeft(adDay.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : ADS_ON ? t("Free for a day with an ad, or pay once.")
-                  : t("Records, shades and more. Pay once.")}
+                  : t("Records, styles, sync. {price}, once.", { price })}
               </span>
             </span>
             <IC.ChevronR />
@@ -300,11 +305,18 @@ export function SettingsSheet({
             onClick={onOpenAccount}
             icon={<CloudIcon />}
             label={t("Account & sync")}
-            sub={sync.phase === "on"
-              ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
-              : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
+            sub={syncSummary(sync, pro)}
             tag={!pro && <ProTag T={T} />}
           />
+          {/* While a song is on its way from or to another device. */}
+          {moving && (
+            <div style={{ padding: "8px 16px 12px 52px" }}>
+              <div style={{ height: 3, background: T.border, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ width: `${moving.total > 0 ? Math.min(100, Math.round(moving.done / moving.total * 100)) : 0}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
+              </div>
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 6 }}>{syncStatus(sync).progress?.note}</div>
+            </div>
+          )}
         </Section>}
 
         <Section T={T} title={t("Appearance")}>

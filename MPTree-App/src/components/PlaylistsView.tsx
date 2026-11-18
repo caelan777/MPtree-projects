@@ -1,18 +1,20 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
-import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX } from "../utils";
-import { CropSheet } from "./CropSheet";
+import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX, indexById } from "../utils";
+import { CropSheet } from "../lazySheets";
 import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
 import { floatCard, roundBtn as cardCloseBtn } from "./cardStyles";
 import { ConfirmSheet } from "./ConfirmSheet";
+import type { ToastAction } from "./Toast";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
 import type { T } from "../themes";
 import { useVinyl } from "../look";
 import { t as tr, tn } from "../i18n";
+import { Preferences } from "@capacitor/preferences";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +65,8 @@ interface Props {
   onShuffleMany:         (ids: string[]) => void;
   onPlayManyNext:        (ids: string[]) => void;
   onShareMany:           (ids: string[]) => void;
+  /** The whole playlist, every song as a file, under the playlist's name. */
+  onSharePlaylist?:      (name: string, ids: string[]) => void;
   /** Picking songs in a playlist starts or ends: App hides its header card. */
   onSelectingChange?:    (on: boolean) => void;
   onAddManyToPlaylist:   (ids: string[]) => void;
@@ -95,6 +99,9 @@ interface Props {
    *  for the header folding or unfolding, so App does not read that scroll as
    *  the finger's and fold the header straight back (the flicker). */
   onInsetJump?:       () => void;
+  /** Called just before this view scrolls by itself (to the playing song), so
+   *  App does not take that scroll for the finger's and fold the header. */
+  onAutoScroll?:      () => void;
   /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
@@ -102,6 +109,8 @@ interface Props {
   /** The name of the playlist that is open, or null on the list. App shows
    *  it in its tabs: "Playlists › name". */
   onOpenName?:        (name: string | null) => void;
+  /** App's toast, for "Undo" after a playlist is deleted with its X. */
+  onToast?:           (msg: string, action?: ToastAction) => void;
   /** Bumped when "Playlists" is tapped in App's tabs inside a playlist:
    *  straight back to the list. */
   listSignal?:        number;
@@ -113,6 +122,8 @@ interface Props {
 /** Shared icon tile: playlist list rows, the detail header, and the fallback
  *  when a playlist has no cover photo. Top level, so it keeps its identity
  *  across renders instead of being rebuilt as a new type each time. */
+const PL_TILES_KEY = "mptree_pl_tiles";
+
 function PlaylistArt({ photo, size, iconSize, onClick, playing, T: t }: {
   photo?: string; size: number; iconSize?: number; onClick?: () => void;
   /** The music is playing from this playlist: "on" moves the bars, "paused"
@@ -287,9 +298,9 @@ export const PlaylistsView: React.FC<Props> = ({
   playlists, smartPlaylists, songs, meta, onPlaylistsChange, onPlayPlaylist,
   onPlaySong, playingFrom = null, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
-  onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
+  onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -318,6 +329,21 @@ export const PlaylistsView: React.FC<Props> = ({
   // Moving playlists: on from "Reorder", or by holding a playlist. Each row
   // then has a handle; dragging it moves the playlist, and the order is kept.
   const [reordering,      setReordering]     = useState(false);
+  // My playlists as rows or as big tiles like the auto playlists. Kept across
+  // restarts, and with the other settings in sync and backups (storage.ts).
+  const [tiles, setTiles] = useState(false);
+  useEffect(() => {
+    Preferences.get({ key: PL_TILES_KEY }).then(r => setTiles(r.value === "1")).catch(() => {});
+  }, []);
+  const toggleTiles = () => {
+    const next = !tiles;
+    onHaptic?.();
+    setTiles(next);
+    Preferences.set({ key: PL_TILES_KEY, value: next ? "1" : "0" }).catch(() => {});
+  };
+  // Looked up per playlist on every render: a Map, not a search through every song.
+  const songById = useMemo(() => indexById(songs), [songs]);
+  const songsOf = (pl: Playlist) => pl.songIds.map(id => songById.get(id)).filter((s): s is Song => !!s);
   const [plDrag,          setPlDrag]         = useState<{ from: number; over: number } | null>(null);
   const plRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const plPress   = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; held: boolean }>({ timer: null, x: 0, y: 0, held: false });
@@ -398,8 +424,18 @@ export const PlaylistsView: React.FC<Props> = ({
     if (!currentSongId) return;
     const open = view === "detail" ? `pl:${activeId}` : `smart:${activeSmartId}`;
     if (playingFrom !== open) return;
+    // The app's own scroll: App must not fold the header for it. Folding
+    // moved the list under the scroll and stopped it short of the song.
+    // Only this list scrolls (scrollIntoView could move the page around it).
     const t = setTimeout(() => {
-      currentRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const el = scrollBodyRef.current, row = currentRowRef.current;
+      if (!el || !row) return;
+      const box = el.getBoundingClientRect(), r = row.getBoundingClientRect();
+      const target = el.scrollTop + r.top - box.top - (el.clientHeight - r.height) / 2;
+      const top = Math.max(0, Math.min(Math.round(target), el.scrollHeight - el.clientHeight));
+      if (Math.abs(top - el.scrollTop) < 2) return;
+      onAutoScroll?.();
+      el.scrollTo({ top, behavior: "smooth" });
     }, 120);
     return () => clearTimeout(t);
   }, [currentSongId, view, playingFrom, activeId, activeSmartId]);
@@ -733,6 +769,19 @@ export const PlaylistsView: React.FC<Props> = ({
     setConfirmDeleteId(null);
   }, [playlists, activeId, onPlaylistsChange]);
 
+  // The X on a row while moving: gone at once, with Undo in the toast instead
+  // of a question. Undo puts it back where it was in the list as it is then.
+  const playlistsRef = useRef(playlists);
+  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
+  const deleteWithUndo = (pl: Playlist, index: number) => {
+    onHaptic?.();
+    deletePlaylist(pl.id);
+    onToast?.(tr("Playlist deleted"), { label: tr("Undo"), onClick: () => {
+      const now = playlistsRef.current.filter(p => p.id !== pl.id);
+      onPlaylistsChange([...now.slice(0, index), pl, ...now.slice(index)]);
+    } });
+  };
+
   /** "Add to playlist" from a row's ⋮ menu. Silently ignores duplicates. */
   const addSongToPlaylist = useCallback((playlistId: string, songId: string) => {
     onPlaylistsChange(playlists.map(p =>
@@ -843,7 +892,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // whole view snapped to its new offset while the logo was still folding: that
   // was the glitchy jump. Spacers animate height, the root animates padding,
   // both on the same curve as the header itself.
-  const FOLD_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+  const FOLD_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
   const insetTransition = animateInsets ? `height ${FOLD_MOTION}` : "none";
   // Scrolled down, the fold does not move the rows: the spacer changes at once
   // and the scroll position makes up for it. App is told first. That scroll is
@@ -891,9 +940,9 @@ export const PlaylistsView: React.FC<Props> = ({
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const ease = "cubic-bezier(0.22, 1, 0.36, 1)";
     if (!from) {
-      card.animate([{ opacity: 0, transform: "translateY(28px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: ease });
+      card.animate([{ opacity: 0, transform: "translateY(28px) scale(0.97)" }, { opacity: 1, transform: "none" }], { duration: 230, easing: ease });
       const d = card.querySelector<HTMLElement>("[data-disc]");
-      if (d) d.animate([{ transform: `translateX(-${Math.round(d.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 420, delay: 260, easing: ease, fill: "backwards" });
+      if (d) d.animate([{ transform: `translateX(-${Math.round(d.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 250, delay: 160, easing: ease, fill: "backwards" });
       return;
     }
     const c = card.getBoundingClientRect();
@@ -903,11 +952,11 @@ export const PlaylistsView: React.FC<Props> = ({
     const right = Math.max(0, c.right - from.box.right);
     card.animate(
       [{ clipPath: `inset(${top}px ${right}px ${bottom}px ${left}px round 14px)` }, { clipPath: "inset(0px 0px 0px 0px round 26px)" }],
-      { duration: 420, easing: ease },
+      { duration: 250, easing: ease },
     );
     for (const el of Array.from(card.children) as HTMLElement[]) {
       if (el.querySelector("[data-sleeve]")) continue;
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 140, easing: "ease", fill: "backwards" });
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 80, easing: "ease", fill: "backwards" });
     }
     const sleeve = card.querySelector<HTMLElement>("[data-sleeve]");
     if (sleeve && from.thumb && from.thumb.width > 0) {
@@ -916,64 +965,20 @@ export const PlaylistsView: React.FC<Props> = ({
       sleeve.animate([
         { transform: `translate(${from.thumb.left - sb.left}px, ${from.thumb.top - sb.top}px) scale(${k})`, transformOrigin: "0 0" },
         { transform: "none", transformOrigin: "0 0" },
-      ], { duration: 420, easing: ease });
+      ], { duration: 250, easing: ease });
     } else if (sleeve) {
-      sleeve.animate([{ opacity: 0, transform: "scale(0.85)" }, { opacity: 1, transform: "none" }], { duration: 360, delay: 80, easing: ease, fill: "backwards" });
+      sleeve.animate([{ opacity: 0, transform: "scale(0.85)" }, { opacity: 1, transform: "none" }], { duration: 220, delay: 50, easing: ease, fill: "backwards" });
     }
     const disc = card.querySelector<HTMLElement>("[data-disc]");
     if (disc) disc.animate(
       [{ transform: `translateX(-${Math.round(disc.offsetWidth / 2)}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
-      { duration: 420, delay: 300, easing: ease, fill: "backwards" },
+      { duration: 250, delay: 180, easing: ease, fill: "backwards" },
     );
     let row = card.nextElementSibling as HTMLElement | null;
     for (let i = 0; row && i < 10; i++, row = row.nextElementSibling as HTMLElement | null) {
-      row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 340, delay: 180 + i * 35, easing: ease, fill: "backwards" });
+      row.animate([{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 200, delay: 110 + i * 21, easing: ease, fill: "backwards" });
     }
   }, [view, activeId, activeSmartId]);
-
-  // ── Swiping a playlist away ───────────────────────────────────────────────
-  // In a playlist a drag to the right takes it off to the right and the list
-  // of playlists comes back from under it, the way App's page swipe goes
-  // between Songs and Playlists. While it is dragged the list is drawn behind
-  // it, still and untouchable, so there is something under the finger.
-  const [swipeX, setSwipeX] = useState(0);
-  const [swipeAnim, setSwipeAnim] = useState(false);
-  const swipeRef = useRef<{ x: number; y: number; t: number; lock: "h" | "v" | null } | null>(null);
-  const canSwipeBack = (view === "detail" || view === "smartDetail") && !selectMode && !menuSong && !renamingId && !confirmDeleteId;
-  const onSwipeStart = (e: React.TouchEvent) => {
-    if (!canSwipeBack || swipeAnim) return;
-    const p = e.touches[0];
-    swipeRef.current = { x: p.clientX, y: p.clientY, t: Date.now(), lock: null };
-  };
-  const onSwipeMove = (e: React.TouchEvent) => {
-    const g = swipeRef.current;
-    if (!g) return;
-    const p = e.touches[0];
-    const dx = p.clientX - g.x, dy = p.clientY - g.y;
-    if (!g.lock) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      g.lock = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.3 ? "h" : "v";
-      if (g.lock === "h") cancelPress();
-    }
-    if (g.lock === "h") setSwipeX(Math.max(0, dx));
-  };
-  const onSwipeEnd = () => {
-    const g = swipeRef.current;
-    swipeRef.current = null;
-    if (!g || g.lock !== "h") return;
-    const w = window.innerWidth;
-    const fast = swipeX / Math.max(1, Date.now() - g.t) > 0.5;
-    setSwipeAnim(true);
-    if (swipeX > w * 0.3 || (fast && swipeX > 40)) {
-      setSwipeX(w);
-      setTimeout(() => { leaveToList(); setSwipeX(0); setSwipeAnim(false); }, 230);
-    } else {
-      setSwipeX(0);
-      setTimeout(() => setSwipeAnim(false), 230);
-    }
-  };
-  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
-  const swipeMotion = swipeAnim ? "0.23s cubic-bezier(0.22, 1, 0.36, 1)" : "0s";
 
   // ── The playlist's card ───────────────────────────────────────────────────
   // Everything above the songs in one card: the way back, the sleeve with its
@@ -1009,6 +1014,13 @@ export const PlaylistsView: React.FC<Props> = ({
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <span style={{ flex: 1 }} />
+          {!empty && onSharePlaylist && (
+            <button onClick={() => onSharePlaylist(name, list.filter(s => !s.isCut).map(s => s.id))} aria-label={tr("Share playlist")} style={roundBtn}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>
+              </svg>
+            </button>
+          )}
           {own && (
             <>
               <button
@@ -1141,6 +1153,27 @@ export const PlaylistsView: React.FC<Props> = ({
               </span>
               {/* Making a playlist, where Reorder used to be. Moving them is
                   still a hold on a playlist; while that is on, this is Done. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {/* Organize: rows or big tiles. Gone while moving playlists,
+                  which always happens in rows. */}
+              {playlists.length > 0 && !reordering && (
+                <button
+                  onClick={toggleTiles}
+                  aria-label={tiles ? tr("Show playlists as a list") : tr("Show playlists as tiles")}
+                  aria-pressed={tiles}
+                  style={{
+                    background: "transparent", color: t.text, border: `1px solid ${t.border}`, borderRadius: 16,
+                    height: 30, width: 38, display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", flexShrink: 0, padding: 0,
+                  }}
+                >
+                  {tiles ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (reordering) { onHaptic?.(); setReordering(false); return; }
@@ -1153,11 +1186,85 @@ export const PlaylistsView: React.FC<Props> = ({
               >
                 {reordering ? tr("Done") : tr("+ New playlist")}
               </button>
+              </div>
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
                 <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New playlist\" to make your first one")}</div>
+              </div>
+            ) : tiles && !reordering ? (
+              /* Big tiles, the auto playlists' cards for your own. A hold
+                 still starts moving them, which switches back to rows. */
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "10px 16px 8px" }}>
+                {playlists.map(pl => {
+                  const count = pl.songIds.filter(id => songById.has(id)).length;
+                  const playingHere = playingFrom === `pl:${pl.id}`;
+                  const photo = pl.coverPhoto;
+                  return (
+                    <div
+                      key={pl.id}
+                      onClick={e => {
+                        if (plPress.current.held) { plPress.current.held = false; return; }
+                        openFrom(e.currentTarget); setActiveId(pl.id); setView("detail");
+                      }}
+                      onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchEnd={plPressEnd}
+                      onMouseDown={e => plPressStart(e.clientX, e.clientY)}
+                      onMouseMove={e => plPressMove(e.clientX, e.clientY)}
+                      onMouseUp={plPressEnd}
+                      onMouseLeave={plPressEnd}
+                      style={{
+                        position: "relative", height: 160, borderRadius: 16, padding: 16,
+                        background: photo ? `center/cover no-repeat url(${photo})` : t.card,
+                        border: `1px solid ${playingHere ? t.accent : t.border}`,
+                        color: photo ? "#ffffff" : t.text,
+                        display: "flex", flexDirection: "column", justifyContent: "space-between",
+                        cursor: "pointer", overflow: "hidden", userSelect: "none",
+                      }}
+                    >
+                      {photo ? (
+                        // Dark at the top and bottom, so the name and the count read on any photo.
+                        <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0) 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6))" }} />
+                      ) : (
+                        <div aria-hidden="true" style={{ position: "absolute", top: 14, right: 14, opacity: 0.16, lineHeight: 0 }}>
+                          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={t.text} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                        </div>
+                      )}
+                      <div style={{
+                        position: "relative", fontSize: 16, fontWeight: 700, lineHeight: 1.25, paddingRight: photo ? 0 : 46,
+                        overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word",
+                      }}>
+                        {pl.name}
+                      </div>
+                      <div style={{ position: "relative", fontSize: 12, fontWeight: 500, color: photo ? "rgba(255,255,255,0.82)" : t.muted, paddingRight: 44 }}>
+                        {tn(count, "{n} song", "{n} songs")}
+                      </div>
+                      {playingHere ? (
+                        <div aria-label={tr("Playing from this playlist")} style={{
+                          position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
+                          background: t.accent, display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <PlayingBars size={34} color={t.playBtnFg} still={!isPlaying} />
+                        </div>
+                      ) : count > 0 && (
+                        <button
+                          aria-label={tr("Play")}
+                          onTouchStart={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); onPlayPlaylist(songsOf(pl), false, `pl:${pl.id}`); }}
+                          style={{
+                            position: "absolute", right: 12, bottom: 12, width: 34, height: 34, borderRadius: 17,
+                            background: t.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill={t.playBtnFg} aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div
@@ -1166,7 +1273,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 onTouchCancel={plDrag ? plDragEnd : undefined}
               >
               {playlists.map((pl, i) => {
-                const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
+                const count = pl.songIds.filter(id => songById.has(id)).length;
                 const isDragging = plDrag?.from === i;
                 const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
                 return (
@@ -1223,8 +1330,7 @@ export const PlaylistsView: React.FC<Props> = ({
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          const ps = pl.songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => !!s);
-                          onPlayPlaylist(ps, false, `pl:${pl.id}`);
+                          onPlayPlaylist(songsOf(pl), false, `pl:${pl.id}`);
                         }}
                         style={{ background: t.accent, border: "none", width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                       >
@@ -1233,6 +1339,17 @@ export const PlaylistsView: React.FC<Props> = ({
                     )}
 
                     {!reordering && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>}
+
+                    {reordering && !ghost && (
+                      <button
+                        aria-label={tr("Delete playlist")}
+                        onTouchStart={e => e.stopPropagation()}
+                        onClick={e => { e.stopPropagation(); deleteWithUndo(pl, i); }}
+                        style={{ background: t.accent, border: "none", width: 32, height: 32, margin: -6, boxSizing: "content-box", backgroundClip: "content-box", padding: 6, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={t.playBtnFg} strokeWidth="3.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1378,18 +1495,6 @@ export const PlaylistsView: React.FC<Props> = ({
         </div>
       )}
 
-      {/* The list, behind a playlist being swiped away. */}
-      {swipeX > 0 && (
-        <div aria-hidden="true" style={{
-          position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none",
-          transform: `translateX(${Math.round((swipeX / vw - 1) * 90)}px)`, transition: `transform ${swipeMotion}`,
-        }}>
-          <div style={{ height: topInset }} />
-          {renderList(true)}
-          <div style={{ position: "absolute", inset: 0, background: "#000", opacity: 0.35 * (1 - swipeX / vw), transition: `opacity ${swipeMotion}` }} />
-        </div>
-      )}
-
       {/* ── Scrollable content ──────────────────────────────────────────── */}
       <div
         ref={scrollBodyRef}
@@ -1399,15 +1504,9 @@ export const PlaylistsView: React.FC<Props> = ({
           if ((top > 0) !== bodyScrolled) setBodyScrolled(top > 0);
           onBodyScroll?.(top);
         }}
-        onTouchStart={onSwipeStart}
-        onTouchMove={onSwipeMove}
-        onTouchEnd={onSwipeEnd}
-        onTouchCancel={onSwipeEnd}
         style={{
           flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overflowAnchor: "none",
           position: "relative", zIndex: 1,
-          ...(swipeX > 0 ? { background: t.bg, transform: `translateX(${swipeX}px)`, boxShadow: "-14px 0 32px rgba(0,0,0,0.35)" } : null),
-          transition: `transform ${swipeMotion}`,
         }}
       >
         {/* The header's height as a spacer INSIDE the scroller, so rows scroll up

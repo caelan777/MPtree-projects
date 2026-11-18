@@ -95,6 +95,14 @@ export type AudioPlayerPlugin = {
 };
 
 export type SystemPlugin = {
+  /** A copy of a song to share, named "Artist - Title" and, for an mp3, with
+   *  the title, artist and cover written in. Resolves its path. */
+  prepareShare(options: { path: string; title: string; artist: string; cover?: string; clear?: boolean }): Promise<{ path: string }>;
+  /** The share sheet with these files, sent as files (documents), so apps
+   *  like WhatsApp keep their names. Android only. */
+  shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;
+  /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
+  setNavBar(options: { light: boolean; color?: string }): Promise<void>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
@@ -139,6 +147,10 @@ export type AdsPlugin = {
   /** Whether Settings must offer a way to change the consent answer. */
   privacyOptions(): Promise<{ required: boolean }>;
   showPrivacyOptions(): Promise<void>;
+  /** The native ad on Discover: drawn by Android over a gap the page leaves. */
+  loadNative(options: { adUnitId: string; colours: Record<string, string> }): Promise<{ loaded: boolean }>;
+  placeNative(options: { visible: boolean; x?: number; y?: number; w?: number; h?: number; clipTop?: number; clipBottom?: number }): Promise<void>;
+  destroyNative(): Promise<void>;
 };
 
 /** Sign in with Google, for the MPTree account. See AccountPlugin.java. */
@@ -172,6 +184,8 @@ export type SyncPlugin = {
   abortFile(options: { tid: string }): Promise<void>;
   driveUpload(options: { token: string; path: string; name: string; tid?: string; appProperties: Record<string, string> }): Promise<{ id: string }>;
   driveDownload(options: { token: string; fileId: string; tid: string; size?: number }): Promise<{ size: number }>;
+  /** A file a Discover source offers for download, into the temp file for tid. */
+  urlDownload(options: { url: string; tid: string }): Promise<{ size: number }>;
   addListener(event: "progress", handler: (p: { tid: string; done: number; total: number }) => void): Promise<{ remove(): void }>;
 };
 
@@ -179,6 +193,9 @@ export type SyncPlugin = {
 // nothing special about it would, so the demo and the dev server run the same
 // code paths.
 const SystemWeb: SystemPlugin = {
+  prepareShare:  async ({ path }) => ({ path }),
+  setNavBar:     async () => {},
+  shareFiles:    async () => { throw new Error("unavailable"); },
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
   openExternal:  async ({ url }) => { window.open(url, "_blank", "noopener"); },
@@ -201,6 +218,9 @@ const AdsWeb: AdsPlugin = {
   showRewarded:       async () => ({ rewarded: false, reason: "failed" }),
   privacyOptions:     async () => ({ required: false }),
   showPrivacyOptions: async () => {},
+  loadNative:         async () => ({ loaded: false }),
+  placeNative:        async () => {},
+  destroyNative:      async () => {},
 };
 
 // No Google sign-in in a browser. On the dev server a stand-in account can be
@@ -231,6 +251,7 @@ const SyncWeb: SyncPlugin = {
   appendChunk:  unavailable,
   finishFile:   unavailable,
   abortFile:    async () => {},
+  urlDownload:  unavailable,
   driveUpload:  unavailable,
   driveDownload: unavailable,
   addListener:  async () => ({ remove() {} }),

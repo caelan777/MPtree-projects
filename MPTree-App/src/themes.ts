@@ -154,7 +154,7 @@ export const SHADE_PREVIEW = {
 // buttons, the Playlists spacers, the movable collapse button. App.tsx and
 // PlaylistsView.tsx each used to carry their own copy of the literal, which is
 // two places for the same number to drift apart in.
-export const CHROME_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+export const CHROME_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
 
 export function makeSH(T: T): Record<string, React.CSSProperties> {
   return {

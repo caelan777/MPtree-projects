@@ -434,11 +434,16 @@ public class MusicPlayerService extends Service {
     /** Past this, coming back is no longer "the same listening": a call that
      *  took an hour should not end in music starting by itself. */
     private static final long RESUME_WITHIN_MS = 10 * 60 * 1000;
-    /** An app that took the speaker for good (a video app, say) is only
-     *  followed for this long: a jingle is over by then, and somebody who went
-     *  to watch something does not get music back the moment they pause it. */
-    private static final long RESUME_AFTER_TAKEOVER_MS = 20 * 1000;
+    /** An app that took the speaker for good (TikTok, a video app) is
+     *  followed this long: leaving TikTok after a few minutes of scrolling
+     *  should bring the music back, as people expect. */
+    private static final long RESUME_AFTER_TAKEOVER_MS = 30 * 60 * 1000;
     private long resumeWithin = RESUME_WITHIN_MS;
+    /** The other app must be quiet this many looks in a row (1.5 s apart)
+     *  before MPTree comes back, so the short gap between two TikTok videos
+     *  does not count as "done" and steal the speaker mid-scroll. */
+    private static final int QUIET_LOOKS_NEEDED = 3;
+    private int quietLooks = 0;
 
     private final AudioManager.OnAudioFocusChangeListener focusListener = focusChange -> {
         if (mixWithOthers) return;
@@ -454,11 +459,27 @@ public class MusicPlayerService extends Service {
                 // so nothing would say when its sound is over. Asking again
                 // after a moment does: the request is granted once it is done.
                 if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
-                    mainHandler.postDelayed(this::resumeAfterFocusLoss, 4000);
+                    quietLooks = 0;
+                    mainHandler.removeCallbacks(this.watchForQuiet);
+                    mainHandler.postDelayed(this.watchForQuiet, 4000);
                 }
             }
         } else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
+            mainHandler.removeCallbacks(this.watchForQuiet);
             resumeAfterFocusLoss();
+        }
+    };
+
+    /** After a takeover: look every 1.5 s whether the other app is still
+     *  sounding, and come back once it has been quiet a few looks in a row. */
+    private final Runnable watchForQuiet = new Runnable() {
+        @Override public void run() {
+            if (!pausedByFocus || isPlaying) return;
+            if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; return; }
+            boolean busy = audioManager != null && audioManager.isMusicActive();
+            quietLooks = busy ? 0 : quietLooks + 1;
+            if (quietLooks >= QUIET_LOOKS_NEEDED) { resumeAfterFocusLoss(); return; }
+            mainHandler.postDelayed(this, 1500);
         }
     };
 

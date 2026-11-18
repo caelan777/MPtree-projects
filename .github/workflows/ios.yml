@@ -68,3 +68,58 @@ jobs:
           name: MPTree-iPhone-${{ github.run_number }}
           path: MPTree-App/MPTree.ipa
           retention-days: 30
+
+  # The same app on an iPhone simulator: it starts, and screenshots of what it
+  # shows come out as MPTree-simulator-<n> on the run.
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: MPTree-App
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: MPTree-App/package-lock.json
+
+      - name: Web app
+        run: |
+          npm ci
+          npm run build:ios
+          npx cap sync ios
+
+      - name: Build for the simulator
+        run: |
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath simbuild \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Start it and take screenshots
+        run: |
+          mkdir -p shots
+          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16')))")
+          xcrun simctl boot "$DEV"
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl privacy "$DEV" grant media-library com.caelan.mptree || true
+          xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl launch --console-pty "$DEV" com.caelan.mptree > shots/console.log 2>&1 &
+          for t in 5 12 25; do sleep $((t > 5 ? 7 : 5)); xcrun simctl io "$DEV" screenshot "shots/after-${t}s.png"; done
+          sleep 10; xcrun simctl io "$DEV" screenshot shots/after-35s.png
+          xcrun simctl spawn "$DEV" log show --last 2m --predicate 'process == "App"' --style compact > shots/system.log 2>&1 || true
+          ls -l shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MPTree-simulator-${{ github.run_number }}
+          path: MPTree-App/shots
+          retention-days: 30

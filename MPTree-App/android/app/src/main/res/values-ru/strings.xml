@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="channel_playback">Воспроизведение музыки</string>
+    <string name="channel_playback_desc">Управление тем, что сейчас играет в MPTree</string>
+    <string name="action_previous">Назад</string>
+    <string name="action_play">Играть</string>
+    <string name="action_pause">Пауза</string>
+    <string name="action_next">Далее</string>
+    <string name="not_playing">Ничего не играет</string>
+</resources>

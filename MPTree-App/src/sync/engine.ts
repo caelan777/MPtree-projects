@@ -7,7 +7,7 @@ import { collectShared, restoreShared } from "../storage";
 import { hasPro, subscribePro, ownsPro, proIsFor, proLost, setAccountPro, forgetAccountPro, PRO_MODE } from "../pro";
 import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
-import { openDrive, type Drive, type DriveFile } from "./drive";
+import { openDrive, isDriveFull, type Drive, type DriveFile } from "./drive";
 import {
   buildLocal, merge, apply, missingFrom, coverRefs, coverHash, same, fileOf, songSig, sigsOf, isCopy, namesOf, nameSize,
   markDeleted, markRestored, deletedBy,
@@ -50,7 +50,7 @@ import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type
 // Nothing runs while the app is in the background: Android freezes the WebView
 // there, which is fine, because both phones being open is the point.
 
-const MAX_DEVICES = 3;
+export const MAX_DEVICES = 3;
 const DEVICES = "devices.json";
 const LIB = "library.json";
 const COVERS = "covers.json";
@@ -103,8 +103,8 @@ const RELAY_BUDGET = 1024 * 1024 * 1024;
 const RELAY_MAX_AGE = 30 * 24 * 60 * 60_000;
 /** After a direct connection fails, use Drive for this long. */
 const DIRECT_PAUSE = 10 * 60_000;
-/** Always left free on a phone. */
-const ROOM_MARGIN = 500 * 1024 * 1024;
+/** Always left free on a phone. The account page says so. */
+export const ROOM_MARGIN = 500 * 1024 * 1024;
 /** At most this much over mobile data a day, when that is allowed at all. */
 export const MOBILE_DAILY = 500 * 1024 * 1024;
 /** A phone of the same name not used for this long is replaced on joining. */
@@ -146,7 +146,7 @@ export type SyncState = {
   saving: boolean;
   lastSaved?: number;
   /** Something went wrong on the last try, in plain words. */
-  problem?: "offline" | "drive" | "signin" | null;
+  problem?: "offline" | "drive" | "signin" | "full" | null;
   /** What the failed round actually said, for whoever has to find out why. */
   problemDetail?: string;
   songs: {
@@ -328,11 +328,31 @@ async function readFile<T>(name: string): Promise<T | null> {
   return body;
 }
 async function writeFile(name: string, body: unknown): Promise<void> {
-  const id = await connect().write(name, body, files.get(name)?.id);
+  let id: string;
+  try {
+    id = await connect().write(name, body, files.get(name)?.id);
+  } catch (e) {
+    if (!isDriveFull(e) || !(await makeRoom())) throw e;
+    id = await connect().write(name, body, files.get(name)?.id);
+  }
   const f = { id, name, modifiedTime: new Date().toISOString() };
   files.set(name, f);
   cache.delete(name);
 }
+/** The person's Google storage is full. The songs waiting in Drive for other
+ *  phones are copies (the phone that sent them still has them), so they go:
+ *  then the small files that keep the library in step fit again. Resolves
+ *  whether there was anything to clear. */
+async function makeRoom(): Promise<boolean> {
+  const waiting = [...files.values()].filter(f => f.name.startsWith("relay-"));
+  if (!waiting.length) return false;
+  for (const f of waiting) await removeFile(f.name).catch(() => {});
+  return true;
+}
+/** Left free in the person's Google storage: songs only go through Drive
+ *  while it has at least this much room besides, so MPTree never fills it. */
+export const DRIVE_KEEP_FREE = 1024 * 1024 * 1024;
+
 async function removeFile(name: string): Promise<void> {
   const f = files.get(name);
   if (!f) return;
@@ -443,7 +463,7 @@ let pendingJoin: StoredAccount | null = null;
 /** Signing in comes first, before buying Pro: the account is where Pro is
  *  kept. An account that has Pro already gives it to this device; without
  *  it the device is signed in and paused until Pro is bought. */
-export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed"> {
+export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "full" | "failed"> {
   set({ phase: "joining", problem: null, removedWhy: undefined });
   try {
     const r = await Account.signIn();
@@ -461,11 +481,13 @@ export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed">
     pendingJoin = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
     set({ account: { email: me.email, name: me.name, photo: me.photo }, deviceId });
     return await nextJoinStep();
-  } catch {
+  } catch (e) {
     pendingJoin = null;
     if (!stored) setAccountPro(false);
-    set({ phase: "off", problem: "signin" });
-    return "failed";
+    // Keep what went wrong: "check your connection" alone hid a Drive refusal.
+    const full = isDriveFull(e);
+    set({ phase: "off", problem: full ? "full" : "signin", problemDetail: errorDetail(e) });
+    return full ? "full" : "failed";
   }
 }
 
@@ -683,6 +705,12 @@ function kick(ms: number) {
   libTimer = setTimeout(() => { libDue = 0; void libraryCycle(); }, ms);
 }
 
+/** "Try now" on the account page: the next round straight away, instead of
+ *  within the minute it would come by itself. */
+export function retryNow(): void {
+  kick(0);
+}
+
 /** A round every minute while the app is open and signed in, so a change made
  *  on another phone shows up here without anyone doing anything. */
 function keepChecking() {
@@ -783,6 +811,13 @@ let notSharedFps = new Set<string>();
 async function scanAll(): Promise<Song[]> {
   const { songs } = await MusicScanner.scan();
   return songs.map(s => ({ ...s, id: s.uri }));
+}
+
+/** A short line saying what failed: a Drive status and reason, or the
+ *  sign-in plugin's code and message. Shown small, so it can be reported. */
+export function errorDetail(e: unknown): string {
+  const err = e as { code?: string; status?: number; reason?: string; message?: string };
+  return [err?.status ?? err?.code, err?.reason || err?.message || String(e)].filter(Boolean).join(" ").slice(0, 160);
 }
 
 async function libraryCycle(): Promise<void> {
@@ -907,10 +942,10 @@ async function libraryCycle(): Promise<void> {
     });
     await songsCycle();
   } catch (e) {
-    const err = e as { code?: string; status?: number; reason?: string; message?: string };
+    const err = e as { code?: string };
     set({
-      problem: err?.code === "NEEDS_SIGN_IN" ? "signin" : "drive",
-      problemDetail: [err?.status, err?.reason || err?.message || String(e)].filter(Boolean).join(" ").slice(0, 160),
+      problem: err?.code === "NEEDS_SIGN_IN" ? "signin" : isDriveFull(e) ? "full" : "drive",
+      problemDetail: errorDetail(e),
     });
   } finally {
     set({ saving: false });
@@ -1605,6 +1640,8 @@ async function leaveFor(to: string, theirs: Inventory) {
   const waiting = [...files.values()].filter(f => f.name.startsWith(prefix));
   let used = waiting.reduce((n, f) => n + Number(f.size ?? 0), 0);
   const already = new Set(waiting.map(f => f.appProperties?.fp));
+  // Room in the person's Google storage, asked once, when a song is about to go.
+  let free: number | null | undefined;
   for (const [fp] of Object.entries(theirs)) {
     if (!active() || session) break;
     if (already.has(fp)) continue;
@@ -1615,6 +1652,8 @@ async function leaveFor(to: string, theirs: Inventory) {
     if ((await readFile<InvFile>(inv(to)))?.fps[fp]) continue;
     const song = find(fileOf(fp));
     if (!song || used + song.size > RELAY_BUDGET) continue;
+    if (free === undefined) free = await connect().space().catch(() => null);
+    if (free !== null && free - song.size < DRIVE_KEEP_FREE) { setSongs({ note: "drive-full" }); break; }
     if (onMobile && (await mobileUsed()) + song.size > MOBILE_DAILY) { setSongs({ note: "mobile-limit" }); break; }
     const tid = "up-" + fp;
     const to_ = nameOf(to);
@@ -1629,9 +1668,10 @@ async function leaveFor(to: string, theirs: Inventory) {
       });
       files.set(prefix + fp, { id, name: prefix + fp, modifiedTime: new Date().toISOString(), size: String(song.size), appProperties: { fp, name: song.name, from: deviceId } });
       used += song.size;
+      if (free !== null) free -= song.size;
       await countMobile(song.size);
     } catch (e) {
-      if (/storageQuotaExceeded|quota/i.test(String((e as Error)?.message))) { setSongs({ note: "drive-full" }); break; }
+      if (isDriveFull(e)) { setSongs({ note: "drive-full" }); break; }
     } finally {
       sub.remove();
     }
