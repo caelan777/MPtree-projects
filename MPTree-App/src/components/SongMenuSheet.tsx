@@ -45,6 +45,8 @@ type SongMenuSheetProps = {
   onRemoveFromPlaylist?: () => void;
   /** The playlist the menu was opened in, said under the artist. */
   inPlaylistName?: string;
+  /** Open straight on the playlist picker: "Add to" in the player's menu. */
+  startOnPlaylists?: boolean;
   onClose: () => void;
   T: T;
 };
@@ -53,10 +55,10 @@ export function SongMenuSheet({
   song, dispName, dispArtist, customPhoto, isLiked, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
   onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist,
-  inPlaylistName, onClose, T,
+  inPlaylistName, startOnPlaylists = false, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
-  const [pane, setPane] = useState<"actions" | "playlists">("actions");
+  const [pane, setPane] = useState<"actions" | "playlists">(startOnPlaylists ? "playlists" : "actions");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const sub = [dispArtist, inPlaylistName && t("in {name}", { name: inPlaylistName })].filter(Boolean).join(" · ");

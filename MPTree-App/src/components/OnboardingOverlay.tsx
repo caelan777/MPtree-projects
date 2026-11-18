@@ -31,33 +31,33 @@ const STEPS: Step[] = [
   {
     target: '[data-tour="logo"]',
     title: "The logo is a button",
-    body: "Tap it to fold the header and the player away and give the list the whole screen. Tap again to bring them back. Scrolling down folds the header by itself, and scrolling up brings it back. Hold the logo for options.",
+    body: "Tap it to give the list the whole screen. Tap again to bring everything back.",
   },
   {
     target: '[data-tour="search"]',
     title: "Find anything fast",
-    body: "Search your whole library by song or artist. The ✕ clears it in one tap.",
+    body: "Search by song or artist.",
   },
   {
     target: '[data-tour="songs"]',
     title: "Tap to play, hold for more",
-    body: "Tap any song to play it. Long-press to edit, cut, like, share, or queue it next.",
+    body: "Tap a song to play it. Hold it for more.",
     pickRow: true,
   },
   {
     target: '[data-tour="shuffle"]',
     title: "Shuffle everything",
-    body: "Tap to shuffle all songs. Hold it to switch repeat mode on or off.",
+    body: "Tap to shuffle. Hold for repeat.",
   },
   {
     target: '[data-tour="playlists"]',
     title: "Your playlists",
-    body: "Tap here (or swipe the screen left) for your playlists, plus Favorites, Recently Played and Most Played, built automatically.",
+    body: "Tap here or swipe left. Favorites and Most Played fill themselves.",
   },
   {
     target: '[data-tour="settings"]',
     title: "Make it yours",
-    body: "Sound, sleep timer, backups, size, language and help all live here. Enjoy the music!",
+    body: "Sound, backups, language and help. Enjoy the music!",
   },
 ];
 

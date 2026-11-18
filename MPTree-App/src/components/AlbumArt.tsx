@@ -67,9 +67,9 @@ export function AlbumArt({ title, size, active = false, playing = false, customP
       overflow: "hidden",
       border: active ? `2px solid ${T.accent}` : "2px solid transparent",
       boxShadow: active ? `0 0 0 1px ${T.accent}33` : "none",
-      background: photo ? "transparent" : T.dim,
+      background: photo ? "transparent" : (T.coverBg ?? T.dim),
       display: "flex", alignItems: "center", justifyContent: "center",
-      transition: "border-color 0.2s", userSelect: "none", color: T.muted,
+      transition: "border-color 0.2s", userSelect: "none", color: T.coverFg ?? T.muted,
     }}>
       {photo
         ? <img src={photo} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />

@@ -217,6 +217,9 @@ export default function App() {
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
   const [menuSong,       setMenuSong]      = useState<Song | null>(null);
+  // "Add to" in the player's menu opens the song menu on its playlist picker.
+  const [menuStartPlaylists, setMenuStartPlaylists] = useState(false);
+  useEffect(() => { if (!menuSong) setMenuStartPlaylists(false); }, [menuSong]);
   const [editSong,       setEditSong]      = useState<Song | null>(null);
   // "Photo" in the song menu is the same edit sheet, opened straight onto the
   // picker. One sheet rather than two that would drift apart.
@@ -4531,6 +4534,7 @@ export default function App() {
         {menuSong && (
           <SongMenuSheet
             song={menuSong}
+            startOnPlaylists={menuStartPlaylists}
             dispName={dispName(menuSong)}
             dispArtist={dispArtist(menuSong)}
             customPhoto={getMeta(menuSong).customPhoto}
@@ -4613,6 +4617,7 @@ export default function App() {
             // list. Its buttons do nothing there; it is only looked at.
             player={lookSong ? (
               <PlayerExpandSheet
+              rowSize={{ h: ROW_H, art: ART, title: ROW_TITLE, sub: ROW_SUB }}
                 onNoCover={() => {}}
                 song={lookSong}
                 dispName={dispName(lookSong)}
@@ -4645,12 +4650,10 @@ export default function App() {
                 onRemove={() => {}}
                 onShare={() => {}}
                 lyrics={getMeta(lookSong).customLyrics}
-                onAddLyrics={() => {}}
                 onSkipUpNext={() => {}}
                 onQueueMove={() => {}}
                 onPlayFromQueue={() => {}}
                 onOpenSongMenu={() => {}}
-                onOpenMenu={() => {}}
                 onClose={() => {}}
                 dragProgress={null}
                 dragSettling={false}
@@ -4782,6 +4785,7 @@ export default function App() {
         {(playerExpanded || expandDrag !== null) && currentSong && (() => {
           return (
             <PlayerExpandSheet
+              rowSize={{ h: ROW_H, art: ART, title: ROW_TITLE, sub: ROW_SUB }}
               onNoCover={() => showToast(t("This song has no cover. Add one with Edit."))}
               onChangePhoto={() => { setEditFocusPhoto(true); setEditSong(currentSong); }}
               song={currentSong}
@@ -4815,13 +4819,31 @@ export default function App() {
               onRemove={() => setRemoveSong(currentSong)}
               onShare={() => shareSong(currentSong)}
               lyrics={getMeta(currentSong).customLyrics}
-              onAddLyrics={() => openLyricsSheet(currentSong)}
+              onSaveLyrics={l => saveLyrics(currentSong, l)}
+              onSearchLyrics={() => searchLyricsOnline(currentSong)}
               sourceLabel={playSourceLabel}
               onSkipUpNext={skipUpNext}
               onQueueMove={moveInQueue}
               onPlayFromQueue={playFromQueue}
               onOpenSongMenu={s => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(s); }}
-              onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}
+              menuActions={(() => {
+                // What opens a sheet of its own closes the player first, as the
+                // menu did when it was a sheet; the rest happens in place.
+                const away = (go: () => void) => () => { setPlayerExpanded(false); openedByDragRef.current = false; go(); };
+                return {
+                  isLiked: isLiked(currentSong),
+                  onPlay: () => { void seekTo(0); },
+                  onPlayNext: () => handlePlayNext(currentSong),
+                  onAddToPlaylist: away(() => { setMenuStartPlaylists(true); setMenuSong(currentSong); }),
+                  onToggleLike: () => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); },
+                  onShare: () => shareSong(currentSong),
+                  onCut: away(() => openCutSheet(currentSong)),
+                  onSetRingtone: away(() => setSongAsRingtone(currentSong)),
+                  onChangePhoto: () => { setEditFocusPhoto(true); setEditSong(currentSong); },
+                  onEdit: () => { setEditFocusPhoto(false); setEditSong(currentSong); },
+                  onBin: () => setRemoveSong(currentSong),
+                };
+              })()}
               onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
               dragProgress={playerExpanded ? null : expandDrag}
               dragSettling={expandSettling}

@@ -215,7 +215,7 @@ const AD_UNIT =
  *  in AdMob (Ad units > Native advanced). Empty: no ad on that page. */
 export const NATIVE_UNIT =
   PRO_MODE === "free" ? "ca-app-pub-3940256099942544/2247696110"
-  : PRO_MODE === "play" ? ""
+  : PRO_MODE === "play" ? "ca-app-pub-3909703327280410/6848616316"
   : "";
 /** Whether this build can show the ad at all (not in a browser). */
 export const ADS_ON = AD_UNIT !== "" && Capacitor.getPlatform() === "android";

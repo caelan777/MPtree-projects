@@ -11,6 +11,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
@@ -168,6 +170,8 @@ public class AdsPlugin extends Plugin {
 
     private NativeAd nativeAd;
     private NativeAdView nativeView;
+    // What lies over the page: the ad inside a frame that passes scrolls on.
+    private ScrollThroughFrame nativeWrap;
     private boolean nativeBusy = false;
 
     @PluginMethod
@@ -290,12 +294,15 @@ public class AdsPlugin extends Plugin {
 
         view.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         view.setNativeAd(ad);
-        view.setVisibility(View.INVISIBLE);
 
         WebView web = getBridge().getWebView();
         ViewGroup parent = (ViewGroup) web.getParent();
-        parent.addView(view, new ViewGroup.LayoutParams(1, 1));
+        ScrollThroughFrame wrap = new ScrollThroughFrame(activity, web);
+        wrap.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.setVisibility(View.INVISIBLE);
+        parent.addView(wrap, new ViewGroup.LayoutParams(1, 1));
         nativeView = view;
+        nativeWrap = wrap;
     }
 
     /** Where the page's gap for the ad is now, in CSS pixels from the top left
@@ -310,7 +317,7 @@ public class AdsPlugin extends Plugin {
         float w = call.getFloat("w", 0f), h = call.getFloat("h", 0f);
         float top = call.getFloat("clipTop", 0f), bottom = call.getFloat("clipBottom", 100000f);
         activity.runOnUiThread(() -> {
-            NativeAdView v = nativeView;
+            View v = nativeWrap;
             if (v == null) return;
             float d = activity.getResources().getDisplayMetrics().density;
             int wp = Math.round(w * d), hp = Math.round(h * d);
@@ -338,7 +345,8 @@ public class AdsPlugin extends Plugin {
     }
 
     private void removeNativeView() {
-        if (nativeView != null && nativeView.getParent() instanceof ViewGroup) ((ViewGroup) nativeView.getParent()).removeView(nativeView);
+        if (nativeWrap != null && nativeWrap.getParent() instanceof ViewGroup) ((ViewGroup) nativeWrap.getParent()).removeView(nativeWrap);
+        nativeWrap = null;
         nativeView = null;
     }
 
@@ -353,5 +361,45 @@ public class AdsPlugin extends Plugin {
         if (cm == null) return true;
         NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
         return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    }
+    /** The ad lies over the page, so a finger on it never reached the page and
+     *  the page could not be scrolled from there. Every touch now also goes to
+     *  the page underneath (where the ad's gap is empty), and once the finger
+     *  moves up or down the ad lets go: a scroll, not a tap on the ad. */
+    static class ScrollThroughFrame extends FrameLayout {
+        private final WebView web;
+        private final int slop;
+        private float downX, downY;
+        private boolean scrolling = false;
+
+        ScrollThroughFrame(Context context, WebView web) {
+            super(context);
+            this.web = web;
+            this.slop = ViewConfiguration.get(context).getScaledTouchSlop();
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent ev) {
+            MotionEvent copy = MotionEvent.obtain(ev);
+            copy.offsetLocation(getX() - web.getX(), getY() - web.getY());
+            web.dispatchTouchEvent(copy);
+            copy.recycle();
+
+            int action = ev.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) { scrolling = false; downX = ev.getX(); downY = ev.getY(); }
+            if (scrolling) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) scrolling = false;
+                return true;
+            }
+            if (action == MotionEvent.ACTION_MOVE && Math.abs(ev.getY() - downY) > slop && Math.abs(ev.getY() - downY) > Math.abs(ev.getX() - downX)) {
+                scrolling = true;
+                MotionEvent cancel = MotionEvent.obtain(ev);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                super.dispatchTouchEvent(cancel);
+                cancel.recycle();
+                return true;
+            }
+            return super.dispatchTouchEvent(ev);
+        }
     }
 }

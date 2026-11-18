@@ -25,6 +25,16 @@ export type MusicAccess = "unasked" | "asking" | "allowed" | "denied";
  * never touched, so nothing in it (fixed headers, the player) can be clipped
  * or thrown off by the effect.
  */
+/** What MPTree is: an icon, a line, and a short line under it. */
+const POINTS: [React.ReactNode, string, string][] = [
+  [<><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></>,
+    "Your own music", "MP3s and other music files on this phone."],
+  [<><path d="M12 20h.01" /><path d="M8.5 16.4a5 5 0 0 1 7 0" /><path d="M2 8.8a15 15 0 0 1 4.2-2.7" /><path d="M22 8.8a15 15 0 0 0-11.3-3.8" /><path d="M5 12.9a10 10 0 0 1 5.2-2.7" /><path d="M19 12.9a10 10 0 0 0-2.3-1.6" /><path d="m2 2 20 20" /></>,
+    "No internet needed", "It plays anywhere, even in flight mode."],
+  [<><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
+    "Free and private", "No subscription. Nothing leaves your phone."],
+];
+
 export function WelcomeScreen({
   lang, onPickLang, music, onAllowMusic, onOpenAppSettings,
   updateNotices, onSetUpdateNotices, songCount, onEnter, onEntered, T,
@@ -108,14 +118,33 @@ export function WelcomeScreen({
       }}
     >
       {shown === "setup" ? (
-        <div key="setup" style={{ flex: 1, display: "flex", flexDirection: "column", animation: "mpFadeIn 0.3s ease both" }}>
-          <Logo size={60} color={T.text} />
-          <div style={{ fontSize: 28, fontWeight: 800, marginTop: 22, letterSpacing: "-0.01em" }}>{t("Welcome to MPTree")}</div>
-          <div style={{ fontSize: 15, color: T.textSub, marginTop: 8, lineHeight: 1.5 }}>
-            {t("A few things to set up before you start listening.")}
+        <div key="setup" style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", animation: "mpFadeIn 0.3s ease both" }}>
+          {/* Nothing here may shrink: the page scrolls when it is too tall. */}
+          <div style={{ flexShrink: 0, display: "flex" }}><Logo size={48} color={T.text} /></div>
+          <div style={{ flexShrink: 0, fontSize: 28, fontWeight: 800, marginTop: 16, letterSpacing: "-0.01em" }}>{t("Welcome to MPTree")}</div>
+          <div style={{ flexShrink: 0, fontSize: 15, color: T.textSub, marginTop: 8, lineHeight: 1.5 }}>
+            {t("A music player for the songs already on your phone.")}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 28 }}>
+          {/* What MPTree is, in three lines, before anything is asked. */}
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+            {POINTS.map(([icon, title, body]) => (
+              <div key={title} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <span style={{ width: 40, height: 40, borderRadius: 12, background: T.dim, color: T.text, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icon}</svg>
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 15, fontWeight: 700 }}>{t(title)}</span>
+                  <span style={{ display: "block", fontSize: 13, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>{t(body)}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: "0.06em", textTransform: "uppercase", marginTop: 20 }}>
+            {t("Set up")}
+          </div>
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
             <button style={{ ...card, cursor: "pointer" }} onClick={() => setLangOpen(true)}>
               <span style={{ flex: 1, fontSize: 15.5, fontWeight: 600 }}>{t("Language")}</span>
               <span style={{ display: "flex", alignItems: "center", gap: 6, color: T.muted, fontSize: 14 }}>{langName}<IC.ChevronR /></span>
@@ -127,7 +156,7 @@ export function WelcomeScreen({
                 <span style={sub}>
                   {music === "denied"
                     ? t("Not allowed yet. Open Settings, then Permissions > Music and audio > Allow.")
-                    : t("MPTree needs to read the audio files on your phone. Nothing leaves it.")}
+                    : t("So MPTree can find the songs on your phone.")}
                 </span>
               </span>
               {musicRight}
@@ -144,10 +173,10 @@ export function WelcomeScreen({
             )}
           </div>
 
-          <div style={{ flex: 1 }} />
+          <div style={{ flex: 1, minHeight: 12 }} />
           {/* Without music access there is nothing to enter into, so Next
               goes to the page that says so, not past it. */}
-          <button style={primary} onClick={() => setStage(music === "allowed" ? "enter" : "permission")}>{t("Next")}</button>
+          <button style={{ ...primary, flexShrink: 0 }} onClick={() => setStage(music === "allowed" ? "enter" : "permission")}>{t("Next")}</button>
         </div>
       ) : shown === "permission" ? (
         <div

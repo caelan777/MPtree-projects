@@ -6,6 +6,7 @@ import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { SpinningDisc } from "./SpinningDisc";
 import { IC } from "./Icons";
+import { SongActionTiles, type SongActions } from "./MultiSelectBar";
 
 /**
  * The blurred album-art wash behind the player.
@@ -108,17 +109,21 @@ type PlayerExpandSheetProps = {
   onQueueMove: (from: number, to: number) => void;
   /** A tap on a song in "Next up": it plays now, and the queue stays. */
   onPlayFromQueue: (song: Song) => void;
+  /** The size of a row in Songs, so "Next up" rows match it. */
+  rowSize?: { h: number; art: number; title: number; sub: number };
   /** The "⋮" on a row in "Next up". */
   onOpenSongMenu: (song: Song) => void;
   /** Lyrics saved for this song, if any. Their absence is what makes the Lyrics
    *  button offer to add some instead of showing an empty panel. */
   lyrics?: string;
-  /** Opens the sheet where lyrics are pasted or searched for. */
-  onAddLyrics: () => void;
-  /** Opens the same "⋮" action sheet the list rows use, for this track. The
-   *  bar below covers the common actions; the menu adds Play next and Add to
-   *  playlist, which have nowhere else to live once you are in the player. */
-  onOpenMenu: () => void;
+  /** Stores pasted lyrics for this song (null clears them). Pasting happens in
+   *  the card itself, where the record was, not on a page of its own. */
+  onSaveLyrics?: (lyrics: string | null) => void;
+  /** Opens a web search for this song's lyrics in the user's own browser. */
+  onSearchLyrics?: () => void;
+  /** What the "⋮" can do with this track. Its tiles open in the card, where the
+   *  record was, the way the lyrics do. Lyrics is handled in here. */
+  menuActions?: Omit<SongActions, "onEditLyrics">;
   /** A tap on the record of a song without a cover. */
   onNoCover?: () => void;
   /** A tap on the record: change the song's photo. */
@@ -139,29 +144,42 @@ export function PlayerExpandSheet({
   song, dispName, dispArtist, customPhoto, backdropPhoto,
   isPlaying, currentTime, duration, playMode, repeatOn, repeatAll, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
+  rowSize = { h: 68, art: 48, title: 15, sub: 13 },
   upNextQueue, playNextQueue = [], sourceLabel, getDispName, getDispArtist, getCustomPhoto,
   onTogglePlay, onSkip, onToggleShuffle, onToggleRepeat,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
-  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto,
+  lyrics, onSaveLyrics, onSearchLyrics, menuActions, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
   T,
 }: PlayerExpandSheetProps) {
   // The record gives way to the words, and back. Tied to the song, so moving to
   // the next track always lands you on the record rather than the last song’s
   // lyrics.
-  const [showLyrics, setShowLyrics] = useState(false);
-  const [lyricsFor, setLyricsFor] = useState(song.id);
-  const lyricsOpen = showLyrics && lyricsFor === song.id;
+  // The same goes for the menu and for pasting lyrics: all three take the
+  // record's place in the card, and only one at a time.
+  const [panelState, setPanelState] = useState<{ kind: "lyrics" | "paste" | "menu"; id: string } | null>(null);
+  const panel = panelState && panelState.id === song.id ? panelState.kind : null;
+  const lyricsOpen = panel === "lyrics" || panel === "paste";
   const hasLyrics = !!lyrics && lyrics.trim().length > 0;
+  const openPanel = (kind: "lyrics" | "paste" | "menu" | null) => setPanelState(kind ? { kind, id: song.id } : null);
 
-  const toggleLyrics = () => {
-    // Nothing to show is not a state worth entering. Offer to add some instead.
-    if (!hasLyrics) { onAddLyrics(); return; }
-    setLyricsFor(song.id);
-    setShowLyrics(!lyricsOpen);
-  };
+  // With no lyrics stored, the Lyrics button opens the paste box straight away.
+  const toggleLyrics = () => openPanel(lyricsOpen ? null : hasLyrics ? "lyrics" : "paste");
+  const toggleMenu = () => openPanel(panel === "menu" ? null : "menu");
+  const panelBody = (full: boolean) =>
+    panel === "menu" && menuActions ? (
+      <MenuPanel title={full ? dispName : undefined} artist={dispArtist} onDone={() => openPanel(null)} T={T}
+        actions={{ ...menuActions, onEditLyrics: () => openPanel(hasLyrics ? "lyrics" : "paste") }} />
+    ) : panel === "paste" ? (
+      <PastePanel key={song.id} full={full} current={lyrics} T={T}
+        onSearch={onSearchLyrics}
+        onCancel={() => openPanel(hasLyrics ? "lyrics" : null)}
+        onSave={l => { onSaveLyrics?.(l); openPanel(l ? "lyrics" : null); }} />
+    ) : (
+      <LyricsPanel text={lyrics ?? ""} title={full ? dispName : undefined} artist={full ? dispArtist : undefined} onEdit={() => openPanel("paste")} T={T} />
+    );
 
   const fmt = (ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -415,7 +433,7 @@ export function PlayerExpandSheet({
         onClick={() => { if (dragIdx === null) onPlayFromQueue(s); }}
         style={{
           display: "flex", alignItems: "center", gap: 12,
-          height: 64, padding: "0 8px 0 4px", cursor: "pointer",
+          height: rowSize.h, padding: "0 8px 0 4px", cursor: "pointer",
           opacity: isDragging ? 0.4 : 1,
           boxShadow: isOver ? `inset 0 ${dragIdx! < i ? -2 : 2}px 0 ${T.accent}` : "none",
           transition: "opacity 0.12s",
@@ -434,9 +452,9 @@ export function PlayerExpandSheet({
             <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
           </svg>
         </div>
-        <AlbumArt title={name} size={44} customPhoto={getPhoto(s)} songPath={s.uri} albumId={s.albumId} T={T} />
+        <AlbumArt title={name} size={rowSize.art} customPhoto={getPhoto(s)} songPath={s.uri} albumId={s.albumId} T={T} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: rowSize.title, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {name}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -445,7 +463,7 @@ export function PlayerExpandSheet({
                 {t("NEXT")}
               </span>
             )}
-            <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: rowSize.sub, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {getArtist(s)}
             </span>
           </div>
@@ -549,7 +567,8 @@ export function PlayerExpandSheet({
                 <span>{t("Lyrics")}</span>
               </button>
               <button
-                onClick={onOpenMenu}
+                onClick={toggleMenu}
+                aria-pressed={panel === "menu"}
                 aria-label={t("More options for {name}", { name: dispName })}
                 style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
                 <IC.Dots />
@@ -567,16 +586,16 @@ export function PlayerExpandSheet({
             {/* Portrait: the words take the whole top of the card, record and
                 title both, at the height the record had, so the timeline and
                 the buttons stay exactly where they were. */}
-            {lyricsOpen && !land ? (
+            {panel && !land ? (
               <div data-own-drag="" style={{ marginBottom: 14, marginTop: 6, height: topH || discSize + 80 }}>
-                <LyricsPanel text={lyrics ?? ""} title={dispName} artist={dispArtist} onEdit={onAddLyrics} T={T} />
+                {panelBody(true)}
               </div>
             ) : (
             <div ref={measureTop} style={land ? { display: "contents" } : { display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
-              {lyricsOpen ? (
+              {panel ? (
                 <div data-own-drag="" style={land ? { gridColumn: 1, gridRow: "1 / span 3" } : undefined}>
                   <div style={{ width: discSize, height: discSize }}>
-                    <LyricsPanel text={lyrics ?? ""} onEdit={onAddLyrics} T={T} />
+                    {panelBody(false)}
                   </div>
                 </div>
               ) : (
@@ -679,16 +698,17 @@ export function PlayerExpandSheet({
             </button>
             {nextSong ? (
               <div style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 10,
+                // The size of a row in Songs, so it reads as the next row of the list.
+                display: "flex", alignItems: "center", gap: 12, boxSizing: "border-box",
+                minHeight: rowSize.h, padding: "0 10px", borderRadius: 12,
                 background: T.card, border: `1px solid ${T.border}`,
               }}>
-                <AlbumArt title={getName(nextSong)} size={36} customPhoto={getPhoto(nextSong)} songPath={nextSong.uri} albumId={nextSong.albumId} T={T} />
+                <AlbumArt title={getName(nextSong)} size={rowSize.art} customPhoto={getPhoto(nextSong)} songPath={nextSong.uri} albumId={nextSong.albumId} T={T} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: rowSize.title, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {getName(nextSong)}
                   </div>
-                  <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: rowSize.sub, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {getArtist(nextSong)}
                   </div>
                 </div>
@@ -770,10 +790,10 @@ export function PlayerExpandSheet({
               margin: "0 12px 6px", padding: "10px 14px", borderRadius: 18,
               background: T.card, border: `1px solid ${T.border}`,
             }}>
-              <AlbumArt title={dispName} size={44} active playing={isPlaying} customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
+              <AlbumArt title={dispName} size={rowSize.art} active playing={isPlaying} customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: T.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispName}</div>
-                <div style={{ fontSize: 13, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist}</div>
+                <div style={{ fontSize: rowSize.title, fontWeight: 700, color: T.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispName}</div>
+                <div style={{ fontSize: rowSize.sub, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist}</div>
               </div>
             </div>
 
@@ -841,6 +861,91 @@ function LyricsPanel({ text, title, artist, onEdit, T }: {
         ...(full ? { WebkitMaskImage: "linear-gradient(#000 85%, transparent)", maskImage: "linear-gradient(#000 85%, transparent)" } : null),
       }}>
         {text.trim()}
+      </div>
+    </div>
+  );
+}
+
+/** The song on one small line, and a button on the right: the head of every
+ *  panel that takes the record's place in the portrait card. */
+function PanelHead({ title, artist, action, onAction, T }: {
+  title?: string; artist?: string; action: string; onAction: () => void; T: T;
+}) {
+  const full = title !== undefined;
+  return (
+    <div style={{
+      display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0,
+      padding: full ? "0 2px 9px" : "10px 14px 6px",
+      borderBottom: full ? `1px solid ${T.border}` : "none",
+    }}>
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {full ? (
+          <>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: T.accent }}>{title}</span>
+            {artist ? <span style={{ fontSize: 12.5, color: T.textSub, marginLeft: 8 }}>{artist}</span> : null}
+          </>
+        ) : null}
+      </span>
+      <button onClick={onAction}
+        style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2, flexShrink: 0 }}>
+        {action}
+      </button>
+    </div>
+  );
+}
+
+/** The "⋮" menu, in the card: the same tiles as the menu on a list row. */
+function MenuPanel({ title, artist, actions, onDone, T }: {
+  title?: string; artist?: string; actions: SongActions; onDone: () => void; T: T;
+}) {
+  const full = title !== undefined;
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden",
+      borderRadius: full ? 0 : 16, background: full ? "transparent" : T.dim }}>
+      <PanelHead title={title} artist={artist} action={t("Done")} onAction={onDone} T={T} />
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 0 8px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <SongActionTiles a={actions} T={T} />
+      </div>
+    </div>
+  );
+}
+
+/** Pasting lyrics, in the card. MPTree does not fetch lyrics: Search opens the
+ *  user's own browser on a search, and they paste what they find here. */
+function PastePanel({ full, current, onSave, onSearch, onCancel, T }: {
+  full: boolean; current?: string; onSave: (lyrics: string | null) => void;
+  onSearch?: () => void; onCancel: () => void; T: T;
+}) {
+  const [text, setText] = useState(current ?? "");
+  const pill = (filled: boolean) => ({
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+    background: filled ? T.accent : "transparent", color: filled ? T.playBtnFg : T.text,
+    border: filled ? "none" : `1px solid ${T.chipBorder}`, borderRadius: 20, padding: "8px 14px",
+    fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
+  } as const);
+  const clearing = !!current && !text.trim();
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 10,
+      ...(full ? null : { background: T.dim, borderRadius: 16, padding: 10, boxSizing: "border-box" as const }) }}>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder={t("Paste the lyrics here…")}
+        style={{
+          flex: 1, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none",
+          background: full ? T.dim : T.card, color: T.text, border: "none", borderRadius: 12,
+          padding: "12px 14px", fontSize: 15, lineHeight: 1.7, fontFamily: "inherit", outline: "none",
+        }}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {onSearch && <button onClick={onSearch} style={pill(false)}>{IC.Search(T.text)}{t("Search online")}</button>}
+        <span style={{ flex: 1 }} />
+        <button onClick={clearing ? () => onSave(null) : onCancel}
+          style={{ ...pill(false), border: "none", color: clearing ? "#e8445a" : T.muted }}>
+          {clearing ? t("Delete") : t("Cancel")}
+        </button>
+        <button onClick={() => { if (text.trim()) onSave(text); }} disabled={!text.trim()}
+          style={{ ...pill(true), opacity: text.trim() ? 1 : 0.45 }}>{t("Save")}</button>
       </div>
     </div>
   );
