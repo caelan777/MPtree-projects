@@ -29,11 +29,6 @@ interface Step {
 
 const STEPS: Step[] = [
   {
-    target: '[data-tour="logo"]',
-    title: "The logo is a button",
-    body: "Tap it to give the list the whole screen. Tap again to bring everything back.",
-  },
-  {
     target: '[data-tour="search"]',
     title: "Find anything fast",
     body: "Search by song or artist.",

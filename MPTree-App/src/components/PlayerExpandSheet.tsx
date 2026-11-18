@@ -570,7 +570,10 @@ export function PlayerExpandSheet({
                 onClick={toggleMenu}
                 aria-pressed={panel === "menu"}
                 aria-label={t("More options for {name}", { name: dispName })}
-                style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+                style={{
+                  background: panel === "menu" ? T.dim : "transparent", borderRadius: 20,
+                  border: "none", color: panel === "menu" ? T.text : T.muted, cursor: "pointer", padding: 8, display: "flex",
+                }}>
                 <IC.Dots />
               </button>
             </div>
