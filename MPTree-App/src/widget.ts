@@ -13,7 +13,8 @@ import { recordPicture } from "./components/SpinningDisc";
 // player, always (test build 127 had a switch for it). Kept on this phone only:
 // widgets belong to a home screen, not to the account.
 
-export const WIDGET_KINDS = ["bar", "card", "record", "pill"] as const;
+// The free ones first, the two of Pro together after them.
+export const WIDGET_KINDS = ["bar", "pill", "card", "record"] as const;
 export type WidgetKind = typeof WIDGET_KINDS[number];
 export const WIDGET_COLOURS = ["app", "black", "white", "clear"] as const;
 export type WidgetColour = typeof WIDGET_COLOURS[number];

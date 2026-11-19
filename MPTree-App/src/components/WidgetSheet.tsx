@@ -97,8 +97,9 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
   const lockedKind = (k: WidgetKind) => !pro && PRO_KINDS.includes(k);
   const lockedColour = (c: WidgetColour) => !pro && c === "clear";
   const [cannot, setCannot] = useState(false);
+  // A locked one can be looked at; adding it is what asks for Pro.
   const add = async () => {
-    if (lockedKind(cfg.kind)) { onNeedPro(); return; }
+    if (lockedKind(cfg.kind) || lockedColour(cfg.colour)) { onNeedPro(); return; }
     const r = await System.pinWidget({ kind: cfg.kind }).catch(() => ({ supported: false }));
     if (!r.supported) setCannot(true);
     else onToast?.(t("Your phone shows the widget. Tap Add."));
@@ -126,7 +127,7 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
             const on = cfg.kind === k;
             const [w, h] = k === "bar" ? [84, 21] : k === "card" ? [84, 42] : k === "record" ? [42, 42] : [42, 21];
             return (
-              <button key={k} onClick={() => (lockedKind(k) ? onNeedPro() : saveWidget({ kind: k }))} aria-pressed={on}
+              <button key={k} onClick={() => saveWidget({ kind: k })} aria-pressed={on}
                 style={{ height: 100, borderRadius: 16, background: T.surface, border: `2px solid ${on ? T.accent : "transparent"}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer", fontFamily: "inherit", color: T.text }}>
                 <span style={{ display: "block", width: w, height: h, borderRadius: Math.min(w, h) / 3, background: on ? T.accent : T.dim }} />
                 <span style={{ fontSize: 14, fontWeight: on ? 700 : 600, display: "flex", alignItems: "center", gap: 5 }}>{widgetName(k)} <span style={{ color: T.muted, fontWeight: 500, fontSize: 12 }}>{SIZE[k]}</span>{lockedKind(k) && <Lock />}</span>
@@ -140,7 +141,7 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
           {WIDGET_COLOURS.map(c => {
             const on = cfg.colour === c;
             return (
-              <button key={c} role="radio" aria-checked={on} onClick={() => (lockedColour(c) ? onNeedPro() : saveWidget({ colour: c }))}
+              <button key={c} role="radio" aria-checked={on} onClick={() => saveWidget({ colour: c })}
                 style={{ flex: 1, padding: "9px 0", borderRadius: 18, border: "none", background: on ? T.accent : "transparent", color: on ? T.playBtnFg : T.textSub, fontSize: 13, fontWeight: on ? 700 : 600, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{widgetColourName(c)}{lockedColour(c) && <Lock />}</span>
               </button>

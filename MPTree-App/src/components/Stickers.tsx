@@ -107,13 +107,15 @@ type EditorProps = {
   name: string;
   /** Editing one of the person's own setups: it can be saved over. */
   own: boolean;
+  /** Saved at once, over itself, without asking for a name (Aviela's Custom). */
+  quick?: boolean;
   cardTone: Tone;
   pageTone: Tone;
   onSave: (items: Sticker[], name: string, asNew: boolean) => void;
   onCancel: () => void;
 };
 
-export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSave, onCancel }: EditorProps) {
+export function StickerEditor({ T, initial, name, own, quick = false, cardTone, pageTone, onSave, onCancel }: EditorProps) {
   // The songs page as it is now, copied, behind the stickers. Its own stickers
   // are left out of the copy: they are the ones being moved about here.
   const host = useRef<HTMLDivElement>(null);
@@ -353,7 +355,7 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px 10px" }}>
           <button onClick={cancel} style={{ padding: "8px 14px", borderRadius: 18, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>{t("Cancel")}</button>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.muted }}>{t("Aviela stickers")}</span>
-          <button onClick={() => setSaving(true)} style={{ padding: "8px 18px", borderRadius: 18, border: "none", background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>{t("Save")}</button>
+          <button onClick={() => (quick ? onSave(plain(items), name, false) : setSaving(true))} style={{ padding: "8px 18px", borderRadius: 18, border: "none", background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>{t("Save")}</button>
         </div>
         <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
           {([

@@ -771,7 +771,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     const last = env === "aviela" ? look.aviela.stickers : look.custom.stickers ?? look.stickers;
     const keep = mine.find(x => x.id === last) ?? mine[mine.length - 1];
     if (keep) wearSetup(env, keep.id);
-    else setEditing({ env, id: null, items: [], name: freeName(mine, t("My stickers")) });
+    else setEditing({ env, id: null, items: [], name: env === "aviela" ? "Aviela" : freeName(mine, t("My stickers")) });
   };
   /** The setups of one world, with what can be done to the one that is on. */
   const ownStickers = (env: StickerEnv) => {
@@ -783,6 +783,18 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     const sCardTone = env === "aviela" ? avielaTone : cardTone;
     const sPageTone: Tone = env === "aviela" ? "pink" : pageTone;
     const btn = { padding: "10px 16px", borderRadius: 20, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" } as const;
+    // Aviela's Custom is one setup: changed and saved, nothing more.
+    if (env === "aviela") {
+      const one = mine[mine.length - 1] ?? null;
+      return (
+        <div style={{ display: "flex", padding: "14px 16px 0" }}>
+          <button onClick={() => setEditing({ env, id: one?.id ?? null, items: one?.items ?? [], name: one?.name ?? "Aviela" })}
+            style={{ ...btn, border: "none", background: T.accent, color: T.playBtnFg, fontWeight: 700 }}>
+            {t("Change")}
+          </button>
+        </div>
+      );
+    }
     return (
       <>
         {mine.length > 0 && (
@@ -1235,7 +1247,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
         {asking && <LanternGate onYes={sayAfraid} onNo={sayNotAfraid} onDone={() => setAsking(false)} />}
         {editing && (
-          <StickerEditor T={T} initial={editing.items} name={editing.name} own={!!editing.id}
+          <StickerEditor T={T} initial={editing.items} name={editing.name} own={!!editing.id} quick={editing.env === "aviela"}
             cardTone={editing.env === "aviela" ? avielaTone : cardTone} pageTone={editing.env === "aviela" ? "pink" : pageTone}
             onSave={saveSetup} onCancel={() => setEditing(null)} />
         )}

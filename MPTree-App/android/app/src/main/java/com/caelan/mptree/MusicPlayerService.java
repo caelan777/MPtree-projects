@@ -1042,9 +1042,10 @@ public class MusicPlayerService extends Service {
         float speed = playbackSpeed > 0 ? playbackSpeed : 1f;
         int remaining = Math.round((duration - position) / speed);
         // A little early, so the next file has time to load before the fade.
-        if (remaining > crossfadeDurationMs + 250 || remaining <= 150) return;
+        // The next file is loaded a few seconds early; the fade starts on time.
+        if (remaining > crossfadeDurationMs + 3000 || remaining <= 150) return;
 
-        startCrossfadeInto(upcoming, Math.max(300, Math.min(crossfadeDurationMs, remaining - 100)));
+        startCrossfadeInto(upcoming, Math.max(300, crossfadeDurationMs));
     }
 
     private Track peekNextTrack() {
@@ -1075,7 +1076,9 @@ public class MusicPlayerService extends Service {
                 int session = audioManager != null ? audioManager.generateAudioSessionId() : AudioManager.ERROR;
                 if (session != AudioManager.ERROR) incomingPlayer.setAudioSessionId(session);
             } catch (Exception ignored) {}
-            fadeEq = eqFor(incomingPlayer.getAudioSessionId());
+            // An equalizer only when it is on: making one on a second session
+            // while the first plays was heard as a hitch on some phones.
+            fadeEq = eqEnabled ? eqFor(incomingPlayer.getAudioSessionId()) : null;
             incomingPlayer.setAudioAttributes(new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -1086,14 +1089,26 @@ public class MusicPlayerService extends Service {
 
             incomingPlayer.setOnPreparedListener(mp -> {
                 if (gen != fadeGen || !crossfading) return;
-                try {
-                    // Paused while it loaded: it waits, paused too.
-                    if (isPlaying) { mp.start(); applyPlaybackSpeed(mp); }
-                    fadeReady = true;
-                    runCrossfadeRamp(outgoing, mp, fadeSteps, gen, next);
-                } catch (Exception e) {
-                    giveUpBlend(next);
-                }
+                // Loaded ahead of time, so loading never competes with the song
+                // that is still playing; it starts when the fade does.
+                fadeReady = true;
+                final Runnable waitForFade = new Runnable() {
+                    @Override public void run() {
+                        if (gen != fadeGen || !crossfading) return;
+                        int left;
+                        try {
+                            float sp = playbackSpeed > 0 ? playbackSpeed : 1f;
+                            left = Math.round((outgoing.getDuration() - outgoing.getCurrentPosition()) / sp);
+                        } catch (Exception e) { left = 0; }
+                        if (left > fadeMs || !isPlaying) { mainHandler.postDelayed(this, 40); return; }
+                        try {
+                            mp.start(); applyPlaybackSpeed(mp);
+                            int steps = Math.max(1, Math.min(fadeMs, Math.max(300, left)) / CROSSFADE_STEP_MS);
+                            runCrossfadeRamp(outgoing, mp, steps, gen, next);
+                        } catch (Exception e) { giveUpBlend(next); }
+                    }
+                };
+                mainHandler.post(waitForFade);
             });
             incomingPlayer.setOnErrorListener((mp, what, extra) -> {
                 if (gen == fadeGen) giveUpBlend(next);
@@ -1285,7 +1300,6 @@ public class MusicPlayerService extends Service {
         }
 
         Track t = nativeQueue.get(next);
-        if (blendInto(t)) { nativeQueueIndex = next; return; }
         try {
             play(t.path, t.title, t.artist, true, t.cutFrom, t.cutTo);
             // play() looks the track up by its file, and a cut shares its file

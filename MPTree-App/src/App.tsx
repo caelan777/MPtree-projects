@@ -193,6 +193,10 @@ const HAS_DISCOVER = Capacitor.getPlatform() !== "ios";
 
 export default function App() {
   const [songs,          setSongs]         = useState<Song[]>([]);
+  // New music since MPTree was last open (NewMusicJob): when that was, for a
+  // "3 new" under the search. 0 the first time, and once looked at.
+  const [newSince, setNewSince] = useState(0);
+  useEffect(() => { System.takeNewSongs().then(r => setNewSince(r.since || 0)).catch(() => {}); }, []);
   const [removedSongs,   setRemovedSongs]  = useState<Song[]>([]);
   const [meta,           setMeta]          = useState<Record<string, SongMeta>>({});
   const [queue,          setQueue]         = useState<Song[]>([]);
@@ -1749,7 +1753,8 @@ export default function App() {
     const nxt = q[idx + dir] ?? (repeatAll ? q[(idx + dir + q.length) % q.length] : undefined);
     if (!nxt) return;
     if (q !== queue) setQueue(q);
-    playSong(nxt, q, undefined, undefined, true);
+    // Next and previous switch at once; crossfade is for songs that end.
+    playSong(nxt, q);
   };
 
   // ── Play Next ─────────────────────────────────────────────────────────────
@@ -3898,6 +3903,15 @@ export default function App() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: discoverOpen ? 1 : undefined }}>
                   <span style={{ fontSize: 12, color: CT.muted, flexShrink: discoverOpen ? 1 : 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
+                  {!discoverOpen && newSince > 0 && (() => {
+                    const n = songs.filter(x => x.dateAdded > newSince).length;
+                    return n > 0 && (
+                      <button onClick={() => { setFilter("newest"); setNewSince(0); }}
+                        style={{ background: CT.accent, color: CT.playBtnFg, border: "none", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                        {tn(n, "{n} new", "{n} new")}
+                      </button>
+                    );
+                  })()}
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}

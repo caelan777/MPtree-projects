@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
@@ -166,6 +167,8 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_pill_info" />
         </receiver>
+
+        <service android:name=".NewMusicJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />
 
         <!--  ── File provider (unchanged) ────────────────────────────────  -->
         <provider

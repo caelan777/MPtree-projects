@@ -14,4 +14,10 @@
     <string name="widget_pill_desc">Píldora: reproducir y pausa, pequeña</string>
     <string name="widget_pro_title">Parte de MPTree Pro</string>
     <string name="widget_pro_sub">Toca para abrir MPTree</string>
+    <string name="channel_new_music">Música nueva</string>
+    <string name="new_songs_sub">Toca para escuchar en MPTree</string>
+    <plurals name="new_songs">
+        <item quantity="one">Una canción nueva</item>
+        <item quantity="other">%d canciones nuevas</item>
+    </plurals>
 </resources>

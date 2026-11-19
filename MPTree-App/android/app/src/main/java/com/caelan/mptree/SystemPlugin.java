@@ -126,6 +126,24 @@ public class SystemPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    // ── New music (NewMusicJob) ──────────────────────────────────────────────
+    /** Opening MPTree: the songs added since it was last open (as a time in
+     *  ms to compare with dateAdded), then all seen, and the watch set up. */
+    @PluginMethod
+    public void takeNewSongs(PluginCall call) {
+        android.content.Context ctx = getContext();
+        boolean first = !ctx.getSharedPreferences(NewMusicJob.PREFS, android.content.Context.MODE_PRIVATE).contains("seen");
+        long since = NewMusicJob.markSeen(ctx);
+        NewMusicJob.schedule(ctx);
+        // Android 13 and later ask for notifications once.
+        if (Build.VERSION.SDK_INT >= 33 && ctx.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            try { getActivity().requestPermissions(new String[] { "android.permission.POST_NOTIFICATIONS" }, 7302); } catch (Exception ignored) {}
+        }
+        JSObject ret = new JSObject();
+        ret.put("since", first ? 0 : since * 1000);
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void getDeviceInfo(PluginCall call) {
         JSObject ret = new JSObject();

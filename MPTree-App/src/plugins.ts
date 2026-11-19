@@ -123,6 +123,8 @@ export type SystemPlugin = {
   /** Asks the launcher to add one of the widgets ("bar", "card", "record",
    *  "pill"). supported:false where the launcher cannot. */
   pinWidget(options: { kind: string }): Promise<{ supported: boolean }>;
+  /** The time (ms) MPTree was last opened, for new songs since; 0 the first time. */
+  takeNewSongs(): Promise<{ since: number }>;
 };
 
 /** Google Play Billing, for MPTree Pro. Only works in a build Play installed. */
@@ -204,6 +206,7 @@ const SystemWeb: SystemPlugin = {
   pinPhotoShortcut:  async () => ({ supported: false }),
   setWidgetConfig:   async () => {},
   pinWidget:         async () => ({ supported: false }),
+  takeNewSongs:      async () => ({ since: 0 }),
 };
 
 const BillingWeb: BillingPlugin = {

@@ -14,4 +14,12 @@
     <string name="widget_pill_desc">Таблетка: плей и пауза, маленькая</string>
     <string name="widget_pro_title">Входит в MPTree Pro</string>
     <string name="widget_pro_sub">Нажмите, чтобы открыть MPTree</string>
+    <string name="channel_new_music">Новая музыка</string>
+    <string name="new_songs_sub">Нажмите, чтобы слушать в MPTree</string>
+    <plurals name="new_songs">
+        <item quantity="one">%d новая песня</item>
+    <item quantity="few">%d новые песни</item>
+    <item quantity="many">%d новых песен</item>
+        <item quantity="other">%d новых песен</item>
+    </plurals>
 </resources>

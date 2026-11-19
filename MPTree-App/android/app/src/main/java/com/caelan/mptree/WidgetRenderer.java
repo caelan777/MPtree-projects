@@ -65,7 +65,7 @@ public final class WidgetRenderer {
         R.layout.widget_now_playing, R.layout.widget_card, R.layout.widget_record, R.layout.widget_pill,
     };
     /** How wide (dp) a widget has to be for previous and next. */
-    private static final int[] ROOM_FOR_SKIPS = { 220, 220, 170, 220 };
+    private static final int[] ROOM_FOR_SKIPS = { 220, 220, 150, 220 };
 
     // The cover of what plays, a copy of the service's (which recycles its own).
     private static Bitmap art;
@@ -75,6 +75,7 @@ public final class WidgetRenderer {
     private static Bitmap record;
     private static int recordVersion = -1;
     private static String lastKey = null;
+    private static int lastHeight = 0;
 
     private WidgetRenderer() {}
 
@@ -193,7 +194,7 @@ public final class WidgetRenderer {
                 int[] ids = m.getAppWidgetIds(new ComponentName(ctx, PROVIDERS[kind]));
                 if (ids == null || ids.length == 0) continue;
                 for (int id : ids) {
-                    if (full) m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id)));
+                    if (full) { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id))); }
                     else if (kind == CARD && st.has && proOn(ctx)) {
                         RemoteViews v = new RemoteViews(ctx.getPackageName(), LAYOUTS[CARD]);
                         timeline(v, st, null);
@@ -209,13 +210,13 @@ public final class WidgetRenderer {
     public static synchronized void update(Context ctx, AppWidgetManager m, int[] ids, int kind) {
         try {
             State st = read(ctx);
-            for (int id : ids) m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id)));
+            for (int id : ids) { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id))); }
         } catch (Exception ignored) { /* stays as it was */ }
     }
 
     /** One widget, made larger or smaller on the home screen. */
     public static synchronized void resized(Context ctx, AppWidgetManager m, int id, int kind) {
-        try { m.updateAppWidget(id, build(ctx, kind, read(ctx), widthOf(m, id))); } catch (Exception ignored) { /* stays as it was */ }
+        try { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, read(ctx), widthOf(m, id))); } catch (Exception ignored) { /* stays as it was */ }
     }
 
     /** How wide the widget is, in dp; 0 when the launcher does not say. */
@@ -223,6 +224,14 @@ public final class WidgetRenderer {
         try {
             Bundle o = m.getAppWidgetOptions(id);
             return o == null ? 0 : o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+        } catch (Exception e) { return 0; }
+    }
+
+    /** How tall the widget is, in dp; 0 when the launcher does not say. */
+    private static int heightOf(Context ctx, int id) {
+        try {
+            Bundle o = AppWidgetManager.getInstance(ctx).getAppWidgetOptions(id);
+            return o == null ? 0 : o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
         } catch (Exception e) { return 0; }
     }
 
@@ -256,7 +265,11 @@ public final class WidgetRenderer {
         // The cover, as the player shows it: the song's own, or the mark.
         Bitmap a = !locked && art != null && st.path != null && st.path.equals(artPath) ? art : null;
         if (kind == RECORD) {
-            v.setImageViewBitmap(R.id.w_disc, disc(ctx, a, Math.round(96 * d), locked));
+            // As large as the widget allows, under the words and the buttons.
+            int side = widthDp > 0 ? widthDp - 20 : 96;
+            int h = lastHeight > 0 ? lastHeight - 110 : 96;
+            int dp = Math.max(72, Math.min(260, Math.min(side, h)));
+            v.setImageViewBitmap(R.id.w_disc, disc(ctx, a, Math.round(dp * d), locked));
         } else if (kind == BAR || kind == CARD) {
             int px = Math.round((kind == CARD ? 100 : 48) * d);
             v.setImageViewBitmap(R.id.w_cover, a != null ? rounded(a, px, px * 0.16f) : markTile(ctx, px, px * 0.16f, c));

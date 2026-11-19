@@ -20,4 +20,10 @@
     <string name="widget_pill_desc">Pill: play and pause, small</string>
     <string name="widget_pro_title">Part of MPTree Pro</string>
     <string name="widget_pro_sub">Tap to open MPTree</string>
+    <string name="channel_new_music">New music</string>
+    <string name="new_songs_sub">Tap to listen in MPTree</string>
+    <plurals name="new_songs">
+        <item quantity="one">One new song</item>
+        <item quantity="other">%d new songs</item>
+    </plurals>
 </resources>
