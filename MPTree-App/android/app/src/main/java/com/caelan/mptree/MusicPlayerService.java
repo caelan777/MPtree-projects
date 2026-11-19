@@ -1362,6 +1362,14 @@ public class MusicPlayerService extends Service {
     //     knows to stop and reset — it never re-drives the advance itself.
     private void nativeSkip(int dir) {
         cancelCrossfade();
+        // No queue in memory (the app restored its last song without handing
+        // one over): the one kept on disk. And the place in it by the song that
+        // is on, if the index does not point at it.
+        restoreQueue();
+        if (currentPath != null && (nativeQueueIndex < 0 || nativeQueueIndex >= nativeQueue.size()
+                || !currentPath.equals(nativeQueue.get(nativeQueueIndex).path))) {
+            for (int i = 0; i < nativeQueue.size(); i++) if (currentPath.equals(nativeQueue.get(i).path)) { nativeQueueIndex = i; break; }
+        }
         if (nativeQueue.isEmpty() || nativeQueueIndex < 0) {
             // No native queue to advance through — let JS decide what to do.
             if (completionListener != null) completionListener.onTrackComplete();
@@ -1374,6 +1382,11 @@ public class MusicPlayerService extends Service {
         // Repeat all goes round, both ways.
         if (MODE_REPEAT_ALL.equals(playMode)) next = (next + nativeQueue.size()) % nativeQueue.size();
 
+        // By hand past the ends: previous on the first song starts it again,
+        // next on the last goes round to the first. It used to say "stopped"
+        // (the widget showed pause) while the song went on playing.
+        if (next < 0 && mediaPlayer != null) { try { seekTo(0); } catch (Exception ignored) {} return; }
+        if (next >= nativeQueue.size()) next = 0;
         if (next < 0 || next >= nativeQueue.size()) {
             // Queue exhausted: stop and notify JS to reset its transport UI.
             isPlaying = false;

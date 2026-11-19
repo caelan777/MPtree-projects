@@ -1733,6 +1733,10 @@ export default function App() {
     try {
       if (!loadedRef.current) {
         await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong), ...cutBounds(currentSong) });
+        // The queue too, or next and previous (the widget's, the notification's)
+        // had nothing to go by until a song was skipped in the app.
+        { const q = queueRef.current.length ? queueRef.current : [currentSong];
+          AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: Math.max(0, q.findIndex(x => x.id === currentSong.id)) }).catch(() => {}); }
         const seekTarget = currentSong.isCut && currentTime <= (currentSong.cutFrom ?? 0) ? (currentSong.cutFrom ?? 0) : currentTime;
         if (seekTarget > 0) await AudioPlayer.seekTo({ milliseconds: seekTarget });
         loadedRef.current = true; setPlaying(true); return;
