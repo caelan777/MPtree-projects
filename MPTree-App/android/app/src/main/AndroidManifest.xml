@@ -148,6 +148,24 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/now_playing_widget_info" />
         </receiver>
+        <receiver android:name=".CardWidgetProvider" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_card_info" />
+        </receiver>
+        <receiver android:name=".RecordWidgetProvider" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_record_info" />
+        </receiver>
+        <receiver android:name=".PillWidgetProvider" android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_pill_info" />
+        </receiver>
 
         <!--  ── File provider (unchanged) ────────────────────────────────  -->
         <provider

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
+import { cleanSetups, setupById, type StickerSetup } from "./stickers";
 
 // ─── LOOK ────────────────────────────────────────────────────────────────────
 // The Pro personalisation: which shade of dark and of light, what colour the
@@ -34,6 +35,14 @@ export type AppIcon    = typeof APP_ICONS[number];
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
+/** How the player shows what plays: the record, the cover large, the record
+ *  on a turntable, or only the words. */
+export const PLAYER_STYLES = ["record", "cover", "turntable", "text"] as const;
+export type PlayerStyle = typeof PLAYER_STYLES[number];
+/** The timeline in the player. There is one for everyone; while Caelan picks
+ *  it, test builds can switch between these on the Player page. */
+export const TIMELINES = ["line", "thick", "wave", "dots", "ruler", "thumb", "ring"] as const;
+export type TimelineKind = typeof TIMELINES[number];
 
 /** The header cards Lantern comes with: its own dark green, green, black or white. */
 export const LANTERN_CARDS: readonly CardShade[] = ["dark:lantern", "light:lantern", "dark:classic", "light:classic"];
@@ -64,6 +73,13 @@ export type Look = {
   /** Tapping the record in the player turns it into a picture disc of the
    *  cover. Free, and remembered. */
   photoDisc: boolean;
+  /** How the player shows what plays (the Player page). */
+  playerStyle: PlayerStyle;
+  timeline: TimelineKind;
+  /** The sticker setup that is on (stickers.ts), or none. */
+  stickers: string | null;
+  /** The setups the person saved under a name. */
+  stickerSetups: StickerSetup[];
 };
 
 export const DEFAULT_LOOK: Look = {
@@ -71,6 +87,7 @@ export const DEFAULT_LOOK: Look = {
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: true,
   flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
+  playerStyle: "record", timeline: "line", stickers: null, stickerSetups: [],
 };
 
 /** What anyone gets without Pro. */
@@ -158,6 +175,10 @@ export async function loadLook(): Promise<Look> {
         if (/^dark:(purple|pink)$/.test(String(look[k]))) look = { ...look, [k]: "default" };
       }
       if (!(APP_ICONS as readonly string[]).includes(look.icon)) look = { ...look, icon: "classic" };
+      if (!(PLAYER_STYLES as readonly string[]).includes(look.playerStyle)) look = { ...look, playerStyle: "record" };
+      if (!(TIMELINES as readonly string[]).includes(look.timeline)) look = { ...look, timeline: "line" };
+      look = { ...look, stickerSetups: cleanSetups(look.stickerSetups) };
+      if (look.stickers !== null && (typeof look.stickers !== "string" || !setupById(look.stickers, look.stickerSetups))) look = { ...look, stickers: null };
       // The first test build had one card skin (glass, line...) for both modes.
       if (typeof look.cardDark !== "string" || !/^(default|dark:|light:)/.test(look.cardDark)) look = { ...look, cardDark: "default" };
       if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };
@@ -230,7 +251,8 @@ export function hasLookChanges(): boolean {
 /** Whether a look is made of free things only, so it can be kept without Pro. */
 export function isFreeLook(l: Look): boolean {
   return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
-    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon;
+    && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon
+    && l.playerStyle === "record" && l.stickers === null;
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────
@@ -281,5 +303,8 @@ export function resetLook(): void {
   preview = null;
   // The white record is free, so it is not taken off either.
   const kept = (v: VinylSkin): VinylSkin => (isFreeVinyl(v) ? v : DEFAULT_LOOK.vinylDark);
-  saveLook({ ...DEFAULT_LOOK, vinylDark: kept(look.vinylDark), vinylLight: kept(look.vinylLight), photoDisc: look.photoDisc });
+  // Saved sticker setups stay, only taken off; so does the timeline, which is
+  // not a Pro thing.
+  saveLook({ ...DEFAULT_LOOK, vinylDark: kept(look.vinylDark), vinylLight: kept(look.vinylLight), photoDisc: look.photoDisc,
+    stickerSetups: look.stickerSetups, timeline: look.timeline });
 }

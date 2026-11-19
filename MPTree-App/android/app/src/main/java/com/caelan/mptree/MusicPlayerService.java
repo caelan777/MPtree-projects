@@ -1253,15 +1253,9 @@ public class MusicPlayerService extends Service {
     }
 
     private void pushWidgetUpdate() {
-        try {
-            Intent updateIntent = new Intent(this, NowPlayingWidgetProvider.class);
-            updateIntent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-            AppWidgetManager mgr = AppWidgetManager.getInstance(this);
-            int[] ids = mgr.getAppWidgetIds(
-                    new android.content.ComponentName(this, NowPlayingWidgetProvider.class));
-            updateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
-            sendBroadcast(updateIntent);
-        } catch (Exception ignored) {}
+        // All four widgets (WidgetRenderer). Once a second while playing only
+        // the Card's timeline goes out; the rest when something else changed.
+        try { WidgetRenderer.refreshAll(this, false); } catch (Exception ignored) {}
     }
 
     private void persistNowPlaying() {
@@ -1269,6 +1263,7 @@ public class MusicPlayerService extends Service {
         final String  title    = currentTitle;
         final String  artist   = currentArtist;
         final int     position = getCurrentPosition();
+        final int     duration = getDuration();
         final boolean playing  = isPlaying;
         final long    now      = System.currentTimeMillis();
 
@@ -1285,6 +1280,7 @@ public class MusicPlayerService extends Service {
                     obj.put("title",     title);
                     obj.put("artist",    artist);
                     obj.put("position",  position);
+                    obj.put("duration",  duration);
                     obj.put("isPlaying", playing);
                     obj.put("updatedAt", now);
                     ed.putString("mptree_native_now_playing", obj.toString());
@@ -1437,6 +1433,8 @@ public class MusicPlayerService extends Service {
                 if (path.equals(currentPath)) {
                     currentTrackArt     = ready;
                     currentTrackArtPath = path;
+                    // The widgets get a copy of their own: this one is recycled later.
+                    WidgetRenderer.setArt(MusicPlayerService.this, path, ready);
                     // Refresh surfaces now that real art is available.
                     updateMediaSessionMetadata();
                     showNotification();

@@ -4,7 +4,9 @@ import type { T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
-import { SpinningDisc } from "./SpinningDisc";
+import { PlayerArt } from "./PlayerArt";
+import { Timeline } from "./Timeline";
+import { useLook } from "../look";
 import { IC } from "./Icons";
 import { SongActionTiles, type SongActions } from "./MultiSelectBar";
 
@@ -180,6 +182,12 @@ export function PlayerExpandSheet({
     ) : (
       <LyricsPanel text={lyrics ?? ""} title={full ? dispName : undefined} artist={full ? dispArtist : undefined} onEdit={() => openPanel("paste")} T={T} />
     );
+
+  // How the player shows what plays, and which timeline it has (Personalise,
+  // the Player page). The ring needs the record to go round; with any other
+  // style the line takes its place.
+  const look = useLook();
+  const timelineKind = look.timeline === "ring" && (look.playerStyle !== "record" || !!panel) ? "line" : look.timeline;
 
   const fmt = (ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -603,18 +611,24 @@ export function PlayerExpandSheet({
                 </div>
               ) : (
                 <div style={{ position: "relative", ...(land ? { gridColumn: 1, gridRow: "1 / span 3" } : null) }}>
-                  <SpinningDisc
+                  <PlayerArt
+                    style={look.playerStyle}
                     size={discSize}
                     spinning={isPlaying}
                     title={dispName}
+                    artist={dispArtist}
                     customPhoto={customPhoto}
-                    tappable
                     onNoCover={onNoCover}
                     onPhoto={onChangePhoto}
+                    progress={duration > 0 ? currentTime / duration : 0}
+                    ring={timelineKind === "ring" ? { currentTime, duration, onSeek, onSeekStart, onSeekEnd } : undefined}
+                    dark={isDarkBg(T.bg)}
+                    wordsExtra={land ? 0 : 64}
+                    T={T}
                   />
                 </div>
               )}
-              <div style={{ width: "100%", textAlign: "center", minWidth: 0, ...(land ? { gridColumn: 2, gridRow: 1, alignSelf: "end", marginBottom: 16 } : null) }}>
+              <div style={{ width: "100%", textAlign: "center", minWidth: 0, ...(land ? { gridColumn: 2, gridRow: 1, alignSelf: "end", marginBottom: 16 } : null), ...(look.playerStyle === "text" && !panel ? { display: "none" } : null) }}>
                 <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
                   {dispName}
                 </div>
@@ -632,16 +646,8 @@ export function PlayerExpandSheet({
             )}
 
             {/* Timeline */}
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 6, ...(land ? { gridColumn: 2, gridRow: 2 } : null) }}>
-              <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
-              <input
-                className="slider" type="range" min={0} max={duration || 100} value={currentTime}
-                onMouseDown={onSeekStart} onTouchStart={onSeekStart}
-                onChange={e => onSeek(Number(e.target.value))}
-                onMouseUp={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-              />
-              <span style={{ fontSize: 11, color: T.muted, width: 34, textAlign: "right" }}>{fmt(duration)}</span>
+            <div style={{ marginBottom: 6, ...(land ? { gridColumn: 2, gridRow: 2 } : null) }}>
+              <Timeline kind={timelineKind} currentTime={currentTime} duration={duration} onSeek={onSeek} onSeekStart={onSeekStart} onSeekEnd={onSeekEnd} fmt={fmt} seed={song.id} T={T} />
             </div>
 
             {/* Transport */}
@@ -952,4 +958,14 @@ function PastePanel({ full, current, onSave, onSearch, onCancel, T }: {
       </div>
     </div>
   );
+}
+
+/** Whether a colour is dark: the turntable is drawn black on a dark app and
+ *  light on a light one. */
+function isDarkBg(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return true;
+  const n = parseInt(m[1], 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum < 0.45;
 }

@@ -7,4 +7,9 @@
     <string name="action_pause">Пауза</string>
     <string name="action_next">Далее</string>
     <string name="not_playing">Ничего не играет</string>
+    <string name="widget_tap_to_open">Нажмите, чтобы открыть MPTree</string>
+    <string name="widget_bar_desc">Полоса: что играет, с кнопками назад, плей и вперёд</string>
+    <string name="widget_card_desc">Карточка: крупнее, со временем</string>
+    <string name="widget_record_desc">Пластинка: ваша обложка на пластинке</string>
+    <string name="widget_pill_desc">Таблетка: плей и пауза, маленькая</string>
 </resources>

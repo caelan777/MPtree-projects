@@ -113,6 +113,12 @@ export type SystemPlugin = {
    *  it. Resolves supported:false when the launcher cannot pin shortcuts. The
    *  launcher shows its own confirmation; this does not wait for it. */
   pinPhotoShortcut(options: { dataUrl: string; label: string }): Promise<{ supported: boolean }>;
+  /** The home screen widgets' colour, whether they show the cover, and the
+   *  app's own colours for "Same as app" (WidgetRenderer.java). */
+  setWidgetConfig(options: { colour?: string; cover?: boolean; palette?: Record<string, string> }): Promise<void>;
+  /** Asks the launcher to add one of the widgets ("bar", "card", "record",
+   *  "pill"). supported:false where the launcher cannot. */
+  pinWidget(options: { kind: string }): Promise<{ supported: boolean }>;
 };
 
 /** Google Play Billing, for MPTree Pro. Only works in a build Play installed. */
@@ -192,6 +198,8 @@ const SystemWeb: SystemPlugin = {
   askReview:         async () => ({ asked: false }),
   setAppIcon:        async () => {},
   pinPhotoShortcut:  async () => ({ supported: false }),
+  setWidgetConfig:   async () => {},
+  pinWidget:         async () => ({ supported: false }),
 };
 
 const BillingWeb: BillingPlugin = {

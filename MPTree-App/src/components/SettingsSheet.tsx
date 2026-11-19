@@ -7,6 +7,8 @@ import { Switch } from "./Switch";
 import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
+import { WidgetSheet, widgetName, widgetColourName } from "./WidgetSheet";
+import { useWidget } from "../widget";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
 import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON, useProPrice } from "../pro";
 import { CyclingDisc } from "./ProArt";
@@ -36,6 +38,7 @@ const StarIcon     = () => <Svg><polygon points="12 2 15.09 8.26 22 9.27 17 14.1
 const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Svg>;
 const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
 const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
+const WidgetIcon   = () => <Svg><rect x="3" y="6" width="18" height="12" rx="4"/><circle cx="8" cy="12" r="2"/><path d="M13 11h5M13 14h3"/></Svg>;
 const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 const InfoIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Svg>;
 /** A note with a flick on its stem, for TikTok, without being its logo. */
@@ -178,7 +181,8 @@ export function SettingsSheet({
   }, []);
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
-  const [sub, setSub] = useState<null | "language" | "about">(null);
+  const [sub, setSub] = useState<null | "language" | "about" | "widget">(null);
+  const widget = useWidget();
 
   // Live remaining-time label for an active fixed-clock timer.
   const [now, setNow] = useState(() => Date.now());
@@ -322,8 +326,16 @@ export function SettingsSheet({
             onClick={onOpenLook}
             icon={<BrushIcon />}
             label={t("Personalise")}
-            sub={t("Styles, your own background, colours, icon and record.")}
+            sub={t("Styles, background, colours, stickers, icon and player.")}
             tag={!pro && <ProTag T={T} />}
+          />
+          {/* The home screen widgets: their own page, with the button that
+              puts one on the home screen. */}
+          <Row T={T}
+            onClick={() => setSub("widget")}
+            icon={<WidgetIcon />}
+            label={t("Home screen widget")}
+            sub={`${widgetName(widget.kind)} · ${widgetColourName(widget.colour)}`}
           />
           {/* Size: text and rows together. One control rather than two: a
               bigger font in a row that stays the same height is a row that
@@ -479,6 +491,7 @@ export function SettingsSheet({
       {/* Outside the sheet's own box so they are not moved by its drag, and
           stopped here so a tap on their backdrop closes only them. */}
       <div onClick={e => e.stopPropagation()}>
+        {sub === "widget" && <WidgetSheet T={T} onClose={() => setSub(null)} />}
         {sub === "language" && (
           <LanguageSheet value={lang} onPick={v => { onSetLang(v); setSub(null); }} onClose={() => setSub(null)} T={T} />
         )}

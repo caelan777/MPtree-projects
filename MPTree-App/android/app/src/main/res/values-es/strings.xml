@@ -7,4 +7,9 @@
     <string name="action_pause">Pausa</string>
     <string name="action_next">Siguiente</string>
     <string name="not_playing">No suena nada</string>
+    <string name="widget_tap_to_open">Toca para abrir MPTree</string>
+    <string name="widget_bar_desc">Barra: lo que suena, con anterior, reproducir y siguiente</string>
+    <string name="widget_card_desc">Tarjeta: más grande, con el tiempo</string>
+    <string name="widget_record_desc">Disco: tu portada en un disco</string>
+    <string name="widget_pill_desc">Píldora: reproducir y pausa, pequeña</string>
 </resources>

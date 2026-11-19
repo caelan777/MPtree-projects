@@ -10,7 +10,7 @@ import { StyleReveal } from "./StyleReveal";
 import { primeLanternVoice } from "../lanternVoice";
 import { usePro, ADS_ON } from "../pro";
 import { System } from "../plugins";
-import { MARK_PATH } from "./Logo";
+import { MARK_PATH, Logo } from "./Logo";
 import { CropSheet } from "../lazySheets";
 import {
   useBackground, previewBackground, keepBackground, endBackgroundPreview, hasBackgroundChanges, STRENGTH_MIN, STRENGTH_MAX,
@@ -18,10 +18,14 @@ import {
 import {
   useLook, getLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
   lanternAsked, markLanternAsked, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
+  saveLook, isFlowerRecord, isLanternRecord, TIMELINES, type PlayerStyle, type TimelineKind,
   type Look, type CardShade, type VinylSkin, type DarkShade, type LightShade, type FlowerRecord, type Flowers, type AvielaFlowers, type LanternRecord, type AppColour, type AppIcon,
 } from "../look";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
 import { ProQuickSheet } from "./ProQuickSheet";
+import { StickerEditor, SetupSwatch, NameDialog } from "./Stickers";
+import { READY_MADE, setupById, newSetupId, freeName, isReadyMade, MAX_SETUPS, type Sticker } from "../stickers";
+import { stickerArt } from "../flowers";
 
 // ─── PERSONALISE (Pro) ───────────────────────────────────────────────────────
 // Laid out the way Android's own "Wallpaper & style" is: what MPTree will look
@@ -274,6 +278,59 @@ function Swatch({ app, card, vinyl, flowers = "none", tone = "white", height = 7
   );
 }
 
+/** The four ways the player can show what plays, drawn small for their tiles. */
+function StyleArt({ id, T, skin }: { id: PlayerStyle; T: T; skin: VinylSkin }) {
+  const box = { width: 64, height: 64, display: "grid", placeItems: "center" } as const;
+  if (id === "record") return <div style={box}><SpinningDisc size={60} skin={skin} /></div>;
+  if (id === "cover") {
+    return (
+      <div style={box}>
+        <span style={{ width: 54, height: 54, borderRadius: 10, background: T.text, display: "grid", placeItems: "center", boxShadow: "0 3px 10px rgba(0,0,0,0.25)" }}>
+          <Logo size={26} color={T.bg} />
+        </span>
+      </div>
+    );
+  }
+  if (id === "turntable") {
+    const dark = isDarkPalette(T);
+    return (
+      <div style={box}>
+        <svg width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+          <rect x="1" y="1" width="58" height="58" rx="11" fill={dark ? "#0b0b0b" : "#f2f2f2"} stroke={dark ? "#333333" : "#cfcfcf"} strokeWidth="1.5" />
+          <circle cx="26" cy="31" r="20" fill="#111111" stroke="#2e2e2e" strokeWidth="1.5" />
+          <circle cx="26" cy="31" r="14" fill="none" stroke="#262626" strokeWidth="1" />
+          <circle cx="26" cy="31" r="6" fill="#ffffff" />
+          <circle cx="50" cy="11" r="4.5" fill="#8a8a8a" />
+          <path d="M50 11 L51 37 L44 45" fill="none" stroke={dark ? "#dedede" : "#8c8c8c"} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+  return (
+    <div style={box}>
+      <span style={{ width: 56, height: 56, borderRadius: 11, background: T.card, border: `1px solid ${T.border}`, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 8px", textAlign: "left" }}>
+        <b style={{ fontSize: 14, lineHeight: 1.05, fontWeight: 900, color: T.text }}>Mid-<br />night</b>
+        <i style={{ display: "block", width: 24, height: 3, borderRadius: 2, background: T.muted, marginTop: 6 }} />
+      </span>
+    </div>
+  );
+}
+
+/** A timeline drawn small, for the test build's row of them. */
+function TimelineArt({ kind, T }: { kind: TimelineKind; T: T }) {
+  const on = T.text, off = T.sliderBg;
+  const p = 0.4;
+  let inner: ReactNode;
+  if (kind === "line") inner = <div style={{ position: "relative", height: 3, borderRadius: 2, background: off }}><i style={{ position: "absolute", left: `${p * 100}%`, top: -4, width: 11, height: 11, marginLeft: -5, borderRadius: 6, background: on }} /></div>;
+  else if (kind === "thick") inner = <div style={{ height: 8, borderRadius: 4, background: off, overflow: "hidden" }}><div style={{ width: `${p * 100}%`, height: "100%", background: on }} /></div>;
+  else if (kind === "wave") inner = <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 20 }}>{[6, 12, 8, 16, 10, 18, 7, 14, 9, 12, 6].map((h, i) => <i key={i} style={{ width: 2, height: h, borderRadius: 1, background: i < 5 ? on : off }} />)}</div>;
+  else if (kind === "dots") inner = <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>{Array.from({ length: 9 }, (_, i) => <i key={i} style={{ width: i === 3 ? 8 : 4, height: i === 3 ? 8 : 4, borderRadius: 4, background: i <= 3 ? on : off }} />)}</div>;
+  else if (kind === "ruler") inner = <div style={{ position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "space-between", height: 16 }}>{Array.from({ length: 13 }, (_, i) => <i key={i} style={{ width: 1.5, height: i % 4 === 0 ? 10 : 5, background: i < 5 ? T.textSub : off }} />)}<i style={{ position: "absolute", left: `${p * 100}%`, bottom: 0, width: 2, height: 18, background: on }} /></div>;
+  else if (kind === "thumb") inner = <div style={{ position: "relative", height: 3, borderRadius: 2, background: off }}><span style={{ position: "absolute", left: `${p * 100}%`, top: -7, width: 24, height: 16, marginLeft: -12, borderRadius: 8, background: on, color: T.bg, fontSize: 8, fontWeight: 800, display: "grid", placeItems: "center" }}>0:49</span></div>;
+  else inner = <div style={{ display: "grid", placeItems: "center" }}><svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke={off} strokeWidth="3" /><circle cx="20" cy="20" r="16" fill="none" stroke={on} strokeWidth="3" strokeDasharray="40 101" transform="rotate(-90 20 20)" strokeLinecap="round" /></svg></div>;
+  return <div style={{ width: 64, height: 64, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 6px", boxSizing: "border-box" }}>{inner}</div>;
+}
+
 const Lock = ({ T }: { T: T }) => (
   <span style={{ width: 20, height: 20, borderRadius: 10, background: T.sheetBg, border: `1px solid ${T.border}`, display: "grid", placeItems: "center", color: T.muted, flexShrink: 0 }}>
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
@@ -337,7 +394,7 @@ function IconArt({ icon, size }: { icon: AppIcon; size: number }) {
 type Point = { x: number; y: number };
 /** The pages under the small screens: the list of choices, a style's own
  *  page, or one kind of choice on its own. */
-type Page = "main" | "aviela" | "lantern" | "background" | "colours" | "card" | "icons" | "records";
+type Page = "main" | "aviela" | "lantern" | "background" | "colours" | "card" | "icons" | "records" | "stickers";
 
 export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClose, T }: LookSheetProps) {
   const sh = makeSH(T);
@@ -358,6 +415,11 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const [reveal, setReveal] = useState<{ kind: "aviela" | "lantern"; at: Point } | null>(null);
   // "Discard changes?", while it is asked.
   const [confirming, setConfirming] = useState(false);
+  // Stickers: the setup being put together by hand (StickerEditor), and the
+  // rename and delete questions on the Stickers page.
+  const [editing, setEditing] = useState<{ id: string | null; items: readonly Sticker[]; name: string } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   // A photo picked for the background, being placed.
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -472,6 +534,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   useEffect(() => {
     setLookBack(() => {
       if (cropSrc) { setCropSrc(null); return true; }
+      if (editing) { setEditing(null); return true; }
+      if (renaming || deleting) { setRenaming(null); setDeleting(null); return true; }
       if (reveal) return true;
       if (confirming) { setConfirming(false); return true; }
       if (asking) { setAsking(false); return true; }
@@ -480,7 +544,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
       return false;
     });
     return () => setLookBack(null);
-  }, [cropSrc, reveal, confirming, asking, page, changed]);
+  }, [cropSrc, editing, renaming, deleting, reveal, confirming, asking, page, changed]);
 
   /** Every pick is shown at once, and kept only by Apply. */
   const pick = (patch: Partial<Look>) => previewLook(patch);
@@ -610,7 +674,30 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     }
     setReveal({ kind: "lantern", at });
   };
+  // A record from the Player page. An Aviela record with Aviela on stays
+  // Aviela; Lantern's records bring Lantern itself (its record is what makes
+  // it), so they go the way Lantern's own tile goes, question and all.
+  const pendingLantern = useRef<LanternRecord | null>(null);
+  const pickRecord = (v: VinylSkin) => {
+    if (isFlowerRecord(v) && avielaOn) { wearAviela({ ...look.aviela, record: v }); return; }
+    setVinyl(v);
+  };
+  const pickLanternRecord = (v: LanternRecord) => {
+    if (lanternOn) { wearLantern({ ...look.lantern, record: v }); return; }
+    if (pro) {
+      const days = lanternLockDays();
+      setShutDays(days);
+      if (days > 0) {
+        if (__PRO_TEST__) { unlockLantern(); setShutDays(0); onToast("Test build: Lantern is open again, and will ask again."); return; }
+        onToast(tn(days, "Lantern is locked for {n} more day.", "Lantern is locked for {n} more days."));
+        return;
+      }
+      if (__PRO_TEST__ || !lanternAsked()) { pendingLantern.current = v; primeLanternVoice(); setAsking(true); return; }
+    }
+    wearLantern({ ...look.lantern, record: v });
+  };
   const sayAfraid = (): number => {
+    pendingLantern.current = null;
     markLanternAsked();
     const days = lockLantern();
     setShutDays(days);
@@ -618,6 +705,8 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   };
   const sayNotAfraid = (at: Point) => {
     markLanternAsked();
+    // Asked for one of its records: that is the record it comes with.
+    if (pendingLantern.current) { pick({ lantern: { ...look.lantern, record: pendingLantern.current } }); pendingLantern.current = null; }
     // The dark stays until the green has covered it, or the page would show
     // through for a moment between the two.
     setReveal({ kind: "lantern", at });
@@ -648,7 +737,25 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const colourName = dark ? DARKS.find(d => d.id === look.dark)?.label : LIGHTS.find(l => l.id === look.light)?.label;
   const cardName = card === "default" ? t("Default") : CARDS.find(c => c.id === card)?.label ?? AVIELA_CARD_NAMES[AVIELA_CARDS.indexOf(card)] ?? "Lantern";
   const recordName = VINYLS.find(v => v.id === vinyl)?.label
-    ?? (avielaOn ? RECORD_NAMES[vinyl as FlowerRecord] : lanternOn ? LANTERN_RECORD_NAMES[vinyl as LanternRecord] : "") ?? "";
+    ?? (isFlowerRecord(vinyl) ? RECORD_NAMES[vinyl] : isLanternRecord(vinyl) ? LANTERN_RECORD_NAMES[vinyl] : "") ?? "";
+  // Stickers: what is on, and the paint for the card and for the page.
+  const setup = setupById(look.stickers, look.stickerSetups);
+  const setupName = (id: string, name: string) => (isReadyMade(id) ? t(name) : name);
+  const cardTone = toneOf(card, dark, look.light);
+  const pageTone: Tone = dark ? "black" : look.light === "pink" ? "pink" : "white";
+  const saveSetup = (items: Sticker[], name: string, asNew: boolean) => {
+    const id = !asNew && editing?.id ? editing.id : newSetupId();
+    const kept = look.stickerSetups.filter(x => x.id !== id);
+    const next = asNew || !editing?.id
+      ? [...kept, { id, name, items }].slice(-MAX_SETUPS)
+      : look.stickerSetups.map(x => (x.id === id ? { ...x, name, items } : x));
+    // Saving keeps the setup either way; wearing it needs Pro, like any pick.
+    saveLook({ stickerSetups: next });
+    if (pro) saveLook({ stickers: id }); else pick({ stickers: id });
+    setEditing(null);
+    onToast(t("Saved"));
+  };
+  const STYLE_NAMES: Record<PlayerStyle, string> = { record: t("Record"), cover: t("Cover"), turntable: t("Turntable"), text: t("Text only") };
   const iconName = ICONS.find(i => i.id === look.icon)?.label ?? "";
   const dot = (s: React.CSSProperties) => <span style={{ width: 34, height: 34, borderRadius: "50%", display: "block", ...s }} />;
   const choices: { id: Page; title: string; sub: string; art: ReactNode }[] = [
@@ -673,8 +780,12 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         </span>
       ),
     },
+    {
+      id: "stickers", title: t("Stickers"), sub: setup ? setupName(setup.id, setup.name) : t("None"),
+      art: <img src={stickerArt("sprig", pageTone).src} alt="" style={{ width: 46, height: "auto", display: "block" }} />,
+    },
+    { id: "records", title: t("Player"), sub: look.playerStyle === "text" ? STYLE_NAMES.text : `${STYLE_NAMES[look.playerStyle]}, ${recordName}`, art: <SpinningDisc size={36} skin={vinyl} /> },
     { id: "icons", title: t("Icons"), sub: iconName, art: <IconArt icon={look.icon} size={34} /> },
-    { id: "records", title: t("Records"), sub: recordName, art: <SpinningDisc size={36} skin={vinyl} /> },
   ];
   const choiceRow = (c: typeof choices[number], i: number) => {
     const first = i === 0, last = i === choices.length - 1;
@@ -722,7 +833,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
   const TITLES: Record<Page, string> = {
     main: t("Personalise"), aviela: "Aviela", lantern: "Lantern", background: t("Background"),
-    colours: t("Colours"), card: t("Header card"), icons: t("Icons"), records: t("Records"),
+    colours: t("Colours"), card: t("Header card"), icons: t("Icons"), records: t("Player"), stickers: t("Stickers"),
   };
   const keepLabel = needsPro ? (ADS_ON ? t("Keep it, free with an ad") : t("Keep it with Pro")) : t("Apply");
   const note = { fontSize: 13, color: T.muted, lineHeight: 1.5, padding: "12px 20px 0" } as const;
@@ -865,6 +976,45 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                   ))}
                 </Group>
               </>
+            ) : page === "stickers" ? (
+              <>
+                <Group T={T} title={t("Your stickers")}>
+                  <Tile T={T} label={t("None")} selected={!look.stickers} onClick={() => pick({ stickers: null })}>
+                    <SetupSwatch setup={null} app={T} card={cardPalette(card, T)} cardTone={cardTone} pageTone={pageTone} />
+                  </Tile>
+                  {look.stickerSetups.map(x => (
+                    <Tile key={x.id} T={T} label={x.name} selected={look.stickers === x.id} locked={!pro} onClick={() => pick({ stickers: x.id })}>
+                      <SetupSwatch setup={x} app={T} card={cardPalette(card, T)} cardTone={cardTone} pageTone={pageTone} />
+                    </Tile>
+                  ))}
+                </Group>
+                <Group T={T} title={t("Ready-made")}>
+                  {READY_MADE.map(x => (
+                    <Tile key={x.id} T={T} label={t(x.name)} selected={look.stickers === x.id} locked={!pro} onClick={() => pick({ stickers: x.id })}>
+                      <SetupSwatch setup={x} app={T} card={cardPalette(card, T)} cardTone={cardTone} pageTone={pageTone} />
+                    </Tile>
+                  ))}
+                </Group>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "16px 16px 0" }}>
+                  <button onClick={() => setEditing({ id: null, items: [], name: freeName(look.stickerSetups, t("My stickers")) })}
+                    style={{ padding: "10px 16px", borderRadius: 20, border: "none", background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+                    {t("+ New setup")}
+                  </button>
+                  {setup && isReadyMade(setup.id) && (
+                    <button onClick={() => setEditing({ id: null, items: setup.items, name: freeName(look.stickerSetups, t(setup.name)) })} style={{ padding: "10px 16px", borderRadius: 20, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+                      {t("Change a copy")}
+                    </button>
+                  )}
+                  {setup && !isReadyMade(setup.id) && (["edit", "rename", "delete"] as const).map(k => (
+                    <button key={k}
+                      onClick={() => (k === "edit" ? setEditing({ id: setup.id, items: setup.items, name: setup.name }) : k === "rename" ? setRenaming(setup.id) : setDeleting(setup.id))}
+                      style={{ padding: "10px 16px", borderRadius: 20, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+                      {k === "edit" ? t("Change") : k === "rename" ? t("Rename") : t("Delete")}
+                    </button>
+                  ))}
+                </div>
+                <div style={note}>{t("Put Aviela's flowers where you like, on the header card or on the songs page, and save them as a setup. They sit behind your songs and buttons, so they never cover anything you tap.")}</div>
+              </>
             ) : page === "background" ? (
               <div style={{ padding: "4px 16px 0" }}>
                 <input ref={picker} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhoto} />
@@ -950,17 +1100,55 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
               </>
             ) : (
               <>
-                <Grid>
+                <Group T={T} title={t("Style")}>
+                  {(["record", "cover", "turntable", "text"] as const).map(id => (
+                    <Tile key={id} T={T} label={STYLE_NAMES[id]} selected={look.playerStyle === id} locked={!pro && id !== "record"}
+                      onClick={() => pick({ playerStyle: id })}>
+                      <StyleArt id={id} T={T} skin={vinyl} />
+                    </Tile>
+                  ))}
+                </Group>
+                <Group T={T} title="MPTree">
                   {VINYLS.map(v => (
                     <Tile key={v.id} T={T} label={v.label} selected={vinyl === v.id} locked={!pro && !isFreeVinyl(v.id)}
-                      onClick={() => setVinyl(v.id)}>
+                      onClick={() => pickRecord(v.id)}>
                       <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
                         <SpinningDisc size={60} skin={v.id} />
                       </div>
                     </Tile>
                   ))}
-                </Grid>
-                <div style={note}>{t("Aviela and Lantern bring records of their own, under Custom styles.")}</div>
+                </Group>
+                <Group T={T} title="Aviela">
+                  {FLOWER_RECORDS.map(id => (
+                    <Tile key={id} T={T} label={RECORD_NAMES[id]} selected={vinyl === id} locked={!pro}
+                      onClick={() => pickRecord(id)}>
+                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
+                        <SpinningDisc size={60} skin={id} />
+                      </div>
+                    </Tile>
+                  ))}
+                </Group>
+                <Group T={T} title="Lantern">
+                  {LANTERN_RECORDS.map(id => (
+                    <Tile key={id} T={T} label={LANTERN_RECORD_NAMES[id]} selected={vinyl === id} locked={!pro || (shutDays > 0 && !lanternOn)}
+                      onClick={() => pickLanternRecord(id)}>
+                      <div style={{ width: 64, height: 64, display: "grid", placeItems: "center" }}>
+                        <SpinningDisc size={60} skin={id} />
+                      </div>
+                    </Tile>
+                  ))}
+                </Group>
+                {/* Only in test builds, while the one for everyone is chosen. */}
+                {__PRO_TEST__ && (
+                  <Group T={T} title="Timeline (test build)">
+                    {TIMELINES.map((k, i) => (
+                      <Tile key={k} T={T} label={`${i + 1} ${k}`} selected={look.timeline === k} onClick={() => saveLook({ timeline: k })}>
+                        <TimelineArt kind={k} T={T} />
+                      </Tile>
+                    ))}
+                  </Group>
+                )}
+                <div style={note}>{t("Any record goes with any colour. With Cover, a song without a cover gets your record. Text only shows no record.")}</div>
               </>
             )}
           </div>
@@ -984,6 +1172,39 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         )}
 
         {asking && <LanternGate onYes={sayAfraid} onNo={sayNotAfraid} onDone={() => setAsking(false)} />}
+        {editing && (
+          <StickerEditor T={T} initial={editing.items} name={editing.name} own={!!editing.id}
+            cardTone={cardTone} pageTone={pageTone}
+            onSave={saveSetup} onCancel={() => setEditing(null)} />
+        )}
+        {renaming && (() => {
+          const x = look.stickerSetups.find(v => v.id === renaming);
+          if (!x) return null;
+          return (
+            <NameDialog T={T} title={t("Rename")} initial={x.name} onCancel={() => setRenaming(null)}
+              actions={[{ label: t("Save"), primary: true, run: n => { saveLook({ stickerSetups: look.stickerSetups.map(v => (v.id === x.id ? { ...v, name: n } : v)) }); setRenaming(null); } }]} />
+          );
+        })()}
+        {deleting && (() => {
+          const x = look.stickerSetups.find(v => v.id === deleting);
+          if (!x) return null;
+          const off = () => {
+            saveLook({ stickerSetups: look.stickerSetups.filter(v => v.id !== x.id), ...(getLook().stickers === x.id ? { stickers: null } : {}) });
+            setDeleting(null);
+          };
+          return (
+            <div style={{ position: "fixed", inset: 0, zIndex: 480, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setDeleting(null)}>
+              <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: T.sheetBg, borderRadius: 20, border: `1px solid ${T.border}`, padding: 18, boxSizing: "border-box" }}>
+                <div style={{ fontSize: 17, fontWeight: 700, color: T.text }}>{t("Delete {name}?", { name: x.name })}</div>
+                <div style={{ fontSize: 14, color: T.textSub, marginTop: 8, lineHeight: 1.45 }}>{t("The setup goes; the ready-made ones stay.")}</div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                  <button onClick={() => setDeleting(null)} style={{ padding: "10px 16px", borderRadius: 20, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>{t("Cancel")}</button>
+                  <button onClick={off} style={{ padding: "10px 16px", borderRadius: 20, border: "none", background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>{t("Delete")}</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {reveal && (
           <StyleReveal kind={reveal.kind} at={reveal.at}

@@ -13,4 +13,9 @@
     <string name="action_pause">Pause</string>
     <string name="action_next">Next</string>
     <string name="not_playing">Not playing</string>
+    <string name="widget_tap_to_open">Tap to open MPTree</string>
+    <string name="widget_bar_desc">Bar: what plays, with previous, play and next</string>
+    <string name="widget_card_desc">Card: larger, with the time</string>
+    <string name="widget_record_desc">Record: your cover on a record</string>
+    <string name="widget_pill_desc">Pill: play and pause, small</string>
 </resources>

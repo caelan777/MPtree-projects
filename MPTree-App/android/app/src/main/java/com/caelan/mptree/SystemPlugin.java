@@ -63,6 +63,52 @@ public class SystemPlugin extends Plugin {
 
     private AppUpdateInfo pendingUpdate = null;
 
+    // ── Home screen widgets (WidgetRenderer) ─────────────────────────────────
+    /** The widgets' colour ("app", "black", "white", "clear"), whether they
+     *  show the cover, and the app's own colours for "app". Every MPTree
+     *  widget on the home screen is drawn again with them at once. */
+    @PluginMethod
+    public void setWidgetConfig(PluginCall call) {
+        android.content.Context ctx = getContext();
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences(WidgetRenderer.PREFS, android.content.Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor ed = prefs.edit();
+        String colour = call.getString("colour");
+        if (colour != null) ed.putString("colour", colour);
+        Boolean cover = call.getBoolean("cover");
+        if (cover != null) ed.putBoolean("cover", cover);
+        JSObject palette = call.getObject("palette");
+        if (palette != null) {
+            for (String k : new String[] { "bg", "text", "sub", "accent", "accentFg" }) {
+                String v = palette.getString(k);
+                if (v == null) continue;
+                try { ed.putInt(k, Color.parseColor(v.trim())); } catch (Exception ignored) { /* not a colour */ }
+            }
+        }
+        ed.putInt("version", prefs.getInt("version", 0) + 1);
+        ed.apply();
+        WidgetRenderer.refreshAll(ctx, true);
+        call.resolve();
+    }
+
+    /** Asks the launcher to put one of the widgets on the home screen. The
+     *  phone shows it first and asks; supported is false where it cannot. */
+    @PluginMethod
+    public void pinWidget(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean ok = false;
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                android.appwidget.AppWidgetManager m = getContext().getSystemService(android.appwidget.AppWidgetManager.class);
+                if (m != null && m.isRequestPinAppWidgetSupported()) {
+                    ComponentName cn = new ComponentName(getContext(), WidgetRenderer.provider(WidgetRenderer.kindOf(call.getString("kind"))));
+                    ok = m.requestPinAppWidget(cn, null, null);
+                }
+            } catch (Exception ignored) { ok = false; }
+        }
+        ret.put("supported", ok);
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void getDeviceInfo(PluginCall call) {
         JSObject ret = new JSObject();

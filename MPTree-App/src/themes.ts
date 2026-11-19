@@ -34,7 +34,7 @@ export const LIGHT = {
 };
 
 /** coverBg/coverFg: the tile of a song without a cover. Unset, it is dim with
- *  a muted note; Black sets it white with a black note. */
+ *  a muted note; Black sets it white with a grey note. */
 export type T = typeof DARK & { coverBg?: string; coverFg?: string };
 
 // ─── SHADES (Pro) ────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export type T = typeof DARK & { coverBg?: string; coverFg?: string };
 const DARK_SHADES: Record<DarkShade, Partial<T>> = {
   // Black: songs without a cover get a white tile, so a list of them reads
   // as black and white rather than grey on black.
-  classic: { coverBg:"#ffffff", coverFg:"#111111" },
+  classic: { coverBg:"#ffffff", coverFg:"#888888" },
   // Charcoal instead of black: easier on the eyes in a lit room.
   graphite: {
     bg:"#17181b", surface:"#202125", card:"#1d1e22", playerBg:"#1b1c20", sheetBg:"#222327",

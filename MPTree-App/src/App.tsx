@@ -16,6 +16,7 @@ import { makeCutId } from "./types";
 import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, DARK } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
+import { LayoutIcon, LIST_LAYOUTS, layoutName, isListLayout, type ListLayout } from "./components/LayoutIcon";
 import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
 import { SongMenuSheet } from "./components/SongMenuSheet";
@@ -40,7 +41,10 @@ import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
 import { LookSheet, BackupSheet, CutTrackSheet, EQSheet, preloadSheets, lookReady, loadLookSheet } from "./lazySheets";
 import { NextUpPanel } from "./components/NextUpPanel";
-import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
+import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK, type Tone } from "./flowers";
+import { StickerLayer } from "./components/Stickers";
+import { setupById } from "./stickers";
+import { loadWidget, sendWidgetPalette } from "./widget";
 import { lanternBackdrop } from "./lanternFigure";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
@@ -209,6 +213,18 @@ export default function App() {
   // you routinely want both (this artist, newest first).
   const [artistFilter,   setArtistFilter]  = useState<string | null>(null);
   const [filterOpen,     setFilterOpen]    = useState(false);
+  // How the songs are laid out: rows (as always), compact rows, or covers in a
+  // grid of two or three, from the button next to the sort in the header
+  // card. Kept, and in sync and backups (storage.ts).
+  const [songsLayout,    setSongsLayoutRaw] = useState<ListLayout>("list");
+  const [layoutOpen,     setLayoutOpen]    = useState(false);
+  useEffect(() => {
+    Preferences.get({ key: "mptree_songs_layout" }).then(r => { if (isListLayout(r.value)) setSongsLayoutRaw(r.value); }).catch(() => {});
+  }, []);
+  const setSongsLayout = (l: ListLayout) => {
+    setSongsLayoutRaw(l);
+    Preferences.set({ key: "mptree_songs_layout", value: l }).catch(() => {});
+  };
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
@@ -264,6 +280,8 @@ export default function App() {
   // The height of a song row (it follows the Size setting), for the effect
   // that scrolls to the playing song by counting rows.
   const rowHRef = useRef(64);
+  // How many songs one line of the list holds: more than one in the grid layouts.
+  const colsRef = useRef(1);
 
   // ── Floating header geometry ───────────────────────────────────────────────
   // Everything the folding header needs, measured in one pass so no consumer can
@@ -1469,7 +1487,7 @@ export default function App() {
       // was when the track changed, and the padding is mid-transition during a
       // fold anyway. getComputedStyle gives the pixel that is actually there.
       const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
-      const target = Math.max(0, pad + idx * ROW - cont.clientHeight / 2 + ROW / 2);
+      const target = Math.max(0, pad + Math.floor(idx / colsRef.current) * ROW - cont.clientHeight / 2 + ROW / 2);
       cont.scrollTo({ top: target, behavior: "smooth" });
     }), 120);
     return () => clearTimeout(t);
@@ -3357,6 +3375,13 @@ export default function App() {
   const CT = ownCard === TH ? TH : tinted(ownCard);
   // Aviela's flowers on the card take their colours from the card's ground.
   const flowerTone = toneOf(theme === "dark" ? look.cardDark : look.cardLight, theme === "dark", look.light);
+  // The home screen widgets: their saved colour and cover once, and the app's
+  // own colours whenever they change, for widgets set to "Same as app".
+  useEffect(() => { loadWidget().catch(() => {}); }, []);
+  useEffect(() => { sendWidgetPalette(TH); }, [TH]);
+  // Stickers (Personalise): the setup that is on, and the paint for the page.
+  const stickerSet = setupById(look.stickers, look.stickerSetups);
+  const pageTone: Tone = theme === "dark" ? "black" : look.light === "pink" ? "pink" : "white";
   const CARD_SKIN: React.CSSProperties = {
     background: CT.playerBg,
     border: `1px solid ${CT.border}`,
@@ -3482,7 +3507,6 @@ export default function App() {
   // row actually had 10px padding and came out at 68px, so every row the
   // virtual window skipped was 4px short and the list shuffled as it scrolled.
   const ROW_H = SIZE_TABLE[uiSize].row + (widePhone ? WIDE_ROW_EXTRA : 0);
-  rowHRef.current = ROW_H;
   const ART   = ROW_H - 20;       // 10px above and below
   // The two lines of a row: the name, and under it the length on the left
   // and the artist on the right. A step bigger on a big phone, like the row.
@@ -3501,6 +3525,16 @@ export default function App() {
   // the menu is a sheet now, so every row is the same height at all times.
   const virtualize = displayList.length > VIRT_THRESHOLD;
   const vpH = listViewportH || 640;
+  // The layout decides what one line of the list is: a row, a compact row, or
+  // a row of two or three covers. The virtual window counts lines.
+  const cols = songsLayout === "grid" ? 2 : songsLayout === "grid3" ? 3 : 1;
+  const GRID_PAD = 14, GRID_GAP = cols === 2 ? 12 : 8;
+  const listW = scrollRef.current?.clientWidth || viewW();
+  const cellW = Math.max(60, Math.floor((listW - GRID_PAD * 2 - GRID_GAP * (cols - 1)) / cols));
+  const LINE_H = cols > 1 ? cellW + (cols === 2 ? 58 : 52) : songsLayout === "compact" ? Math.round(ROW_H * 0.72) : ROW_H;
+  rowHRef.current = LINE_H;
+  colsRef.current = cols;
+  const lineCount = Math.ceil(displayList.length / cols);
 
   let virtStart = 0;
   let virtEnd = displayList.length;
@@ -3515,14 +3549,73 @@ export default function App() {
     // about a row and a half. VIRT_BUFFER * ROW_H (8 * 64 = 512px) absorbs that
     // with room to spare, and has to keep doing so.
     const scrolled = Math.max(0, listScrollTop - pullOffset - songsInset);
-    virtStart = Math.max(0, Math.floor(scrolled / ROW_H) - VIRT_BUFFER);
-    const visibleCount = Math.ceil(vpH / ROW_H) + VIRT_BUFFER * 2;
-    virtEnd = Math.min(displayList.length, virtStart + visibleCount);
+    virtStart = Math.max(0, Math.floor(scrolled / LINE_H) - VIRT_BUFFER);
+    const visibleCount = Math.ceil(vpH / LINE_H) + VIRT_BUFFER * 2;
+    virtEnd = Math.min(lineCount, virtStart + visibleCount);
+  } else {
+    virtEnd = lineCount;
   }
-  const virtTopPad = virtualize ? virtStart * ROW_H : 0;
-  const virtBottomPad = virtualize ? (displayList.length - virtEnd) * ROW_H : 0;
-  const visibleSongs = virtualize ? displayList.slice(virtStart, virtEnd) : displayList;
+  const virtTopPad = virtualize ? virtStart * LINE_H : 0;
+  const virtBottomPad = virtualize ? (lineCount - virtEnd) * LINE_H : 0;
+  const visibleSongs = virtualize ? displayList.slice(virtStart * cols, virtEnd * cols) : displayList;
 
+
+  // A song in the grid layouts: its cover large, the name and the artist
+  // under it. A tap plays it and a hold opens its menu, as on a row.
+  const gridCell = (song: Song) => {
+    const isActive   = currentSong?.id === song.id && !playSource;
+    const isSelected = selected.has(song.id);
+    const m          = getMeta(song);
+    const name       = dispName(song);
+    const artist     = dispArtist(song);
+    const corner     = cols === 2 ? 14 : 10;
+    return (
+      <div key={song.id} ref={el => { if (el) songRowRefs.current.set(song.id, el); else songRowRefs.current.delete(song.id); }}
+        data-song-row=""
+        onTouchStart={e => onPressStart(song.id, e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={e => onPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={onPressEnd} onTouchCancel={onPressEnd}
+        onMouseDown={e => onPressStart(song.id, e.clientX, e.clientY)}
+        onMouseMove={e => onPressMove(e.clientX, e.clientY)}
+        onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
+        onClick={e => handleTap(song, e.timeStamp)}
+        style={{ width: cellW, cursor: "pointer", minWidth: 0 }}>
+        <div style={{
+          position: "relative", width: cellW, height: cellW, borderRadius: corner,
+          boxShadow: isSelected ? `0 0 0 2px ${TH.violet}` : isActive ? `0 0 0 2px ${TH.accent}` : "none",
+        }}>
+          <AlbumArt title={name} size={cellW} radius={corner} big active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
+          {selectMode && <span style={{ position: "absolute", right: 6, top: 6, display: "flex" }}><SelectCheck on={isSelected} T={TH} /></span>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 7 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: cols === 2 ? 14 : 13, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+            <div style={{ fontSize: 12, color: TH.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</div>
+          </div>
+          {!selectMode && cols === 2 && (
+            <button
+              onClick={e => { e.stopPropagation(); setMenuSong(song); }}
+              onTouchStart={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              aria-label={t("More options for {name}", { name })}
+              style={{ background: "transparent", border: "none", cursor: "pointer", padding: "4px 0 4px 4px", display: "flex", flexShrink: 0, color: TH.muted }}
+            >
+              <IC.Dots />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+  const gridLines = (songs: Song[]) => {
+    const lines: Song[][] = [];
+    for (let i = 0; i < songs.length; i += cols) lines.push(songs.slice(i, i + cols));
+    return lines.map(line => (
+      <div key={`line:${line[0].id}`} style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${cellW}px)`, columnGap: GRID_GAP, padding: `0 ${GRID_PAD}px`, height: LINE_H, boxSizing: "border-box", alignContent: "start" }}>
+        {line.map(gridCell)}
+      </div>
+    ));
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -3584,6 +3677,8 @@ export default function App() {
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
       <div data-app-shell style={{ backgroundColor: TH.bg, ...(background.photo ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+        {/* Stickers on the songs page: over the background, under everything else. */}
+        {stickerSet && page === "songs" && !discoverOpen && <StickerLayer items={stickerSet.items} place="page" tone={pageTone} fixed />}
         {/* Their own photo, under a veil of the app's colour, and Aviela's
             flowers or Lantern's light over both. Behind everything else in
             the app: the shell is its own layer, so -1 is still inside it. */}
@@ -3604,6 +3699,7 @@ export default function App() {
             expression and the measured `dims.cardTop` are one number read two
             ways: change one and change the other. */}
         <div
+          data-header-card=""
           ref={headerCardRef}
           style={{
             position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, zIndex: 60,
@@ -3627,6 +3723,10 @@ export default function App() {
           {[cardFlowers(look.flowers, flowerTone), cornerFlowers(look.flowers, flowerTone)].map((layer, i) => layer && (
             <div key={i} aria-hidden="true" style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
           ))}
+          {stickerSet && (
+            <StickerLayer items={stickerSet.items} place="card" tone={flowerTone}
+              style={{ opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
+          )}
           {/* Full header. Kept mounted and at its natural width while collapsed
               (just clipped) so it never reflows — a reflow would corrupt the
               measured height the card animates to. */}
@@ -3800,9 +3900,20 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
-                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {/* How the list is laid out. Its menu, like the sort's, is
+                    drawn outside the card. */}
+                {!discoverOpen && (
+                  <button onClick={() => { setFilterOpen(false); setLayoutOpen(v => !v); }} tabIndex={page === "songs" ? undefined : -1}
+                    aria-label={t("Layout")} aria-expanded={layoutOpen}
+                    style={{ width: 38, height: 30, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, borderRadius: 16, border: `1px solid ${layoutOpen ? CT.accent : CT.border}`, background: layoutOpen ? CT.accent : CT.surface, color: layoutOpen ? CT.playBtnFg : CT.chipColor, cursor: "pointer", fontFamily: "inherit", transition: "background 0.15s, color 0.15s, border-color 0.15s" }}>
+                    <LayoutIcon kind={songsLayout} />
+                  </button>
+                )}
+                <button onClick={() => { setLayoutOpen(false); setFilterOpen(v => !v); }} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
+                </div>
               </div>
           </div>
           </div>
@@ -3964,6 +4075,24 @@ export default function App() {
           </>
         )}
 
+        {/* ── Layout menu: rows, compact rows, or a grid of covers ───────── */}
+        {layoutOpen && page === "songs" && !discoverOpen && !chromeCollapsed && !selecting && (
+          <>
+            <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setLayoutOpen(false)} />
+            <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+              <div style={{ padding: "11px 16px 7px", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: TH.muted, fontWeight: 700 }}>{t("Show songs as")}</div>
+              {LIST_LAYOUTS.map(l => (
+                <button key={l} onClick={() => { hapticImpact("light"); setSongsLayout(l); setLayoutOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 16px", background: "transparent", border: "none", borderTop: `1px solid ${TH.dim}`, color: songsLayout === l ? TH.text : TH.textSub, fontWeight: songsLayout === l ? 700 : 500, fontSize: 14, fontFamily: "inherit", cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ display: "flex", color: songsLayout === l ? TH.text : TH.muted }}><LayoutIcon kind={l} size={18} /></span>
+                  <span style={{ flex: 1 }}>{layoutName(l)}</span>
+                  {songsLayout === l && IC.Check(TH.accent)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* ── Header options, from holding the logo ───────────────────────── */}
         {chromeMenuOpen && (
           <>
@@ -4033,7 +4162,7 @@ export default function App() {
                 // re-rendered all of this component on every scroll event, some
                 // sixty times a second through a fling, to draw the same thing.
                 const base = pullOffset + songsInset;
-                const rowOf = (v: number) => Math.floor(Math.max(0, v - base) / ROW_H);
+                const rowOf = (v: number) => Math.floor(Math.max(0, v - base) / LINE_H);
                 if (rowOf(top) !== rowOf(listScrollTop) || (top > songsInset) !== (listScrollTop > songsInset)) {
                   setListScrollTop(top);
                 }
@@ -4075,7 +4204,7 @@ export default function App() {
               ) : (
                 <>
                   {virtTopPad > 0 && <div style={{ height: virtTopPad }} aria-hidden="true" />}
-                  {visibleSongs.map((song) => {
+                  {cols > 1 ? gridLines(visibleSongs) : visibleSongs.map((song) => {
                     // Not marked here when it plays from a playlist: it plays there.
                     const isActive   = currentSong?.id === song.id && !playSource;
                     const liked      = isLiked(song);
@@ -4097,7 +4226,7 @@ export default function App() {
                             onClick={e => handleTap(song, e.timeStamp)}
                             style={{
                               display: "flex", alignItems: "center", padding: "0 8px", margin: "0 8px", gap: 10, cursor: "pointer",
-                              height: ROW_H, boxSizing: "border-box",
+                              height: LINE_H, boxSizing: "border-box",
                               // The playing row is a rounded tile with moving
                               // bars on its art. The accent bar that ran down
                               // its left edge is gone: the tile says it alone.
@@ -4106,8 +4235,14 @@ export default function App() {
                               boxShadow: isSelected ? `inset 0 0 0 1.5px ${TH.violet}55` : isActive ? `inset 0 0 0 1px ${TH.border}` : "none",
                               transition: "background 0.15s, box-shadow 0.15s",
                             }}>
-                            <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
-                            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                            {songsLayout !== "compact" && <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />}
+                            {songsLayout === "compact" ? (
+                              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8, paddingLeft: 4 }}>
+                                <span style={{ fontSize: ROW_TITLE, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{name}</span>
+                                <span style={{ flex: 1, minWidth: 0, fontSize: ROW_SUB, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
+                                {rowLength(song) > 0 && <span style={{ fontSize: ROW_SUB, color: TH.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(rowLength(song))}</span>}
+                              </div>
+                            ) : <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ fontSize: ROW_TITLE, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                                 {song.isCut && <span style={{ fontSize: 10, background: TH.dim, color: TH.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: "700", flexShrink: 0 }}>CUT</span>}
@@ -4120,7 +4255,7 @@ export default function App() {
                                 {rowLength(song) > 0 && <span style={{ fontSize: ROW_SUB, color: TH.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(rowLength(song))}</span>}
                                 <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: ROW_SUB, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
                               </div>
-                            </div>
+                            </div>}
                             {!selectMode && liked && (
                               <button onClick={e => { e.stopPropagation(); hapticImpact("light"); setMeta(prev => ({ ...prev, [song.id]: { ...(prev[song.id] || {}), liked: false } })); showToast(t("Removed from favorites")); }} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6, display: "flex", flexShrink: 0, color: TH.accent }}>
                                 <IC.Heart filled={true} size={16} />
