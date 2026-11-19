@@ -285,8 +285,6 @@ export const RU: Record<string, string> = {
   "Appearance": "Внешний вид",
   "Size": "Размер",
   "General": "Общие",
-  "New songs": "Новые песни",
-  "Tell me when new music is on my phone.": "Сообщать, когда на телефоне появляется новая музыка.",
   "Update notices": "Уведомления об обновлениях",
   "Tell me when a new version of MPTree is out.": "Сообщать, когда выходит новая версия MPTree.",
   "Audio": "Звук",

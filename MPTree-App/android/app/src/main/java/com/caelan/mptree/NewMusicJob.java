@@ -73,7 +73,7 @@ public class NewMusicJob extends JobService {
         Context ctx = getApplicationContext();
         long seen = ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getLong("seen", System.currentTimeMillis() / 1000);
         int n = countSince(ctx, seen);
-        if (n > 0 && ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean("notify", true)) notifyNew(ctx, n);
+        if (n > 0) notifyNew(ctx, n);
         schedule(ctx);
         return false;
     }

@@ -561,6 +561,11 @@ export default function App() {
   const musicAccess: MusicAccess = !musicAsked ? "unasked"
     : permissionDenied ? "denied"
     : libraryReady ? "allowed" : "asking";
+  // Once the music may be read, Android asks once for notifications (the
+  // note about new songs); asked after the files, not before or with them.
+  useEffect(() => {
+    if (libraryReady && !permissionDenied) System.askNotifications().catch(() => {});
+  }, [libraryReady, permissionDenied]);
   useEffect(() => {
     // Key is versioned: v2 = the spotlight tour. Bumping the key makes the new
     // tour show once even for users who completed the old card-based one.
@@ -628,26 +633,23 @@ export default function App() {
   const [uiSize, setUiSize]           = useState<UiSize>("medium");
   const [langPref, setLangPref]       = useState<LangPref>("auto");
   const [updateNotices, setUpdateNotices] = useState(true);
-  const [songNotices, setSongNotices] = useState(true);
   const [mixOthers, setMixOthers]     = useState(false);
   // Read at start, and again when the MPTree account brings settings from
   // another phone.
-  const applyPrefs = ([size, lang, notices, mix, songs]: (string | null)[]) => {
+  const applyPrefs = ([size, lang, notices, mix]: (string | null)[]) => {
     const sz: UiSize = size === "small" || size === "large" ? size : "medium";
     setUiSize(sz);
     System.setTextZoom({ factor: SIZE_TABLE[sz].text }).catch(() => {});
     const l: LangPref = isLang(lang) ? lang : "auto";
     applyLang(l); setLangPref(l);
     setUpdateNotices(notices !== "0");
-    setSongNotices(songs !== "0");
-    System.setNewSongNotices({ on: songs !== "0" }).catch(() => {});
     setMixOthers(mix === "true");
     // There was an option to turn the other app down as well. It is gone,
     // so nothing is ever asked to be quieter.
     AudioPlayer.setMixMode({ mix: mix === "true", duck: false }).catch(() => {});
   };
   const loadPrefs = useCallback(() => {
-    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others", "mptree_song_notices"];
+    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others"];
     return Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
       .then(prefs => applyPrefs(prefs));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -674,13 +676,6 @@ export default function App() {
     setUpdateNotices(on);
     if (!on) setUpdateInfo(null);
     Preferences.set({ key: NOTICES_KEY, value: on ? "1" : "0" }).catch(() => {});
-  };
-  // New songs on the phone: a note in the notification bar. Turning it on
-  // is what asks Android for notifications.
-  const changeSongNotices = (on: boolean, ask = true) => {
-    setSongNotices(on);
-    System.setNewSongNotices({ on, ask }).catch(() => {});
-    Preferences.set({ key: "mptree_song_notices", value: on ? "1" : "0" }).catch(() => {});
   };
   const changeMix = (mix: boolean) => {
     setMixOthers(mix);
@@ -4769,7 +4764,6 @@ export default function App() {
             lang={langPref} onSetLang={changeLang}
             updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
-            songNotices={songNotices} onSetSongNotices={changeSongNotices}
             mixOthers={mixOthers} onSetMix={changeMix}
             onFeedback={sendFeedback}
             onRate={__DISTRIBUTION__ === "play"
@@ -4892,8 +4886,6 @@ export default function App() {
             onOpenAppSettings={openAppSettings}
             updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
-            songNotices={songNotices} onSetSongNotices={on => changeSongNotices(on, false)}
-            onAskSongNotices={() => { if (songNotices) changeSongNotices(true); }}
             songCount={songs.length}
             onEnter={() => setWelcome("entering")}
             // A short beat with the library on its own before the tour starts

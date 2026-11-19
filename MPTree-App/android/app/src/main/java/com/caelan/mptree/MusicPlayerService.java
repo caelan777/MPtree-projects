@@ -223,6 +223,44 @@ public class MusicPlayerService extends Service {
         nativeQueue.clear();
         nativeQueue.addAll(queue);
         nativeQueueIndex = currentIndex;
+        saveQueue();
+    }
+
+    // The queue on disk, so a widget's next and previous work with the player
+    // started cold (MPTree closed): before, the queue lived only in memory and
+    // came back only once the app was opened and a song skipped there.
+    private static final String QUEUE_FILE = "native_queue.json";
+    private void saveQueue() {
+        final org.json.JSONArray a = new org.json.JSONArray();
+        try {
+            for (Track t : nativeQueue) {
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("p", t.path); o.put("t", t.title); o.put("a", t.artist);
+                if (t.isCut) o.put("c", true);
+                if (t.cutTo > 0) { o.put("f", t.cutFrom); o.put("e", t.cutTo); }
+                a.put(o);
+            }
+        } catch (Exception e) { return; }
+        final java.io.File f = new java.io.File(getFilesDir(), QUEUE_FILE);
+        new Thread(() -> {
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                out.write(a.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Exception ignored) {}
+        }).start();
+    }
+    private void restoreQueue() {
+        if (!nativeQueue.isEmpty()) return;
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), QUEUE_FILE);
+            if (!f.exists()) return;
+            byte[] b = new byte[(int) f.length()];
+            try (java.io.FileInputStream in = new java.io.FileInputStream(f)) { int n = 0; while (n < b.length) { int r = in.read(b, n, b.length - n); if (r < 0) break; n += r; } }
+            org.json.JSONArray a = new org.json.JSONArray(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+            for (int i = 0; i < a.length(); i++) {
+                org.json.JSONObject o = a.getJSONObject(i);
+                nativeQueue.add(new Track(o.optString("p"), o.optString("t"), o.optString("a"), o.optBoolean("c"), o.optInt("f"), o.optInt("e")));
+            }
+        } catch (Exception e) { nativeQueue.clear(); }
     }
 
     // ── Timers ────────────────────────────────────────────────────────────────
@@ -359,6 +397,11 @@ public class MusicPlayerService extends Service {
                 String path = o.optString("path", "");
                 if (path.isEmpty()) { stopIfIdle(); return; }
                 final int at = o.optInt("position", 0);
+                restoreQueue();
+                nativeQueueIndex = -1;
+                for (int i = 0; i < nativeQueue.size(); i++) if (path.equals(nativeQueue.get(i).path)) { nativeQueueIndex = i; break; }
+                // Next and previous: the song next to the last one, from its start.
+                if (!ACTION_PLAY.equals(act) && nativeQueueIndex >= 0) { nativeSkip(ACTION_NEXT.equals(act) ? 1 : -1); return; }
                 play(path, o.optString("title", ""), o.optString("artist", ""), 0, 0);
                 if (at > 1000) mainHandler.postDelayed(() -> { try { seekTo(at); } catch (Exception ignored) {} }, 700);
             } catch (Exception e) { stopIfIdle(); }

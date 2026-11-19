@@ -140,18 +140,15 @@ public class SystemPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    /** The "New songs" switch (Welcome, Settings). ask: Android 13 and later
-     *  ask for notifications now, from the switch, not out of nowhere. */
+    /** Once the music may be read: Android asks for notifications, once
+     *  ever, for the note about new songs. */
     @PluginMethod
-    public void setNewSongNotices(PluginCall call) {
+    public void askNotifications(PluginCall call) {
         android.content.Context ctx = getContext();
-        boolean on = Boolean.TRUE.equals(call.getBoolean("on", true));
-        ctx.getSharedPreferences(NewMusicJob.PREFS, android.content.Context.MODE_PRIVATE).edit().putBoolean("notify", on).apply();
-        if (!on) {
-            android.app.NotificationManager nm = ctx.getSystemService(android.app.NotificationManager.class);
-            if (nm != null) nm.cancel(7411);
-        } else if (Boolean.TRUE.equals(call.getBoolean("ask", false)) && Build.VERSION.SDK_INT >= 33
+        android.content.SharedPreferences p = ctx.getSharedPreferences(NewMusicJob.PREFS, android.content.Context.MODE_PRIVATE);
+        if (Build.VERSION.SDK_INT >= 33 && !p.getBoolean("askedNotify", false)
                 && ctx.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            p.edit().putBoolean("askedNotify", true).apply();
             try { getActivity().requestPermissions(new String[] { "android.permission.POST_NOTIFICATIONS" }, 7302); } catch (Exception ignored) {}
         }
         call.resolve();

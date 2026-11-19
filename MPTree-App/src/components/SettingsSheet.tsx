@@ -137,8 +137,6 @@ type SettingsSheetProps = {
   /** null hides the row: the demo has nothing to update. */
   updateNotices: boolean | null;
   onSetUpdateNotices: (on: boolean) => void;
-  songNotices: boolean;
-  onSetSongNotices: (on: boolean) => void;
   // ── Other apps ──
   mixOthers: boolean;
   onSetMix: (mix: boolean) => void;
@@ -157,7 +155,7 @@ export function SettingsSheet({
   onViewBin, onOpenAudioEffects, onShowTutorial,
   onBackup,
   sleepUntil, sleepEndOfTrack, hasCurrentSong, onSetSleepTimer,
-  uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices, songNotices, onSetSongNotices,
+  uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, onSetMix,
   onFeedback, onRate, onPrivacy,
   onClose, T,
@@ -388,13 +386,6 @@ export function SettingsSheet({
               right={<Switch on={updateNotices} T={T} />}
             />
           )}
-          <Row T={T}
-            onClick={() => onSetSongNotices(!songNotices)}
-            icon={<BellIcon />}
-            label={t("New songs")}
-            sub={t("Tell me when new music is on my phone.")}
-            right={<Switch on={songNotices} T={T} />}
-          />
         </Section>
 
         <Section T={T} title={t("Audio")}>
