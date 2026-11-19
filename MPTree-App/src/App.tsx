@@ -17,7 +17,6 @@ import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, 
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { LayoutIcon, LIST_LAYOUTS, layoutName, isListLayout, type ListLayout } from "./components/LayoutIcon";
-import { LOCK_RED } from "./components/lockRed";
 import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
 import { SongMenuSheet } from "./components/SongMenuSheet";
@@ -907,7 +906,7 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
-  const layoutNow: ListLayout = pro ? songsLayout : "list";
+  const layoutNow: ListLayout = songsLayout;
   // Pro, for the widgets that are part of it (Card and Record, and Clear).
   useEffect(() => { sendWidgetPro(pro); }, [pro]);
   const [proOpen,     setProOpenState] = useState(false);
@@ -3919,11 +3918,10 @@ export default function App() {
                     the dropdown off and made the sort options unusable. */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 {/* How the list is laid out: each tap the next of the four.
-                    The others than List are Pro; without it a tap shows Pro. */}
+                    Free for everyone. */}
                 {!discoverOpen && (
                   <button onClick={() => {
                       setFilterOpen(false);
-                      if (!pro) { setProOpen(true, "look"); return; }
                       hapticImpact("light");
                       setSongsLayout(LIST_LAYOUTS[(LIST_LAYOUTS.indexOf(layoutNow) + 1) % LIST_LAYOUTS.length]);
                     }}
@@ -3931,11 +3929,6 @@ export default function App() {
                     aria-label={`${t("Layout")}: ${layoutName(layoutNow)}`}
                     style={{ position: "relative", width: 38, height: 30, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, borderRadius: 16, border: `1px solid ${CT.border}`, background: CT.surface, color: CT.chipColor, cursor: "pointer", fontFamily: "inherit" }}>
                     <LayoutIcon kind={layoutNow} />
-                    {!pro && (
-                      <span aria-hidden="true" style={{ position: "absolute", right: -4, top: -4, width: 15, height: 15, borderRadius: 8, background: CT.surface, border: `1px solid ${CT.border}`, display: "grid", placeItems: "center", color: LOCK_RED }}>
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-                      </span>
-                    )}
                   </button>
                 )}
                 <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
