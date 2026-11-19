@@ -2,15 +2,15 @@ import { useState } from "react";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { System } from "../plugins";
-import { Switch } from "./Switch";
 import { Logo } from "./Logo";
-import { useWidget, saveWidget, WIDGET_KINDS, WIDGET_COLOURS, type WidgetKind, type WidgetColour } from "../widget";
+import { useWidget, saveWidget, WIDGET_KINDS, WIDGET_COLOURS, PRO_KINDS, type WidgetKind, type WidgetColour } from "../widget";
+import { LOCK_RED } from "./lockRed";
 
 // ─── HOME SCREEN WIDGET ──────────────────────────────────────────────────────
-// Settings, Home screen widget: which of the four widgets to add, their colour
-// and whether they show the cover, and the button that asks the phone to put
-// the chosen one on the home screen. The widgets themselves are native
-// (WidgetRenderer.java); the drawing here only shows what they look like.
+// Settings, Home screen widget: which of the four widgets to add, their colour,
+// and the button that asks the phone to put the chosen one on the home screen.
+// Card and Record, and Clear, are part of Pro. The widgets themselves are
+// native (WidgetRenderer.java); the drawing here only shows what they look like.
 
 export const widgetName = (k: WidgetKind): string =>
   k === "bar" ? t("Bar") : k === "card" ? t("Card") : k === "record" ? t("Record") : t("Pill");
@@ -22,7 +22,8 @@ type Pal = { bg: string; text: string; sub: string; accent: string; accentFg: st
 function palette(c: WidgetColour, T: T): Pal {
   if (c === "black") return { bg: "#111111", text: "#ffffff", sub: "#9a9a9a", accent: "#ffffff", accentFg: "#000000", border: "#2a2a2a" };
   if (c === "white") return { bg: "#ffffff", text: "#111111", sub: "#666666", accent: "#111111", accentFg: "#ffffff", border: "#e2e2e2" };
-  if (c === "clear") return { bg: "transparent", text: "#ffffff", sub: "#e6e6e6", accent: "#ffffff", accentFg: "#000000", border: "transparent" };
+  // Glass: see-through, lit at the top edge, with a line of light round it.
+  if (c === "clear") return { bg: "linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0.10))", text: "#ffffff", sub: "#ececec", accent: "#ffffff", accentFg: "#000000", border: "rgba(255,255,255,0.45)" };
   return { bg: T.playerBg ?? T.bg, text: T.text, sub: T.textSub, accent: T.accent, accentFg: T.playBtnFg, border: T.border };
 }
 
@@ -53,7 +54,7 @@ const Cover = ({ size, p, on, radius }: { size: number; p: Pal; on: boolean; rad
 
 /** The widget drawn small, the way the home screen will show it. */
 function Preview({ kind, p, cover }: { kind: WidgetKind; p: Pal; cover: boolean }) {
-  const box = { background: p.bg, border: `1px solid ${p.border}`, boxSizing: "border-box" as const };
+  const box = { background: p.bg, border: `1px solid ${p.border}`, boxSizing: "border-box" as const, boxShadow: p.border.startsWith("rgba") ? "0 8px 24px rgba(0,0,0,0.25)" : undefined };
   if (kind === "bar") return (
     <div style={{ ...box, width: 300, height: 70, borderRadius: 24, display: "flex", alignItems: "center", gap: 12, padding: "0 12px" }}>
       <Cover size={46} p={p} on={cover} radius={11} /><Lines p={p} /><Skip p={p} back /><Play size={40} p={p} /><Skip p={p} />
@@ -86,11 +87,18 @@ function Preview({ kind, p, cover }: { kind: WidgetKind; p: Pal; cover: boolean 
   );
 }
 
-export function WidgetSheet({ T, onClose, onToast }: { T: T; onClose: () => void; onToast?: (m: string) => void }) {
+const Lock = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={LOCK_RED} strokeWidth="2.8" strokeLinecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+);
+
+export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro: boolean; onNeedPro: () => void; onClose: () => void; onToast?: (m: string) => void }) {
   const cfg = useWidget();
   const p = palette(cfg.colour, T);
+  const lockedKind = (k: WidgetKind) => !pro && PRO_KINDS.includes(k);
+  const lockedColour = (c: WidgetColour) => !pro && c === "clear";
   const [cannot, setCannot] = useState(false);
   const add = async () => {
+    if (lockedKind(cfg.kind)) { onNeedPro(); return; }
     const r = await System.pinWidget({ kind: cfg.kind }).catch(() => ({ supported: false }));
     if (!r.supported) setCannot(true);
     else onToast?.(t("Your phone shows the widget. Tap Add."));
@@ -100,15 +108,16 @@ export function WidgetSheet({ T, onClose, onToast }: { T: T; onClose: () => void
   const wall = "radial-gradient(130% 120% at 20% 10%, #4d4d4d 0%, #1c1c1c 55%, #050505 100%)";
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 430, background: T.sheetBg, color: T.text, display: "flex", flexDirection: "column", paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "14px 16px 10px" }}>
-        <button onClick={onClose} aria-label={t("Back")} style={{ background: "transparent", border: "none", color: T.text, padding: "6px 8px 6px 0", cursor: "pointer", display: "flex" }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
-        </button>
+      {/* Its own page over Settings, closed with an X like Personalise. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 20px 10px" }}>
         <span style={{ fontSize: 16, fontWeight: 700 }}>{t("Home screen widget")}</span>
+        <button onClick={onClose} aria-label={t("Close")} style={{ background: "transparent", border: "none", color: T.muted, padding: 4, cursor: "pointer", display: "flex" }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
         <div style={{ margin: "4px 16px 0", height: 200, borderRadius: 22, background: wall, display: "grid", placeItems: "center", overflow: "hidden" }}>
-          <Preview kind={cfg.kind} p={p} cover={cfg.cover} />
+          <Preview kind={cfg.kind} p={p} cover />
         </div>
 
         <div style={lbl}>{t("Widget")}</div>
@@ -117,10 +126,10 @@ export function WidgetSheet({ T, onClose, onToast }: { T: T; onClose: () => void
             const on = cfg.kind === k;
             const [w, h] = k === "bar" ? [84, 21] : k === "card" ? [84, 42] : k === "record" ? [42, 42] : [42, 21];
             return (
-              <button key={k} onClick={() => saveWidget({ kind: k })} aria-pressed={on}
+              <button key={k} onClick={() => (lockedKind(k) ? onNeedPro() : saveWidget({ kind: k }))} aria-pressed={on}
                 style={{ height: 100, borderRadius: 16, background: T.surface, border: `2px solid ${on ? T.accent : "transparent"}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, cursor: "pointer", fontFamily: "inherit", color: T.text }}>
                 <span style={{ display: "block", width: w, height: h, borderRadius: Math.min(w, h) / 3, background: on ? T.accent : T.dim }} />
-                <span style={{ fontSize: 14, fontWeight: on ? 700 : 600 }}>{widgetName(k)} <span style={{ color: T.muted, fontWeight: 500, fontSize: 12 }}>{SIZE[k]}</span></span>
+                <span style={{ fontSize: 14, fontWeight: on ? 700 : 600, display: "flex", alignItems: "center", gap: 5 }}>{widgetName(k)} <span style={{ color: T.muted, fontWeight: 500, fontSize: 12 }}>{SIZE[k]}</span>{lockedKind(k) && <Lock />}</span>
               </button>
             );
           })}
@@ -131,22 +140,13 @@ export function WidgetSheet({ T, onClose, onToast }: { T: T; onClose: () => void
           {WIDGET_COLOURS.map(c => {
             const on = cfg.colour === c;
             return (
-              <button key={c} role="radio" aria-checked={on} onClick={() => saveWidget({ colour: c })}
+              <button key={c} role="radio" aria-checked={on} onClick={() => (lockedColour(c) ? onNeedPro() : saveWidget({ colour: c }))}
                 style={{ flex: 1, padding: "9px 0", borderRadius: 18, border: "none", background: on ? T.accent : "transparent", color: on ? T.playBtnFg : T.textSub, fontSize: 13, fontWeight: on ? 700 : 600, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
-                {widgetColourName(c)}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{widgetColourName(c)}{lockedColour(c) && <Lock />}</span>
               </button>
             );
           })}
         </div>
-
-        <button onClick={() => saveWidget({ cover: !cfg.cover })} role="switch" aria-checked={cfg.cover}
-          style={{ display: "flex", alignItems: "center", gap: 14, width: "calc(100% - 32px)", margin: "14px 16px 0", padding: "14px 16px", borderRadius: 18, background: T.surface, border: "none", color: T.text, fontFamily: "inherit", textAlign: "left", cursor: "pointer" }}>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 15, fontWeight: 600 }}>{t("Show the cover")}</span>
-            <span style={{ display: "block", fontSize: 13, color: T.textSub, marginTop: 3, lineHeight: 1.4 }}>{t("If it's off, your song photos won't show in the widgets.")}</span>
-          </span>
-          <Switch on={cfg.cover} T={T} />
-        </button>
 
         <button onClick={add}
           style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "calc(100% - 32px)", margin: "18px 16px 0", height: 52, borderRadius: 26, background: T.accent, color: T.playBtnFg, border: "none", fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
@@ -159,7 +159,7 @@ export function WidgetSheet({ T, onClose, onToast }: { T: T; onClose: () => void
             : t("Your phone shows the widget first. Tap Add and it's on your home screen.")}
         </div>
         <div style={{ fontSize: 13, color: T.muted, textAlign: "center", lineHeight: 1.5, padding: "6px 28px 0" }}>
-          {t("Colour and cover also change the widgets you already have.")}
+          {t("The colour also changes the widgets you already have.")}
         </div>
       </div>
     </div>

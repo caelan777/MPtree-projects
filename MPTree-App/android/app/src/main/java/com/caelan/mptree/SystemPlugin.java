@@ -74,8 +74,25 @@ public class SystemPlugin extends Plugin {
         android.content.SharedPreferences.Editor ed = prefs.edit();
         String colour = call.getString("colour");
         if (colour != null) ed.putString("colour", colour);
-        Boolean cover = call.getBoolean("cover");
-        if (cover != null) ed.putBoolean("cover", cover);
+        Boolean pro = call.getBoolean("pro");
+        if (pro != null) ed.putBoolean("pro", pro);
+        Boolean photoDisc = call.getBoolean("photoDisc");
+        if (photoDisc != null) ed.putBoolean("photoDisc", photoDisc);
+        for (String k : new String[] { "labelBg", "labelInk" }) {
+            String v = call.getString(k);
+            if (v == null) continue;
+            try { ed.putInt(k, Color.parseColor(v.trim())); } catch (Exception ignored) { /* not a colour */ }
+        }
+        // The record the app has on, as the app drew it, for the Record widget.
+        String record = call.getString("record");
+        if (record != null) {
+            try {
+                byte[] png = Base64.decode(record, Base64.DEFAULT);
+                File f = new File(ctx.getFilesDir(), WidgetRenderer.RECORD_FILE);
+                try (FileOutputStream out = new FileOutputStream(f)) { out.write(png); }
+                ed.putInt("recordVersion", prefs.getInt("recordVersion", 0) + 1);
+            } catch (Exception ignored) { /* the widget keeps the black record */ }
+        }
         JSObject palette = call.getObject("palette");
         if (palette != null) {
             for (String k : new String[] { "bg", "text", "sub", "accent", "accentFg" }) {

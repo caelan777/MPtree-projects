@@ -1028,4 +1028,23 @@ export const ES: Record<string, string> = {
   "Colour and cover also change the widgets you already have.": "El color y la portada también cambian los widgets que ya tienes.",
   "Your phone shows the widget. Tap Add.": "Tu teléfono muestra el widget. Toca Añadir.",
   "Styles, background, colours, stickers, icon and player.": "Estilos, fondo, colores, pegatinas, icono y reproductor.",
+
+  // Test build 128 (1.5.7): three worlds in Personalise, stickers of your own, the timeline row, widgets.
+  "From styles": "De los estilos",
+  "Timeline": "Línea de tiempo",
+  "Line": "Línea",
+  "Thick": "Gruesa",
+  "Wave": "Onda",
+  "Dots": "Puntos",
+  "Ruler": "Regla",
+  "Time in the knob": "Tiempo en el botón",
+  "Ring": "Anillo",
+  "Any record goes with any colour. With Cover, a song without a cover shows the MPTree mark. The ring timeline goes with Record only.": "Cualquier disco va con cualquier color. Con Portada, una canción sin portada muestra el logo de MPTree. La línea en anillo va solo con Disco.",
+  "Aviela's flowers on your own colours, or your own stickers put down by hand. They sit behind your songs and buttons, so they never cover anything you tap.": "Las flores de Aviela en tus propios colores, o tus propias pegatinas puestas a mano. Quedan detrás de tus canciones y botones, así que nunca tapan nada que toques.",
+  "Its stickers go with it. This cannot be undone.": "Sus pegatinas se van con ella. No se puede deshacer.",
+  "Copy": "Copiar",
+  "Mirror": "Reflejar",
+  "To front": "Al frente",
+  "To back": "Al fondo",
+  "The colour also changes the widgets you already have.": "El color también cambia los widgets que ya tienes.",
 };

@@ -125,7 +125,6 @@ export function EQSheet({
     onLevelsChange(localLevels);
   }, [localLevels, onLevelsChange]);
 
-  const commitCfChange = () => { onCrossfadeChange(stopFromIndex(cfIndex)); };
 
   const resetEQ = () => {
     const zeros = (eqInfo?.bandFreqsHz ?? []).map(() => 0);
@@ -174,8 +173,9 @@ export function EQSheet({
             </div>
             <input type="range" min={0} max={CROSSFADE_STOPS.length - 1} step={1} value={cfIndex}
               className="slider"
-              onChange={e => setCfIndex(Number(e.target.value))}
-              onMouseUp={commitCfChange} onTouchEnd={commitCfChange}
+              // Kept at every step, not only when the finger lets go: a touch
+              // that ended outside the slider never saved the new length.
+              onChange={e => { const i = Number(e.target.value); setCfIndex(i); onCrossfadeChange(stopFromIndex(i)); }}
               style={{ width: "100%", accentColor: accent }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
               <span style={{ fontSize: 11, color: T.muted }}>{t("Off")}</span>

@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -19,26 +20,32 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.os.Bundle;
+import android.view.View;
 import android.widget.RemoteViews;
 
 import androidx.core.content.ContextCompat;
 
 import org.json.JSONObject;
 
+import java.io.File;
+
 /**
  * MPTree's four home screen widgets, drawn here and nowhere else:
  *
  *   Bar    4 x 1   cover, title and artist, previous, play/pause, next
- *   Card   4 x 2   the same, larger, with the time and a timeline
- *   Record 2 x 2   the cover on a record, with play/pause
+ *   Card   4 x 2   the same, larger, with the time and a timeline      (Pro)
+ *   Record 2 x 2   the record the app has on, with the song's cover     (Pro)
  *   Pill   2 x 1   play/pause and what is playing
  *
  * Each is its own widget in the phone's widget list, because a widget on the
  * home screen cannot change its size: Bar is the old NowPlayingWidgetProvider,
- * so widgets placed before keep working. The colour ("Same as app", Black,
- * White or Clear) and whether the cover shows are chosen in the app (Settings,
- * Home screen widget) and kept in the "mptree_widget" preferences; they apply to
- * every MPTree widget at once.
+ * so widgets placed before keep working. Previous and next only show where
+ * the widget is wide enough for them; made larger, Record and Pill get them.
+ * The colour ("Same as app", Black, White or Clear glass, which is Pro) is
+ * chosen in the app (Settings, Home screen widget) and kept in the
+ * "mptree_widget" preferences, with the app's own colours, its record and
+ * whether Pro is on; it applies to every MPTree widget at once.
  *
  * Nothing here touches the player. What plays is read from what
  * MusicPlayerService.persistNowPlaying() wrote, and the buttons send the same
@@ -50,17 +57,23 @@ import org.json.JSONObject;
 public final class WidgetRenderer {
     public static final int BAR = 0, CARD = 1, RECORD = 2, PILL = 3;
     public static final String PREFS = "mptree_widget";
+    public static final String RECORD_FILE = "widget_record.png";
     private static final Class<?>[] PROVIDERS = {
         NowPlayingWidgetProvider.class, CardWidgetProvider.class, RecordWidgetProvider.class, PillWidgetProvider.class,
     };
     private static final int[] LAYOUTS = {
         R.layout.widget_now_playing, R.layout.widget_card, R.layout.widget_record, R.layout.widget_pill,
     };
+    /** How wide (dp) a widget has to be for previous and next. */
+    private static final int[] ROOM_FOR_SKIPS = { 220, 220, 170, 220 };
 
     // The cover of what plays, a copy of the service's (which recycles its own).
     private static Bitmap art;
     private static String artPath;
     private static int artVersion = 0;
+    // The record the app has on, as it drew it.
+    private static Bitmap record;
+    private static int recordVersion = -1;
     private static String lastKey = null;
 
     private WidgetRenderer() {}
@@ -120,7 +133,7 @@ public final class WidgetRenderer {
     }
 
     // ── colours ──────────────────────────────────────────────────────────────
-    static final class Colours { int bg, text, sub, accent, accentFg, bgAlpha; }
+    static final class Colours { int bg, text, sub, accent, accentFg, bgAlpha; boolean glass; }
 
     private static Colours of(int bg, int text, int sub, int accent, int accentFg, int alpha) {
         Colours c = new Colours();
@@ -130,13 +143,18 @@ public final class WidgetRenderer {
 
     static Colours colours(Context ctx) {
         SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        switch (p.getString("colour", "app")) {
+        String colour = p.getString("colour", "app");
+        // Clear is part of Pro; without it the widget is black.
+        if ("clear".equals(colour) && !p.getBoolean("pro", false)) colour = "black";
+        switch (colour) {
             case "black": return of(0xFF111111, 0xFFFFFFFF, 0xFF9A9A9A, 0xFFFFFFFF, 0xFF000000, 255);
             case "white": return of(0xFFFFFFFF, 0xFF111111, 0xFF666666, 0xFF111111, 0xFFFFFFFF, 255);
             case "clear": {
                 boolean dark = darkTextOnWallpaper(ctx);
                 int fg = dark ? 0xFF111111 : 0xFFFFFFFF;
-                return of(0x00000000, fg, dark ? 0xFF3A3A3A : 0xFFE6E6E6, fg, dark ? 0xFFFFFFFF : 0xFF000000, 0);
+                Colours c = of(0x00000000, fg, dark ? 0xFF3A3A3A : 0xFFECECEC, fg, dark ? 0xFFFFFFFF : 0xFF000000, 255);
+                c.glass = true;
+                return c;
             }
             default:
                 // The app's own colours, which the app sends (SystemPlugin.setWidgetConfig).
@@ -167,20 +185,20 @@ public final class WidgetRenderer {
     public static synchronized void refreshAll(Context ctx, boolean force) {
         try {
             State st = read(ctx);
-            int version = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("version", 0);
-            String key = st.has + "|" + st.path + "|" + st.title + "|" + st.artist + "|" + st.playing + "|" + artVersion + "|" + version;
+            SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            String key = st.has + "|" + st.path + "|" + st.title + "|" + st.artist + "|" + st.playing + "|" + artVersion + "|" + p.getInt("version", 0);
             boolean full = force || !key.equals(lastKey);
             AppWidgetManager m = AppWidgetManager.getInstance(ctx);
             for (int kind = 0; kind < PROVIDERS.length; kind++) {
                 int[] ids = m.getAppWidgetIds(new ComponentName(ctx, PROVIDERS[kind]));
                 if (ids == null || ids.length == 0) continue;
-                if (full) {
-                    RemoteViews v = build(ctx, kind, st);
-                    for (int id : ids) m.updateAppWidget(id, v);
-                } else if (kind == CARD && st.has) {
-                    RemoteViews v = new RemoteViews(ctx.getPackageName(), LAYOUTS[CARD]);
-                    timeline(v, st, null);
-                    for (int id : ids) m.partiallyUpdateAppWidget(id, v);
+                for (int id : ids) {
+                    if (full) m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id)));
+                    else if (kind == CARD && st.has && proOn(ctx)) {
+                        RemoteViews v = new RemoteViews(ctx.getPackageName(), LAYOUTS[CARD]);
+                        timeline(v, st, null);
+                        m.partiallyUpdateAppWidget(id, v);
+                    }
                 }
             }
             lastKey = key;
@@ -190,33 +208,64 @@ public final class WidgetRenderer {
     /** For a provider's own onUpdate: the system asks after placing or a reboot. */
     public static synchronized void update(Context ctx, AppWidgetManager m, int[] ids, int kind) {
         try {
-            RemoteViews v = build(ctx, kind, read(ctx));
-            for (int id : ids) m.updateAppWidget(id, v);
+            State st = read(ctx);
+            for (int id : ids) m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id)));
         } catch (Exception ignored) { /* stays as it was */ }
     }
 
-    private static RemoteViews build(Context ctx, int kind, State st) {
+    /** One widget, made larger or smaller on the home screen. */
+    public static synchronized void resized(Context ctx, AppWidgetManager m, int id, int kind) {
+        try { m.updateAppWidget(id, build(ctx, kind, read(ctx), widthOf(m, id))); } catch (Exception ignored) { /* stays as it was */ }
+    }
+
+    /** How wide the widget is, in dp; 0 when the launcher does not say. */
+    private static int widthOf(AppWidgetManager m, int id) {
+        try {
+            Bundle o = m.getAppWidgetOptions(id);
+            return o == null ? 0 : o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+        } catch (Exception e) { return 0; }
+    }
+
+    private static boolean proOn(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("pro", false);
+    }
+
+    private static RemoteViews build(Context ctx, int kind, State st, int widthDp) {
         RemoteViews v = new RemoteViews(ctx.getPackageName(), LAYOUTS[kind]);
         Colours c = colours(ctx);
-        boolean coverOn = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("cover", true);
+        // Card and Record are part of Pro. Without it they say so, and a tap opens MPTree.
+        boolean locked = (kind == CARD || kind == RECORD) && !proOn(ctx);
 
-        v.setInt(R.id.w_bg, "setColorFilter", c.bg | 0xFF000000);
-        v.setInt(R.id.w_bg, "setImageAlpha", c.bgAlpha);
-        v.setTextViewText(R.id.w_title, st.title);
+        if (c.glass) {
+            v.setImageViewResource(R.id.w_bg, kind == PILL ? R.drawable.w_glass_pill : R.drawable.w_glass);
+            v.setInt(R.id.w_bg, "setColorFilter", 0x00000000);
+            v.setInt(R.id.w_bg, "setImageAlpha", 255);
+        } else {
+            v.setInt(R.id.w_bg, "setColorFilter", c.bg | 0xFF000000);
+            v.setInt(R.id.w_bg, "setImageAlpha", c.bgAlpha);
+        }
+        v.setTextViewText(R.id.w_title, locked ? ctx.getString(R.string.widget_pro_title) : st.title);
         v.setTextColor(R.id.w_title, c.text);
-        v.setTextViewText(R.id.w_artist, st.has ? st.artist : ctx.getString(R.string.widget_tap_to_open));
+        v.setTextViewText(R.id.w_artist, locked ? ctx.getString(R.string.widget_pro_sub) : st.has ? st.artist : ctx.getString(R.string.widget_tap_to_open));
         v.setTextColor(R.id.w_artist, c.sub);
         v.setInt(R.id.w_play_bg, "setColorFilter", c.accent);
-        v.setImageViewResource(R.id.w_play, st.playing ? R.drawable.ic_w_pause : R.drawable.ic_w_play);
+        v.setImageViewResource(R.id.w_play, locked ? R.drawable.ic_w_lock : st.playing ? R.drawable.ic_w_pause : R.drawable.ic_w_play);
         v.setInt(R.id.w_play, "setColorFilter", c.accentFg);
 
         float d = Math.min(ctx.getResources().getDisplayMetrics().density, 2.5f);
-        Bitmap a = coverOn && art != null && st.path != null && st.path.equals(artPath) ? art : null;
+        // The cover, as the player shows it: the song's own, or the mark.
+        Bitmap a = !locked && art != null && st.path != null && st.path.equals(artPath) ? art : null;
         if (kind == RECORD) {
-            v.setImageViewBitmap(R.id.w_disc, disc(ctx, a, Math.round(96 * d)));
+            v.setImageViewBitmap(R.id.w_disc, disc(ctx, a, Math.round(96 * d), locked));
         } else if (kind == BAR || kind == CARD) {
             int px = Math.round((kind == CARD ? 100 : 48) * d);
             v.setImageViewBitmap(R.id.w_cover, a != null ? rounded(a, px, px * 0.16f) : markTile(ctx, px, px * 0.16f, c));
+        }
+        // Previous and next, where the widget is wide enough for them.
+        boolean skips = !locked && (widthDp == 0 ? (kind == BAR || kind == CARD) : widthDp >= ROOM_FOR_SKIPS[kind]);
+        v.setViewVisibility(R.id.w_prev, skips ? View.VISIBLE : View.GONE);
+        v.setViewVisibility(R.id.w_next, skips ? View.VISIBLE : View.GONE);
+        if (skips) {
             v.setInt(R.id.w_prev, "setColorFilter", c.text);
             v.setInt(R.id.w_next, "setColorFilter", c.text);
             v.setInt(R.id.w_prev, "setImageAlpha", st.has ? 255 : 90);
@@ -227,12 +276,14 @@ public final class WidgetRenderer {
         if (kind == CARD) {
             v.setImageViewResource(R.id.w_mark, R.drawable.ic_stat_mptree);
             v.setInt(R.id.w_mark, "setColorFilter", c.sub);
-            timeline(v, st, c);
+            v.setViewVisibility(R.id.w_progress, locked ? View.INVISIBLE : View.VISIBLE);
+            if (locked) { v.setTextViewText(R.id.w_time, ""); v.setTextViewText(R.id.w_total, ""); }
+            else timeline(v, st, c);
         }
 
         PendingIntent open = openApp(ctx);
         v.setOnClickPendingIntent(R.id.widget_root, open);
-        v.setOnClickPendingIntent(R.id.w_play_box, st.has
+        v.setOnClickPendingIntent(R.id.w_play_box, st.has && !locked
             ? action(ctx, st.playing ? MusicPlayerService.ACTION_PAUSE : MusicPlayerService.ACTION_PLAY, 11)
             : open);
         return v;
@@ -299,7 +350,7 @@ public final class WidgetRenderer {
         return out;
     }
 
-    /** No cover (or the cover is off): the MPTree mark on the accent. */
+    /** No cover: the MPTree mark on the accent. */
     private static Bitmap markTile(Context ctx, int px, float r, Colours c) {
         Bitmap out = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(out);
@@ -310,38 +361,71 @@ public final class WidgetRenderer {
         return out;
     }
 
-    /** A record seen from above: the cover printed on it when there is one,
-     *  black with grooves when not, and a white label with the mark. */
-    private static Bitmap disc(Context ctx, Bitmap a, int px) {
+    /** The record the app has on, drawn by the app and kept as a file. */
+    private static Bitmap appRecord(Context ctx) {
+        SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        int version = p.getInt("recordVersion", 0);
+        if (record != null && recordVersion == version) return record;
+        recordVersion = version;
+        record = null;
+        try {
+            File f = new File(ctx.getFilesDir(), RECORD_FILE);
+            if (f.exists()) record = BitmapFactory.decodeFile(f.getAbsolutePath());
+        } catch (Exception ignored) { record = null; }
+        return record;
+    }
+
+    /** A record seen from above, the way the player draws it: the record the
+     *  app has on, with the song's cover on its label; or, with the picture
+     *  disc on and a cover there, the cover as the record and the mark on a
+     *  white label. Locked (no Pro), the black record. */
+    private static Bitmap disc(Context ctx, Bitmap a, int px, boolean locked) {
+        SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        boolean picture = !locked && a != null && p.getBoolean("photoDisc", true);
+        int labelBg = locked ? 0xFFFFFFFF : p.getInt("labelBg", 0xFFFFFFFF);
+        int labelInk = locked ? 0xFF000000 : p.getInt("labelInk", 0xFF000000);
         Bitmap out = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(out);
         float R = px / 2f;
-        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        if (a != null) {
-            Path clip = new Path();
-            clip.addCircle(R, R, R, Path.Direction.CW);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        Path clip = new Path();
+        clip.addCircle(R, R, R, Path.Direction.CW);
+        cv.save();
+        cv.clipPath(clip);
+        Bitmap rec = locked ? null : appRecord(ctx);
+        if (picture) {
+            cv.drawBitmap(a, null, new RectF(0, 0, px, px), paint);
+        } else if (rec != null) {
+            cv.drawBitmap(rec, null, new RectF(0, 0, px, px), paint);
+        } else {
+            paint.setColor(0xFF111111);
+            cv.drawCircle(R, R, R, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, px * 0.004f));
+            paint.setColor(0xFF242424);
+            for (float k = 0.42f; k < 0.97f; k += 0.06f) cv.drawCircle(R, R, R * k, paint);
+            paint.setStyle(Paint.Style.FILL);
+        }
+        cv.restore();
+        paint.setColor(0x55000000);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, px * 0.012f));
+        cv.drawCircle(R, R, R - paint.getStrokeWidth() / 2, paint);
+        paint.setStyle(Paint.Style.FILL);
+        float L = R * 0.3f;
+        if (!picture && a != null) {
+            // The song's cover on the label, as in the player.
+            Path label = new Path();
+            label.addCircle(R, R, L, Path.Direction.CW);
             cv.save();
-            cv.clipPath(clip);
-            cv.drawBitmap(a, null, new RectF(0, 0, px, px), p);
+            cv.clipPath(label);
+            cv.drawBitmap(a, null, new RectF(R - L, R - L, R + L, R + L), paint);
             cv.restore();
         } else {
-            p.setColor(0xFF111111);
-            cv.drawCircle(R, R, R, p);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(Math.max(1f, px * 0.004f));
-            p.setColor(0xFF242424);
-            for (float k = 0.42f; k < 0.97f; k += 0.06f) cv.drawCircle(R, R, R * k, p);
-            p.setStyle(Paint.Style.FILL);
+            paint.setColor(picture ? 0xFFFFFFFF : labelBg);
+            cv.drawCircle(R, R, L, paint);
+            drawMark(ctx, cv, R, R, L * 0.6f, picture ? 0xFF000000 : labelInk);
         }
-        p.setShader(null);
-        p.setColor(0x55000000);
-        p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(Math.max(1f, px * 0.012f));
-        cv.drawCircle(R, R, R - p.getStrokeWidth() / 2, p);
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(0xFFFFFFFF);
-        cv.drawCircle(R, R, R * 0.28f, p);
-        drawMark(ctx, cv, R, R, R * 0.17f, 0xFF000000);
         return out;
     }
 

@@ -59,6 +59,14 @@
             android:singleLine="true"
             android:ellipsize="end" />
             </LinearLayout>
+            <ImageView
+                android:id="@+id/w_prev"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="7dp"
+                android:visibility="gone"
+                android:src="@drawable/ic_w_prev"
+                android:contentDescription="@string/action_previous" />
             <FrameLayout
             android:id="@+id/w_play_box"
             android:layout_width="36dp"
@@ -80,6 +88,14 @@
                 android:tint="#FF000000"
                 android:contentDescription="@null" />
         </FrameLayout>
+            <ImageView
+                android:id="@+id/w_next"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="7dp"
+                android:visibility="gone"
+                android:src="@drawable/ic_w_next"
+                android:contentDescription="@string/action_next" />
         </LinearLayout>
     </LinearLayout>
 

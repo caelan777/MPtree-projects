@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from "react";
-import { LayoutIcon, LIST_LAYOUTS, layoutName, isListLayout, type ListLayout } from "./LayoutIcon";
+import { LayoutIcon, layoutName, isListLayout, type ListLayout } from "./LayoutIcon";
+import { usePro } from "../pro";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
 import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX, indexById } from "../utils";
@@ -336,7 +337,6 @@ export const PlaylistsView: React.FC<Props> = ({
   // big tiles like the auto playlists, or small ones three to a line. Kept
   // across restarts, and with the other settings in sync and backups.
   const [plLayout, setPlLayoutRaw] = useState<ListLayout>("list");
-  const [plLayoutOpen, setPlLayoutOpen] = useState(false);
   useEffect(() => {
     (async () => {
       const now = (await Preferences.get({ key: PL_LAYOUT_KEY })).value;
@@ -347,12 +347,17 @@ export const PlaylistsView: React.FC<Props> = ({
   const setPlLayout = (l: ListLayout) => {
     onHaptic?.();
     setPlLayoutRaw(l);
-    setPlLayoutOpen(false);
     Preferences.set({ key: PL_LAYOUT_KEY, value: l }).catch(() => {});
   };
-  const tiles = plLayout === "grid" || plLayout === "grid3";
-  const small = plLayout === "grid3";
-  const compact = plLayout === "compact";
+  // Rows and tiles were free before Pro had layouts; compact and small tiles
+  // are Pro. Without it the button steps between the two free ones.
+  const pro = usePro();
+  const PL_ORDER: ListLayout[] = pro ? ["list", "compact", "grid", "grid3"] : ["list", "grid"];
+  const plShown: ListLayout = PL_ORDER.includes(plLayout) ? plLayout : "list";
+  const stepPlLayout = () => setPlLayout(PL_ORDER[(PL_ORDER.indexOf(plShown) + 1) % PL_ORDER.length]);
+  const tiles = plShown === "grid" || plShown === "grid3";
+  const small = plShown === "grid3";
+  const compact = plShown === "compact";
   // Looked up per playlist on every render: a Map, not a search through every song.
   const songById = useMemo(() => indexById(songs), [songs]);
   const songsOf = (pl: Playlist) => pl.songIds.map(id => songById.get(id)).filter((s): s is Song => !!s);
@@ -1169,37 +1174,17 @@ export const PlaylistsView: React.FC<Props> = ({
               {/* The layout, as for the songs. Gone while moving playlists,
                   which always happens in rows. */}
               {playlists.length > 0 && !reordering && (
-                <span style={{ position: "relative", display: "flex" }}>
-                  <button
-                    onClick={() => setPlLayoutOpen(v => !v)}
-                    aria-label={tr("Layout")}
-                    aria-expanded={plLayoutOpen}
-                    style={{
-                      background: plLayoutOpen ? t.accent : "transparent", color: plLayoutOpen ? t.playBtnFg : t.text,
-                      border: `1px solid ${plLayoutOpen ? t.accent : t.border}`, borderRadius: 16,
-                      height: 30, width: 38, display: "flex", alignItems: "center", justifyContent: "center",
-                      cursor: "pointer", flexShrink: 0, padding: 0, transition: "background 0.15s, color 0.15s",
-                    }}
-                  >
-                    <LayoutIcon kind={plLayout} />
-                  </button>
-                  {plLayoutOpen && !ghost && (
-                    <>
-                      <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setPlLayoutOpen(false)} />
-                      <div style={{ position: "absolute", right: -110, top: 38, zIndex: 200, minWidth: 205, background: t.sheetBg, borderRadius: 14, border: `1px solid ${t.border}`, boxShadow: "0 10px 36px rgba(0,0,0,0.3)", overflow: "hidden" }}>
-                        <div style={{ padding: "11px 16px 7px", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: t.muted, fontWeight: 700 }}>{tr("Show playlists as")}</div>
-                        {LIST_LAYOUTS.map(l => (
-                          <button key={l} onClick={() => setPlLayout(l)}
-                            style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 16px", background: "transparent", border: "none", borderTop: `1px solid ${t.dim}`, color: plLayout === l ? t.text : t.textSub, fontWeight: plLayout === l ? 700 : 500, fontSize: 14, fontFamily: "inherit", cursor: "pointer", textAlign: "left" }}>
-                            <span style={{ display: "flex", color: plLayout === l ? t.text : t.muted }}><LayoutIcon kind={l} size={18} /></span>
-                            <span style={{ flex: 1 }}>{layoutName(l)}</span>
-                            {plLayout === l && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </span>
+                <button
+                  onClick={stepPlLayout}
+                  aria-label={`${tr("Layout")}: ${layoutName(plShown)}`}
+                  style={{
+                    background: "transparent", color: t.text, border: `1px solid ${t.border}`, borderRadius: 16,
+                    height: 30, width: 38, display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", flexShrink: 0, padding: 0,
+                  }}
+                >
+                  <LayoutIcon kind={plShown} />
+                </button>
               )}
               <button
                 onClick={() => {

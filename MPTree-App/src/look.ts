@@ -35,14 +35,27 @@ export type AppIcon    = typeof APP_ICONS[number];
 /** The header card follows the app ("default") or wears any shade of either
  *  mode, so a light card on a dark app is allowed. */
 export type CardShade  = "default" | `dark:${DarkShade}` | `light:${LightShade}`;
-/** How the player shows what plays: the record, the cover large, the record
- *  on a turntable, or only the words. */
-export const PLAYER_STYLES = ["record", "cover", "turntable", "text"] as const;
+/** How the player shows what plays: the record, the cover large (the MPTree
+ *  mark for a song without one), or only the words. Test build 127 had a
+ *  turntable too; Caelan took it out again. */
+export const PLAYER_STYLES = ["record", "cover", "text"] as const;
 export type PlayerStyle = typeof PLAYER_STYLES[number];
-/** The timeline in the player. There is one for everyone; while Caelan picks
- *  it, test builds can switch between these on the Player page. */
+/** The timeline in the player, picked on the Player page. The line is free,
+ *  the others are Pro. */
 export const TIMELINES = ["line", "thick", "wave", "dots", "ruler", "thumb", "ring"] as const;
 export type TimelineKind = typeof TIMELINES[number];
+
+// ─── THE THREE WORLDS ────────────────────────────────────────────────────────
+// Aviela and Lantern are styles of their own: each brings everything, and
+// keeps what was last picked inside it (look.aviela, look.lantern). Everything
+// under the Custom heading of Personalise is the third: one world too, not a
+// pile of loose picks. Which of the three is on is `env`. While Aviela or
+// Lantern is on, what Custom was set to waits in `custom`, so coming back
+// brings it all back. Until test build 128 the style was worked out from the
+// colour and the record instead, so a Lantern record picked on its own turned
+// Lantern on.
+export type StyleEnv = "custom" | "aviela" | "lantern";
+export const STYLE_ENVS: readonly StyleEnv[] = ["custom", "aviela", "lantern"];
 
 /** The header cards Lantern comes with: its own dark green, green, black or white. */
 export const LANTERN_CARDS: readonly CardShade[] = ["dark:lantern", "light:lantern", "dark:classic", "light:classic"];
@@ -66,7 +79,7 @@ export type Look = {
   flowers: Flowers;
   /** What was last picked on the Aviela page, so coming back to the style
    *  brings back the same record, the same flowers and the same header card. */
-  aviela: { record: FlowerRecord; flowers: AvielaFlowers; card: CardShade };
+  aviela: { record: FlowerRecord; flowers: AvielaFlowers | "custom"; card: CardShade; stickers: string | null };
   /** And the same for the Lantern page: its record, its header card and the
    *  colour of the app under them. */
   lantern: { record: LanternRecord; card: CardShade; colour: AppColour };
@@ -78,16 +91,42 @@ export type Look = {
   timeline: TimelineKind;
   /** The sticker setup that is on (stickers.ts), or none. */
   stickers: string | null;
-  /** The setups the person saved under a name. */
+  /** The setups the person saved under a name, Custom's and Aviela's apart. */
   stickerSetups: StickerSetup[];
+  /** Which world is on: Custom, Aviela or Lantern. */
+  env: StyleEnv;
+  /** What Custom was set to, kept while another world is on. */
+  custom: CustomLook;
 };
+
+/** Custom's own picks: everything under the Custom heading, and the mode its
+ *  colours were in. */
+export type CustomLook = {
+  dark: DarkShade; light: LightShade; mode: "dark" | "light";
+  cardDark: CardShade; cardLight: CardShade;
+  vinylDark: VinylSkin; vinylLight: VinylSkin;
+  icon: AppIcon; playerStyle: PlayerStyle; timeline: TimelineKind;
+  flowers: Flowers; stickers: string | null;
+};
+export const DEFAULT_CUSTOM: CustomLook = {
+  dark: "classic", light: "classic", mode: "dark", cardDark: "default", cardLight: "default",
+  vinylDark: "classic", vinylLight: "classic", icon: "classic", playerStyle: "record", timeline: "line",
+  flowers: "none", stickers: null,
+};
+/** Custom's picks as the look wears them now. */
+export const customOf = (l: Look, mode: "dark" | "light"): CustomLook => ({
+  dark: l.dark, light: l.light, mode, cardDark: l.cardDark, cardLight: l.cardLight,
+  vinylDark: l.vinylDark, vinylLight: l.vinylLight, icon: l.icon, playerStyle: l.playerStyle, timeline: l.timeline,
+  flowers: l.flowers, stickers: l.stickers,
+});
 
 export const DEFAULT_LOOK: Look = {
   vinylDark: "classic", vinylLight: "classic", dark: "classic", light: "classic",
   cardDark: "default", cardLight: "default", icon: "classic", photoDisc: true,
-  flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic" },
+  flowers: "none", aviela: { record: "lily", flowers: "sprig", card: "light:classic", stickers: null },
   lantern: { record: "lantern", card: "dark:lantern", colour: "light:paper" },
   playerStyle: "record", timeline: "line", stickers: null, stickerSetups: [],
+  env: "custom", custom: DEFAULT_CUSTOM,
 };
 
 /** What anyone gets without Pro. */
@@ -151,8 +190,9 @@ export async function loadLook(): Promise<Look> {
       {
         // Only these three: test build 62 also kept flowers placed by hand.
         const a = { ...DEFAULT_LOOK.aviela, ...look.aviela };
-        const ok = isFlowerRecord(a.record) && isAvielaFlowers(a.flowers) && AVIELA_CARDS.includes(a.card);
-        look = { ...look, aviela: ok ? { record: a.record, flowers: a.flowers, card: a.card } : DEFAULT_LOOK.aviela };
+        const ok = isFlowerRecord(a.record) && (isAvielaFlowers(a.flowers) || a.flowers === "custom") && AVIELA_CARDS.includes(a.card);
+        const stickers = typeof a.stickers === "string" ? a.stickers : null;
+        look = { ...look, aviela: ok ? { record: a.record, flowers: a.flowers, card: a.card, stickers } : DEFAULT_LOOK.aviela };
       }
       {
         const l = { ...DEFAULT_LOOK.lantern, ...look.lantern };
@@ -179,6 +219,19 @@ export async function loadLook(): Promise<Look> {
       if (!(TIMELINES as readonly string[]).includes(look.timeline)) look = { ...look, timeline: "line" };
       look = { ...look, stickerSetups: cleanSetups(look.stickerSetups) };
       if (look.stickers !== null && (typeof look.stickers !== "string" || !setupById(look.stickers, look.stickerSetups))) look = { ...look, stickers: null };
+      // Which world: kept, or for a look saved before test build 128 worked
+      // out the way it used to be (pink with flowers is Aviela, a Lantern
+      // record without them is Lantern).
+      {
+        let env: StyleEnv = (STYLE_ENVS as readonly string[]).includes(stored.env) ? stored.env : "custom";
+        if (stored.env === undefined) {
+          const aviela = look.light === "pink" && look.flowers !== "none";
+          const lantern = !aviela && look.flowers === "none" && (isLanternRecord(look.vinylDark) || isLanternRecord(look.vinylLight));
+          env = aviela ? "aviela" : lantern ? "lantern" : "custom";
+        }
+        const fromNow = env === "custom" ? customOf(look, "dark") : DEFAULT_CUSTOM;
+        look = { ...look, env, custom: cleanCustom(stored.custom, fromNow) };
+      }
       // The first test build had one card skin (glass, line...) for both modes.
       if (typeof look.cardDark !== "string" || !/^(default|dark:|light:)/.test(look.cardDark)) look = { ...look, cardDark: "default" };
       if (typeof look.cardLight !== "string" || !/^(default|dark:|light:)/.test(look.cardLight)) look = { ...look, cardLight: "default" };
@@ -194,6 +247,28 @@ export async function loadLook(): Promise<Look> {
   } catch { /* stays as it was */ }
   emit();
   return look;
+}
+
+const VINYL_IDS = ["classic", "white", "smoke", "marble"];
+const isVinyl = (v: unknown): v is VinylSkin => typeof v === "string" && (VINYL_IDS.includes(v) || isFlowerRecord(v) || isLanternRecord(v));
+const isCard = (v: unknown): v is CardShade => typeof v === "string" && /^(default|dark:(classic|graphite|lantern)|light:(classic|paper|stone|pink|sage|lantern))$/.test(v);
+/** Custom's picks read back from storage; what is missing or broken comes
+ *  from `fallback`. */
+function cleanCustom(v: unknown, fallback: CustomLook): CustomLook {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const pickOf = <K extends keyof CustomLook>(k: K, ok: (x: unknown) => boolean): CustomLook[K] => (ok(o[k]) ? o[k] as CustomLook[K] : fallback[k]);
+  return {
+    dark: pickOf("dark", x => x === "classic" || x === "graphite"),
+    light: pickOf("light", x => typeof x === "string" && ["classic", "paper", "stone", "pink", "sage"].includes(x)),
+    mode: pickOf("mode", x => x === "dark" || x === "light"),
+    cardDark: pickOf("cardDark", isCard), cardLight: pickOf("cardLight", isCard),
+    vinylDark: pickOf("vinylDark", isVinyl), vinylLight: pickOf("vinylLight", isVinyl),
+    icon: pickOf("icon", x => (APP_ICONS as readonly unknown[]).includes(x)),
+    playerStyle: pickOf("playerStyle", x => (PLAYER_STYLES as readonly unknown[]).includes(x)),
+    timeline: pickOf("timeline", x => (TIMELINES as readonly unknown[]).includes(x)),
+    flowers: pickOf("flowers", x => x === "none" || isAvielaFlowers(String(x))),
+    stickers: pickOf("stickers", x => x === null || typeof x === "string"),
+  };
 }
 
 /** The records a swipe on the player's record goes through: the two free
@@ -252,7 +327,7 @@ export function hasLookChanges(): boolean {
 export function isFreeLook(l: Look): boolean {
   return l.dark === FREE.dark && l.light === FREE.light && l.cardDark === FREE.card && l.cardLight === FREE.card
     && isFreeVinyl(l.vinylDark) && isFreeVinyl(l.vinylLight) && l.flowers === "none" && l.icon === FREE.icon
-    && l.playerStyle === "record" && l.stickers === null;
+    && l.playerStyle === "record" && l.timeline === "line" && l.stickers === null;
 }
 
 // ─── Lantern's question ──────────────────────────────────────────────────────
@@ -303,8 +378,8 @@ export function resetLook(): void {
   preview = null;
   // The white record is free, so it is not taken off either.
   const kept = (v: VinylSkin): VinylSkin => (isFreeVinyl(v) ? v : DEFAULT_LOOK.vinylDark);
-  // Saved sticker setups stay, only taken off; so does the timeline, which is
-  // not a Pro thing.
+  // Saved sticker setups stay, only taken off.
   saveLook({ ...DEFAULT_LOOK, vinylDark: kept(look.vinylDark), vinylLight: kept(look.vinylLight), photoDisc: look.photoDisc,
-    stickerSetups: look.stickerSetups, timeline: look.timeline });
+    stickerSetups: look.stickerSetups,
+    custom: { ...DEFAULT_CUSTOM, vinylDark: kept(look.vinylDark), vinylLight: kept(look.vinylLight) } });
 }

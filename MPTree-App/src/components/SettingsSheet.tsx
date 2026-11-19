@@ -491,7 +491,7 @@ export function SettingsSheet({
       {/* Outside the sheet's own box so they are not moved by its drag, and
           stopped here so a tap on their backdrop closes only them. */}
       <div onClick={e => e.stopPropagation()}>
-        {sub === "widget" && <WidgetSheet T={T} onClose={() => setSub(null)} />}
+        {sub === "widget" && <WidgetSheet T={T} pro={pro} onNeedPro={onOpenPro} onClose={() => setSub(null)} />}
         {sub === "language" && (
           <LanguageSheet value={lang} onPick={v => { onSetLang(v); setSub(null); }} onClose={() => setSub(null)} T={T} />
         )}

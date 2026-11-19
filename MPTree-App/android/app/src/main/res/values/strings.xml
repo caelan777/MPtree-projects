@@ -18,4 +18,6 @@
     <string name="widget_card_desc">Card: larger, with the time</string>
     <string name="widget_record_desc">Record: your cover on a record</string>
     <string name="widget_pill_desc">Pill: play and pause, small</string>
+    <string name="widget_pro_title">Part of MPTree Pro</string>
+    <string name="widget_pro_sub">Tap to open MPTree</string>
 </resources>

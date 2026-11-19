@@ -12,4 +12,6 @@
     <string name="widget_card_desc">Карточка: крупнее, со временем</string>
     <string name="widget_record_desc">Пластинка: ваша обложка на пластинке</string>
     <string name="widget_pill_desc">Таблетка: плей и пауза, маленькая</string>
+    <string name="widget_pro_title">Входит в MPTree Pro</string>
+    <string name="widget_pro_sub">Нажмите, чтобы открыть MPTree</string>
 </resources>

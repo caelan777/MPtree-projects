@@ -17,6 +17,7 @@ import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, 
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { LayoutIcon, LIST_LAYOUTS, layoutName, isListLayout, type ListLayout } from "./components/LayoutIcon";
+import { LOCK_RED } from "./components/lockRed";
 import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
 import { SongMenuSheet } from "./components/SongMenuSheet";
@@ -44,7 +45,7 @@ import { NextUpPanel } from "./components/NextUpPanel";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK, type Tone } from "./flowers";
 import { StickerLayer } from "./components/Stickers";
 import { setupById } from "./stickers";
-import { loadWidget, sendWidgetPalette } from "./widget";
+import { loadWidget, sendWidgetPalette, sendWidgetRecord, sendWidgetPro } from "./widget";
 import { lanternBackdrop } from "./lanternFigure";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
@@ -55,7 +56,7 @@ import {
 import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
 import { useBackground, loadBackground } from "./background";
-import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
+import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack } from "./look";
 import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, adOkText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
@@ -217,7 +218,6 @@ export default function App() {
   // grid of two or three, from the button next to the sort in the header
   // card. Kept, and in sync and backups (storage.ts).
   const [songsLayout,    setSongsLayoutRaw] = useState<ListLayout>("list");
-  const [layoutOpen,     setLayoutOpen]    = useState(false);
   useEffect(() => {
     Preferences.get({ key: "mptree_songs_layout" }).then(r => { if (isListLayout(r.value)) setSongsLayoutRaw(r.value); }).catch(() => {});
   }, []);
@@ -907,6 +907,9 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
+  const layoutNow: ListLayout = pro ? songsLayout : "list";
+  // Pro, for the widgets that are part of it (Card and Record, and Clear).
+  useEffect(() => { sendWidgetPro(pro); }, [pro]);
   const [proOpen,     setProOpenState] = useState(false);
   // Where the Pro page was opened from, for the counter (ProSheet).
   const [proFrom,     setProFrom]     = useState<ProFrom>("other");
@@ -953,6 +956,11 @@ export default function App() {
     // Personalise goes over everything: Account & sync too, which was left
     // open above it after buying Pro from there.
     setAccountOpen(false);
+    // The small copy of the app in Personalise is always the songs, with the
+    // header and the player open: folded, it was a strange thing to choose by.
+    setPage("songs");
+    setChromeOpen(true);
+    setPlayerFolded(false);
     setLookOpen(true);
     // A beat after the code is read, so Personalise has drawn before Settings goes.
     if (!lookReady()) loadLookSheet().then(() => setTimeout(() => setLookLoaded(true), 60)).catch(() => setLookLoaded(true));
@@ -972,8 +980,10 @@ export default function App() {
   // Shuffle and selection are violet, except in the two styles with a name,
   // which bring their own colour for them: pink in Aviela, green in Lantern.
   // Aviela is on while there are flowers, Lantern while its record is.
-  const styleTint = look.flowers !== "none" ? AVIELA_PINK
-    : isLanternRecord(theme === "dark" ? look.vinylDark : look.vinylLight) ? LANTERN_GREEN : null;
+  // Shuffle and selection wear the style's own colour in Aviela and Lantern,
+  // violet everywhere else. Which world is on says it (look.env), not the
+  // flowers or the record: Custom may wear either without becoming a style.
+  const styleTint = look.env === "aviela" ? AVIELA_PINK : look.env === "lantern" ? LANTERN_GREEN : null;
   // Lantern goes further and lights the accent too (lanternAccent).
   const tinted = <P extends { violet: string; bg: string; accent: string }>(p: P): P => {
     if (!styleTint) return p;
@@ -986,6 +996,8 @@ export default function App() {
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
   const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
+  // The background photo belongs to Custom: Aviela and Lantern have their own.
+  const bgPhoto = look.env === "custom" ? background.photo : undefined;
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -1678,7 +1690,7 @@ export default function App() {
     void reviewSongPlayed();
   };
 
-  const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
+  const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string, blend = false) => {
     // Starting a track makes the app scroll to it. Flag that here, in the click
     // handler itself, rather than relying on the effect that performs the
     // scroll: effects run after paint and can be delayed, and a scroll event
@@ -1688,7 +1700,9 @@ export default function App() {
       setQueue(q); setCurrent(s); setCurrentTime(0); setDuration(0); setPlaying(true); loadedRef.current = true;
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
       const artist = artistOverride ?? getMeta(s).customArtist ?? (!isMissingArtist(s.artist) ? s.artist : "");
-      await AudioPlayer.play({ path: s.uri, title, artist, ...cutBounds(s) });
+      // Next and previous blend into the song when crossfade is on (native
+      // decides: not into or out of a cut, not while paused).
+      await AudioPlayer.play({ path: s.uri, title, artist, ...cutBounds(s), ...(blend && !s.isCut ? { blend: true } : null) });
       if (s.isCut && s.cutFrom && s.cutFrom > 0) { setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom; }
       const idx = q.findIndex(x => x.id === s.id);
       AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: idx }).catch(() => {});
@@ -1736,7 +1750,7 @@ export default function App() {
     const nxt = q[idx + dir] ?? (repeatAll ? q[(idx + dir + q.length) % q.length] : undefined);
     if (!nxt) return;
     if (q !== queue) setQueue(q);
-    playSong(nxt, q);
+    playSong(nxt, q, undefined, undefined, true);
   };
 
   // ── Play Next ─────────────────────────────────────────────────────────────
@@ -2426,8 +2440,8 @@ export default function App() {
       // to their style: when the account brings another style, such an icon
       // goes with it (to the new style's own, or back to the plain one).
       const dark = (session.theme ?? themeNowRef.current) === "dark";
-      const style = !dark && l.light === "pink" && l.flowers !== "none" ? "aviela"
-        : isLanternRecord(dark ? l.vinylDark : l.vinylLight) && l.flowers === "none" ? "lantern" : null;
+      void dark;
+      const style = l.env === "custom" ? null : l.env;
       let after = l.icon;
       if ((after === "aviela" || after === "lantern") && after !== style) {
         after = style ?? "classic";
@@ -3379,6 +3393,9 @@ export default function App() {
   // own colours whenever they change, for widgets set to "Same as app".
   useEffect(() => { loadWidget().catch(() => {}); }, []);
   useEffect(() => { sendWidgetPalette(TH); }, [TH]);
+  // The record the app has on, for the Record widget.
+  const widgetVinyl = theme === "dark" ? look.vinylDark : look.vinylLight;
+  useEffect(() => { void sendWidgetRecord(widgetVinyl, look.photoDisc); }, [widgetVinyl, look.photoDisc]);
   // Stickers (Personalise): the setup that is on, and the paint for the page.
   const stickerSet = setupById(look.stickers, look.stickerSetups);
   const pageTone: Tone = theme === "dark" ? "black" : look.light === "pink" ? "pink" : "white";
@@ -3527,11 +3544,11 @@ export default function App() {
   const vpH = listViewportH || 640;
   // The layout decides what one line of the list is: a row, a compact row, or
   // a row of two or three covers. The virtual window counts lines.
-  const cols = songsLayout === "grid" ? 2 : songsLayout === "grid3" ? 3 : 1;
+  const cols = layoutNow === "grid" ? 2 : layoutNow === "grid3" ? 3 : 1;
   const GRID_PAD = 14, GRID_GAP = cols === 2 ? 12 : 8;
   const listW = scrollRef.current?.clientWidth || viewW();
   const cellW = Math.max(60, Math.floor((listW - GRID_PAD * 2 - GRID_GAP * (cols - 1)) / cols));
-  const LINE_H = cols > 1 ? cellW + (cols === 2 ? 58 : 52) : songsLayout === "compact" ? Math.round(ROW_H * 0.72) : ROW_H;
+  const LINE_H = cols > 1 ? cellW + (cols === 2 ? 58 : 52) : layoutNow === "compact" ? Math.round(ROW_H * 0.72) : ROW_H;
   rowHRef.current = LINE_H;
   colsRef.current = cols;
   const lineCount = Math.ceil(displayList.length / cols);
@@ -3676,14 +3693,14 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ backgroundColor: TH.bg, ...(background.photo ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...(bgPhoto ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
         {/* Stickers on the songs page: over the background, under everything else. */}
         {stickerSet && page === "songs" && !discoverOpen && <StickerLayer items={stickerSet.items} place="page" tone={pageTone} fixed />}
         {/* Their own photo, under a veil of the app's colour, and Aviela's
             flowers or Lantern's light over both. Behind everything else in
             the app: the shell is its own layer, so -1 is still inside it. */}
-        {background.photo && <>
-          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${background.photo}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
+        {bgPhoto && <>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${bgPhoto}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundColor: TH.bg, opacity: 1 - background.strength }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
         </>}
@@ -3901,16 +3918,27 @@ export default function App() {
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                {/* How the list is laid out. Its menu, like the sort's, is
-                    drawn outside the card. */}
+                {/* How the list is laid out: each tap the next of the four.
+                    The others than List are Pro; without it a tap shows Pro. */}
                 {!discoverOpen && (
-                  <button onClick={() => { setFilterOpen(false); setLayoutOpen(v => !v); }} tabIndex={page === "songs" ? undefined : -1}
-                    aria-label={t("Layout")} aria-expanded={layoutOpen}
-                    style={{ width: 38, height: 30, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, borderRadius: 16, border: `1px solid ${layoutOpen ? CT.accent : CT.border}`, background: layoutOpen ? CT.accent : CT.surface, color: layoutOpen ? CT.playBtnFg : CT.chipColor, cursor: "pointer", fontFamily: "inherit", transition: "background 0.15s, color 0.15s, border-color 0.15s" }}>
-                    <LayoutIcon kind={songsLayout} />
+                  <button onClick={() => {
+                      setFilterOpen(false);
+                      if (!pro) { setProOpen(true, "look"); return; }
+                      hapticImpact("light");
+                      setSongsLayout(LIST_LAYOUTS[(LIST_LAYOUTS.indexOf(layoutNow) + 1) % LIST_LAYOUTS.length]);
+                    }}
+                    tabIndex={page === "songs" ? undefined : -1}
+                    aria-label={`${t("Layout")}: ${layoutName(layoutNow)}`}
+                    style={{ position: "relative", width: 38, height: 30, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, borderRadius: 16, border: `1px solid ${CT.border}`, background: CT.surface, color: CT.chipColor, cursor: "pointer", fontFamily: "inherit" }}>
+                    <LayoutIcon kind={layoutNow} />
+                    {!pro && (
+                      <span aria-hidden="true" style={{ position: "absolute", right: -4, top: -4, width: 15, height: 15, borderRadius: 8, background: CT.surface, border: `1px solid ${CT.border}`, display: "grid", placeItems: "center", color: LOCK_RED }}>
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                      </span>
+                    )}
                   </button>
                 )}
-                <button onClick={() => { setLayoutOpen(false); setFilterOpen(v => !v); }} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
+                <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
                 </div>
@@ -4075,24 +4103,6 @@ export default function App() {
           </>
         )}
 
-        {/* ── Layout menu: rows, compact rows, or a grid of covers ───────── */}
-        {layoutOpen && page === "songs" && !discoverOpen && !chromeCollapsed && !selecting && (
-          <>
-            <div style={{ position: "fixed", inset: 0, zIndex: 199 }} onClick={() => setLayoutOpen(false)} />
-            <div style={{ position: "absolute", right: 18, top: cardBottom - 8, background: TH.sheetBg, borderRadius: 14, border: `1px solid ${TH.border}`, minWidth: 205, zIndex: 200, boxShadow: "0 10px 36px rgba(0,0,0,0.3)", overflow: "hidden" }}>
-              <div style={{ padding: "11px 16px 7px", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: TH.muted, fontWeight: 700 }}>{t("Show songs as")}</div>
-              {LIST_LAYOUTS.map(l => (
-                <button key={l} onClick={() => { hapticImpact("light"); setSongsLayout(l); setLayoutOpen(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 16px", background: "transparent", border: "none", borderTop: `1px solid ${TH.dim}`, color: songsLayout === l ? TH.text : TH.textSub, fontWeight: songsLayout === l ? 700 : 500, fontSize: 14, fontFamily: "inherit", cursor: "pointer", textAlign: "left" }}>
-                  <span style={{ display: "flex", color: songsLayout === l ? TH.text : TH.muted }}><LayoutIcon kind={l} size={18} /></span>
-                  <span style={{ flex: 1 }}>{layoutName(l)}</span>
-                  {songsLayout === l && IC.Check(TH.accent)}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
         {/* ── Header options, from holding the logo ───────────────────────── */}
         {chromeMenuOpen && (
           <>
@@ -4235,8 +4245,8 @@ export default function App() {
                               boxShadow: isSelected ? `inset 0 0 0 1.5px ${TH.violet}55` : isActive ? `inset 0 0 0 1px ${TH.border}` : "none",
                               transition: "background 0.15s, box-shadow 0.15s",
                             }}>
-                            {songsLayout !== "compact" && <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />}
-                            {songsLayout === "compact" ? (
+                            {layoutNow !== "compact" && <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />}
+                            {layoutNow === "compact" ? (
                               <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8, paddingLeft: 4 }}>
                                 <span style={{ fontSize: ROW_TITLE, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{name}</span>
                                 <span style={{ flex: 1, minWidth: 0, fontSize: ROW_SUB, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>

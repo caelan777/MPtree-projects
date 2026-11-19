@@ -66,6 +66,22 @@
             android:singleLine="true"
             android:ellipsize="end" />
         </LinearLayout>
+        <ImageView
+            android:id="@+id/w_prev"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="8dp"
+            android:visibility="gone"
+            android:src="@drawable/ic_w_prev"
+            android:contentDescription="@string/action_previous" />
+        <ImageView
+            android:id="@+id/w_next"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:padding="8dp"
+            android:visibility="gone"
+            android:src="@drawable/ic_w_next"
+            android:contentDescription="@string/action_next" />
     </LinearLayout>
 
 </FrameLayout>

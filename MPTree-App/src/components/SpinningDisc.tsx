@@ -85,6 +85,21 @@ const SHEEN =
   "conic-gradient(from 25deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,0.16) 22deg, rgba(255,255,255,0) 52deg, " +
   "rgba(255,255,255,0) 180deg, rgba(255,255,255,0.11) 205deg, rgba(255,255,255,0) 235deg, rgba(255,255,255,0) 360deg)";
 
+/** A record's own picture and label, as the player draws them: also used to
+ *  hand the record to the home screen widgets (widget.ts). */
+export function recordPicture(skin: VinylSkin): { src: string; filter?: string; opacity: number; labelBg: string; labelInk: string } {
+  const flower = isFlowerRecord(skin) ? skin : null;
+  const lantern = isLanternRecord(skin) ? skin : null;
+  const pale = skin === "white" || skin === "marble";
+  return {
+    src: flower ? recordArt(flower) : lantern ? lanternRecord(lantern) : skin === "marble" ? MARBLE : "/vinyl.webp",
+    filter: skin === "white" ? "invert(1) grayscale(1) brightness(1.08)" : skin === "smoke" ? "grayscale(1) brightness(1.9) contrast(0.75)" : undefined,
+    opacity: skin === "smoke" ? 0.62 : 1,
+    labelBg: flower ? RECORD_LABEL[flower].bg : lantern ? LANTERN_LABEL[lantern].bg : pale ? "#000000" : "#ffffff",
+    labelInk: flower ? RECORD_LABEL[flower].ink : lantern ? LANTERN_LABEL[lantern].ink : pale ? "#ffffff" : "#000000",
+  };
+}
+
 export const SpinningDisc = memo(function SpinningDisc({
   size, spinning = false, title = "", customPhoto, skin: forced, tappable = false, onNoCover, onPhoto,
 }: SpinningDiscProps) {

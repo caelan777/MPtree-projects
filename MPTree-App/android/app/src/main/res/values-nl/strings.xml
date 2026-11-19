@@ -12,4 +12,6 @@
     <string name="widget_card_desc">Kaart: groter, met de tijd</string>
     <string name="widget_record_desc">Plaat: je cover op een plaat</string>
     <string name="widget_pill_desc">Pil: afspelen en pauze, klein</string>
+    <string name="widget_pro_title">Hoort bij MPTree Pro</string>
+    <string name="widget_pro_sub">Tik om MPTree te openen</string>
 </resources>

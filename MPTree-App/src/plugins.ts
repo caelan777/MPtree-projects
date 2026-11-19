@@ -50,7 +50,7 @@ export type MusicScannerPlugin = {
 export type AudioPlayerPlugin = {
   /** cutFrom and cutTo: only this part of the file is played (a cut that is
    *  not a file of its own). The service starts and ends there by itself. */
-  play(options: { path: string; title?: string; artist?: string; cutFrom?: number; cutTo?: number }): Promise<void>;
+  play(options: { path: string; title?: string; artist?: string; cutFrom?: number; cutTo?: number; blend?: boolean }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   getCurrentPosition(): Promise<{ position: number }>;
@@ -115,7 +115,11 @@ export type SystemPlugin = {
   pinPhotoShortcut(options: { dataUrl: string; label: string }): Promise<{ supported: boolean }>;
   /** The home screen widgets' colour, whether they show the cover, and the
    *  app's own colours for "Same as app" (WidgetRenderer.java). */
-  setWidgetConfig(options: { colour?: string; cover?: boolean; palette?: Record<string, string> }): Promise<void>;
+  setWidgetConfig(options: {
+    colour?: string; palette?: Record<string, string>; pro?: boolean;
+    /** The record on, as a PNG in base64, with its label's colours. */
+    record?: string; labelBg?: string; labelInk?: string; photoDisc?: boolean;
+  }): Promise<void>;
   /** Asks the launcher to add one of the widgets ("bar", "card", "record",
    *  "pill"). supported:false where the launcher cannot. */
   pinWidget(options: { kind: string }): Promise<{ supported: boolean }>;

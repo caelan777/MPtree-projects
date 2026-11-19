@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { cleanSetups, cleanSticker, setupById, freeName, READY_MADE, MAX_STICKERS, isReadyMade } from "./stickers";
+import { cleanSetups, cleanSticker, setupById, freeName, MAX_STICKERS } from "./stickers";
 
 describe("stickers", () => {
   it("keeps a good setup as it is", () => {
-    const s = [{ id: "s1", name: "Mine", items: [{ k: "sprig", on: "card", x: 0.8, y: 0.3, w: 0.4, r: 10 }] }];
+    const s = [{ id: "s1", name: "Mine", items: [{ k: "sprig", on: "card", x: 0.8, y: 0.3, w: 0.4, r: 10 }], env: "custom" }];
     expect(cleanSetups(s)).toEqual(s);
   });
 
@@ -27,14 +27,17 @@ describe("stickers", () => {
     expect(cleanSetups([{ id: "s", name: "Many", items }])[0].items).toHaveLength(MAX_STICKERS);
   });
 
-  it("finds ready-made and saved setups by id", () => {
+  it("finds saved setups by id, and no longer the ready-made ones", () => {
     const saved = [{ id: "s9", name: "Mine", items: [] }];
-    expect(setupById("made:meadow", saved)).toBe(READY_MADE.find(s => s.id === "made:meadow"));
     expect(setupById("s9", saved)?.name).toBe("Mine");
+    expect(setupById("made:meadow", saved)).toBeNull();
     expect(setupById("gone", saved)).toBeNull();
     expect(setupById(null, saved)).toBeNull();
-    expect(isReadyMade("made:sprig")).toBe(true);
-    expect(isReadyMade("s9")).toBe(false);
+  });
+
+  it("keeps Custom's and Aviela's setups apart, and old ones as Custom's", () => {
+    const out = cleanSetups([{ id: "a", name: "A", items: [], env: "aviela" }, { id: "b", name: "B", items: [] }, { id: "c", name: "C", items: [], env: "sky" }]);
+    expect(out.map(x => x.env)).toEqual(["aviela", "custom", "custom"]);
   });
 
   it("gives a new setup a name that is not taken", () => {
@@ -43,12 +46,4 @@ describe("stickers", () => {
     expect(freeName(saved, "My stickers")).toBe("My stickers 3");
   });
 
-  it("puts every ready-made sticker somewhere it can be seen", () => {
-    for (const s of READY_MADE) for (const i of s.items) {
-      const c = cleanSticker(i)!;
-      expect([c.x, c.y, c.w, c.on, c.k]).toEqual([i.x, i.y, i.w, i.on, i.k]);
-      expect((c.r - i.r + 720) % 360).toBe(0);
-      expect(i.x > 0 && i.x < 1 && i.y > 0 && i.y < 1).toBe(true);
-    }
-  });
 });

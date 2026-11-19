@@ -1017,4 +1017,23 @@ export const RU: Record<string, string> = {
   "Colour and cover also change the widgets you already have.": "Цвет и обложка меняются и у виджетов, которые уже есть.",
   "Your phone shows the widget. Tap Add.": "Телефон показывает виджет. Нажмите «Добавить».",
   "Styles, background, colours, stickers, icon and player.": "Стили, фон, цвета, наклейки, значок и плеер.",
+
+  // Test build 128 (1.5.7): three worlds in Personalise, stickers of your own, the timeline row, widgets.
+  "From styles": "Из стилей",
+  "Timeline": "Шкала времени",
+  "Line": "Линия",
+  "Thick": "Толстая",
+  "Wave": "Волна",
+  "Dots": "Точки",
+  "Ruler": "Линейка",
+  "Time in the knob": "Время в ползунке",
+  "Ring": "Кольцо",
+  "Any record goes with any colour. With Cover, a song without a cover shows the MPTree mark. The ring timeline goes with Record only.": "Любая пластинка подходит к любому цвету. С обложкой песня без обложки показывает знак MPTree. Кольцо работает только с пластинкой.",
+  "Aviela's flowers on your own colours, or your own stickers put down by hand. They sit behind your songs and buttons, so they never cover anything you tap.": "Цветы Aviela на ваших цветах или ваши наклейки, разложенные вручную. Они лежат под песнями и кнопками и никогда ничего не закрывают.",
+  "Its stickers go with it. This cannot be undone.": "Его наклейки удалятся вместе с ним. Это нельзя отменить.",
+  "Copy": "Копия",
+  "Mirror": "Отразить",
+  "To front": "Вперёд",
+  "To back": "Назад",
+  "The colour also changes the widgets you already have.": "Цвет меняется и у виджетов, которые уже есть.",
 };

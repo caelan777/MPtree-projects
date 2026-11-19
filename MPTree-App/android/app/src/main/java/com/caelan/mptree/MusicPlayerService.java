@@ -896,11 +896,17 @@ public class MusicPlayerService extends Service {
     }
 
     public int getCurrentPosition() {
+        if (blendingSkip && fadeReady && incomingPlayer != null) {
+            try { return incomingPlayer.getCurrentPosition(); } catch (Exception ignored) { return 0; }
+        }
         if (mediaPlayer == null || isPreparing) return 0;
         try { return mediaPlayer.getCurrentPosition(); } catch (Exception e) { return 0; }
     }
 
     public int getDuration() {
+        if (blendingSkip && fadeReady && incomingPlayer != null) {
+            try { return incomingPlayer.getDuration(); } catch (Exception ignored) { return 0; }
+        }
         if (mediaPlayer == null || isPreparing) return 0;
         try { return mediaPlayer.getDuration(); } catch (Exception e) { return 0; }
     }
@@ -981,7 +987,36 @@ public class MusicPlayerService extends Service {
         });
     }
 
+    // ── A blend on a skip ────────────────────────────────────────────────────
+    // With crossfade on, next and previous blend too, over a short stretch.
+    // They used to cut hard, from the app's buttons, the notification and the
+    // widgets alike, so the setting seemed to do nothing at all: it was only
+    // ever heard where a song ran out by itself.
+    private static final int SKIP_FADE_MAX_MS = 1800;
+    private boolean blendingSkip = false;
+
+    /** Starts `t` by blending into it, when crossfade is on and a whole song
+     *  is playing. True when it did; false means play it the usual way. */
+    private boolean blendInto(Track t) {
+        if (crossfadeDurationMs <= 0 || mediaPlayer == null || !isPlaying || isPreparing) return false;
+        if (curCutFrom > 0 || curCutTo > 0 || t == null || t.isCut) return false;
+        cancelCrossfade();
+        blendingSkip = true;
+        startCrossfadeInto(t, Math.max(400, Math.min(crossfadeDurationMs, SKIP_FADE_MAX_MS)));
+        if (!crossfading) blendingSkip = false;
+        return crossfading;
+    }
+
+    /** The app's next and previous: the song it picked, blended into. */
+    public void playBlended(String path, String title, String artist) throws Exception {
+        Track t = null;
+        for (Track q : nativeQueue) { if (q.path.equals(path) && !q.isCut) { t = q; break; } }
+        if (t == null) t = new Track(path, title, artist, false, 0, 0);
+        if (!blendInto(t)) play(path, title, artist, 0, 0);
+    }
+
     private void cancelCrossfade() {
+        blendingSkip = false;
         if (!crossfading) return;
         crossfading = false;
         fadeReady = false;
@@ -1057,17 +1092,28 @@ public class MusicPlayerService extends Service {
                     fadeReady = true;
                     runCrossfadeRamp(outgoing, mp, fadeSteps, gen, next);
                 } catch (Exception e) {
-                    cancelCrossfade();
+                    giveUpBlend(next);
                 }
             });
             incomingPlayer.setOnErrorListener((mp, what, extra) -> {
-                if (gen == fadeGen) cancelCrossfade();
+                if (gen == fadeGen) giveUpBlend(next);
                 return true;
             });
             incomingPlayer.setDataSource(next.path);
             incomingPlayer.prepareAsync();
         } catch (Exception e) {
-            cancelCrossfade();
+            giveUpBlend(next);
+        }
+    }
+
+    /** The next song could not be blended into. At a song's end the song plays
+     *  out and the queue moves on as usual; a skip still has to get there, so
+     *  it plays the song the ordinary way. */
+    private void giveUpBlend(Track next) {
+        boolean wasSkip = blendingSkip;
+        cancelCrossfade();
+        if (wasSkip && next != null) {
+            try { play(next.path, next.title, next.artist, true, next.cutFrom, next.cutTo); } catch (Exception ignored) { /* stays where it was */ }
         }
     }
 
@@ -1097,6 +1143,7 @@ public class MusicPlayerService extends Service {
                     else attachEqualizer();
                     crossfading    = false;
                     fadeReady      = false;
+                    blendingSkip   = false;
                     // From here the song that faded in is the one playing; the
                     // one that faded out has nothing more to say.
                     final int promotedToken = ++playToken;
@@ -1238,6 +1285,7 @@ public class MusicPlayerService extends Service {
         }
 
         Track t = nativeQueue.get(next);
+        if (blendInto(t)) { nativeQueueIndex = next; return; }
         try {
             play(t.path, t.title, t.artist, true, t.cutFrom, t.cutTo);
             // play() looks the track up by its file, and a cut shares its file

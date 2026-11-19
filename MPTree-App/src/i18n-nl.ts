@@ -1028,4 +1028,23 @@ export const NL: Record<string, string> = {
   "Colour and cover also change the widgets you already have.": "Kleur en hoes veranderen ook de widgets die je al hebt.",
   "Your phone shows the widget. Tap Add.": "Je telefoon laat de widget zien. Tik op Toevoegen.",
   "Styles, background, colours, stickers, icon and player.": "Stijlen, achtergrond, kleuren, stickers, icoon en speler.",
+
+  // Test build 128 (1.5.7): three worlds in Personalise, stickers of your own, the timeline row, widgets.
+  "From styles": "Uit de stijlen",
+  "Timeline": "Tijdlijn",
+  "Line": "Lijn",
+  "Thick": "Dik",
+  "Wave": "Golf",
+  "Dots": "Stippen",
+  "Ruler": "Liniaal",
+  "Time in the knob": "Tijd in de knop",
+  "Ring": "Ring",
+  "Any record goes with any colour. With Cover, a song without a cover shows the MPTree mark. The ring timeline goes with Record only.": "Elke plaat past bij elke kleur. Met Hoes krijgt een nummer zonder hoes het MPTree-teken. De ring-tijdlijn hoort alleen bij Plaat.",
+  "Aviela's flowers on your own colours, or your own stickers put down by hand. They sit behind your songs and buttons, so they never cover anything you tap.": "Aviela's bloemen op je eigen kleuren, of je eigen stickers met de hand neergezet. Ze zitten achter je nummers en knoppen, dus ze zitten nooit in de weg.",
+  "Its stickers go with it. This cannot be undone.": "Zijn stickers gaan mee. Dit kan niet ongedaan worden.",
+  "Copy": "Kopie",
+  "Mirror": "Spiegelen",
+  "To front": "Naar voren",
+  "To back": "Naar achteren",
+  "The colour also changes the widgets you already have.": "De kleur verandert ook de widgets die je al hebt.",
 };

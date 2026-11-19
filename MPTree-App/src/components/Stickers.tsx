@@ -28,7 +28,7 @@ export function stickerName(k: StickerKind): string {
 
 function piece(s: Sticker, tone: Tone, extra?: CSSProperties) {
   const a = stickerArt(s.k, tone);
-  return { src: a.src, style: { position: "absolute", left: `${s.x * 100}%`, top: `${s.y * 100}%`, width: `${s.w * 100}%`, height: "auto", aspectRatio: `${a.w} / ${a.h}`, transform: `translate(-50%, -50%) rotate(${s.r}deg)`, display: "block", ...extra } as CSSProperties };
+  return { src: a.src, style: { position: "absolute", left: `${s.x * 100}%`, top: `${s.y * 100}%`, width: `${s.w * 100}%`, height: "auto", aspectRatio: `${a.w} / ${a.h}`, transform: `translate(-50%, -50%) rotate(${s.r}deg)${s.f ? " scaleX(-1)" : ""}`, display: "block", ...extra } as CSSProperties };
 }
 
 /** The stickers of one place, behind what else is there: inside the header
@@ -141,7 +141,23 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
   }, []);
 
   const nextId = useRef(initial.length);
-  const [items, setItems] = useState<Item[]>(() => initial.map((s, i) => ({ ...s, id: i })));
+  const [items, setItemsNow] = useState<Item[]>(() => initial.map((s, i) => ({ ...s, id: i })));
+  // Every change can be undone, one step at a time, back to how it opened.
+  const history = useRef<Item[][]>([]);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const setItems = (next: (list: Item[]) => Item[]) => {
+    history.current = [...history.current.slice(-49), itemsRef.current];
+    setItemsNow(next);
+  };
+  const undo = () => {
+    const prev = history.current.pop();
+    if (!prev) return;
+    setItemsNow(prev);
+    if (sel !== null && !prev.some(x => x.id === sel)) setSel(null);
+  };
+  // Where a sticker clicks onto the header card while it is dragged.
+  const [snap, setSnap] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   const [sel, setSel] = useState<number | null>(null);
   const [live, setLiveState] = useState<Live | null>(null);
   // Also in a ref: a gesture's events can come faster than the screen redraws,
@@ -203,7 +219,16 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
     if (!g) return;
     const s = g.start;
     if (g.mode === "move") {
-      setLive({ ...s, cx: s.cx + e.clientX - g.ax, cy: s.cy + e.clientY - g.ay });
+      let cx = s.cx + e.clientX - g.ax, cy = s.cy + e.clientY - g.ay;
+      let sx: number | null = null, sy: number | null = null;
+      if (card && cx > card.left - 30 && cx < card.left + card.width + 30 && cy > card.top - 30 && cy < card.top + card.height + 30) {
+        const SNAP = 10;
+        for (const x of [card.left, card.left + card.width / 2, card.left + card.width]) if (Math.abs(cx - x) < SNAP) { cx = x; sx = x; }
+        for (const y of [card.top, card.top + card.height / 2, card.top + card.height]) if (Math.abs(cy - y) < SNAP) { cy = y; sy = y; }
+      }
+      if ((sx !== null && sx !== snap.x) || (sy !== null && sy !== snap.y)) navigator.vibrate?.(6);
+      if (sx !== snap.x || sy !== snap.y) setSnap({ x: sx, y: sy });
+      setLive({ ...s, cx, cy });
     } else if (g.mode === "turn") {
       const dx = e.clientX - s.cx, dy = e.clientY - s.cy;
       const k = Math.hypot(dx, dy) / g.d0;
@@ -219,7 +244,31 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
     if (pointers.current.size > 0) return;
     if (liveRef.current) commit(liveRef.current);
     setLive(null);
+    setSnap({ x: null, y: null });
     gesture.current = null;
+  };
+
+  // What can be done to the sticker that is picked.
+  const selected = items.find(s => s.id === sel) ?? null;
+  const duplicate = () => {
+    if (!selected || items.length >= MAX_STICKERS) return;
+    const id = nextId.current++;
+    const b = surface(selected.on);
+    setItems(list => [...list, { ...selected, id, x: selected.x + 24 / b.width, y: selected.y + 24 / b.height }]);
+    setSel(id);
+  };
+  const mirror = () => { if (selected) setItems(list => list.map(s => (s.id === selected.id ? { ...s, f: !s.f } : s))); };
+  /** Forward (1) or back (-1) among the others: later ones lie on top. */
+  const restack = (dir: 1 | -1) => {
+    if (!selected) return;
+    setItems(list => {
+      const i = list.findIndex(s => s.id === selected.id);
+      const j = dir > 0 ? list.length - 1 : 0;
+      if (i < 0 || i === j) return list;
+      const next = list.filter(s => s.id !== selected.id);
+      next.splice(dir > 0 ? Math.min(next.length, i + 1) : Math.max(0, i - 1), 0, selected);
+      return next;
+    });
   };
 
   const add = (k: StickerKind) => {
@@ -257,15 +306,18 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
       {card && (
         <div aria-hidden="true" style={{ position: "absolute", left: card.left, top: card.top, width: card.width, height: card.height, borderRadius: 22, border: `1.5px dashed ${T.textSub}`, boxSizing: "border-box", pointerEvents: "none", opacity: 0.7 }} />
       )}
-      {items.map(s => {
+      {/* The lines a sticker has clicked onto. */}
+      {snap.x !== null && card && <i aria-hidden="true" style={{ position: "absolute", left: snap.x, top: card.top - 40, height: card.height + 80, width: 0, borderLeft: `1px dashed ${T.accent}`, pointerEvents: "none", zIndex: 90 }} />}
+      {snap.y !== null && card && <i aria-hidden="true" style={{ position: "absolute", top: snap.y, left: card.left - 20, width: card.width + 40, height: 0, borderTop: `1px dashed ${T.accent}`, pointerEvents: "none", zIndex: 90 }} />}
+      {items.map((s, order) => {
         const p = toPx(s);
         const a = stickerArt(s.k, inCard(p.cx, p.cy) ? cardTone : pageTone);
         const on = sel === s.id;
         return (
           <div key={s.id}
             onPointerDown={e => begin(e, s.id, "move")}
-            style={{ position: "absolute", left: p.cx, top: p.cy, width: p.w, transform: `translate(-50%, -50%) rotate(${p.r}deg)`, touchAction: "none", cursor: "grab", zIndex: on ? 3 : 2 }}>
-            <img src={a.src} alt={stickerName(s.k)} draggable={false} style={{ width: "100%", height: "auto", aspectRatio: `${a.w} / ${a.h}`, display: "block", pointerEvents: "none" }} />
+            style={{ position: "absolute", left: p.cx, top: p.cy, width: p.w, transform: `translate(-50%, -50%) rotate(${p.r}deg)`, touchAction: "none", cursor: "grab", zIndex: 2 + order }}>
+            <img src={a.src} alt={stickerName(s.k)} draggable={false} style={{ width: "100%", height: "auto", aspectRatio: `${a.w} / ${a.h}`, display: "block", pointerEvents: "none", transform: s.f ? "scaleX(-1)" : undefined }} />
             {on && (
               <>
                 <span aria-hidden="true" style={{ position: "absolute", inset: -7, border: `1.5px dashed ${T.text}`, borderRadius: 8, pointerEvents: "none" }} />
@@ -284,7 +336,7 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
       })}
 
       {hint && (
-        <div style={{ position: "absolute", left: 16, right: 16, bottom: 218, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", left: 16, right: 16, bottom: 262, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
           <span style={{ background: T.surface, color: T.text, border: `1px solid ${T.border}`, borderRadius: 18, padding: "9px 14px", fontSize: 13, fontWeight: 600, textAlign: "center", lineHeight: 1.4, boxShadow: "0 6px 18px rgba(0,0,0,0.3)" }}>
             {t("Tap a sticker below, then drag it onto the header card or the page.")}
           </span>
@@ -302,6 +354,21 @@ export function StickerEditor({ T, initial, name, own, cardTone, pageTone, onSav
           <button onClick={cancel} style={{ padding: "8px 14px", borderRadius: 18, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>{t("Cancel")}</button>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.muted }}>{t("Aviela stickers")}</span>
           <button onClick={() => setSaving(true)} style={{ padding: "8px 18px", borderRadius: 18, border: "none", background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>{t("Save")}</button>
+        </div>
+        <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", overflowX: "auto", scrollbarWidth: "none", touchAction: "pan-x" }}>
+          {([
+            ["undo", t("Undo"), undo, history.current.length > 0, "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"],
+            ["copy", t("Copy"), duplicate, !!selected && items.length < MAX_STICKERS, "M8 8h12v12H8zM4 16V4h12"],
+            ["mirror", t("Mirror"), mirror, !!selected, "M12 3v18M8 7 3 12l5 5M16 7l5 5-5 5"],
+            ["front", t("To front"), () => restack(1), !!selected, "M12 19V5M5 12l7-7 7 7"],
+            ["back", t("To back"), () => restack(-1), !!selected, "M12 5v14M19 12l-7 7-7-7"],
+          ] as const).map(([k, label, run, ok, d]) => (
+            <button key={k} onClick={run} disabled={!ok} aria-label={label}
+              style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, padding: "7px 12px", borderRadius: 16, border: `1px solid ${T.border}`, background: T.surface, color: T.text, opacity: ok ? 1 : 0.38, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: ok ? "pointer" : "default" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+              {label}
+            </button>
+          ))}
         </div>
         <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "2px 14px 4px", scrollbarWidth: "none", touchAction: "pan-x" }}>
           {STICKER_KINDS.map(k => {

@@ -158,7 +158,9 @@ public class AudioPlayerPlugin extends Plugin {
         String artist = getStringOrDefault(call, "artist", "Unknown");
         if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
         try {
-            playerService.play(path, title, artist, call.getInt("cutFrom", 0), call.getInt("cutTo", 0));
+            // blend: the app's next and previous, which crossfade when it is on.
+            if (call.getBoolean("blend", false)) playerService.playBlended(path, title, artist);
+            else playerService.play(path, title, artist, call.getInt("cutFrom", 0), call.getInt("cutTo", 0));
             call.resolve();
         } catch (Exception e) {
             call.reject("Playback failed: " + e.getMessage(), e);

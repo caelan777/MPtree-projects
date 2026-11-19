@@ -2,22 +2,27 @@ import { useSyncExternalStore } from "react";
 import { Preferences } from "@capacitor/preferences";
 import { System } from "./plugins";
 import type { T } from "./themes";
+import type { VinylSkin } from "./look";
+import { recordPicture } from "./components/SpinningDisc";
 
 // ─── HOME SCREEN WIDGETS ─────────────────────────────────────────────────────
 // What the Widget page (Settings, Home screen widget) decides: which of the
-// four widgets its button adds, their colour, and whether they show the cover.
-// The four are drawn natively (WidgetRenderer.java); colour and cover go there
-// at once and change every MPTree widget already on the home screen. Kept on
-// this phone only: widgets belong to a home screen, not to the account.
+// four widgets its button adds, and their colour. The four are drawn natively
+// (WidgetRenderer.java); the colour goes there at once and changes every
+// MPTree widget already on the home screen. The cover shows as it does in the
+// player, always (test build 127 had a switch for it). Kept on this phone only:
+// widgets belong to a home screen, not to the account.
 
 export const WIDGET_KINDS = ["bar", "card", "record", "pill"] as const;
 export type WidgetKind = typeof WIDGET_KINDS[number];
 export const WIDGET_COLOURS = ["app", "black", "white", "clear"] as const;
 export type WidgetColour = typeof WIDGET_COLOURS[number];
-export type WidgetConfig = { kind: WidgetKind; colour: WidgetColour; cover: boolean };
+/** Card and Record, and the Clear colour, are part of Pro. */
+export const PRO_KINDS: readonly WidgetKind[] = ["card", "record"];
+export type WidgetConfig = { kind: WidgetKind; colour: WidgetColour };
 
 const KEY = "mptree_widget";
-export const DEFAULT_WIDGET: WidgetConfig = { kind: "card", colour: "app", cover: true };
+export const DEFAULT_WIDGET: WidgetConfig = { kind: "bar", colour: "app" };
 
 let config: WidgetConfig = DEFAULT_WIDGET;
 const listeners = new Set<() => void>();
@@ -36,11 +41,10 @@ export async function loadWidget(): Promise<WidgetConfig> {
       config = {
         kind: (WIDGET_KINDS as readonly string[]).includes(v.kind as string) ? v.kind as WidgetKind : DEFAULT_WIDGET.kind,
         colour: (WIDGET_COLOURS as readonly string[]).includes(v.colour as string) ? v.colour as WidgetColour : DEFAULT_WIDGET.colour,
-        cover: typeof v.cover === "boolean" ? v.cover : DEFAULT_WIDGET.cover,
       };
     }
   } catch { /* the default, then */ }
-  System.setWidgetConfig({ colour: config.colour, cover: config.cover }).catch(() => {});
+  System.setWidgetConfig({ colour: config.colour }).catch(() => {});
   listeners.forEach(l => l());
   return config;
 }
@@ -48,9 +52,7 @@ export async function loadWidget(): Promise<WidgetConfig> {
 export function saveWidget(patch: Partial<WidgetConfig>): void {
   config = { ...config, ...patch };
   Preferences.set({ key: KEY, value: JSON.stringify(config) }).catch(() => {});
-  if (patch.colour !== undefined || patch.cover !== undefined) {
-    System.setWidgetConfig({ colour: config.colour, cover: config.cover }).catch(() => {});
-  }
+  if (patch.colour !== undefined) System.setWidgetConfig({ colour: config.colour }).catch(() => {});
   listeners.forEach(l => l());
 }
 
@@ -62,4 +64,47 @@ export function sendWidgetPalette(T: T): void {
   if (key === sentPalette) return;
   sentPalette = key;
   System.setWidgetConfig({ palette }).catch(() => {});
+}
+
+/** Whether Pro is on, for the widgets that are part of it. */
+let sentPro: boolean | null = null;
+export function sendWidgetPro(pro: boolean): void {
+  if (sentPro === pro) return;
+  sentPro = pro;
+  System.setWidgetConfig({ pro }).catch(() => {});
+}
+
+/** The record the app has on, for the Record widget: drawn here the way the
+ *  player draws it and handed over as a picture, with its label's colours.
+ *  The widget puts the song's cover on the label, or makes the whole record
+ *  the cover with the picture disc on, as the player does. */
+let sentRecord = "";
+export async function sendWidgetRecord(skin: VinylSkin, photoDisc: boolean): Promise<void> {
+  const key = `${skin}|${photoDisc}`;
+  if (key === sentRecord) return;
+  sentRecord = key;
+  try {
+    const pic = recordPicture(skin);
+    const img = new Image();
+    img.src = pic.src;
+    await img.decode();
+    const N = 288;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = N;
+    const g = canvas.getContext("2d");
+    if (!g) return;
+    g.beginPath();
+    g.arc(N / 2, N / 2, N / 2, 0, Math.PI * 2);
+    g.clip();
+    // Under a see-through record (smoke), the dark it sits on in the player.
+    g.fillStyle = "#111111";
+    g.fillRect(0, 0, N, N);
+    if (pic.filter) g.filter = pic.filter;
+    g.globalAlpha = pic.opacity;
+    g.drawImage(img, 0, 0, N, N);
+    const record = canvas.toDataURL("image/png").split(",")[1];
+    await System.setWidgetConfig({ record, labelBg: pic.labelBg, labelInk: pic.labelInk, photoDisc });
+  } catch {
+    sentRecord = "";
+  }
 }
