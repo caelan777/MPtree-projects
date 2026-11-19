@@ -245,11 +245,14 @@ public final class WidgetRenderer {
         // Card and Record are part of Pro. Without it they say so, and a tap opens MPTree.
         boolean locked = (kind == CARD || kind == RECORD) && !proOn(ctx);
 
+        // Each colour sets its own picture: a launcher applies an update to the
+        // widget it has, so Black after Clear kept the glass.
         if (c.glass) {
             v.setImageViewResource(R.id.w_bg, kind == PILL ? R.drawable.w_glass_pill : R.drawable.w_glass);
-            v.setInt(R.id.w_bg, "setColorFilter", 0x00000000);
+            v.setInt(R.id.w_bg, "setColorFilter", 0xFFFFFFFF);
             v.setInt(R.id.w_bg, "setImageAlpha", 255);
         } else {
+            v.setImageViewResource(R.id.w_bg, kind == PILL ? R.drawable.w_bg_pill : R.drawable.w_bg);
             v.setInt(R.id.w_bg, "setColorFilter", c.bg | 0xFF000000);
             v.setInt(R.id.w_bg, "setImageAlpha", c.bgAlpha);
         }
@@ -329,8 +332,9 @@ public final class WidgetRenderer {
     // ── taps ─────────────────────────────────────────────────────────────────
     /** The same broadcasts the notification's buttons send. */
     private static PendingIntent action(Context ctx, String act, int code) {
-        Intent intent = new Intent(act);
-        intent.setPackage(ctx.getPackageName());
+        // To WidgetActionReceiver, which starts the player if it is not running.
+        Intent intent = new Intent(ctx, WidgetActionReceiver.class);
+        intent.setAction(act);
         return PendingIntent.getBroadcast(ctx, code, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 

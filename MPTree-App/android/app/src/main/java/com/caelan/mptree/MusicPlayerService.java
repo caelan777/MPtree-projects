@@ -336,7 +336,46 @@ public class MusicPlayerService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // A widget's button (WidgetActionReceiver): foreground at once, as
+        // Android asks of a player started like this, then the button.
+        String act = intent != null ? intent.getAction() : null;
+        if (act != null && (ACTION_PLAY.equals(act) || ACTION_PAUSE.equals(act) || ACTION_NEXT.equals(act) || ACTION_PREV.equals(act))) {
+            try { promoteToForeground(buildNotification()); } catch (Exception ignored) {}
+            final String a = act;
+            mainHandler.post(() -> widgetAction(a));
+        }
         return START_STICKY;
+    }
+
+    /** A widget's button, also with the player just started: without a song
+     *  loaded it carries on with the last one, where it was. */
+    private void widgetAction(String act) {
+        if (ACTION_PAUSE.equals(act)) { pausePlayback(); return; }
+        if (mediaPlayer == null && currentPath == null) {
+            try {
+                String json = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE).getString("mptree_native_now_playing", null);
+                if (json == null) { stopIfIdle(); return; }
+                org.json.JSONObject o = new org.json.JSONObject(json);
+                String path = o.optString("path", "");
+                if (path.isEmpty()) { stopIfIdle(); return; }
+                final int at = o.optInt("position", 0);
+                play(path, o.optString("title", ""), o.optString("artist", ""), 0, 0);
+                if (at > 1000) mainHandler.postDelayed(() -> { try { seekTo(at); } catch (Exception ignored) {} }, 700);
+            } catch (Exception e) { stopIfIdle(); }
+            return;
+        }
+        if (ACTION_PLAY.equals(act)) resumePlayback();
+        else if (ACTION_NEXT.equals(act)) nativeSkip(1);
+        else nativeSkip(-1);
+    }
+
+    private void stopIfIdle() {
+        if (isPlaying) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(Service.STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+        } catch (Exception ignored) {}
+        isForeground = false;
     }
 
     @Override
@@ -1092,6 +1131,10 @@ public class MusicPlayerService extends Service {
                 // Loaded ahead of time, so loading never competes with the song
                 // that is still playing; it starts when the fade does.
                 fadeReady = true;
+                // Its sound path opened now, silent: opening it when the fade
+                // starts was the hitch heard at the start of the fade (the
+                // phone sets up a new output and its sound effects then).
+                try { mp.start(); mp.pause(); mp.seekTo(0); } catch (Exception ignored) {}
                 final Runnable waitForFade = new Runnable() {
                     @Override public void run() {
                         if (gen != fadeGen || !crossfading) return;

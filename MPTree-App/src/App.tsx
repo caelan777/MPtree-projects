@@ -628,23 +628,26 @@ export default function App() {
   const [uiSize, setUiSize]           = useState<UiSize>("medium");
   const [langPref, setLangPref]       = useState<LangPref>("auto");
   const [updateNotices, setUpdateNotices] = useState(true);
+  const [songNotices, setSongNotices] = useState(true);
   const [mixOthers, setMixOthers]     = useState(false);
   // Read at start, and again when the MPTree account brings settings from
   // another phone.
-  const applyPrefs = ([size, lang, notices, mix]: (string | null)[]) => {
+  const applyPrefs = ([size, lang, notices, mix, songs]: (string | null)[]) => {
     const sz: UiSize = size === "small" || size === "large" ? size : "medium";
     setUiSize(sz);
     System.setTextZoom({ factor: SIZE_TABLE[sz].text }).catch(() => {});
     const l: LangPref = isLang(lang) ? lang : "auto";
     applyLang(l); setLangPref(l);
     setUpdateNotices(notices !== "0");
+    setSongNotices(songs !== "0");
+    System.setNewSongNotices({ on: songs !== "0" }).catch(() => {});
     setMixOthers(mix === "true");
     // There was an option to turn the other app down as well. It is gone,
     // so nothing is ever asked to be quieter.
     AudioPlayer.setMixMode({ mix: mix === "true", duck: false }).catch(() => {});
   };
   const loadPrefs = useCallback(() => {
-    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others"];
+    const keys = ["mptree_ui_size", "mptree_lang", NOTICES_KEY, "mptree_mix_others", "mptree_song_notices"];
     return Promise.all(keys.map(key => Preferences.get({ key }).then(r => r.value).catch(() => null)))
       .then(prefs => applyPrefs(prefs));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -671,6 +674,13 @@ export default function App() {
     setUpdateNotices(on);
     if (!on) setUpdateInfo(null);
     Preferences.set({ key: NOTICES_KEY, value: on ? "1" : "0" }).catch(() => {});
+  };
+  // New songs on the phone: a note in the notification bar. Turning it on
+  // is what asks Android for notifications.
+  const changeSongNotices = (on: boolean, ask = true) => {
+    setSongNotices(on);
+    System.setNewSongNotices({ on, ask }).catch(() => {});
+    Preferences.set({ key: "mptree_song_notices", value: on ? "1" : "0" }).catch(() => {});
   };
   const changeMix = (mix: boolean) => {
     setMixOthers(mix);
@@ -954,6 +964,16 @@ export default function App() {
   const lookFromDiscover = useRef(false);
   // Whether Personalise's code is read, so it can cover Settings at once.
   const [lookLoaded, setLookLoaded] = useState(lookReady);
+  // Personalise drawn once, out of sight, a while after start-up: its first
+  // real opening waited on drawing it (and its pictures) the first time.
+  const [lookWarm, setLookWarm] = useState(false);
+  useEffect(() => {
+    let off = 0;
+    const id = window.setTimeout(() => {
+      loadLookSheet().then(() => { setLookWarm(true); off = window.setTimeout(() => setLookWarm(false), 1500); }).catch(() => {});
+    }, 7000);
+    return () => { window.clearTimeout(id); window.clearTimeout(off); };
+  }, []);
   const openLook = () => {
     if (discoverOpenRef.current) { lookFromDiscover.current = true; setDiscoverOpen(false); }
     // Personalise goes over everything: Account & sync too, which was left
@@ -4749,6 +4769,7 @@ export default function App() {
             lang={langPref} onSetLang={changeLang}
             updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
+            songNotices={songNotices} onSetSongNotices={changeSongNotices}
             mixOthers={mixOthers} onSetMix={changeMix}
             onFeedback={sendFeedback}
             onRate={__DISTRIBUTION__ === "play"
@@ -4759,10 +4780,11 @@ export default function App() {
             T={TH} />
         )}
 
-        {lookOpen && (() => {
+        {(lookOpen || lookWarm) && (() => {
           // What the small player shows: the song that is on, or the first.
           const lookSong = currentSong ?? displayList[0];
           return (
+          <div key="look" aria-hidden={!lookOpen || undefined} style={lookOpen ? undefined : { position: "fixed", inset: 0, visibility: "hidden", pointerEvents: "none", zIndex: -1 }}>
           <LookSheet
             theme={theme} onSetTheme={setTheme}
             // The real player, for the small screen next to the copy of the
@@ -4817,6 +4839,7 @@ export default function App() {
             onToast={showToast}
             onClose={closeLook}
             T={TH} />
+          </div>
           );
         })()}
         {cleanupOpen && (
@@ -4869,6 +4892,8 @@ export default function App() {
             onOpenAppSettings={openAppSettings}
             updateNotices={__DISTRIBUTION__ === "demo" ? null : updateNotices}
             onSetUpdateNotices={changeUpdateNotices}
+            songNotices={songNotices} onSetSongNotices={on => changeSongNotices(on, false)}
+            onAskSongNotices={() => { if (songNotices) changeSongNotices(true); }}
             songCount={songs.length}
             onEnter={() => setWelcome("entering")}
             // A short beat with the library on its own before the tour starts

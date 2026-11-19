@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { System } from "../plugins";
@@ -96,12 +95,11 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
   const p = palette(cfg.colour, T);
   const lockedKind = (k: WidgetKind) => !pro && PRO_KINDS.includes(k);
   const lockedColour = (c: WidgetColour) => !pro && c === "clear";
-  const [cannot, setCannot] = useState(false);
   // A locked one can be looked at; adding it is what asks for Pro.
   const add = async () => {
     if (lockedKind(cfg.kind) || lockedColour(cfg.colour)) { onNeedPro(); return; }
     const r = await System.pinWidget({ kind: cfg.kind }).catch(() => ({ supported: false }));
-    if (!r.supported) setCannot(true);
+    if (!r.supported) onToast?.(t("Your phone can't add it from here. Hold your home screen, tap Widgets and find MPTree."));
     else onToast?.(t("Your phone shows the widget. Tap Add."));
   };
   const lbl = { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: T.muted, padding: "18px 20px 8px" };
@@ -154,14 +152,7 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
           {t("Add {widget} to home screen", { widget: widgetName(cfg.kind) })}
         </button>
-        <div style={{ fontSize: 13, color: T.textSub, textAlign: "center", lineHeight: 1.5, padding: "12px 28px 0" }}>
-          {cannot
-            ? t("Your phone can't add it from here. Hold your home screen, tap Widgets and find MPTree.")
-            : t("Your phone shows the widget first. Tap Add and it's on your home screen.")}
-        </div>
-        <div style={{ fontSize: 13, color: T.muted, textAlign: "center", lineHeight: 1.5, padding: "6px 28px 0" }}>
-          {t("The colour also changes the widgets you already have.")}
-        </div>
+        <div style={{ height: 24 }} />
       </div>
     </div>
   );

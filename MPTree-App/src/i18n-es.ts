@@ -285,6 +285,8 @@ export const ES: Record<string, string> = {
   "Appearance": "Apariencia",
   "Size": "Tamaño",
   "General": "General",
+  "New songs": "Canciones nuevas",
+  "Tell me when new music is on my phone.": "Avísame cuando haya música nueva en mi teléfono.",
   "Update notices": "Avisos de actualización",
   "Tell me when a new version of MPTree is out.": "Avísame cuando salga una versión nueva de MPTree.",
   "Audio": "Audio",

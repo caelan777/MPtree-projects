@@ -125,6 +125,8 @@ export type SystemPlugin = {
   pinWidget(options: { kind: string }): Promise<{ supported: boolean }>;
   /** The time (ms) MPTree was last opened, for new songs since; 0 the first time. */
   takeNewSongs(): Promise<{ since: number }>;
+  /** The New songs switch; ask asks Android for notifications. */
+  setNewSongNotices(options: { on: boolean; ask?: boolean }): Promise<void>;
 };
 
 /** Google Play Billing, for MPTree Pro. Only works in a build Play installed. */
@@ -207,6 +209,7 @@ const SystemWeb: SystemPlugin = {
   setWidgetConfig:   async () => {},
   pinWidget:         async () => ({ supported: false }),
   takeNewSongs:      async () => ({ since: 0 }),
+  setNewSongNotices: async () => {},
 };
 
 const BillingWeb: BillingPlugin = {

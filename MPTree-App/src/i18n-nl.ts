@@ -285,6 +285,8 @@ export const NL: Record<string, string> = {
   "Appearance": "Weergave",
   "Size": "Grootte",
   "General": "Algemeen",
+  "New songs": "Nieuwe liedjes",
+  "Tell me when new music is on my phone.": "Laat het weten als er nieuwe muziek op mijn telefoon staat.",
   "Update notices": "Updatemeldingen",
   "Tell me when a new version of MPTree is out.": "Laat het weten als er een nieuwe versie van MPTree is.",
   "Audio": "Audio",

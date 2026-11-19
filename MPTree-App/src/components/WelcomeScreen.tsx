@@ -27,7 +27,7 @@ export type MusicAccess = "unasked" | "asking" | "allowed" | "denied";
  */
 export function WelcomeScreen({
   lang, onPickLang, music, onAllowMusic, onOpenAppSettings,
-  updateNotices, onSetUpdateNotices, songCount, onEnter, onEntered, T,
+  updateNotices, onSetUpdateNotices, songNotices, onSetSongNotices, onAskSongNotices, songCount, onEnter, onEntered, T,
 }: {
   lang: LangPref;
   onPickLang: (l: LangPref) => void;
@@ -37,6 +37,10 @@ export function WelcomeScreen({
   /** null hides the row: the demo has nothing to update. */
   updateNotices: boolean | null;
   onSetUpdateNotices: (on: boolean) => void;
+  songNotices: boolean;
+  onSetSongNotices: (on: boolean) => void;
+  /** Next: Android asks for notifications, if New songs is on. */
+  onAskSongNotices: () => void;
   songCount: number;
   /** The tap on Enter, before the opening starts. */
   onEnter: () => void;
@@ -142,12 +146,19 @@ export function WelcomeScreen({
                 <Switch on={updateNotices} T={T} />
               </button>
             )}
+            <button style={{ ...card, cursor: "pointer" }} onClick={() => onSetSongNotices(!songNotices)} aria-pressed={songNotices}>
+              <span style={{ flex: 1 }}>
+                <span style={{ fontSize: 15.5, fontWeight: 600 }}>{t("New songs")}</span>
+                <span style={sub}>{t("Tell me when new music is on my phone.")}</span>
+              </span>
+              <Switch on={songNotices} T={T} />
+            </button>
           </div>
 
           <div style={{ flex: 1 }} />
           {/* Without music access there is nothing to enter into, so Next
               goes to the page that says so, not past it. */}
-          <button style={primary} onClick={() => setStage(music === "allowed" ? "enter" : "permission")}>{t("Next")}</button>
+          <button style={primary} onClick={() => { onAskSongNotices(); setStage(music === "allowed" ? "enter" : "permission"); }}>{t("Next")}</button>
         </div>
       ) : shown === "permission" ? (
         <div

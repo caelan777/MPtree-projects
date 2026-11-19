@@ -24,7 +24,7 @@ import {
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, type Tone } from "../flowers";
 import { ProQuickSheet } from "./ProQuickSheet";
 import { LOCK_RED } from "./lockRed";
-import { StickerEditor, SetupSwatch, NameDialog } from "./Stickers";
+import { StickerEditor, NameDialog } from "./Stickers";
 import { setupById, newSetupId, freeName, MAX_SETUPS, type Sticker, type StickerEnv } from "../stickers";
 import { stickerArt } from "../flowers";
 
@@ -778,48 +778,19 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     const mine = setupsOf(env);
     const on = env === "aviela" ? (avielaOn && look.aviela.flowers === "custom" ? look.aviela.stickers : null) : (customOn ? look.stickers : null);
     const current = mine.find(x => x.id === on) ?? null;
-    const sApp = env === "aviela" ? avielaApp : T;
-    const sCard = env === "aviela" ? avielaCard : cardPalette(card, T);
-    const sCardTone = env === "aviela" ? avielaTone : cardTone;
-    const sPageTone: Tone = env === "aviela" ? "pink" : pageTone;
     const btn = { padding: "10px 16px", borderRadius: 20, border: `1px solid ${T.border}`, background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" } as const;
-    // Aviela's Custom is one setup: changed and saved, nothing more.
-    if (env === "aviela") {
-      const one = mine[mine.length - 1] ?? null;
+    // Custom stickers are one setup, in both worlds: changed and saved, nothing more.
+    {
+      const one = (current ?? mine[mine.length - 1]) ?? null;
       return (
         <div style={{ display: "flex", padding: "14px 16px 0" }}>
-          <button onClick={() => setEditing({ env, id: one?.id ?? null, items: one?.items ?? [], name: one?.name ?? "Aviela" })}
+          <button onClick={() => setEditing({ env, id: one?.id ?? null, items: one?.items ?? [], name: one?.name ?? (env === "aviela" ? "Aviela" : "Stickers") })}
             style={{ ...btn, border: "none", background: T.accent, color: T.playBtnFg, fontWeight: 700 }}>
             {t("Change")}
           </button>
         </div>
       );
     }
-    return (
-      <>
-        {mine.length > 0 && (
-          <Group T={T} title={t("Your stickers")}>
-            {mine.map(x => (
-              <Tile key={x.id} T={T} label={x.name} selected={on === x.id} locked={!pro} onClick={() => wearSetup(env, x.id)}>
-                <SetupSwatch setup={x} app={sApp} card={sCard} cardTone={sCardTone} pageTone={sPageTone} />
-              </Tile>
-            ))}
-          </Group>
-        )}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "14px 16px 0" }}>
-          <button onClick={() => setEditing({ env, id: null, items: [], name: freeName(mine, t("My stickers")) })}
-            style={{ ...btn, border: "none", background: T.accent, color: T.playBtnFg, fontWeight: 700 }}>
-            {t("+ New setup")}
-          </button>
-          {current && (["edit", "rename", "delete"] as const).map(k => (
-            <button key={k} style={btn}
-              onClick={() => (k === "edit" ? setEditing({ env, id: current.id, items: current.items, name: current.name }) : k === "rename" ? setRenaming(current.id) : setDeleting(current.id))}>
-              {k === "edit" ? t("Change") : k === "rename" ? t("Rename") : t("Delete")}
-            </button>
-          ))}
-        </div>
-      </>
-    );
   };
   /** The tile that stands for stickers put down by hand. */
   const ownArt = (app: T, tone: Tone) => (
@@ -1247,7 +1218,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
         {asking && <LanternGate onYes={sayAfraid} onNo={sayNotAfraid} onDone={() => setAsking(false)} />}
         {editing && (
-          <StickerEditor T={T} initial={editing.items} name={editing.name} own={!!editing.id} quick={editing.env === "aviela"}
+          <StickerEditor T={T} initial={editing.items} name={editing.name} own={!!editing.id} quick
             cardTone={editing.env === "aviela" ? avielaTone : cardTone} pageTone={editing.env === "aviela" ? "pink" : pageTone}
             onSave={saveSetup} onCancel={() => setEditing(null)} />
         )}

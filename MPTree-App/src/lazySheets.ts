@@ -40,4 +40,11 @@ export const CropSheet     = sheet(loadCrop);
 /** Fetches every sheet above in the background. Called once, after start-up. */
 export function preloadSheets(): void {
   for (const load of [loadLook, loadBackup, loadCut, loadEQ, loadCrop]) load().catch(() => {});
+  // Personalise's first opening waited on decoding every record's picture;
+  // decoded now, while nothing happens, it opens at once.
+  void Promise.all([import("./look"), import("./components/SpinningDisc")]).then(([l, d]) => {
+    for (const v of l.swipeRecords(true)) {
+      try { const img = new Image(); img.src = d.recordPicture(v).src; img.decode?.().catch(() => {}); } catch { /* skip */ }
+    }
+  }).catch(() => {});
 }
