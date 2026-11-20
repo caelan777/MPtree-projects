@@ -83,13 +83,13 @@ put(join(ICON, "app-icon-light-512.png"), await appIcon(512, OPAQUE_WHITE, BLACK
 }
 
 // ── Favicons ───────────────────────────────────────────────────────────────
-// Theme-aware vector favicon: black mark on light chrome, white on dark chrome.
+// The vector favicon is the app icon: white mark on a black square. A bare
+// mark that follows the system theme vanished on Chrome's white active tab
+// in dark mode, so the favicon brings its own ground and reads on any tab.
 const faviconSvg = master
-  .replace('fill="currentColor"', 'fill="#000000" class="mark"')
-  .replace("</svg>", `  <style>
-    @media (prefers-color-scheme: dark) { .mark { fill: #FFFFFF; } }
-  </style>
-</svg>`);
+  .replace('fill="currentColor"', 'fill="#FFFFFF"')
+  .replace(/(<svg[^>]*>)/, '$1\n  <rect width="1000" height="1000" rx="180" fill="#000000"/>\n  <g transform="translate(190 190) scale(0.62)">')
+  .replace("</svg>", "  </g>\n</svg>");
 put(join(ICON, "favicon.svg"), Buffer.from(faviconSvg));
 
 for (const size of [16, 32, 48]) {
