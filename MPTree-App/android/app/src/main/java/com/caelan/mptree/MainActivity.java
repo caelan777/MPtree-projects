@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AccountPlugin.class);
         registerPlugin(SyncPlugin.class);
         registerPlugin(AdsPlugin.class);
+        registerPlugin(BackupPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

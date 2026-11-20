@@ -25,8 +25,9 @@ import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
 import { ConfirmSheet } from "./components/ConfirmSheet";
-import { MusicHint, MusicHowSheet, HintArrow } from "./components/MusicHint";
-import { countDaily } from "./counter";
+import { MusicHint, MusicHowSheet, HintBalloon } from "./components/MusicHint";
+import { countDaily, countFirstLibrary } from "./counter";
+import { shrinkCovers } from "./covers";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
@@ -39,7 +40,7 @@ import { ListenCard } from "./components/ListenCard";
 import { useListenCard, loadListen, setListening, closeListenCard } from "./listen";
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
-import { LookSheet, BackupSheet, CutTrackSheet, EQSheet, preloadSheets, lookReady, loadLookSheet } from "./lazySheets";
+import { LookSheet, CutTrackSheet, EQSheet, preloadSheets, lookReady, loadLookSheet } from "./lazySheets";
 import { NextUpPanel } from "./components/NextUpPanel";
 import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK, type Tone } from "./flowers";
 import { StickerLayer } from "./components/Stickers";
@@ -65,7 +66,8 @@ import { PlaylistsView }    from "./components/PlaylistsView";
 import { DiscoverView, DiscoverIcon, NewBadge, WALL_MS } from "./components/DiscoverView";
 import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
-import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
+import { BackupPage } from "./components/BackupPage";
+import { restoreOf, songIdsFor, bytesOf, backOf, pickText, CLOUD_NAME, type BackupPick, type BackupStep } from "./backupPick";
 import type { Playlist, SmartPlaylist } from "./types";
 import { useMultiSelect } from "./hooks/useMultiSelect";
 import { usePageSwipe } from "./hooks/usePageSwipe";
@@ -80,7 +82,7 @@ import {
 } from "./storage";
 import type { BackupData } from "./storage";
 
-import { MusicScanner, AudioPlayer, System } from "./plugins";
+import { MusicScanner, AudioPlayer, System, BackupNative, type CloudApp, type BackupPicked } from "./plugins";
 import { checkForUpdate, checkForPlayUpdate, dismissUpdate, NOTICES_KEY, type UpdateInfo } from "./updateCheck";
 
 
@@ -743,14 +745,17 @@ export default function App() {
   useEffect(() => { sleepUntilRef.current      = sleepUntil;      }, [sleepUntil]);
   useEffect(() => { sleepEndOfTrackRef.current = sleepEndOfTrack; }, [sleepEndOfTrack]);
 
-  // ── Backup / Restore sheet state machine ──────────────────────────────────
-  const [backupSheet, setBackupSheet] = useState<BackupSheetState>({ kind: "closed" });
+  // ── Backup (BackupPage) ───────────────────────────────────────────────────
+  // null: closed. The page draws the step; the work is done here.
+  const [backupStep, setBackupStep] = useState<BackupStep | null>(null);
+  const backupStepRef = useRef<BackupStep | null>(null);
+  useEffect(() => { backupStepRef.current = backupStep; }, [backupStep]);
   const backupCancelRef = useRef(false);
-  // Holds the JSON file URI after a successful export (for sharing)
-  const exportJsonUriRef = useRef<string>("");
-  const exportFolderNameRef = useRef<string>("");
-  // Hidden file input for picking the backup JSON
-  const importFileInputRef = useRef<HTMLInputElement>(null);
+  // Which cloud apps are on the phone, and the last backup made.
+  const [backupClouds, setBackupClouds] = useState<Record<CloudApp, boolean> | null>(null);
+  const [lastBackup, setLastBackup] = useState<{ at: number; app: CloudApp } | null>(null);
+  // A backup picked to restore from, between reading it and restoring it.
+  const pickedBackupRef = useRef<{ data: BackupData; picked: BackupPicked } | null>(null);
 
   // ── Playlists ─────────────────────────────────────────────────────────────
   const [playlists,     setPlaylists]     = useState<Playlist[]>([]);
@@ -1177,6 +1182,12 @@ export default function App() {
       try {
         const scanned = await scanMusic(pendingBin);
         const session = pendingSession;
+        // Someone new: whether MPTree found any music, found none, or was not
+        // let in. Counted once per install (counter.ts).
+        if (firstRunRef.current) {
+          if (scanned.length > 0) countFirstLibrary("songs");
+          else MusicScanner.hasAccess().then(r => countFirstLibrary(r.granted ? "empty" : "denied")).catch(() => {});
+        }
 
         const resynced = await resyncFromNative(scanned, session);
         if (!resynced && session.currentId) {
@@ -2111,302 +2122,209 @@ export default function App() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ── EXPORT FLOW ───────────────────────────────────────────────────────────
+  // ── BACKUP ────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────
+  // BackupPage draws the steps; the work is here.
+  // Make: the songs picked are copied into Download/<name>/music next to a
+  // JSON with everything else (storage.ts exportBackup), packed into
+  // Download/<name>.zip, and handed to the cloud app, which asks where in it
+  // to save it (BackupNative.sendTo). The folder goes once the zip is made.
+  // Restore: the backup is picked in the cloud app or anywhere on the phone,
+  // copied here and read (BackupNative.pick); only what was picked comes back,
+  // its songs unpacked into Music/MPTree/<backup> (BackupNative.unpack).
 
-  /** Called when user taps "Export backup" in SettingsSheet */
-  const handleExportOpen = useCallback(() => {
-    setBackupSheet({ kind: "exportInfo" });
+  const LAST_BACKUP_KEY = "mptree_last_backup";
+  // Restored settings (theme, size, language, look) are read once at start,
+  // so a restore that brought some starts the app again on Done.
+  const reloadAfterRestoreRef = useRef(false);
+
+  const openBackup = useCallback(() => {
+    backupCancelRef.current = false;
+    setBackupStep({ kind: "home" });
+    BackupNative.clouds().then(setBackupClouds).catch(() => setBackupClouds(null));
+    Preferences.get({ key: LAST_BACKUP_KEY })
+      .then(r => setLastBackup(r.value ? JSON.parse(r.value) as { at: number; app: CloudApp } : null))
+      .catch(() => {});
   }, []);
 
-  /** Called when user taps "Start backup" in ExportInfoSheet */
-  const doExport = useCallback(async (backupName: string, opts: BackupOptions) => {
+  const closeBackup = useCallback(() => {
+    backupCancelRef.current = true;
+    if (pickedBackupRef.current) { pickedBackupRef.current = null; BackupNative.discard().catch(() => {}); }
+    setBackupStep(null);
+    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
+  }, []);
+
+  const removeBackupFolder = (name: string) =>
+    Filesystem.rmdir({ path: `Download/${name}`, directory: Directory.ExternalStorage, recursive: true }).catch(() => {});
+
+  /** Makes a backup of what was picked and hands it to `app`. */
+  const doBackup = useCallback(async (pick: BackupPick, app: CloudApp) => {
     backupCancelRef.current = false;
-
     const now = Date.now();
-
-    // Song details and covers live in the same store, so each is cut out of
-    // it when it is not wanted.
+    const name = `MPTree_Backup_${makeDateTag()}`;
+    const ids = songIdsFor(pick, songs.map(s => s.id), playlists);
+    const inBackup = songs.filter(s => ids.has(s.id));
+    const chosen = playlists.filter(pl => pick.playlists.includes(pl.id));
+    const songsById = indexById(songs);
+    const nameOf = (s: Song) => metaRef.current[s.id]?.customName ?? s.title;
+    const artistOf = (s: Song) => metaRef.current[s.id]?.customArtist ?? s.artist;
     const metaOut: Record<string, SongMeta> = {};
-    if (opts.details || opts.covers) {
-      for (const [id, m] of Object.entries(metaRef.current)) {
-        const { customPhoto, ...rest } = m;
-        const entry: SongMeta = opts.details ? { ...rest } : {};
-        if (opts.covers && customPhoto) entry.customPhoto = customPhoto;
-        if (Object.keys(entry).length) metaOut[id] = entry;
-      }
-    }
+    for (const [id, m] of Object.entries(metaRef.current)) if (ids.has(id)) metaOut[id] = m;
 
-    const backupData: BackupData = {
+    const data: BackupData = {
       version:    2,
       exportedAt: now,
-      parts: {
-        playlists: opts.playlists, covers: opts.covers, details: opts.details,
-        bin: opts.bin, settings: opts.settings,
-      },
-      settings: opts.settings ? await collectSettings() : undefined,
-      playlists: !opts.playlists ? [] : (songsById => playlists.map(pl => ({
+      // Likes, covers, names and settings always go along; the bin does not.
+      parts: { playlists: chosen.length > 0, covers: true, details: true, bin: false, settings: true },
+      settings: await collectSettings(),
+      playlists: chosen.map(pl => ({
         id:         pl.id,
         name:       pl.name,
         createdAt:  pl.createdAt,
-        coverPhoto: opts.covers ? pl.coverPhoto : undefined,
+        coverPhoto: pl.coverPhoto,
         songs:      pl.songIds
           .map(id => songsById.get(id))
           .filter((s): s is Song => s != null)
-          .map(s => ({
-            id:       s.id,
-            title:    metaRef.current[s.id]?.customName   ?? s.title,
-            artist:   metaRef.current[s.id]?.customArtist ?? s.artist,
-            path:     s.uri,
-            duration: s.duration,
-          })),
-      })))(indexById(songs)),
-      meta: metaOut,
-      removedSongs: !opts.bin ? [] : removedSongs.map(s => ({
-        id:        s.id,
-        title:     s.title,
-        artist:    s.artist,
-        path:      s.uri,
-        dateAdded: s.dateAdded,
+          .map(s => ({ id: s.id, title: nameOf(s), artist: artistOf(s), path: s.uri, duration: s.duration })),
       })),
-      cutTracks: !opts.details ? [] : songs
-        .filter(s => s.isCut)
-        .map(s => ({
-          id:      s.id,
-          title:   metaRef.current[s.id]?.customName   ?? s.title,
-          artist:  metaRef.current[s.id]?.customArtist ?? s.artist,
-          path:    s.uri,
-          cutFrom: s.cutFrom,
-          cutTo:   s.cutTo,
-        })),
-      liked: !opts.details ? [] : songs
-        .filter(s => metaRef.current[s.id]?.liked)
-        .map(s => s.uri),
+      meta: metaOut,
+      removedSongs: [],
+      cutTracks: inBackup.filter(s => s.isCut)
+        .map(s => ({ id: s.id, title: nameOf(s), artist: artistOf(s), path: s.uri, cutFrom: s.cutFrom, cutTo: s.cutTo })),
+      liked: inBackup.filter(s => metaRef.current[s.id]?.liked).map(s => s.uri),
     };
-
-    const picked = new Set(opts.songIds);
-    const allPathSet = new Set<string>();
-    for (const s of songs) {
-      if (opts.songs === "all" || (opts.songs === "some" && picked.has(s.id))) allPathSet.add(s.uri);
-    }
-    if (opts.bin) for (const s of removedSongs) allPathSet.add(s.uri);
-    const songPaths = [...allPathSet];
-    const total     = songPaths.length;
-
-    // Show progress sheet immediately
-    setBackupSheet({ kind: "exportProgress", done: 0, total, cancelled: false });
-
+    const songPaths = [...new Set(inBackup.map(s => s.uri))];
+    const making = (done: number, total: number) => setBackupStep({
+      kind: "busy", title: t("Making your backup"), unit: "songs", done, total, stop: true,
+      line: t("When it is packed, {app} opens so you can save it.", { app: CLOUD_NAME[app] }),
+    });
+    making(0, songPaths.length);
     try {
-      const result = await exportBackup(
-        backupData,
-        songPaths,
-        backupName,
-        (done, tot) => {
-          if (backupCancelRef.current) return;
-          setBackupSheet({ kind: "exportProgress", done, total: tot, cancelled: false });
-        },
-        backupCancelRef,
-      );
-
+      const result = await exportBackup(data, songPaths, name,
+        (done, total) => { if (!backupCancelRef.current) making(done, total); }, backupCancelRef);
       if (backupCancelRef.current) {
-        setBackupSheet({ kind: "closed" });
+        await removeBackupFolder(name);
+        if (backupStepRef.current) setBackupStep({ kind: "where", pick });
         showToast(t("Backup cancelled"));
         return;
       }
-
-      exportJsonUriRef.current = result.jsonUri;
-      exportFolderNameRef.current = result.folderName;
-      setBackupSheet({
-        kind:        "exportSuccess",
-        folderName:  result.folderName,
-        jsonUri:     result.jsonUri,
-        failedCount: result.failedCount > 0 ? result.failedCount : undefined,
-      });
+      setBackupStep({ kind: "busy", title: t("Making your backup"), unit: "none", done: 0, total: 0, line: t("Packing the backup") });
+      const { zipUri } = await zipBackupFolder(result.folderName);
+      // The zip holds it all now: the copies in the folder can go.
+      await removeBackupFolder(name);
+      const size = (await Filesystem.stat({ path: `Download/${name}.zip`, directory: Directory.ExternalStorage }).catch(() => null))?.size
+        ?? bytesOf(inBackup.map(s => s.duration));
+      const sent = await BackupNative.sendTo({ path: zipUri, app });
+      if (!sent.sent) { setBackupStep({ kind: "where", pick }); return; }
+      const last = { at: now, app };
+      setLastBackup(last);
+      Preferences.set({ key: LAST_BACKUP_KEY, value: JSON.stringify(last) }).catch(() => {});
+      setBackupStep({ kind: "made", app, what: `${pickText(pick, playlists.length)}, ${fmtBytes(size)}` });
     } catch (e: any) {
-      if (e?.isStorageFull) {
-        exportJsonUriRef.current = e.jsonUri ?? "";
-        setBackupSheet({
-          kind:         "exportError",
-          message:      t("Not enough storage space. Free up space and try again."),
-          copiedCount:  e.copiedCount ?? 0,
-        });
-      } else {
-        setBackupSheet({
-          kind:         "exportError",
-          message:      t("Export failed: {error}", { error: String(e) }),
-          copiedCount:  0,
-        });
-      }
+      await removeBackupFolder(name);
+      setBackupStep({
+        kind: "error", back: "home",
+        message: e?.isStorageFull ? t("Not enough storage space. Free up space and try again.") : t("Export failed: {error}", { error: String(e?.message ?? e) }),
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlists, songs, removedSongs]);
+  }, [songs, playlists]);
 
-  /** Share the whole backup folder (JSON + music) as a zip via Android share sheet */
-  const handleShareBackup = useCallback(async () => {
-    const folderName = exportFolderNameRef.current;
-    if (!folderName) { showToast(t("Nothing to share")); return; }
-
-    setBackupSheet({ kind: "sharing" });
+  /** Lets the person pick a backup in `from`, then shows what is in it. */
+  const doPickBackup = useCallback(async (from: CloudApp | "phone") => {
+    setBackupStep({ kind: "busy", title: t("Getting your backup"), unit: "none", done: 0, total: 0, line: t("Choose your backup in the window that opens.") });
+    const sub = await BackupNative.addListener("progress", p => {
+      if (p.phase === "read") setBackupStep({ kind: "busy", title: t("Getting your backup"), unit: p.total > 0 ? "bytes" : "none", done: p.done, total: p.total, line: t("Reading the backup") });
+    });
+    const unknown = () => setBackupStep({ kind: "error", back: "from", message: t("File not recognized. This doesn't look like an MPTree backup.") });
     try {
-      const { zipUri } = await zipBackupFolder(folderName);
-      await Share.share({
-        title: t("MPTree backup"),
-        files: [zipUri],
-        dialogTitle: t("Share backup"),
-      });
-      // Restore the success sheet so the user can still tap "Done".
-      setBackupSheet({ kind: "exportSuccess", folderName });
+      const picked = await BackupNative.pick(from === "phone" ? {} : { app: from });
+      if (picked.cancelled || !picked.json) { setBackupStep({ kind: "from" }); return; }
+      let data: BackupData;
+      try { data = parseBackup(picked.json); } catch { BackupNative.discard().catch(() => {}); unknown(); return; }
+      if (data.version > 2) {
+        BackupNative.discard().catch(() => {});
+        setBackupStep({ kind: "error", back: "from", message: t("Backup is from a newer version of MPTree. Please update the app.") });
+        return;
+      }
+      pickedBackupRef.current = { data, picked };
+      setBackupStep({ kind: "restorePick", data });
     } catch (e) {
-      showToast(t("Couldn't prepare backup for sharing"));
-      setBackupSheet({ kind: "exportSuccess", folderName });
+      const msg = String((e as { message?: string })?.message ?? e);
+      if (msg.includes("not a backup")) unknown();
+      else setBackupStep({
+        kind: "error", back: "from",
+        message: msg.includes("full") ? t("Not enough storage space. Free up space and try again.") : t("File not recognized. Could not read the file."),
+      });
+    } finally {
+      sub.remove();
     }
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // ── IMPORT FLOW ───────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /** Called when user taps "Restore backup" in SettingsSheet */
-  const handleImportOpen = useCallback(() => {
-    setBackupSheet({ kind: "importInfo" });
-  }, []);
-
-  /** Called from ImportInfoSheet — opens the hidden file picker */
-  const handleOpenImportPicker = useCallback(() => {
-    importFileInputRef.current?.click();
-  }, []);
-
-  /** Processes the selected JSON file */
-  const handleImportFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (importFileInputRef.current) importFileInputRef.current.value = "";
-
-    // Move to progress state before parsing
-    setBackupSheet({ kind: "importProgress", phase: t("Reading backup…") });
-
-    const json = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = ev => resolve(ev.target?.result as string);
-      reader.onerror = ()  => reject(new Error("Could not read file"));
-      reader.readAsText(file);
-    }).catch(() => null);
-
-    if (!json) {
-      setBackupSheet({ kind: "importError", message: t("File not recognized. Could not read the file.") });
-      return;
-    }
-
-    let data: BackupData;
+  /** Puts back what was picked from the backup read by doPickBackup. */
+  const doRestoreBackup = useCallback(async (pick: BackupPick) => {
+    const held = pickedBackupRef.current;
+    if (!held) { setBackupStep({ kind: "from" }); return; }
+    const { data, files } = restoreOf(held.data, pick);
+    const sub = await BackupNative.addListener("progress", p => {
+      if (p.phase === "unpack") setBackupStep({ kind: "busy", title: t("Restoring"), unit: "songs", done: p.done, total: p.total, line: t("Unpacking songs") });
+    });
     try {
-      data = parseBackup(json);
-    } catch {
-      setBackupSheet({ kind: "importError", message: t("File not recognized. This doesn't look like an MPTree backup.") });
-      return;
-    }
-
-    // Check version compatibility
-    if (data.version > 2) {
-      setBackupSheet({ kind: "importError", message: t("Backup is from a newer version of MPTree. Please update the app.") });
-      return;
-    }
-
-    try {
+      let musicAbsDir: string | null = null;
+      if (held.picked.kind === "zip" && held.picked.zip && files.length) {
+        const inZip = new Set(held.picked.names ?? []);
+        const names = [...new Set(files.map(f => f.split(/[\\/]/).pop() ?? f))].filter(n => inZip.has(n));
+        setBackupStep({ kind: "busy", title: t("Restoring"), unit: "songs", done: 0, total: names.length, line: t("Unpacking songs") });
+        const folder = (held.data.musicDir?.split("/").pop() || `MPTree_Backup_${held.data.exportedAt}`).replace(/[\\/:*?"<>|]/g, "_");
+        musicAbsDir = (await BackupNative.unpack({ zip: held.picked.zip, names, to: `Music/MPTree/${folder}` })).folder;
+      } else if (held.picked.kind === "json" && data.includeMusic && data.musicDir) {
+        // A backup from before 1.6.3: its songs are in its folder on this phone.
+        const { uri } = await Filesystem.getUri({ directory: Directory.ExternalStorage, path: `${data.musicDir}/music` });
+        musicAbsDir = uri.replace(/^file:\/\//, "");
+      }
       let pathRemap: Map<string, string> | undefined;
-
-      if (data.includeMusic && data.musicDir) {
-        setBackupSheet({ kind: "importProgress", phase: t("Indexing music…") });
-
-        const { uri: musicAbsUri } = await Filesystem.getUri({
-          directory: Directory.ExternalStorage,
-          path: `${data.musicDir}/music`,
-        });
-        const musicAbsDir = musicAbsUri.replace(/^file:\/\//, "");
-
-        pathRemap = new Map<string, string>();
-        const allBackupPaths = new Set<string>();
-        for (const pl of data.playlists)    for (const s of pl.songs)   allBackupPaths.add(s.path);
-        for (const s  of data.removedSongs)                              allBackupPaths.add(s.path);
-        for (const s  of data.cutTracks)                                 allBackupPaths.add(s.path);
-        for (const p  of data.liked)                                     allBackupPaths.add(p);
-        for (const key of Object.keys(data.meta))                        allBackupPaths.add(key);
-
-        // Version 2 says which files it copied; only those point at the
-        // backup's folder. A song left out of the backup is still wherever
-        // it was.
-        const copied = data.musicFiles ? new Set(data.musicFiles) : null;
-        for (const origPath of allBackupPaths) {
-          if (copied && !copied.has(origPath)) continue;
-          const filename = origPath.split("/").pop();
-          if (filename) {
-            pathRemap.set(origPath, `${musicAbsDir}/${filename}`);
-          }
+      if (musicAbsDir) {
+        pathRemap = new Map();
+        for (const orig of files) {
+          const file = orig.split(/[\\/]/).pop();
+          if (file) pathRemap.set(orig, `${musicAbsDir}/${file}`);
         }
-
         await scanBackupFolder(musicAbsDir);
       }
 
-      setBackupSheet({ kind: "importProgress", phase: t("Restoring playlists…") });
-
-      const { playlists: pl, meta: m, removedSongs: rs, cutTracks: ct } =
-        await importBackup(data, pathRemap, {
-          playlists, meta: metaRef.current, removedSongs: removedRef.current,
-          cutTracks: songs.filter(s => s.isCut),
-        });
-
-      setPlaylists(pl);
-      setMeta(m);
-      metaRef.current = m;
-      setRemovedSongs(rs);
-      removedRef.current = rs;
-
-      if (data.includeMusic) {
-        await scanMusic(rs);
-      }
-
+      setBackupStep({ kind: "busy", title: t("Restoring"), unit: "none", done: 0, total: 0, line: t("Restoring playlists…") });
+      const { playlists: pl, meta: m, removedSongs: rs, cutTracks: ct } = await importBackup(data, pathRemap, {
+        playlists: playlistsRef.current, meta: metaRef.current, removedSongs: removedRef.current,
+        cutTracks: songsRef.current.filter(s => s.isCut),
+      }, { mergePlaylists: true });
+      playlistsRef.current = pl; setPlaylists(pl);
+      metaRef.current = m; setMeta(m);
+      removedRef.current = rs; setRemovedSongs(rs);
+      if (musicAbsDir) await scanMusic(rs);
       if (ct.length > 0) {
         setSongs(prev => {
           const cutIds = new Set(ct.map(s => s.id));
           return [...ct, ...prev.filter(s => !cutIds.has(s.id))];
         });
       }
-
-      // Count total song references for the success screen
-      const songCount = new Set([
-        ...pl.flatMap(p => p.songIds),
-        ...rs.map(s => s.id),
-      ]).size;
-
       if (data.settings) reloadAfterRestoreRef.current = true;
-      setBackupSheet({
-        kind:          "importSuccess",
-        playlistCount: pl.length,
-        songCount,
+      pickedBackupRef.current = null;
+      BackupNative.discard().catch(() => {});
+      const songCount = files.length || new Set(data.playlists.flatMap(p => p.songs.map(s => s.path))).size;
+      setBackupStep({ kind: "restored", songs: songCount, playlists: data.playlists.length });
+    } catch (e) {
+      const msg = String((e as { message?: string })?.message ?? e);
+      setBackupStep({
+        kind: "error", back: "from",
+        message: msg.includes("full") ? t("Not enough storage space. Free up space and try again.")
+          : /permission/i.test(msg) ? t("Storage permission needed. Please grant file access and try again.")
+          : t("Restore failed. The backup may be incomplete or corrupted."),
       });
-    } catch (e: any) {
-      const msg = String(e);
-      if (msg.includes("permission") || msg.includes("Permission")) {
-        setBackupSheet({ kind: "importError", message: t("Storage permission needed. Please grant file access and try again.") });
-      } else {
-        setBackupSheet({ kind: "importError", message: t("Restore failed. The backup may be incomplete or corrupted.") });
-      }
+    } finally {
+      sub.remove();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanMusic]);
-
-  // Restored settings (theme, size, language, look) are read once at start,
-  // so a restore that brought some starts the app again on Done.
-  const reloadAfterRestoreRef = useRef(false);
-  const closeBackupSheet = useCallback(() => {
-    backupCancelRef.current = true;
-    setBackupSheet({ kind: "closed" });
-    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
-  }, []);
-
-  const doneBackupSheet = useCallback(() => {
-    setBackupSheet({ kind: "closed" });
-    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
-  }, []);
 
   // ── MPTree account ────────────────────────────────────────────────────────
   // The engine (src/sync/engine.ts) reads the library through these and puts
@@ -2416,6 +2334,41 @@ export default function App() {
   useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
   const songsRef = useRef<Song[]>([]);
   useEffect(() => { songsRef.current = songs; }, [songs]);
+
+  // Covers that together pass 20 MB are made smaller, quietly, so Android's
+  // own backup of the settings (25 MB at most) still takes them (covers.ts).
+  // Once per start, a while after it. Only a cover that is still the one made
+  // smaller is swapped: one changed in the meantime keeps the change.
+  const coversCheckedRef = useRef(false);
+  useEffect(() => {
+    if (isInitializing || !libraryReady || coversCheckedRef.current) return;
+    coversCheckedRef.current = true;
+    const timer = window.setTimeout(() => {
+      const before = { meta: metaRef.current, playlists: playlistsRef.current };
+      shrinkCovers(before.meta, before.playlists).then(async r => {
+        if (!r) return;
+        const nextMeta = { ...metaRef.current };
+        let metaChanged = false;
+        for (const [id, m] of Object.entries(r.meta)) {
+          const was = before.meta[id]?.customPhoto;
+          if (m.customPhoto === was || nextMeta[id]?.customPhoto !== was) continue;
+          nextMeta[id] = { ...nextMeta[id], customPhoto: m.customPhoto };
+          metaChanged = true;
+        }
+        const swapped = new Map(r.playlists.map((p, i) => [before.playlists[i]?.id, { was: before.playlists[i]?.coverPhoto, now: p.coverPhoto }]));
+        let listsChanged = false;
+        const nextLists = playlistsRef.current.map(p => {
+          const s = swapped.get(p.id);
+          if (!s || s.now === s.was || p.coverPhoto !== s.was) return p;
+          listsChanged = true;
+          return { ...p, coverPhoto: s.now };
+        });
+        if (metaChanged) { metaRef.current = nextMeta; setMeta(nextMeta); await saveMetaNow(nextMeta); }
+        if (listsChanged) { playlistsRef.current = nextLists; setPlaylists(nextLists); await savePlaylists(nextLists); }
+      }).catch(() => {});
+    }, 15000);
+    return () => window.clearTimeout(timer);
+  }, [isInitializing, libraryReady]);
   const syncHostRef = useRef<Host | null>(null);
   // Refreshed after every render, so the engine always calls this render's
   // functions.
@@ -3171,14 +3124,12 @@ export default function App() {
   useEffect(() => {
     backHandlerRef.current = () => {
       // Topmost layers first. Each branch returns after handling one level.
-      if (backupSheet.kind !== "closed") {
-        // Never interrupt an in-flight backup/restore; those sheets drive a
-        // long native job and dismissing mid-way would orphan it. Every other
-        // state is either a prompt or a finished result, so Back dismisses it.
-        const busy = backupSheet.kind === "exportProgress"
-          || backupSheet.kind === "importProgress"
-          || backupSheet.kind === "sharing";
-        if (!busy) setBackupSheet({ kind: "closed" });
+      if (backupStep) {
+        // A step back, as the page's own arrow goes. Never out of a backup or
+        // restore under way: that drives a long native job.
+        const to = backOf(backupStep);
+        if (to === null) closeBackup();
+        else if (to !== "stay") setBackupStep(to);
         return;
       }
       if (showOnboarding)      { finishOnboarding(); return; }
@@ -3495,7 +3446,6 @@ export default function App() {
   const allSelectedLiked = selectedSongs.length > 0 && selectedSongs.every(s => isLiked(s));
 
   // Default backup name (date-based)
-  const defaultBackupName = `MPTree_Backup_${makeDateTag()}`;
 
   // Measure the scroll viewport height for virtualization. Re-measures on
   // window resize / orientation change. cheap and runs rarely.
@@ -4011,7 +3961,7 @@ export default function App() {
             this the header and player just disappear on a scroll and nothing
             suggests the little round logo is the way back. Shown three times
             total (counted in Preferences), then never again. */}
-        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && !discoverDragging && <HintArrow target={discoverBtnRef} T={TH} />}
+        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && !discoverDragging && <HintBalloon target={discoverBtnRef} onDone={musicHintDone} T={TH} />}
 
         {chromeCollapsed && collapseHint && (
           <div
@@ -4214,7 +4164,7 @@ export default function App() {
                   onPro={() => { closeListenCard(); setProOpen(true, "listen"); }} />
               )}
 
-              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
+              {showMusicHint && !HAS_DISCOVER && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
 
               {displayList.length === 0 && search.trim() ? (
                 // Searched and nothing matched: say so, and offer the free
@@ -4759,7 +4709,7 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onBackup={() => setBackupSheet({ kind: "choose" })}
+            onBackup={openBackup}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4926,34 +4876,24 @@ export default function App() {
           />
         )}
 
-        {/* Mounted only while open: closed it drew nothing, but still mapped
-            the whole library into a list on every render. */}
-        {backupSheet.kind !== "closed" && (
-        /* Backup sheet */
-        <BackupSheet
-          songs={songs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
-          binSongs={removedSongs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
-          state={backupSheet}
-          defaultBackupName={defaultBackupName}
-          onStartBackup={doExport}
-          onCancelBackup={closeBackupSheet}
-          onShare={handleShareBackup}
-          onDone={doneBackupSheet}
-          onOpenImportPicker={handleOpenImportPicker}
-          onChoose={what => (what === "export" ? handleExportOpen() : handleImportOpen())}
-          onClose={closeBackupSheet}
-          T={TH}
-        />
+        {backupStep && (
+          <BackupPage
+            step={backupStep}
+            onStep={setBackupStep}
+            onClose={closeBackup}
+            songs={songs}
+            playlists={playlists}
+            meta={meta}
+            clouds={backupClouds}
+            last={lastBackup}
+            onSave={(pick, app) => { void doBackup(pick, app); }}
+            onGetApp={app => { BackupNative.getApp({ app }).catch(() => {}); }}
+            onStop={() => { backupCancelRef.current = true; }}
+            onFrom={from => { void doPickBackup(from); }}
+            onRestore={pick => { void doRestoreBackup(pick); }}
+            T={TH}
+          />
         )}
-
-        {/* Hidden file input for import — outside BackupSheet so it persists */}
-        <input
-          ref={importFileInputRef}
-          type="file"
-          accept=".json,application/json"
-          style={{ display: "none" }}
-          onChange={handleImportFileChange}
-        />
 
         {(playerExpanded || expandDrag !== null) && currentSong && (() => {
           return (

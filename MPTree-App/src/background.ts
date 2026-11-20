@@ -13,7 +13,8 @@ import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 // in the phone's gallery anyway.
 
 export type Background = {
-  /** The photo, cut to the screen's shape, as a JPEG data URL. */
+  /** The photo, cut to the screen's shape, as a data URL (WebP, or JPEG
+   *  from before 20 Nov 2026). */
   photo: string | null;
   /** How much of the photo shows through the veil: 0.1 to 0.6. */
   strength: number;

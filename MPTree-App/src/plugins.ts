@@ -291,3 +291,48 @@ export const Account: AccountPlugin = isWeb
 export const Sync: SyncPlugin = isWeb
   ? SyncWeb
   : registerPlugin<SyncPlugin>("Sync");
+
+// ─── BACKUP ──────────────────────────────────────────────────────────────────
+// A backup to and from the person's own cloud app (BackupPlugin.java).
+
+export type CloudApp = "drive" | "onedrive" | "dropbox";
+
+export interface BackupPicked {
+  /** Nothing picked; `store` when the app was not there and its Play page opened. */
+  cancelled?: boolean;
+  store?: boolean;
+  /** "zip": a backup made from 1.6.3 on, songs inside. "json": an older one. */
+  kind?: "zip" | "json";
+  json?: string;
+  /** Where the copy of the zip is, for unpack. */
+  zip?: string;
+  /** The file names of the songs in the zip. */
+  names?: string[];
+}
+
+export interface BackupNativePlugin {
+  clouds(): Promise<Record<CloudApp, boolean>>;
+  /** Its Play Store page, for an app that is not on the phone. */
+  getApp(options: { app: CloudApp }): Promise<void>;
+  sendTo(options: { path: string; app: CloudApp }): Promise<{ sent: boolean; store?: boolean }>;
+  /** `app` left out: anywhere on the phone. */
+  pick(options: { app?: CloudApp }): Promise<BackupPicked>;
+  unpack(options: { zip: string; names: string[]; to: string }): Promise<{ folder: string; files: number }>;
+  discard(): Promise<void>;
+  addListener(event: "progress", handler: (p: { phase: "read" | "unpack"; done: number; total: number }) => void): Promise<{ remove(): void }>;
+}
+
+// In the browser demo there are no cloud apps to hand a file to.
+const BackupWeb: BackupNativePlugin = {
+  clouds:      async () => ({ drive: true, onedrive: false, dropbox: false }),
+  getApp:      async () => {},
+  sendTo:      async () => ({ sent: false }),
+  pick:        async () => ({ cancelled: true }),
+  unpack:      async () => { throw new Error("not available"); },
+  discard:     async () => {},
+  addListener: async () => ({ remove() {} }),
+};
+
+export const BackupNative: BackupNativePlugin = isWeb
+  ? BackupWeb
+  : registerPlugin<BackupNativePlugin>("Backup");

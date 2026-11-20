@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { viewW } from "../utils";
+import { encodeCover } from "../covers";
 import type { T } from "../themes";
 import { t } from "../i18n";
 
@@ -8,14 +9,16 @@ import { t } from "../i18n";
 // any other shape has to lose something. Left to itself that was the edges,
 // whatever was on them. Here the person decides: the photo lies under a square
 // window and is dragged about, and zoomed with the slider or two fingers. What is
-// in the window is what is kept, as a square JPEG.
+// in the window is what is kept, as a square WebP (encodeCover in covers.ts).
 //
 // The ring in the window is the record's label, the smallest the cover is
 // ever cut to.
 
 const OUT_PX = 640;
 const BACKGROUND_PX = 900;
-const QUALITY = 0.82;
+// WebP at 0.8 looks like the JPEG at 0.82 it replaced, at about two thirds
+// of the size (tmp-edit/covers).
+const QUALITY = 0.8;
 const MAX_ZOOM = 4;
 
 type CropSheetProps = {
@@ -135,11 +138,11 @@ export function CropSheet({ src, shape = "cover", onUse, onCancel, T }: CropShee
       canvas.width = outW; canvas.height = outH;
       const ctx = canvas.getContext("2d");
       if (!ctx) { onUse(src); return; }
-      // A see-through photo would come out black as a JPEG.
+      // A see-through photo would come out black where a JPEG is made.
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, outW, outH);
       ctx.drawImage(img, -view.x * perPx, -view.y * perPx, cutW, cutH, 0, 0, outW, outH);
-      onUse(canvas.toDataURL("image/jpeg", QUALITY));
+      onUse(encodeCover(canvas, QUALITY));
     } catch {
       // Better the whole photo than none.
       onUse(src);

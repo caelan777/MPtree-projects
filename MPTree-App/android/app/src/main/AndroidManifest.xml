@@ -20,6 +20,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- The three clouds a backup can go to (BackupPlugin). Android 11 and up
+         only lets MPTree see whether these apps are installed, and hand a
+         backup to them, when they are named here. -->
+    <queries>
+        <package android:name="com.google.android.apps.docs" />
+        <package android:name="com.microsoft.skydrive" />
+        <package android:name="com.dropbox.android" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"

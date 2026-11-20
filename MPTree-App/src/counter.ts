@@ -18,7 +18,11 @@ export type CountEvent = "open" | "tab-songs" | "tab-playlists" | "pro-open" | "
   // Where the Pro page was opened from, what made someone tap to buy, and the
   // moments that offer Pro: so it can be seen which of them work.
   | "pro-open-settings" | "pro-open-look" | "pro-open-day" | "pro-open-listen" | "pro-open-other"
-  | "pro-tap-buy" | "pro-day-over" | "pro-look-sheet" | "listen-card";
+  | "pro-tap-buy" | "pro-day-over" | "pro-look-sheet" | "listen-card"
+  // The first time MPTree looks for music after it is installed: it found
+  // songs, it found none, or it was not let in. Only which of the three, never
+  // how many: so it can be seen how many people start with an empty list.
+  | "first-songs" | "first-empty" | "first-denied";
 
 const BASE = "https://mp-tree.net/a/";
 const platform = Capacitor.getPlatform();
@@ -31,6 +35,20 @@ export function count(event: CountEvent): void {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const sentOn = new Map<CountEvent, string>();
+
+const FIRST_KEY = "mptree_count_first";
+
+/** Once per install: what the first look for music found. Android puts the
+ *  key back with the rest of the settings after a reinstall, so someone who
+ *  comes back is not counted as new again. */
+export function countFirstLibrary(found: "songs" | "empty" | "denied"): void {
+  if (!where) return;
+  Preferences.get({ key: FIRST_KEY }).then(r => {
+    if (r.value) return;
+    count(`first-${found}`);
+    return Preferences.set({ key: FIRST_KEY, value: found });
+  }).catch(() => {});
+}
 
 /** Once a day per phone, whatever the number of calls. */
 export function countDaily(event: "open" | "tab-songs" | "tab-playlists" | "discover"): void {

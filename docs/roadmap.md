@@ -223,6 +223,16 @@ These are explicitly **not** now. Revisit once Phases 1 to 5 are done and the ne
 - **Cross-platform feature parity**, a dedicated **modern-UI pass**, and a **performance
   pass** (profiling cold-start and large-library scroll on each platform).
 - Test coverage and CI beyond the basics.
+- **Phone to phone, in one go (Pro)**: put on hold 20 Nov 2026. A backup sent straight
+  from one phone with MPTree to another: all songs and the chosen playlists, with no
+  internet, no account and no zip. The receiving phone shows where they came from, and
+  songs it already has are skipped. It would sit in Backup ("To another phone" / "From
+  another phone") and on the Account & sync page ("Songs syncing too slow? Send them all
+  in one go"). Designs: `tmp-edit/design3/out/telefoon.png`.
+  On hold because the plan (Google's Nearby Connections, what Quick Share runs on) only
+  works between two Android phones. Windows and iPhone could join through the same
+  Wi-Fi network with a QR code instead, but then both must be on one network that lets
+  devices see each other, which school and public Wi-Fi often do not.
 
 ---
 

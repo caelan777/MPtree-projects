@@ -10,7 +10,7 @@ import type { Song, SongMeta, Playlist } from "../types";
 import { openDrive, isDriveFull, type Drive, type DriveFile } from "./drive";
 import {
   buildLocal, merge, apply, missingFrom, coverRefs, coverHash, same, fileOf, songSig, sigsOf, isCopy, namesOf, nameSize,
-  markDeleted, markRestored, deletedBy,
+  markDeleted, markRestored, deletedBy, noteOrphaned,
   type LibDoc, type Applied, type Inventory,
 } from "./model";
 import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type Session } from "./rtc";
@@ -476,7 +476,8 @@ export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "full" | 
     if (!hasPro()) {
       // Bought on another device, maybe with another Google Play account.
       await listFiles();
-      if (takesPro(await readFile<ProFile>(PRO))) setAccountPro(true);
+      const note = await readFile<ProFile>(PRO);
+      if (takesPro(note) && !orphan(note, await devicesNow())) setAccountPro(true);
     }
     pendingJoin = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
     set({ account: { email: me.email, name: me.name, photo: me.photo }, deviceId });
@@ -732,6 +733,13 @@ async function checkAccountPro() {
     await listFiles();
     const note = await readFile<ProFile>(PRO);
     if (await takeBack(note)) { await removeFile(PRO).catch(() => {}); return; }
+    // Left behind by a phone that is gone from the account: no Pro from it,
+    // and it goes. Only by a phone that is on the list itself.
+    const devices = await devicesNow();
+    if (orphan(note, devices)) {
+      if (devices.some(d => d.id === deviceId)) await removeFile(PRO).catch(() => {});
+      return;
+    }
     if (stored && takesPro(note) && (note.by !== deviceId || !ownsPro())) setAccountPro(true);
   } catch { /* next time */ }
 }
@@ -746,11 +754,28 @@ const givesPro = async () => ownsPro() && !!stored && await proIsFor(stored.emai
 const takeBack = async (note: ProFile | null) =>
   note?.by === deviceId && !(await givesPro()) && (ownsPro() || proLost());
 
+/** A note from a phone that is no longer on the account: it signed out, or
+ *  was taken off. Only the phone that wrote the note can take it back when its
+ *  Pro goes (refunded), and off the account it never will, so the note no
+ *  longer says anything. Pro in the account lasts while the phone that bought
+ *  it is on it. An empty or unread list proves nothing, so it never counts. */
+const orphan = (note: ProFile | null, devices: Device[]): boolean =>
+  noteOrphaned(note?.by, devices.map(d => d.id));
+
+/** The phones on the account, when its list can be read. */
+async function devicesNow(): Promise<Device[]> {
+  return files.has(DEVICES) ? await readDevices().catch(() => []) : [];
+}
+
 /** Keeps pro.json right: there while a device that bought Pro for this
  *  account is on it, gone when the one that put it there no longer has it
  *  (refunded). Every other device on the account has Pro while it is there. */
-async function syncPro() {
+async function syncPro(devices: Device[]) {
   let note = await readFile<ProFile>(PRO);
+  if (orphan(note, devices)) {
+    await removeFile(PRO).catch(() => {});
+    note = null;
+  }
   if (await givesPro()) {
     if (!note || (note.via !== proVia && proVia === "play")) {
       note = { by: deviceId, at: Date.now(), via: proVia };
@@ -849,7 +874,7 @@ async function libraryCycle(): Promise<void> {
       return;
     }
     set({ devices });
-    await syncPro();
+    await syncPro(devices);
     if (!accountOn()) return;
     // "Still here", now and then, for "last used" on the other phones.
     const mine = files.get(peer(deviceId));
