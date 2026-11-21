@@ -1712,8 +1712,12 @@ export const PlaylistsView: React.FC<Props> = ({
 
       {/* ── Per-song action menu ──────────────────────────────────────────
           The same sheet the Songs page uses, plus "Remove from playlist" when
-          the row belongs to a real (editable) playlist. Portalled to body so
-          it always sits above the floating mini-player. */}
+          the row belongs to a real (editable) playlist. Portalled out of the
+          sliding page so it sits above the floating mini-player; into the app
+          itself, not body, so the sheets it opens (App's, which stay inside
+          the app) and the toasts come over it while it stays open. Only Play,
+          out of the playlist and the bin close it: those last two take the
+          song off this list (Caelan, 21 Nov). */}
       {menuSong && createPortal(
         <SongMenuSheet
           song={menuSong.song}
@@ -1725,16 +1729,16 @@ export const PlaylistsView: React.FC<Props> = ({
           isRingtone={isRingtone?.(menuSong.song)}
           playlists={playlists}
           onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song], m.inPlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`); }}
-          onPlayNext={() => { onPlayNext(menuSong.song); setMenuSong(null); }}
-          onAddToPlaylist={id => { addSongToPlaylist(id, menuSong.song.id); setMenuSong(null); }}
-          onCreatePlaylistWithSong={name => { createPlaylistWithSong(name, menuSong.song.id); setMenuSong(null); }}
-          onEdit={() => { onEditSong(menuSong.song); setMenuSong(null); }}
-          onChangePhoto={() => { onChangePhoto(menuSong.song); setMenuSong(null); }}
-          onSetRingtone={() => { onSetRingtone(menuSong.song); setMenuSong(null); }}
-          onEditLyrics={() => { onEditLyrics(menuSong.song); setMenuSong(null); }}
-          onCut={() => { onCutSong(menuSong.song); setMenuSong(null); }}
-          onToggleLike={() => { onToggleLike(menuSong.song); setMenuSong(null); }}
-          onShare={() => { onShareSong(menuSong.song); setMenuSong(null); }}
+          onPlayNext={() => onPlayNext(menuSong.song)}
+          onAddToPlaylist={id => addSongToPlaylist(id, menuSong.song.id)}
+          onCreatePlaylistWithSong={name => createPlaylistWithSong(name, menuSong.song.id)}
+          onEdit={() => onEditSong(menuSong.song)}
+          onChangePhoto={() => onChangePhoto(menuSong.song)}
+          onSetRingtone={() => onSetRingtone(menuSong.song)}
+          onEditLyrics={() => onEditLyrics(menuSong.song)}
+          onCut={() => onCutSong(menuSong.song)}
+          onToggleLike={() => onToggleLike(menuSong.song)}
+          onShare={() => onShareSong(menuSong.song)}
           onRemove={() => { onRemoveSong(menuSong.song); setMenuSong(null); }}
           onRemoveFromPlaylist={menuSong.inPlaylist
             ? () => { removeFromPlaylist(menuSong.song.id); setMenuSong(null); }
@@ -1743,7 +1747,7 @@ export const PlaylistsView: React.FC<Props> = ({
           onClose={() => setMenuSong(null)}
           T={t}
         />,
-        document.body
+        document.querySelector<HTMLElement>("[data-app-shell]") ?? document.body
       )}
 
       {/* ── New playlist ──────────────────────────────────────────────────

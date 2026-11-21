@@ -92,7 +92,10 @@ export function SongMenuSheet({
   );
 
   return (
-    <div style={{ ...sh.overlay, padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 12px)", boxSizing: "border-box" }} onClick={onClose}>
+    // It stays open after everything but Play (Caelan, 21 Nov), so it sits
+    // just under what it opens: Edit, Cut, Lyrics, the question before the bin
+    // (all 400 and up) and the toasts (500). Still over the mini player.
+    <div style={{ ...sh.overlay, zIndex: 390, padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 12px)", boxSizing: "border-box" }} onClick={onClose}>
       <div
         style={{ ...floatCard(T), width: "100%", maxHeight: "82vh", display: "flex", flexDirection: "column", padding: 12, animation: "mpCardUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both" }}
         onClick={e => e.stopPropagation()}

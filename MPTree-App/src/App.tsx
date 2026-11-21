@@ -1286,12 +1286,15 @@ export default function App() {
     countDaily("open");
     const readRingtone = () => { MusicScanner.getRingtone().then(r => setRingtonePath(r.path ?? null)).catch(() => {}); };
     readRingtone();
+    let awayAt = 0;
     const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
       if (isActive) { countDaily("open"); readRingtone(); }
-      // Dismiss the per-song action sheet across a background/foreground
-      // transition, so returning to the app never lands on a stale menu for a
-      // song you have since scrolled away from.
-      setMenuSong(null);
+      // Back after a long time away, the per-song menu is gone, so returning
+      // never lands on a stale menu for a song since scrolled away from. A
+      // short trip out keeps it: sharing, or the switch the ringtone needs,
+      // and back to the menu it was done from (Caelan, 21 Nov).
+      if (!isActive) awayAt = Date.now();
+      else if (awayAt && Date.now() - awayAt > 5 * 60_000) setMenuSong(null);
       // Coming back to the app during the welcome page, before Allow was
       // tapped, must not scan: that would put up the permission prompt with
       // nobody having asked for it.
@@ -1838,7 +1841,6 @@ export default function App() {
   // queue it was handed, so the pinned track has to be physically moved into
   // the queue (here and natively) or it never actually plays next.
   const handlePlayNext = useCallback((song: Song) => {
-    setMenuSong(null);
     const cur = curRef.current;
 
     // Nothing playing: there is no "next" to sit after, so just start it.
@@ -2744,7 +2746,8 @@ export default function App() {
     if (u.customPhoto !== undefined) {
       AudioPlayer.setTrackArt({ path: s.uri, dataUrl: u.customPhoto ?? null }).catch(() => {});
     }
-    setEditSong(null); setMenuSong(null);
+    // Back to the song menu it came from, if it did (it stays open).
+    setEditSong(null);
   };
 
   // Id-taking versions of the multi-select actions, so the Playlists page can
@@ -2948,7 +2951,7 @@ export default function App() {
   // ── Cut track ─────────────────────────────────────────────────────────────
   const openCutSheet = async (song: Song) => {
     // A file that never said how long it is gets asked by the sheet itself.
-    setCutDuration(song.duration ?? 0); setCutSong(song); setMenuSong(null);
+    setCutDuration(song.duration ?? 0); setCutSong(song);
   };
 
   const saveCutTrack = async (song: Song, startMs: number, endMs: number, newName: string) => {
@@ -3070,7 +3073,6 @@ export default function App() {
       if (target) showToast(t("Added to \"{name}\"", { name: target.name }));
       return updated;
     });
-    setMenuSong(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3117,7 +3119,6 @@ export default function App() {
       return updated;
     });
     showToast(t("Created \"{name}\"", { name }));
-    setMenuSong(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3270,6 +3271,7 @@ export default function App() {
       if (removeMultiConfirm)  { setRemoveMultiConfirm(false); return; }
       if (binManyIds)          { setBinManyIds(null); return; }
       if (editSong)            { setEditSong(null); return; }
+      if (lyricsSong)          { setLyricsSong(null); return; }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
       if (nextUpOpen)          { setNextUpOpen(false); return; }
       if (updateInfo)          { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); return; }
@@ -4828,11 +4830,13 @@ export default function App() {
             onPlayNext={() => handlePlayNext(menuSong)}
             onAddToPlaylist={id => handleAddToPlaylist(id, menuSong)}
             onCreatePlaylistWithSong={name => handleCreatePlaylistWithSong(name, menuSong)}
-            onEdit={() => { const s = menuSong; setMenuSong(null); setEditFocusPhoto(false); setEditSong(s); }}
-            onChangePhoto={() => { const s = menuSong; setMenuSong(null); setEditFocusPhoto(true); setEditSong(s); }}
-            onSetRingtone={() => { const s = menuSong; setMenuSong(null); setSongAsRingtone(s); }}
-            onEditLyrics={() => { const s = menuSong; setMenuSong(null); openLyricsSheet(s); }}
-            onCut={() => { const s = menuSong; setMenuSong(null); openCutSheet(s); }}
+            // Open after everything but Play and the bin (Caelan, 21 Nov):
+            // what it opens comes over it (SongMenuSheet), and back here.
+            onEdit={() => { setEditFocusPhoto(false); setEditSong(menuSong); }}
+            onChangePhoto={() => { setEditFocusPhoto(true); setEditSong(menuSong); }}
+            onSetRingtone={() => { void setSongAsRingtone(menuSong); }}
+            onEditLyrics={() => openLyricsSheet(menuSong)}
+            onCut={() => { void openCutSheet(menuSong); }}
             onToggleLike={() => {
               hapticImpact("light");
               const s = menuSong;
@@ -4842,9 +4846,8 @@ export default function App() {
                 showToast(nowLiked ? t("Liked") : t("Removed from favorites"));
                 return { ...prev, [s.id]: { ...cur, liked: nowLiked } };
               });
-              setMenuSong(null);
             }}
-            onShare={() => { const s = menuSong; setMenuSong(null); shareSong(s); }}
+            onShare={() => { void shareSong(menuSong); }}
             onRemove={() => { const s = menuSong; setMenuSong(null); setRemoveSong(s); }}
             onClose={() => setMenuSong(null)}
             T={TH}
@@ -5116,7 +5119,7 @@ export default function App() {
                   onToggleLike: () => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); },
                   onShare: () => shareSong(currentSong),
                   onCut: away(() => openCutSheet(currentSong)),
-                  onSetRingtone: away(() => setSongAsRingtone(currentSong)),
+                  onSetRingtone: () => { void setSongAsRingtone(currentSong); },
                   onChangePhoto: () => { setEditFocusPhoto(true); setEditSong(currentSong); },
                   onEdit: () => { setEditFocusPhoto(false); setEditSong(currentSong); },
                   onBin: () => setRemoveSong(currentSong),
