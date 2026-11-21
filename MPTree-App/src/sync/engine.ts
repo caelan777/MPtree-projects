@@ -524,6 +524,14 @@ async function standsInFor(id: string): Promise<void> {
   if (!id || id === deviceId || inherit.includes(id)) return;
   inherit = [...inherit, id];
   await writeJson(KEY_INHERIT, inherit);
+  // Pro that phone put in the account is this phone's now. Left under the
+  // old id it read as left behind by a phone gone from the account (orphan),
+  // and went: a reinstall took Pro out of the account, and a phone without
+  // Pro of its own (a test build) stopped syncing (Caelan, 22 Nov).
+  try {
+    const note = await readFile<ProFile>(PRO);
+    if (note?.by === id) await writeFile(PRO, { ...note, by: deviceId });
+  } catch { /* looked at again in the next round */ }
 }
 
 /** What was deleted for good on the devices this one stands in for stays
