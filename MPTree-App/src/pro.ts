@@ -196,7 +196,6 @@ const AD_DAY_KEY = "mptree_ad_day";
 /** Where the free week was kept, read once so a week still running ends as it would have. */
 const OLD_TRIAL_KEY = "mptree_trial";
 const DAY = 24 * 60 * 60 * 1000;
-const HOUR = 60 * 60 * 1000;
 type StoredDay = { from: number; until: number; extra?: boolean; ask?: 1 | 2 };
 
 function storeDay(d: StoredDay) {
@@ -253,11 +252,10 @@ function checkDay() {
  *  and then MPTree asks again; the second time Pro turns off. */
 export function notNowAdDay(): "hour" | "off" {
   if (adDay.state !== "ask") return "off";
-  if (adDay.round === 2) { endDay(); return "off"; }
-  const now = Date.now();
-  storeDay({ from: now, until: now + HOUR, extra: true });
-  runDay(now, now + HOUR, true);
-  return "hour";
+  // No extra hour any more (Caelan, 21 Nov): the day is up, so "Not now"
+  // turns Pro off at once. An extra hour still running from before ends as it did.
+  endDay();
+  return "off";
 }
 
 /** A day of Pro as a gift (the Halloween treat): 24 hours from now, or 24 on

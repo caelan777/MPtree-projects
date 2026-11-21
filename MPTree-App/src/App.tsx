@@ -2079,6 +2079,9 @@ export default function App() {
   // Closed without its animation too (a sheet of its own took over): it comes
   // back all the same. "in" ends with its animation (onAnimationEnd below).
   const miniPhase = miniMorph === "out" && !playerExpanded && expandDrag === null ? "in" : miniMorph;
+  // How far up the big player's top is from the mini player's (PlayerExpandSheet onCardTop).
+  const [cardTop, setCardTop] = useState<number | null>(null);
+  const miniRise = miniRect && cardTop !== null ? Math.min(0, Math.round(cardTop - miniRect.top)) : 0;
   const playerAxisRef   = useRef<"h" | "v" | null>(null); // gesture axis lock
   const playerSwipeT    = useRef(0);       // when the touch began, for a flick
 
@@ -4622,8 +4625,7 @@ export default function App() {
           return (
             <div
               ref={playerCardRef}
-              className={miniPhase === "out" ? "mp-mini-out" : miniPhase === "in" ? "mp-mini-in" : undefined}
-              onAnimationEnd={e => { if (e.animationName === "mpMiniIn") setMiniMorph(null); }}
+              onTransitionEnd={e => { if (miniPhase === "in" && e.propertyName === "opacity" && e.target === e.currentTarget) setMiniMorph(null); }}
               style={{
                 position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
@@ -4632,11 +4634,18 @@ export default function App() {
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
                 // Pulled up by a finger, it fades as the big player grows out of it.
-                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : "translateY(0)",
-                opacity: playerHidden ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 3) : 1,
+                // It is the top of the big player (Caelan, 21 Nov): it moves up
+                // with the top of the card the big one grows out of, fading
+                // slowly, and comes back down with it.
+                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))`
+                  : miniPhase === "out" ? `translateY(${miniRise}px)`
+                  : expandDrag ? `translateY(${Math.round(miniRise * expandDrag)}px)` : "translateY(0)",
+                opacity: playerHidden ? 0 : miniPhase === "out" ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 1.5) : 1,
                 pointerEvents: playerHidden || miniPhase === "out" ? "none" : "auto",
-                transition: chromeAnimate
-                  ? `${move("transform", "opacity")}, background 0.4s ease`
+                transition: expandDrag !== null ? "background 0.4s ease"
+                  : miniPhase === "out" ? "transform 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s ease, background 0.4s ease"
+                  : miniPhase === "in" ? "transform 0.28s cubic-bezier(0.3, 0, 0.8, 0.15), opacity 0.2s ease 0.08s, background 0.4s ease"
+                  : chromeAnimate ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
               }}
               onTouchStart={e => onPlayerSwipeStart(e.touches[0].clientX, e.touches[0].clientY)}
@@ -5073,6 +5082,7 @@ export default function App() {
               dragSettling={expandSettling}
               skipEnter={openedByDragRef.current}
               fromRect={miniRect}
+              onCardTop={setCardTop}
               onCloseStart={miniBack}
               T={TH}
             />

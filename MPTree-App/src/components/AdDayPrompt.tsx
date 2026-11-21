@@ -71,8 +71,7 @@ export function AdDayPrompt({ stage, onWatch, onBought, onToast, onNotNow, T }: 
   const body = stage === "off" ? t("To get it back, keep Pro for {price}, once. Or have one more day free.", { price })
     : what ? t("You used {what}. Keep it for {price}, once.", { what, price })
     : t("Keep Pro for {price}, once. Everything you picked stays as it is.", { price });
-  const footnote = stage === 1 ? t("Not now keeps Pro on for one more hour.")
-    : stage === 2 ? t("Not now turns Pro off.")
+  const footnote = stage === 1 || stage === 2 ? t("Not now turns Pro off.")
     : null;
   const canAd = ADS_ON || import.meta.env.DEV;
 

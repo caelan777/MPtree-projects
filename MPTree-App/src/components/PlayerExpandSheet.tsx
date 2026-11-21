@@ -145,6 +145,8 @@ type PlayerExpandSheetProps = {
   fromRect?: { top: number; left: number; right: number; bottom: number } | null;
   /** The close starts (its animation), so the mini player can come back with it. */
   onCloseStart?: () => void;
+  /** Where the sheet's top lies on the screen, measured as it opens. */
+  onCardTop?: (top: number) => void;
   T: T;
 };
 
@@ -160,7 +162,7 @@ export function PlayerExpandSheet({
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
   lyrics, onSaveLyrics, onSearchLyrics, menuActions, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
-  fromRect = null, onCloseStart,
+  fromRect = null, onCloseStart, onCardTop,
   T,
 }: PlayerExpandSheetProps) {
   // The record gives way to the words, and back. Tied to the song, so moving to
@@ -273,10 +275,11 @@ export function PlayerExpandSheet({
       b: Math.max(0, Math.round(window.innerHeight - fromRect.bottom)),
       l: Math.max(0, Math.round(fromRect.left)),
     });
-    // The card is drawn first, then it grows: two frames on.
-    let second = 0;
-    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => setArmed(true)); });
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+    // Where the sheet's top will be: the mini player moves up to it (App).
+    onCardTop?.(el.offsetTop);
+    // The card is drawn first, then it grows, one frame on.
+    const first = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(first);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const grow = dragProgress !== null ? dragProgress : closing || !armed ? 0 : 1;
@@ -286,7 +289,7 @@ export function PlayerExpandSheet({
     closingRef.current = true;
     setClosing(true);
     onCloseStart?.();
-    setTimeout(onClose, card ? 300 : 180); // the card shrinking, or .pes-sheet-out
+    setTimeout(onClose, card ? 290 : 180); // the card shrinking, or .pes-sheet-out
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -576,14 +579,18 @@ export function PlayerExpandSheet({
           // Out of the mini player's card (see `grow`); before the card is
           // measured, the whole sheet is held to nothing so it never flashes.
           ...(card ? {
+            // The whole sheet sits lower by what is left of the card's top, so
+            // the player inside moves up with the card's top edge (the mini
+            // player is that top); the clip cuts the card's sides and bottom.
             clipPath: grow >= 1
               ? "inset(0px 0px 0px 0px round 20px 20px 0px 0px)"
-              : `inset(${Math.round(card.t * (1 - grow))}px ${Math.round(card.r * (1 - grow))}px ${Math.round(card.b * (1 - grow))}px ${Math.round(card.l * (1 - grow))}px round ${Math.round(22 - 2 * grow)}px)`,
+              : `inset(0px ${Math.round(card.r * (1 - grow))}px ${Math.round((card.b + card.t) * (1 - grow))}px ${Math.round(card.l * (1 - grow))}px round ${Math.round(22 - 2 * grow)}px)`,
           } : fromRect && !(skipEnter && dragProgress === null) ? { clipPath: "inset(100% 0px 0px 0px)" } : null),
-          transform: card && dragProgress !== null ? undefined : sheetTransform,
+          transform: card && !(closeDragY > 0 || closeSnap) ? `translateY(${Math.round(card.t * (1 - grow))}px)` : sheetTransform,
           // The card itself is drawn at once; only from there on does it move.
           transition: isDraggingOpen || isDraggingClose || (card && !armed && dragProgress === null) ? "none"
-            : card ? `clip-path ${closing ? "0.3s cubic-bezier(0.3, 0, 0.8, 0.15)" : "0.38s cubic-bezier(0.2, 0, 0, 1)"}, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)`
+            // Opening about as quick as closing (Caelan, 21 Nov).
+            : card ? (closing ? "clip-path 0.28s cubic-bezier(0.3, 0, 0.8, 0.15), transform 0.28s cubic-bezier(0.3, 0, 0.8, 0.15)" : "clip-path 0.3s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.2, 0, 0, 1)")
             : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
@@ -593,8 +600,8 @@ export function PlayerExpandSheet({
         {card && (
           <div aria-hidden="true" style={{
             position: "absolute", inset: 0, zIndex: 30, pointerEvents: "none", background: T.sheetBg,
-            opacity: dragProgress !== null ? Math.max(0, 1 - dragProgress * 1.6) : grow >= 1 ? 0 : 1,
-            transition: isDraggingOpen ? "none" : closing ? "opacity 0.16s ease" : "opacity 0.24s ease 0.1s",
+            opacity: dragProgress !== null ? Math.max(0, 1 - dragProgress * 2) : grow >= 1 ? 0 : 1,
+            transition: isDraggingOpen ? "none" : closing ? "opacity 0.18s ease 0.06s" : "opacity 0.2s ease",
           }} />
         )}
 
