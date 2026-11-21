@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="channel_playback">Воспроизведение музыки</string>
+    <string name="channel_playback_desc">Управление тем, что сейчас играет в MPTree</string>
+    <string name="action_previous">Назад</string>
+    <string name="action_play">Играть</string>
+    <string name="action_pause">Пауза</string>
+    <string name="action_next">Далее</string>
+    <string name="not_playing">Ничего не играет</string>
+    <string name="widget_tap_to_open">Нажмите, чтобы открыть MPTree</string>
+    <string name="widget_bar_desc">Полоса: что играет, с кнопками назад, плей и вперёд</string>
+    <string name="widget_card_desc">Карточка: крупнее, со временем</string>
+    <string name="widget_record_desc">Пластинка: ваша обложка на пластинке</string>
+    <string name="widget_pill_desc">Таблетка: плей и пауза, маленькая</string>
+    <string name="widget_pro_title">Входит в MPTree Pro</string>
+    <string name="widget_pro_sub">Нажмите, чтобы открыть MPTree</string>
+    <string name="channel_new_music">Новая музыка</string>
+    <string name="new_songs_sub">Нажмите, чтобы слушать в MPTree</string>
+    <plurals name="new_songs">
+        <item quantity="one">%d новая песня</item>
+    <item quantity="few">%d новые песни</item>
+    <item quantity="many">%d новых песен</item>
+        <item quantity="other">%d новых песен</item>
+    </plurals>
+</resources>

@@ -21,6 +21,8 @@ import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.media.PlaybackParams;
 import android.media.audiofx.Equalizer;
+import android.media.audiofx.LoudnessEnhancer;
+import android.os.SystemClock;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Binder;
@@ -48,7 +50,9 @@ public class MusicPlayerService extends Service {
     private static final int NOTIFICATION_ID   = 1;
 
     // ── Crossfade tuning ────────────────────────────────────────────────────
-    private static final int  CROSSFADE_STEP_MS = 100;
+    // How often the volumes move. Where they are comes from the clock, not
+    // from a count of these steps (see runCrossfadeRamp).
+    private static final int  CROSSFADE_STEP_MS = 40;
     // FIX 3: Poll crossfade detection on its own fast timer, independent of the
     // 1-second persist/notification ticker. On the old 1s cadence, a fade could
     // start up to ~1s late and get truncated. 200ms gives smooth, on-time fades.
@@ -65,6 +69,20 @@ public class MusicPlayerService extends Service {
     // file whose length was misreported): the next one fades in instead of
     // starting at full volume.
     private boolean fadeInNext = false;
+    // The fade itself has started: both songs can be heard. Before that the
+    // next one only waits, loaded and paused at 0.
+    private boolean fadeHeard = false;
+    // The song the fade goes into.
+    private Track   fadeTrack = null;
+    // Where the fade is (0 to 1), and how much of it has played, so next can
+    // finish it from there (see takeOverFade).
+    private float   fadeT = 0f;
+    private long[]  fadeHeardMs = null;
+    // Next pressed during the fade: the playing time the fade was at then,
+    // and where it was. -1 while nobody pressed.
+    private long    rushAt = -1;
+    private float   rushFrom = 0f;
+    private static final int RUSH_MS = 200;
 
     public class LocalBinder extends Binder {
         public MusicPlayerService getService() { return MusicPlayerService.this; }
@@ -150,6 +168,40 @@ public class MusicPlayerService extends Service {
 
     public void setCrossfadeDuration(int ms) {
         crossfadeDurationMs = Math.max(0, ms);
+        keepOffOffload(crossfadeDurationMs > 0);
+    }
+
+    // ── No offload while crossfade is on ─────────────────────────────────────
+    // A phone can hand a song that plays on its own to its sound chip
+    // ("offload"), which saves battery. When a second song starts next to it,
+    // as in a crossfade, many phones take the first one back out of the chip
+    // first, and that is the stop and stutter heard right before the fade
+    // (Caelan, 19 Nov: "de muziek stopt en glitched eerst"). An effect the chip
+    // cannot run keeps every song on the ordinary path while crossfade is on:
+    // a loudness enhancer that adds nothing, on a session no song plays in, so
+    // it is never heard. PixelPlayer keeps offload off for the same reason.
+    // With crossfade off, songs may be offloaded again (from the next song on).
+    private LoudnessEnhancer noOffload;
+    private int noOffloadSession = -1;
+
+    private void keepOffOffload(boolean on) {
+        if (!on) {
+            if (noOffload != null) {
+                try { noOffload.release(); } catch (Exception ignored) {}
+                noOffload = null;
+            }
+            return;
+        }
+        if (noOffload != null) return;
+        try {
+            if (noOffloadSession == -1 && audioManager != null) noOffloadSession = audioManager.generateAudioSessionId();
+            if (noOffloadSession == -1 || noOffloadSession == AudioManager.ERROR) return;
+            noOffload = new LoudnessEnhancer(noOffloadSession);
+            noOffload.setTargetGain(0);
+            noOffload.setEnabled(true);
+        } catch (Exception e) {
+            noOffload = null;
+        }
     }
 
     /** speed: playback rate multiplier (0.5–2.0 typical). 1.0 == normal. */
@@ -173,6 +225,10 @@ public class MusicPlayerService extends Service {
         if (mp == null) return;
         try {
             PlaybackParams params = mp.getPlaybackParams();
+            // Already at that speed (a new player is at 1): nothing to change.
+            // Setting it anyway makes some phones set up the sound again,
+            // which was heard as a hitch as a song began.
+            if (Math.abs(params.getSpeed() - playbackSpeed) < 0.001f) return;
             params.setSpeed(playbackSpeed);
             mp.setPlaybackParams(params);
         } catch (Exception ignored) {
@@ -223,6 +279,44 @@ public class MusicPlayerService extends Service {
         nativeQueue.clear();
         nativeQueue.addAll(queue);
         nativeQueueIndex = currentIndex;
+        saveQueue();
+    }
+
+    // The queue on disk, so a widget's next and previous work with the player
+    // started cold (MPTree closed): before, the queue lived only in memory and
+    // came back only once the app was opened and a song skipped there.
+    private static final String QUEUE_FILE = "native_queue.json";
+    private void saveQueue() {
+        final org.json.JSONArray a = new org.json.JSONArray();
+        try {
+            for (Track t : nativeQueue) {
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("p", t.path); o.put("t", t.title); o.put("a", t.artist);
+                if (t.isCut) o.put("c", true);
+                if (t.cutTo > 0) { o.put("f", t.cutFrom); o.put("e", t.cutTo); }
+                a.put(o);
+            }
+        } catch (Exception e) { return; }
+        final java.io.File f = new java.io.File(getFilesDir(), QUEUE_FILE);
+        new Thread(() -> {
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                out.write(a.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Exception ignored) {}
+        }).start();
+    }
+    private void restoreQueue() {
+        if (!nativeQueue.isEmpty()) return;
+        try {
+            java.io.File f = new java.io.File(getFilesDir(), QUEUE_FILE);
+            if (!f.exists()) return;
+            byte[] b = new byte[(int) f.length()];
+            try (java.io.FileInputStream in = new java.io.FileInputStream(f)) { int n = 0; while (n < b.length) { int r = in.read(b, n, b.length - n); if (r < 0) break; n += r; } }
+            org.json.JSONArray a = new org.json.JSONArray(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+            for (int i = 0; i < a.length(); i++) {
+                org.json.JSONObject o = a.getJSONObject(i);
+                nativeQueue.add(new Track(o.optString("p"), o.optString("t"), o.optString("a"), o.optBoolean("c"), o.optInt("f"), o.optInt("e")));
+            }
+        } catch (Exception e) { nativeQueue.clear(); }
     }
 
     // ── Timers ────────────────────────────────────────────────────────────────
@@ -326,6 +420,8 @@ public class MusicPlayerService extends Service {
         registerNoisyReceiver();
         loadMixMode();
         loadPlayerSettings();
+        // Before anything plays, so no song is in the chip when it comes.
+        keepOffOffload(crossfadeDurationMs > 0);
         // FIX 2: Bring up a shared audio session + equalizer eagerly, so
         // getEqualizerInfo() returns real band data even before the first
         // play() call (e.g. user opens Audio Effects immediately on launch).
@@ -336,7 +432,51 @@ public class MusicPlayerService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // A widget's button (WidgetActionReceiver): foreground at once, as
+        // Android asks of a player started like this, then the button.
+        String act = intent != null ? intent.getAction() : null;
+        if (act != null && (ACTION_PLAY.equals(act) || ACTION_PAUSE.equals(act) || ACTION_NEXT.equals(act) || ACTION_PREV.equals(act))) {
+            try { promoteToForeground(buildNotification()); } catch (Exception ignored) {}
+            final String a = act;
+            mainHandler.post(() -> widgetAction(a));
+        }
         return START_STICKY;
+    }
+
+    /** A widget's button, also with the player just started: without a song
+     *  loaded it carries on with the last one, where it was. */
+    private void widgetAction(String act) {
+        if (ACTION_PAUSE.equals(act)) { pausePlayback(); return; }
+        if (mediaPlayer == null && currentPath == null) {
+            try {
+                String json = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE).getString("mptree_native_now_playing", null);
+                if (json == null) { stopIfIdle(); return; }
+                org.json.JSONObject o = new org.json.JSONObject(json);
+                String path = o.optString("path", "");
+                if (path.isEmpty()) { stopIfIdle(); return; }
+                final int at = o.optInt("position", 0);
+                restoreQueue();
+                nativeQueueIndex = -1;
+                for (int i = 0; i < nativeQueue.size(); i++) if (path.equals(nativeQueue.get(i).path)) { nativeQueueIndex = i; break; }
+                // Next and previous: the song next to the last one, from its start.
+                if (!ACTION_PLAY.equals(act) && nativeQueueIndex >= 0) { nativeSkip(ACTION_NEXT.equals(act) ? 1 : -1); return; }
+                play(path, o.optString("title", ""), o.optString("artist", ""), 0, 0);
+                if (at > 1000) mainHandler.postDelayed(() -> { try { seekTo(at); } catch (Exception ignored) {} }, 700);
+            } catch (Exception e) { stopIfIdle(); }
+            return;
+        }
+        if (ACTION_PLAY.equals(act)) resumePlayback();
+        else if (ACTION_NEXT.equals(act)) nativeSkip(1);
+        else nativeSkip(-1);
+    }
+
+    private void stopIfIdle() {
+        if (isPlaying) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(Service.STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+        } catch (Exception ignored) {}
+        isForeground = false;
     }
 
     @Override
@@ -354,6 +494,7 @@ public class MusicPlayerService extends Service {
         } catch (Exception ignored) {}
         isForeground = false;
         releaseEqualizer();
+        keepOffOffload(false);
         releasePlayer();
         releaseIncomingPlayer();
         if (mediaSession != null) { mediaSession.release(); mediaSession = null; }
@@ -434,11 +575,16 @@ public class MusicPlayerService extends Service {
     /** Past this, coming back is no longer "the same listening": a call that
      *  took an hour should not end in music starting by itself. */
     private static final long RESUME_WITHIN_MS = 10 * 60 * 1000;
-    /** An app that took the speaker for good (a video app, say) is only
-     *  followed for this long: a jingle is over by then, and somebody who went
-     *  to watch something does not get music back the moment they pause it. */
-    private static final long RESUME_AFTER_TAKEOVER_MS = 20 * 1000;
+    /** An app that took the speaker for good (TikTok, a video app) is
+     *  followed this long: leaving TikTok after a few minutes of scrolling
+     *  should bring the music back, as people expect. */
+    private static final long RESUME_AFTER_TAKEOVER_MS = 30 * 60 * 1000;
     private long resumeWithin = RESUME_WITHIN_MS;
+    /** The other app must be quiet this many looks in a row (1.5 s apart)
+     *  before MPTree comes back, so the short gap between two TikTok videos
+     *  does not count as "done" and steal the speaker mid-scroll. */
+    private static final int QUIET_LOOKS_NEEDED = 3;
+    private int quietLooks = 0;
 
     private final AudioManager.OnAudioFocusChangeListener focusListener = focusChange -> {
         if (mixWithOthers) return;
@@ -454,11 +600,27 @@ public class MusicPlayerService extends Service {
                 // so nothing would say when its sound is over. Asking again
                 // after a moment does: the request is granted once it is done.
                 if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
-                    mainHandler.postDelayed(this::resumeAfterFocusLoss, 4000);
+                    quietLooks = 0;
+                    mainHandler.removeCallbacks(this.watchForQuiet);
+                    mainHandler.postDelayed(this.watchForQuiet, 4000);
                 }
             }
         } else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
+            mainHandler.removeCallbacks(this.watchForQuiet);
             resumeAfterFocusLoss();
+        }
+    };
+
+    /** After a takeover: look every 1.5 s whether the other app is still
+     *  sounding, and come back once it has been quiet a few looks in a row. */
+    private final Runnable watchForQuiet = new Runnable() {
+        @Override public void run() {
+            if (!pausedByFocus || isPlaying) return;
+            if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; return; }
+            boolean busy = audioManager != null && audioManager.isMusicActive();
+            quietLooks = busy ? 0 : quietLooks + 1;
+            if (quietLooks >= QUIET_LOOKS_NEEDED) { resumeAfterFocusLoss(); return; }
+            mainHandler.postDelayed(this, 1500);
         }
     };
 
@@ -700,6 +862,9 @@ public class MusicPlayerService extends Service {
                       int cutFrom, int cutTo) throws Exception {
         if (path == null || path.isEmpty()) throw new IllegalArgumentException("path is empty");
 
+        // Next while that song is already fading in: it stays, see takeOverFade.
+        if (!isAutoAdvance && cutFrom <= 0 && cutTo <= 0 && takeOverFade(path)) return;
+
         // A start without an end is allowed: the cut sheet listens from a
         // point and stops by itself.
         curCutTo      = cutTo > cutFrom ? cutTo : 0;
@@ -749,13 +914,16 @@ public class MusicPlayerService extends Service {
                     notifyStateChange();
                     return;
                 }
+                // Coming in from silence: silent from its very first sound. It
+                // used to start at full volume and drop to nothing a moment
+                // later, a blip before the fade in.
+                final boolean fade = fadeInNext && wasAutoAdvance && crossfadeDurationMs > 0;
+                fadeInNext = false;
+                if (fade) mp.setVolume(0f, 0f);
                 mp.start();
                 applyPlaybackSpeed(mp); // keep user's speed across track changes
                 isPlaying = true;
-                if (fadeInNext) {
-                    fadeInNext = false;
-                    if (wasAutoAdvance && crossfadeDurationMs > 0) fadeIn(mp, myToken);
-                }
+                if (fade) fadeIn(mp, myToken);
                 // Re-assert the session as active so lock-screen / system media
                 // controls reliably pick it up (some OEMs drop inactive sessions).
                 if (mediaSession != null && !mediaSession.isActive()) {
@@ -855,7 +1023,10 @@ public class MusicPlayerService extends Service {
             requestAudioFocus();
             mediaPlayer.start();
             applyPlaybackSpeed(mediaPlayer);
-            if (incomingPlayer != null) { try { incomingPlayer.start(); } catch (Exception ignored) {} }
+            // The next song only when the fade had started: loaded and waiting,
+            // it used to start here too and play on unheard, so the fade
+            // later came in a few seconds into it instead of from its start.
+            if (incomingPlayer != null && fadeHeard) { try { incomingPlayer.start(); } catch (Exception ignored) {} }
             isPlaying = true;
             updatePlaybackState(PlaybackState.STATE_PLAYING);
             showNotification();
@@ -875,11 +1046,17 @@ public class MusicPlayerService extends Service {
     }
 
     public int getCurrentPosition() {
+        if ((blendingSkip || rushAt >= 0) && fadeReady && incomingPlayer != null) {
+            try { return incomingPlayer.getCurrentPosition(); } catch (Exception ignored) { return 0; }
+        }
         if (mediaPlayer == null || isPreparing) return 0;
         try { return mediaPlayer.getCurrentPosition(); } catch (Exception e) { return 0; }
     }
 
     public int getDuration() {
+        if ((blendingSkip || rushAt >= 0) && fadeReady && incomingPlayer != null) {
+            try { return incomingPlayer.getDuration(); } catch (Exception ignored) { return 0; }
+        }
         if (mediaPlayer == null || isPreparing) return 0;
         try { return mediaPlayer.getDuration(); } catch (Exception e) { return 0; }
     }
@@ -946,27 +1123,89 @@ public class MusicPlayerService extends Service {
     /** The next song coming up from silence, over part of the crossfade's
      *  length, when the crossfade itself could not happen. */
     private void fadeIn(MediaPlayer mp, int token) {
-        final int steps = Math.max(1, Math.min(crossfadeDurationMs, 1500) / CROSSFADE_STEP_MS);
-        final int[] step = {0};
+        final long length = Math.max(200, Math.min(crossfadeDurationMs, 1500));
+        final long[] heard = {0};
+        final long[] last = {SystemClock.uptimeMillis()};
         try { mp.setVolume(0f, 0f); } catch (Exception ignored) {}
         mainHandler.post(new Runnable() {
             @Override public void run() {
                 if (token != playToken || mediaPlayer != mp) return;
-                if (isPlaying) step[0]++;
-                float v = Math.min(1f, step[0] / (float) steps);
+                long now = SystemClock.uptimeMillis();
+                // Paused: the fade waits with the music.
+                if (isPlaying) heard[0] += now - last[0];
+                last[0] = now;
+                float t = Math.min(1f, heard[0] / (float) length);
+                // Alone, a song coming up sounds even when its loudness goes
+                // up as a square: a straight line sounds like a jump at first.
+                float v = t * t;
                 try { mp.setVolume(v, v); } catch (Exception ignored) {}
-                if (v < 1f) mainHandler.postDelayed(this, CROSSFADE_STEP_MS);
+                if (t < 1f) mainHandler.postDelayed(this, CROSSFADE_STEP_MS);
             }
         });
     }
 
+    // ── A blend on a skip ────────────────────────────────────────────────────
+    // With crossfade on, next and previous blend too, over a short stretch.
+    // They used to cut hard, from the app's buttons, the notification and the
+    // widgets alike, so the setting seemed to do nothing at all: it was only
+    // ever heard where a song ran out by itself.
+    private static final int SKIP_FADE_MAX_MS = 1800;
+    private boolean blendingSkip = false;
+
+    /** Starts `t` by blending into it, when crossfade is on and a whole song
+     *  is playing. True when it did; false means play it the usual way. */
+    private boolean blendInto(Track t) {
+        if (crossfadeDurationMs <= 0 || mediaPlayer == null || !isPlaying || isPreparing) return false;
+        if (curCutFrom > 0 || curCutTo > 0 || t == null || t.isCut) return false;
+        cancelCrossfade();
+        blendingSkip = true;
+        startCrossfadeInto(t, Math.max(400, Math.min(crossfadeDurationMs, SKIP_FADE_MAX_MS)));
+        if (!crossfading) blendingSkip = false;
+        return crossfading;
+    }
+
+    /** The app's next and previous: the song it picked, blended into. */
+    public void playBlended(String path, String title, String artist) throws Exception {
+        Track t = null;
+        for (Track q : nativeQueue) { if (q.path.equals(path) && !q.isCut) { t = q; break; } }
+        if (t == null) t = new Track(path, title, artist, false, 0, 0);
+        if (!blendInto(t)) play(path, title, artist, 0, 0);
+    }
+
     private void cancelCrossfade() {
+        blendingSkip = false;
         if (!crossfading) return;
         crossfading = false;
         fadeReady = false;
+        clearFadeState();
         fadeGen++;
         releaseIncomingPlayer();
         if (mediaPlayer != null) { try { mediaPlayer.setVolume(1f, 1f); } catch (Exception ignored) {} }
+    }
+
+    private void clearFadeState() {
+        fadeHeard = false;
+        fadeTrack = null;
+        fadeT = 0f;
+        fadeHeardMs = null;
+        rushAt = -1;
+        rushFrom = 0f;
+    }
+
+    /** Next while the next song is already fading in. That song is the one
+     *  asked for and it can be heard already, so it stays where it is and the
+     *  old one goes out in a fifth of a second. Starting it again from 0
+     *  threw away what had been heard of it. Not for repeat one (the fade
+     *  then goes into the same song) and not before the fade has started.
+     *  True when it took over; false means play the song the usual way. */
+    private boolean takeOverFade(String path) {
+        if (!crossfading || !fadeReady || !fadeHeard || fadeTrack == null || path == null) return false;
+        if (!path.equals(fadeTrack.path) || path.equals(currentPath)) return false;
+        if (rushAt < 0) {
+            rushAt = fadeHeardMs != null ? fadeHeardMs[0] : 0;
+            rushFrom = fadeT;
+        }
+        return true;
     }
 
     private void maybeStartCrossfade() {
@@ -986,9 +1225,10 @@ public class MusicPlayerService extends Service {
         float speed = playbackSpeed > 0 ? playbackSpeed : 1f;
         int remaining = Math.round((duration - position) / speed);
         // A little early, so the next file has time to load before the fade.
-        if (remaining > crossfadeDurationMs + 250 || remaining <= 150) return;
+        // The next file is loaded a few seconds early; the fade starts on time.
+        if (remaining > crossfadeDurationMs + 3000 || remaining <= 150) return;
 
-        startCrossfadeInto(upcoming, Math.max(300, Math.min(crossfadeDurationMs, remaining - 100)));
+        startCrossfadeInto(upcoming, Math.max(300, crossfadeDurationMs));
     }
 
     private Track peekNextTrack() {
@@ -1003,23 +1243,25 @@ public class MusicPlayerService extends Service {
     private void startCrossfadeInto(Track next, int fadeMs) {
         crossfading = true;
         fadeReady = false;
+        clearFadeState();
+        fadeTrack = next;
         final MediaPlayer outgoing = mediaPlayer;
-        final int fadeSteps = Math.max(1, fadeMs / CROSSFADE_STEP_MS);
 
         try {
             incomingPlayer = new MediaPlayer();
             keepAwake(incomingPlayer);
-            // A session of its own, with an equalizer of its own set the same
-            // way. It used to join the session of the song that was ending,
-            // and two players in one session at once is what broke the
-            // crossfade on many phones: the ending song stopped dead, and the
-            // next one was heard only seconds later, from 0 or from halfway
-            // into the fade.
-            try {
-                int session = audioManager != null ? audioManager.generateAudioSessionId() : AudioManager.ERROR;
-                if (session != AudioManager.ERROR) incomingPlayer.setAudioSessionId(session);
-            } catch (Exception ignored) {}
-            fadeEq = eqFor(incomingPlayer.getAudioSessionId());
+            // The same sound session as the song that is ending, with the
+            // same equalizer. Since build 56 it had a session of its own,
+            // because two players in one session seemed to break the fade
+            // (the ending song stopped dead). That was the sound chip taking
+            // the first song back (offload), which is off while crossfade is
+            // on since build 134 (keepOffOffload). A new session makes the
+            // phone set up its sound effects for it while the old song plays,
+            // which is most likely the short pause still heard a few seconds
+            // before a fade (Caelan, 21 Nov). If the song stopping dead comes
+            // back, this is the line to look at.
+            fadeEq = null;
+            ensureSharedSessionId(incomingPlayer);
             incomingPlayer.setAudioAttributes(new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -1030,29 +1272,66 @@ public class MusicPlayerService extends Service {
 
             incomingPlayer.setOnPreparedListener(mp -> {
                 if (gen != fadeGen || !crossfading) return;
-                try {
-                    // Paused while it loaded: it waits, paused too.
-                    if (isPlaying) { mp.start(); applyPlaybackSpeed(mp); }
-                    fadeReady = true;
-                    runCrossfadeRamp(outgoing, mp, fadeSteps, gen, next);
-                } catch (Exception e) {
-                    cancelCrossfade();
-                }
+                // Loaded ahead of time, so loading never competes with the song
+                // that is still playing; it starts when the fade does.
+                fadeReady = true;
+                // Its sound path opened now, silent: opening it when the fade
+                // starts was the hitch heard at the start of the fade (the
+                // phone sets up a new output and its sound effects then).
+                // The speed too, now, while nobody can hear it: setting it is
+                // a moment of setting up the sound on some phones.
+                try { mp.start(); applyPlaybackSpeed(mp); mp.pause(); mp.seekTo(0); } catch (Exception ignored) {}
+                final Runnable waitForFade = new Runnable() {
+                    @Override public void run() {
+                        if (gen != fadeGen || !crossfading) return;
+                        int left;
+                        try {
+                            float sp = playbackSpeed > 0 ? playbackSpeed : 1f;
+                            left = Math.round((outgoing.getDuration() - outgoing.getCurrentPosition()) / sp);
+                        } catch (Exception e) { left = 0; }
+                        if (left > fadeMs || !isPlaying) { mainHandler.postDelayed(this, 40); return; }
+                        try {
+                            fadeHeard = true;
+                            mp.start(); applyPlaybackSpeed(mp);
+                            runCrossfadeRamp(outgoing, mp, Math.min(fadeMs, Math.max(300, left)), gen, next);
+                        } catch (Exception e) { giveUpBlend(next); }
+                    }
+                };
+                mainHandler.post(waitForFade);
             });
             incomingPlayer.setOnErrorListener((mp, what, extra) -> {
-                if (gen == fadeGen) cancelCrossfade();
+                if (gen == fadeGen) giveUpBlend(next);
                 return true;
             });
             incomingPlayer.setDataSource(next.path);
             incomingPlayer.prepareAsync();
         } catch (Exception e) {
-            cancelCrossfade();
+            giveUpBlend(next);
         }
     }
 
-    private void runCrossfadeRamp(MediaPlayer outgoing, MediaPlayer incoming, int stepsTotal,
+    /** The next song could not be blended into. At a song's end the song plays
+     *  out and the queue moves on as usual; a skip still has to get there, so
+     *  it plays the song the ordinary way. */
+    private void giveUpBlend(Track next) {
+        boolean wasSkip = blendingSkip;
+        cancelCrossfade();
+        if (wasSkip && next != null) {
+            try { play(next.path, next.title, next.artist, true, next.cutFrom, next.cutTo); } catch (Exception ignored) { /* stays where it was */ }
+        }
+    }
+
+    /** The two songs over `lengthMs` of playing time. Where the volumes are
+     *  comes from the clock: counting steps made the fade drag and then jump
+     *  whenever the main thread was busy (the app drawing, a widget). The curve
+     *  keeps the two together as loud as one song all the way (equal power);
+     *  a straight line went quieter in the middle of the fade. */
+    private void runCrossfadeRamp(MediaPlayer outgoing, MediaPlayer incoming, int lengthMs,
                                   int gen, Track next) {
-        final int[] step = {0};
+        final long length = Math.max(1, lengthMs);
+        final long[] heard = {0};
+        final long[] last = {SystemClock.uptimeMillis()};
+        fadeHeardMs = heard;
         Runnable ramp = new Runnable() {
             @Override public void run() {
                 // FIX 3 (existing): Also check crossfading flag — cancelCrossfade()
@@ -1060,22 +1339,31 @@ public class MusicPlayerService extends Service {
                 // the ramp keeps ticking for one more step after cancellation, calling
                 // setVolume() on a potentially released outgoing player.
                 if (gen != fadeGen || !crossfading) return;
+                long now = SystemClock.uptimeMillis();
                 // Paused: the fade waits with the music.
-                if (!isPlaying) { mainHandler.postDelayed(this, CROSSFADE_STEP_MS); return; }
-                step[0]++;
-                float t = Math.min(1f, step[0] / (float) stepsTotal);
-                try { outgoing.setVolume(1f - t, 1f - t); } catch (Exception ignored) {}
-                try { incoming.setVolume(t, t); } catch (Exception ignored) {}
+                if (!isPlaying) { last[0] = now; mainHandler.postDelayed(this, CROSSFADE_STEP_MS); return; }
+                heard[0] += now - last[0];
+                last[0] = now;
+                float t = Math.min(1f, heard[0] / (float) length);
+                // Next was pressed: from where the fade was to its end in RUSH_MS.
+                if (rushAt >= 0) {
+                    t = Math.max(t, Math.min(1f, rushFrom + (1f - rushFrom) * (heard[0] - rushAt) / (float) RUSH_MS));
+                }
+                fadeT = t;
+                float in = (float) Math.sin(t * Math.PI / 2);
+                float out = (float) Math.cos(t * Math.PI / 2);
+                try { outgoing.setVolume(out, out); } catch (Exception ignored) {}
+                try { incoming.setVolume(in, in); } catch (Exception ignored) {}
                 if (t >= 1f) {
                     try { outgoing.stop(); outgoing.release(); } catch (Exception ignored) {}
                     mediaPlayer    = incoming;
                     incomingPlayer = null;
-                    // Its session is the one from now on, and its equalizer.
-                    sharedAudioSessionId = incoming.getAudioSessionId();
-                    if (fadeEq != null) { releaseEqualizer(); equalizer = fadeEq; fadeEq = null; }
-                    else attachEqualizer();
+                    // Same session, same equalizer: nothing to set up again
+                    // now that the new song is the only one playing.
                     crossfading    = false;
                     fadeReady      = false;
+                    blendingSkip   = false;
+                    clearFadeState();
                     // From here the song that faded in is the one playing; the
                     // one that faded out has nothing more to say.
                     final int promotedToken = ++playToken;
@@ -1092,6 +1380,10 @@ public class MusicPlayerService extends Service {
                     for (int i = 0; i < nativeQueue.size(); i++) {
                         if (nativeQueue.get(i) == next) { at = i; break; }
                     }
+                    // Next pressed during the fade: the app has already said
+                    // where that song is in the queue it handed over.
+                    if (at < 0 && nativeQueueIndex >= 0 && nativeQueueIndex < nativeQueue.size()
+                            && nativeQueue.get(nativeQueueIndex).path.equals(next.path)) at = nativeQueueIndex;
                     for (int i = nativeQueueIndex + 1; at < 0 && i < nativeQueue.size(); i++) {
                         if (nativeQueue.get(i).path.equals(next.path)) at = i;
                     }
@@ -1192,7 +1484,18 @@ public class MusicPlayerService extends Service {
     //   • onTrackComplete() is fired ONLY when the queue is exhausted, so JS
     //     knows to stop and reset — it never re-drives the advance itself.
     private void nativeSkip(int dir) {
+        // Next (widget, notification, headset) while the next song is already
+        // fading in: it stays, as from the app (takeOverFade).
+        if (dir > 0 && fadeTrack != null && takeOverFade(fadeTrack.path)) return;
         cancelCrossfade();
+        // No queue in memory (the app restored its last song without handing
+        // one over): the one kept on disk. And the place in it by the song that
+        // is on, if the index does not point at it.
+        restoreQueue();
+        if (currentPath != null && (nativeQueueIndex < 0 || nativeQueueIndex >= nativeQueue.size()
+                || !currentPath.equals(nativeQueue.get(nativeQueueIndex).path))) {
+            for (int i = 0; i < nativeQueue.size(); i++) if (currentPath.equals(nativeQueue.get(i).path)) { nativeQueueIndex = i; break; }
+        }
         if (nativeQueue.isEmpty() || nativeQueueIndex < 0) {
             // No native queue to advance through — let JS decide what to do.
             if (completionListener != null) completionListener.onTrackComplete();
@@ -1205,6 +1508,11 @@ public class MusicPlayerService extends Service {
         // Repeat all goes round, both ways.
         if (MODE_REPEAT_ALL.equals(playMode)) next = (next + nativeQueue.size()) % nativeQueue.size();
 
+        // By hand past the ends: previous on the first song starts it again,
+        // next on the last goes round to the first. It used to say "stopped"
+        // (the widget showed pause) while the song went on playing.
+        if (next < 0 && mediaPlayer != null) { try { seekTo(0); } catch (Exception ignored) {} return; }
+        if (next >= nativeQueue.size()) next = 0;
         if (next < 0 || next >= nativeQueue.size()) {
             // Queue exhausted: stop and notify JS to reset its transport UI.
             isPlaying = false;
@@ -1232,15 +1540,9 @@ public class MusicPlayerService extends Service {
     }
 
     private void pushWidgetUpdate() {
-        try {
-            Intent updateIntent = new Intent(this, NowPlayingWidgetProvider.class);
-            updateIntent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-            AppWidgetManager mgr = AppWidgetManager.getInstance(this);
-            int[] ids = mgr.getAppWidgetIds(
-                    new android.content.ComponentName(this, NowPlayingWidgetProvider.class));
-            updateIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
-            sendBroadcast(updateIntent);
-        } catch (Exception ignored) {}
+        // All four widgets (WidgetRenderer). Once a second while playing only
+        // the Card's timeline goes out; the rest when something else changed.
+        try { WidgetRenderer.refreshAll(this, false); } catch (Exception ignored) {}
     }
 
     private void persistNowPlaying() {
@@ -1248,6 +1550,7 @@ public class MusicPlayerService extends Service {
         final String  title    = currentTitle;
         final String  artist   = currentArtist;
         final int     position = getCurrentPosition();
+        final int     duration = getDuration();
         final boolean playing  = isPlaying;
         final long    now      = System.currentTimeMillis();
 
@@ -1264,6 +1567,7 @@ public class MusicPlayerService extends Service {
                     obj.put("title",     title);
                     obj.put("artist",    artist);
                     obj.put("position",  position);
+                    obj.put("duration",  duration);
                     obj.put("isPlaying", playing);
                     obj.put("updatedAt", now);
                     ed.putString("mptree_native_now_playing", obj.toString());
@@ -1416,6 +1720,8 @@ public class MusicPlayerService extends Service {
                 if (path.equals(currentPath)) {
                     currentTrackArt     = ready;
                     currentTrackArtPath = path;
+                    // The widgets get a copy of their own: this one is recycled later.
+                    WidgetRenderer.setArt(MusicPlayerService.this, path, ready);
                     // Refresh surfaces now that real art is available.
                     updateMediaSessionMetadata();
                     showNotification();

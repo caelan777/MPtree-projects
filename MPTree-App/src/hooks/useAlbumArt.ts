@@ -19,8 +19,10 @@ export function useAlbumArt(
   path: string | undefined,
   albumId: number | undefined,
   enabled: boolean,
+  /** A bigger picture, for the grid layouts. */
+  big = false,
 ): string | null {
-  const key = enabled && path ? artKey(path, albumId) : undefined;
+  const key = enabled && path ? (big ? "big|" : "") + artKey(path, albumId) : undefined;
 
   const subscribe = useCallback((onChange: () => void) => {
     if (!key) return () => {};

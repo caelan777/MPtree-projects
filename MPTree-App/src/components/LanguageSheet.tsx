@@ -34,6 +34,13 @@ const FLAGS: Record<Lang, ReactNode> = {
       <rect y="6" width="24" height="12" fill="#F1BF00" />
     </>
   ),
+  ru: (
+    <>
+      <rect width="24" height="8" fill="#fff" />
+      <rect y="8" width="24" height="8" fill="#0039A6" />
+      <rect y="16" width="24" height="8" fill="#D52B1E" />
+    </>
+  ),
 };
 
 const round = (T: T): React.CSSProperties => ({

@@ -7,4 +7,17 @@
     <string name="action_pause">Pauze</string>
     <string name="action_next">Volgende</string>
     <string name="not_playing">Speelt niets</string>
+    <string name="widget_tap_to_open">Tik om MPTree te openen</string>
+    <string name="widget_bar_desc">Balk: wat speelt, met vorige, afspelen en volgende</string>
+    <string name="widget_card_desc">Kaart: groter, met de tijd</string>
+    <string name="widget_record_desc">Plaat: je cover op een plaat</string>
+    <string name="widget_pill_desc">Pil: afspelen en pauze, klein</string>
+    <string name="widget_pro_title">Hoort bij MPTree Pro</string>
+    <string name="widget_pro_sub">Tik om MPTree te openen</string>
+    <string name="channel_new_music">Nieuwe muziek</string>
+    <string name="new_songs_sub">Tik om te luisteren in MPTree</string>
+    <plurals name="new_songs">
+        <item quantity="one">Eén nieuw nummer</item>
+        <item quantity="other">%d nieuwe nummers</item>
+    </plurals>
 </resources>

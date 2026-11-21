@@ -11,6 +11,8 @@ import { CapacitorHttp } from "@capacitor/core";
 // stack, so the WebView's cross-origin rules do not come into it.
 
 const API = "https://www.googleapis.com";
+/** Drive's simple upload takes up to 5 MB; stay well under it. */
+const SIMPLE_UPLOAD_MAX = 4 * 1024 * 1024;
 
 export type DriveFile = {
   id: string;
@@ -30,8 +32,17 @@ export class DriveError extends Error {
   }
 }
 
+/** The person's Google storage is full: Drive takes nothing more from anyone,
+ *  MPTree included, until they make room. Rate limits are not this. */
+export function isDriveFull(e: unknown): boolean {
+  const err = e as { reason?: string; message?: string } | null;
+  return /storageQuotaExceeded|storage quota/i.test(`${err?.reason ?? ""} ${err?.message ?? ""}`);
+}
+
 export type Drive = {
   about(): Promise<{ email: string; name: string; photo?: string }>;
+  /** Free bytes in the person's Google storage, or null when it has no limit. */
+  space(): Promise<number | null>;
   list(): Promise<DriveFile[]>;
   read<T>(id: string): Promise<T>;
   /** Creates the file when id is absent. Resolves its id. */
@@ -74,11 +85,42 @@ function realDrive(tokens: Tokens): Drive {
     return out as T;
   }
 
+  /** Drive's two-step upload: ask for an upload address, then send the whole
+   *  file to it. No size limit that MPTree comes near. */
+  async function resumableUpload(fileId: string, text: string, retried = false): Promise<void> {
+    const token = await tokens.get();
+    const start = await CapacitorHttp.request({
+      method: "PATCH",
+      url: `${API}/upload/drive/v3/files/${fileId}?uploadType=resumable&fields=id`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": "application/json",
+      },
+      data: {},
+    });
+    if (start.status === 401 && !retried) { await tokens.renew(token); return resumableUpload(fileId, text, true); }
+    const where = start.headers?.Location ?? start.headers?.location;
+    if (start.status < 200 || start.status >= 300 || !where) throw new DriveError(start.status, "resumableStart");
+    const put = await CapacitorHttp.request({
+      method: "PUT", url: where, data: text,
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+    });
+    if (put.status < 200 || put.status >= 300) throw new DriveError(put.status, "resumableUpload");
+  }
+
   return {
     async about() {
       const r = await call<{ user: { displayName: string; emailAddress: string; photoLink?: string } }>(
         "GET", `${API}/drive/v3/about?fields=user(displayName,emailAddress,photoLink)`);
       return { email: r.user.emailAddress, name: r.user.displayName, photo: r.user.photoLink };
+    },
+    async space() {
+      const r = await call<{ storageQuota?: { limit?: string; usage?: string } }>(
+        "GET", `${API}/drive/v3/about?fields=storageQuota(limit,usage)`);
+      const limit = Number(r.storageQuota?.limit);
+      if (!limit) return null;
+      return Math.max(0, limit - Number(r.storageQuota?.usage ?? 0));
     },
     async list() {
       const files: DriveFile[] = [];
@@ -103,7 +145,22 @@ function realDrive(tokens: Tokens): Drive {
           { name, parents: ["appDataFolder"], mimeType: "application/json" });
         fileId = made.id;
       }
-      await call("PATCH", `${API}/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, body);
+      // A simple upload stops at 5 MB, and covers.json passes that once a
+      // library has a few dozen photos: then every cover was refused and a
+      // phone signing in got none back. Bigger files go up resumable.
+      const text = JSON.stringify(body);
+      try {
+        if (text.length < SIMPLE_UPLOAD_MAX) {
+          await call("PATCH", `${API}/upload/drive/v3/files/${fileId}?uploadType=media&fields=id`, body);
+        } else {
+          await resumableUpload(fileId, text);
+        }
+      } catch (e) {
+        // A file just made but left empty (storage full, say) would be read
+        // as the newest of its name: it goes again.
+        if (!id) await call("DELETE", `${API}/drive/v3/files/${fileId}`).catch(() => {});
+        throw e;
+      }
       return fileId;
     },
     async remove(id) {
@@ -125,6 +182,7 @@ function devDrive(): Drive {
   const save = (s: DevStore) => fetch("/__dev_drive", { method: "POST", body: JSON.stringify(s) });
   return {
     async about() { return { email: "dev@example.com", name: "Dev" }; },
+    async space() { return null; },
     async list() {
       return Object.values(await load()).map(f => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime, size: f.size, appProperties: f.appProperties }));
     },

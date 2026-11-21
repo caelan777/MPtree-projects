@@ -1,10 +1,15 @@
-import { useState, useRef, memo } from "react";
+import { useState, useRef, useLayoutEffect, memo } from "react";
+import { viewW, COLUMN_QUERY } from "../utils";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
-import { SpinningDisc } from "./SpinningDisc";
+import { PlayerArt } from "./PlayerArt";
+import { Marquee } from "./Marquee";
+import { Timeline } from "./Timeline";
+import { useLook } from "../look";
 import { IC } from "./Icons";
+import { SongActionTiles, type SongActions } from "./MultiSelectBar";
 
 /**
  * The blurred album-art wash behind the player.
@@ -107,17 +112,21 @@ type PlayerExpandSheetProps = {
   onQueueMove: (from: number, to: number) => void;
   /** A tap on a song in "Next up": it plays now, and the queue stays. */
   onPlayFromQueue: (song: Song) => void;
+  /** The size of a row in Songs, so "Next up" rows match it. */
+  rowSize?: { h: number; art: number; title: number; sub: number };
   /** The "⋮" on a row in "Next up". */
   onOpenSongMenu: (song: Song) => void;
   /** Lyrics saved for this song, if any. Their absence is what makes the Lyrics
    *  button offer to add some instead of showing an empty panel. */
   lyrics?: string;
-  /** Opens the sheet where lyrics are pasted or searched for. */
-  onAddLyrics: () => void;
-  /** Opens the same "⋮" action sheet the list rows use, for this track. The
-   *  bar below covers the common actions; the menu adds Play next and Add to
-   *  playlist, which have nowhere else to live once you are in the player. */
-  onOpenMenu: () => void;
+  /** Stores pasted lyrics for this song (null clears them). Pasting happens in
+   *  the card itself, where the record was, not on a page of its own. */
+  onSaveLyrics?: (lyrics: string | null) => void;
+  /** Opens a web search for this song's lyrics in the user's own browser. */
+  onSearchLyrics?: () => void;
+  /** What the "⋮" can do with this track. Its tiles open in the card, where the
+   *  record was, the way the lyrics do. Lyrics is handled in here. */
+  menuActions?: Omit<SongActions, "onEditLyrics">;
   /** A tap on the record of a song without a cover. */
   onNoCover?: () => void;
   /** A tap on the record: change the song's photo. */
@@ -131,6 +140,11 @@ type PlayerExpandSheetProps = {
   dragSettling?: boolean;
   /** Skip the enter keyframe (the drag already brought the sheet into place). */
   skipEnter?: boolean;
+  /** Where the top of the mini player was when it was tapped (px from the top
+   *  of the screen): the player grows up out of it and goes back into it. */
+  riseFrom?: number | null;
+  /** The close starts (its animation), so the mini player can come back with it. */
+  onCloseStart?: () => void;
   T: T;
 };
 
@@ -138,29 +152,49 @@ export function PlayerExpandSheet({
   song, dispName, dispArtist, customPhoto, backdropPhoto,
   isPlaying, currentTime, duration, playMode, repeatOn, repeatAll, isLiked,
   playbackSpeed, onPlaybackSpeedChange,
+  rowSize = { h: 68, art: 48, title: 15, sub: 13 },
   upNextQueue, playNextQueue = [], sourceLabel, getDispName, getDispArtist, getCustomPhoto,
   onTogglePlay, onSkip, onToggleShuffle, onToggleRepeat,
   onSeek, onSeekStart, onSeekEnd,
   onToggleLike, onRemove, onShare,
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
-  lyrics, onAddLyrics, onOpenMenu, onClose, onNoCover, onChangePhoto,
+  lyrics, onSaveLyrics, onSearchLyrics, menuActions, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
+  riseFrom = null, onCloseStart,
   T,
 }: PlayerExpandSheetProps) {
   // The record gives way to the words, and back. Tied to the song, so moving to
   // the next track always lands you on the record rather than the last song’s
   // lyrics.
-  const [showLyrics, setShowLyrics] = useState(false);
-  const [lyricsFor, setLyricsFor] = useState(song.id);
-  const lyricsOpen = showLyrics && lyricsFor === song.id;
+  // The same goes for the menu and for pasting lyrics: all three take the
+  // record's place in the card, and only one at a time.
+  const [panelState, setPanelState] = useState<{ kind: "lyrics" | "paste" | "menu"; id: string } | null>(null);
+  const panel = panelState && panelState.id === song.id ? panelState.kind : null;
+  const lyricsOpen = panel === "lyrics" || panel === "paste";
   const hasLyrics = !!lyrics && lyrics.trim().length > 0;
+  const openPanel = (kind: "lyrics" | "paste" | "menu" | null) => setPanelState(kind ? { kind, id: song.id } : null);
 
-  const toggleLyrics = () => {
-    // Nothing to show is not a state worth entering. Offer to add some instead.
-    if (!hasLyrics) { onAddLyrics(); return; }
-    setLyricsFor(song.id);
-    setShowLyrics(!lyricsOpen);
-  };
+  // With no lyrics stored, the Lyrics button opens the paste box straight away.
+  const toggleLyrics = () => openPanel(lyricsOpen ? null : hasLyrics ? "lyrics" : "paste");
+  const toggleMenu = () => openPanel(panel === "menu" ? null : "menu");
+  const panelBody = (full: boolean) =>
+    panel === "menu" && menuActions ? (
+      <MenuPanel title={full ? dispName : undefined} artist={dispArtist} onDone={() => openPanel(null)} T={T}
+        actions={{ ...menuActions, onEditLyrics: () => openPanel(hasLyrics ? "lyrics" : "paste") }} />
+    ) : panel === "paste" ? (
+      <PastePanel key={song.id} full={full} current={lyrics} T={T}
+        onSearch={onSearchLyrics}
+        onCancel={() => openPanel(hasLyrics ? "lyrics" : null)}
+        onSave={l => { onSaveLyrics?.(l); openPanel(l ? "lyrics" : null); }} />
+    ) : (
+      <LyricsPanel text={lyrics ?? ""} title={full ? dispName : undefined} artist={full ? dispArtist : undefined} onEdit={() => openPanel("paste")} T={T} />
+    );
+
+  // How the player shows what plays, and which timeline it has (Personalise,
+  // the Player page). The ring needs the record to go round; with any other
+  // style the line takes its place.
+  const look = useLook();
+  const timelineKind = look.timeline === "ring" && (look.playerStyle !== "record" || !!panel) ? "line" : look.timeline;
 
   const fmt = (ms: number) => {
     const s = Math.floor(ms / 1000);
@@ -218,11 +252,29 @@ export function PlayerExpandSheet({
   // during the animation don't call onClose twice.
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
+
+  // ── Out of the mini player and back into it ───────────────────────────────
+  // Opened by a tap, the player used to come up from the bottom of the screen
+  // while the mini player stood still under it. Now its top starts where the
+  // mini player's top is and grows up from there, as the mini player fades into
+  // it; closing goes back down into the mini player (Caelan, 21 Nov). The
+  // distance is the sheet's own top, measured before the first paint: offsetTop
+  // is where it lies, whatever the animation does to it.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [riseBy, setRiseBy] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = sheetRef.current;
+    if (riseFrom == null || skipEnter || !el) return;
+    setRiseBy(Math.max(0, Math.round(riseFrom - el.offsetTop)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const animatedClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
-    setTimeout(onClose, 180); // matches .pes-sheet-out duration
+    onCloseStart?.();
+    setTimeout(onClose, riseBy != null ? 240 : 180); // matches .pes-sheet-sink / -out
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -302,6 +354,7 @@ export function PlayerExpandSheet({
       if (closeDragY > vh() * 0.12 || flick) {
         if (closingRef.current) return;
         closingRef.current = true;
+        onCloseStart?.();
         setCloseSnap(true);
         setCloseDragY(vh());         // glide the rest of the way down
         setTimeout(onClose, 230);    // just after the 0.22 s glide, never mid-way
@@ -366,8 +419,17 @@ export function PlayerExpandSheet({
 
   // The record at the size it always had. The player is as tall as what it
   // holds, so nothing is stretched to fill a screen.
-  const winW = typeof window !== "undefined" ? window.innerWidth : 375;
-  const discSize = Math.min(268, winW - 84);
+  const winW = typeof window !== "undefined" ? viewW() : 375;
+  // Sideways on a phone the record goes left of the title and the controls,
+  // sized to the height there is, so the whole player fits on the screen.
+  const land = typeof window !== "undefined" && !!window.matchMedia?.(COLUMN_QUERY).matches;
+  const discSize = land ? Math.max(140, Math.min(230, window.innerHeight - 150)) : Math.min(268, winW - 84);
+  // Height of the record and title together, so the lyrics can take exactly
+  // that room: opening them moves nothing else in the card.
+  const [topH, setTopH] = useState(0);
+  const measureTop = (el: HTMLDivElement | null) => {
+    if (el && !land && el.offsetHeight && el.offsetHeight !== topH) setTopH(el.offsetHeight);
+  };
 
   /** One part of the bar under the player. The bar is drawn like a segmented
    *  control: a rounded track, the parts inside it rounded on their outer
@@ -405,7 +467,7 @@ export function PlayerExpandSheet({
         onClick={() => { if (dragIdx === null) onPlayFromQueue(s); }}
         style={{
           display: "flex", alignItems: "center", gap: 12,
-          height: 64, padding: "0 8px 0 4px", cursor: "pointer",
+          height: rowSize.h, padding: "0 8px 0 4px", cursor: "pointer",
           opacity: isDragging ? 0.4 : 1,
           boxShadow: isOver ? `inset 0 ${dragIdx! < i ? -2 : 2}px 0 ${T.accent}` : "none",
           transition: "opacity 0.12s",
@@ -424,9 +486,9 @@ export function PlayerExpandSheet({
             <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
           </svg>
         </div>
-        <AlbumArt title={name} size={44} customPhoto={getPhoto(s)} songPath={s.uri} albumId={s.albumId} T={T} />
+        <AlbumArt title={name} size={rowSize.art} customPhoto={getPhoto(s)} songPath={s.uri} albumId={s.albumId} T={T} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontSize: rowSize.title, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {name}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -435,7 +497,7 @@ export function PlayerExpandSheet({
                 {t("NEXT")}
               </span>
             )}
-            <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: rowSize.sub, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {getArtist(s)}
             </span>
           </div>
@@ -476,17 +538,30 @@ export function PlayerExpandSheet({
         .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
         .pes-sheet-in    { animation: pesSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .pes-sheet-out   { animation: pesSlideDown 0.18s ease-in both; }
+        /* Out of the mini player: the top starts at the mini player's top
+           (--pes-from below where the sheet lies) and the sheet is clear at
+           first, so the mini player seems to grow into it. */
+        @keyframes pesRise { from { transform: translateY(var(--pes-from)); opacity: 0; } 38% { opacity: 1; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pesSink { from { transform: translateY(0); opacity: 1; } 62% { opacity: 1; } to { transform: translateY(var(--pes-from)); opacity: 0; } }
+        .pes-sheet-rise  { animation: pesRise 0.34s cubic-bezier(0.2, 0.85, 0.25, 1) backwards; }
+        .pes-sheet-sink  { animation: pesSink 0.24s cubic-bezier(0.4, 0, 0.7, 0.2) both; }
         @media (prefers-reduced-motion: reduce) {
-          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
+          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out, .pes-sheet-rise, .pes-sheet-sink { animation: none; }
         }
       `}</style>
       {/* A sheet from the bottom, as tall as the player needs, with the list
           dimmed above it. Never taller than the screen under the status bar
           (the WebView runs edge to edge); on a short screen it scrolls. */}
       <div
-        className={closing ? "pes-sheet-out" : dragProgress !== null || skipEnter ? undefined : "pes-sheet-in"}
+        ref={sheetRef}
+        className={
+          closing ? (riseBy != null ? "pes-sheet-sink" : "pes-sheet-out")
+          : dragProgress !== null || skipEnter ? undefined
+          : riseFrom != null ? (riseBy != null ? "pes-sheet-rise" : undefined)
+          : "pes-sheet-in"}
         onClick={e => e.stopPropagation()}
         style={{
+          ...(riseBy != null ? { ["--pes-from" as string]: `${riseBy}px` } : null),
           position: "absolute", left: 0, right: 0, bottom: 0,
           maxHeight: "calc(100% - env(safe-area-inset-top, 0px) - 8px)",
           display: "flex", flexDirection: "column",
@@ -539,9 +614,13 @@ export function PlayerExpandSheet({
                 <span>{t("Lyrics")}</span>
               </button>
               <button
-                onClick={onOpenMenu}
+                onClick={toggleMenu}
+                aria-pressed={panel === "menu"}
                 aria-label={t("More options for {name}", { name: dispName })}
-                style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", padding: 8, display: "flex" }}>
+                style={{
+                  background: panel === "menu" ? T.dim : "transparent", borderRadius: 20,
+                  border: "none", color: panel === "menu" ? T.text : T.muted, cursor: "pointer", padding: 8, display: "flex",
+                }}>
                 <IC.Dots />
               </button>
             </div>
@@ -552,56 +631,65 @@ export function PlayerExpandSheet({
             background: T.card, borderRadius: 14, margin: "4px 16px 0", padding: "14px 14px 12px",
             border: `1px solid ${T.accent}44`, boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
             flexShrink: 0,
+            ...(land ? { display: "grid", gridTemplateColumns: `${discSize}px minmax(0, 1fr)`, columnGap: 22, alignItems: "center", alignContent: "center" } : null),
           }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
-              {lyricsOpen ? (
-                <div data-own-drag="">
-                  <LyricsPanel text={lyrics ?? ""} size={discSize} onEdit={onAddLyrics} T={T} />
+            {/* Portrait: the words take the whole top of the card, record and
+                title both, at the height the record had, so the timeline and
+                the buttons stay exactly where they were. */}
+            {panel && !land ? (
+              <div data-own-drag="" style={{ marginBottom: 14, marginTop: 6, height: topH || discSize + 80 }}>
+                {panelBody(true)}
+              </div>
+            ) : (
+            <div ref={measureTop} style={land ? { display: "contents" } : { display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 14, marginTop: 6 }}>
+              {panel ? (
+                <div data-own-drag="" style={land ? { gridColumn: 1, gridRow: "1 / span 3" } : undefined}>
+                  <div style={{ width: discSize, height: discSize }}>
+                    {panelBody(false)}
+                  </div>
                 </div>
               ) : (
-                <div style={{ position: "relative" }}>
-                  <SpinningDisc
+                <div style={{ position: "relative", ...(land ? { gridColumn: 1, gridRow: "1 / span 3" } : null) }}>
+                  <PlayerArt
+                    style={look.playerStyle}
                     size={discSize}
                     spinning={isPlaying}
                     title={dispName}
+                    artist={dispArtist}
                     customPhoto={customPhoto}
-                    tappable
                     onNoCover={onNoCover}
                     onPhoto={onChangePhoto}
+                    progress={duration > 0 ? currentTime / duration : 0}
+                    ring={timelineKind === "ring" ? { currentTime, duration, onSeek, onSeekStart, onSeekEnd } : undefined}
+                    dark={isDarkBg(T.bg)}
+                    wordsExtra={land ? 0 : 64}
+                    T={T}
                   />
                 </div>
               )}
-              <div style={{ width: "100%", textAlign: "center", minWidth: 0 }}>
-                <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
-                  {dispName}
-                </div>
+              <div style={{ width: "100%", textAlign: "center", minWidth: 0, ...(land ? { gridColumn: 2, gridRow: 1, alignSelf: "end", marginBottom: 16 } : null), ...(look.playerStyle === "text" && !panel ? { display: "none" } : null) }}>
+                {/* One line each, moving when too long (Marquee): a name on
+                    two or three lines made the player grow and shrink from
+                    song to song (Caelan, 21 Nov). */}
+                <Marquee text={dispName} align="center" style={{ fontSize: 18, fontWeight: "700", color: T.accent, lineHeight: 1.3 }} />
                 {song.isCut && (
                   <span style={{
                     fontSize: 10, background: T.dim, color: T.textSub,
                     borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
                   }}>CUT</span>
                 )}
-                <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
-                  {dispArtist}
-                </div>
+                <Marquee text={dispArtist} align="center" style={{ fontSize: 14, color: T.textSub, marginTop: 6, lineHeight: 1.3 }} />
               </div>
             </div>
+            )}
 
             {/* Timeline */}
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: T.muted, width: 34 }}>{fmt(currentTime)}</span>
-              <input
-                className="slider" type="range" min={0} max={duration || 100} value={currentTime}
-                onMouseDown={onSeekStart} onTouchStart={onSeekStart}
-                onChange={e => onSeek(Number(e.target.value))}
-                onMouseUp={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={e => onSeekEnd(Number((e.target as HTMLInputElement).value))}
-              />
-              <span style={{ fontSize: 11, color: T.muted, width: 34, textAlign: "right" }}>{fmt(duration)}</span>
+            <div style={{ marginBottom: 6, ...(land ? { gridColumn: 2, gridRow: 2 } : null) }}>
+              <Timeline kind={timelineKind} currentTime={currentTime} duration={duration} onSeek={onSeek} onSeekStart={onSeekStart} onSeekEnd={onSeekEnd} fmt={fmt} seed={song.id} T={T} />
             </div>
 
             {/* Transport */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: land ? 6 : 18, marginTop: 10, ...(land ? { gridColumn: 2, gridRow: 3, alignSelf: "start" } : null) }}>
               {/* Shuffle and repeat used to be one button that went round
                   off, shuffle, repeat: reaching repeat meant shuffling first.
                   Each has its own now, at either end, with a dot when on. */}
@@ -657,16 +745,17 @@ export function PlayerExpandSheet({
             </button>
             {nextSong ? (
               <div style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 10,
+                // The size of a row in Songs, so it reads as the next row of the list.
+                display: "flex", alignItems: "center", gap: 12, boxSizing: "border-box",
+                minHeight: rowSize.h, padding: "0 10px", borderRadius: 12,
                 background: T.card, border: `1px solid ${T.border}`,
               }}>
-                <AlbumArt title={getName(nextSong)} size={36} customPhoto={getPhoto(nextSong)} songPath={nextSong.uri} albumId={nextSong.albumId} T={T} />
+                <AlbumArt title={getName(nextSong)} size={rowSize.art} customPhoto={getPhoto(nextSong)} songPath={nextSong.uri} albumId={nextSong.albumId} T={T} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: rowSize.title, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {getName(nextSong)}
                   </div>
-                  <div style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: rowSize.sub, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {getArtist(nextSong)}
                   </div>
                 </div>
@@ -748,10 +837,10 @@ export function PlayerExpandSheet({
               margin: "0 12px 6px", padding: "10px 14px", borderRadius: 18,
               background: T.card, border: `1px solid ${T.border}`,
             }}>
-              <AlbumArt title={dispName} size={44} active playing={isPlaying} customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
+              <AlbumArt title={dispName} size={rowSize.art} active playing={isPlaying} customPhoto={getPhoto(song)} songPath={song.uri} albumId={song.albumId} T={T} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: T.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispName}</div>
-                <div style={{ fontSize: 13, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist}</div>
+                <div style={{ fontSize: rowSize.title, fontWeight: 700, color: T.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispName}</div>
+                <div style={{ fontSize: rowSize.sub, color: T.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist}</div>
               </div>
             </div>
 
@@ -775,37 +864,146 @@ export function PlayerExpandSheet({
  * whatever you pasted, so there are no timings to follow and pretending
  * otherwise would just be a panel that never moves.
  */
-function LyricsPanel({ text, size, onEdit, T }: {
-  text: string; size: number; onEdit: () => void; T: T;
+function LyricsPanel({ text, title, artist, onEdit, T }: {
+  text: string; title?: string; artist?: string; onEdit: () => void; T: T;
 }) {
+  // With a title it is the portrait card (design L1): the song on one small
+  // line above the words, a hairline under it, no box of its own. Without, it
+  // is the square in landscape's record column.
+  const full = title !== undefined;
   return (
     <div style={{
-      width: size, height: size, flexShrink: 0,
-      borderRadius: 16, background: T.dim,
+      width: "100%", height: "100%",
+      borderRadius: full ? 0 : 16, background: full ? "transparent" : T.dim,
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 14px 6px", flexShrink: 0,
+        display: "flex", alignItems: "baseline", gap: 8,
+        padding: full ? "0 2px 9px" : "10px 14px 6px", flexShrink: 0,
+        borderBottom: full ? `1px solid ${T.border}` : "none",
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
-          {t("Lyrics")}
-        </span>
+        {full ? (
+          <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: T.accent }}>{title}</span>
+            {artist ? <span style={{ fontSize: 12.5, color: T.textSub, marginLeft: 8 }}>{artist}</span> : null}
+          </span>
+        ) : (
+          <span style={{ flex: 1, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.muted }}>
+            {t("Lyrics")}
+          </span>
+        )}
         <button
           onClick={onEdit}
-          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2 }}
+          style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2, flexShrink: 0 }}
         >
           {t("Edit")}
         </button>
       </div>
       <div style={{
         flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch",
-        padding: "0 16px 14px",
-        fontSize: 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+        padding: full ? "12px 4px 52px" : "0 16px 14px",
+        fontSize: full ? 16 : 15, lineHeight: 1.75, color: T.text, whiteSpace: "pre-wrap",
+        // The last lines fade out, so it reads as more below rather than cut off.
+        ...(full ? { WebkitMaskImage: "linear-gradient(#000 85%, transparent)", maskImage: "linear-gradient(#000 85%, transparent)" } : null),
       }}>
         {text.trim()}
       </div>
     </div>
   );
+}
+
+/** The song on one small line, and a button on the right: the head of every
+ *  panel that takes the record's place in the portrait card. */
+function PanelHead({ title, artist, action, onAction, T }: {
+  title?: string; artist?: string; action: string; onAction: () => void; T: T;
+}) {
+  const full = title !== undefined;
+  return (
+    <div style={{
+      display: "flex", alignItems: "baseline", gap: 8, flexShrink: 0,
+      padding: full ? "0 2px 9px" : "10px 14px 6px",
+      borderBottom: full ? `1px solid ${T.border}` : "none",
+    }}>
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {full ? (
+          <>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: T.accent }}>{title}</span>
+            {artist ? <span style={{ fontSize: 12.5, color: T.textSub, marginLeft: 8 }}>{artist}</span> : null}
+          </>
+        ) : null}
+      </span>
+      <button onClick={onAction}
+        style={{ background: "transparent", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", padding: 2, flexShrink: 0 }}>
+        {action}
+      </button>
+    </div>
+  );
+}
+
+/** The "⋮" menu, in the card: the same tiles as the menu on a list row. */
+function MenuPanel({ title, artist, actions, onDone, T }: {
+  title?: string; artist?: string; actions: SongActions; onDone: () => void; T: T;
+}) {
+  const full = title !== undefined;
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden",
+      borderRadius: full ? 0 : 16, background: full ? "transparent" : T.dim }}>
+      <PanelHead title={title} artist={artist} action={t("Done")} onAction={onDone} T={T} />
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 0 8px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <SongActionTiles a={actions} T={T} />
+      </div>
+    </div>
+  );
+}
+
+/** Pasting lyrics, in the card. MPTree does not fetch lyrics: Search opens the
+ *  user's own browser on a search, and they paste what they find here. */
+function PastePanel({ full, current, onSave, onSearch, onCancel, T }: {
+  full: boolean; current?: string; onSave: (lyrics: string | null) => void;
+  onSearch?: () => void; onCancel: () => void; T: T;
+}) {
+  const [text, setText] = useState(current ?? "");
+  const pill = (filled: boolean) => ({
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+    background: filled ? T.accent : "transparent", color: filled ? T.playBtnFg : T.text,
+    border: filled ? "none" : `1px solid ${T.chipBorder}`, borderRadius: 20, padding: "8px 14px",
+    fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", flexShrink: 0,
+  } as const);
+  const clearing = !!current && !text.trim();
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 10,
+      ...(full ? null : { background: T.dim, borderRadius: 16, padding: 10, boxSizing: "border-box" as const }) }}>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder={t("Paste the lyrics here…")}
+        style={{
+          flex: 1, minHeight: 0, width: "100%", boxSizing: "border-box", resize: "none",
+          background: full ? T.dim : T.card, color: T.text, border: "none", borderRadius: 12,
+          padding: "12px 14px", fontSize: 15, lineHeight: 1.7, fontFamily: "inherit", outline: "none",
+        }}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {onSearch && <button onClick={onSearch} style={pill(false)}>{IC.Search(T.text)}{t("Search online")}</button>}
+        <span style={{ flex: 1 }} />
+        <button onClick={clearing ? () => onSave(null) : onCancel}
+          style={{ ...pill(false), border: "none", color: clearing ? "#e8445a" : T.muted }}>
+          {clearing ? t("Delete") : t("Cancel")}
+        </button>
+        <button onClick={() => { if (text.trim()) onSave(text); }} disabled={!text.trim()}
+          style={{ ...pill(true), opacity: text.trim() ? 1 : 0.45 }}>{t("Save")}</button>
+      </div>
+    </div>
+  );
+}
+
+/** Whether a colour is dark: the turntable is drawn black on a dark app and
+ *  light on a light one. */
+function isDarkBg(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return true;
+  const n = parseInt(m[1], 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum < 0.45;
 }

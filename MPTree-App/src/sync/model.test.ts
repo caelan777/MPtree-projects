@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Song, Playlist, SongMeta } from "../types";
-import { buildLocal, merge, apply, missingFrom, toKey, songSig, markDeleted, markRestored, deletedBy, PENDING, type LibDoc } from "./model";
+import { buildLocal, merge, apply, missingFrom, toKey, songSig, markDeleted, markRestored, deletedBy, PENDING, noteOrphaned, type LibDoc } from "./model";
 
 // Two phones with the same two songs at different paths, and a third song
 // only phone A has.
@@ -286,5 +286,18 @@ describe("deleting for good", () => {
     const doc: LibDoc = { v: 1, songs: { fp1: { del: { A: 1 } } }, playlists: {}, cuts: {}, settings: {} };
     expect(Object.keys(missingFrom({}, [{ fp1: [1, "one.mp3"] }], doc, { me: "A" }))).toEqual([]);
     expect(Object.keys(missingFrom({}, [{ fp1: [1, "one.mp3"] }], { ...doc, songs: { fp1: { del: { B: 1 } } } }, { me: "A" }))).toEqual(["fp1"]);
+  });
+});
+
+describe("Pro in the account after a refund", () => {
+  it("keeps the note while the phone that bought Pro is on the account", () => {
+    expect(noteOrphaned("A", ["A", "B", "C"])).toBe(false);
+  });
+  it("drops the note of a phone that left the account (signed out or taken off)", () => {
+    expect(noteOrphaned("A", ["B", "C"])).toBe(true);
+  });
+  it("says nothing when there is no note, or the list could not be read", () => {
+    expect(noteOrphaned(undefined, ["B", "C"])).toBe(false);
+    expect(noteOrphaned("A", [])).toBe(false);
   });
 });

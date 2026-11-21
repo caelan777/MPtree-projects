@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { viewW, viewLeft } from "../utils";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { t, tn } from "../i18n";
 import { LANTERN_GREEN } from "../lantern";
@@ -146,7 +147,7 @@ export function LanternGate({ onYes, onNo, onDone }: LanternGateProps) {
     if (share >= COMMIT) {
       const r = knob.current?.getBoundingClientRect();
       setPull(d.reach);
-      sayNo(r ? r.left + r.width / 2 : window.innerWidth / 2, r ? r.top + r.height / 2 : window.innerHeight * 0.85);
+      sayNo(r ? r.left - viewLeft() + r.width / 2 : viewW() / 2, r ? r.top + r.height / 2 : window.innerHeight * 0.85);
     } else if (share <= -COMMIT) {
       setPull(-d.reach);
       sayYes();

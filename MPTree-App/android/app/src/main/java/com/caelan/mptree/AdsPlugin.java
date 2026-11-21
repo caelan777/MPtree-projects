@@ -4,6 +4,28 @@ import android.app.Activity;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
+import android.graphics.Color;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.WebView;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdLoader;
+import com.google.android.gms.ads.nativead.MediaView;
+import com.google.android.gms.ads.nativead.NativeAd;
+import com.google.android.gms.ads.nativead.NativeAdOptions;
+import com.google.android.gms.ads.nativead.NativeAdView;
 
 import androidx.annotation.NonNull;
 
@@ -137,10 +159,247 @@ public class AdsPlugin extends Plugin {
         call.resolve(r);
     }
 
+    // ── The ad on the Discover page ──────────────────────────────────────────
+    // A native ad, drawn by Android over a gap the page leaves for it under
+    // Popular this week, in the page's own colours so it reads as part of it.
+    // AdMob only allows native ads in its own NativeAdView, so it cannot be
+    // HTML: the page tells where its gap is (placeNative) as it scrolls, and
+    // the view follows, cut off where the header card or the screen ends.
+    // Only asked for once the person has answered the consent question (on a
+    // first rewarded ad, in the EU): this page never brings the form up itself.
+
+    private NativeAd nativeAd;
+    private NativeAdView nativeView;
+    // What lies over the page: the ad inside a frame that passes scrolls on.
+    private ScrollThroughFrame nativeWrap;
+    private boolean nativeBusy = false;
+
+    @PluginMethod
+    public void loadNative(PluginCall call) {
+        String unit = call.getString("adUnitId");
+        if (unit == null || unit.isEmpty() || nativeBusy) { nativeDone(call, false); return; }
+        if (nativeAd != null && nativeView != null) { nativeDone(call, true); return; }
+        if (!online()) { nativeDone(call, false); return; }
+        Activity activity = getActivity();
+        if (activity == null) { nativeDone(call, false); return; }
+        JSObject c = call.getObject("colours", new JSObject());
+        nativeBusy = true;
+        activity.runOnUiThread(() -> {
+            ConsentInformation consent = UserMessagingPlatform.getConsentInformation(activity);
+            consent.requestConsentInfoUpdate(activity, new ConsentRequestParameters.Builder().build(),
+                () -> { if (consent.canRequestAds()) startNative(activity, call, unit, c); else { nativeBusy = false; nativeDone(call, false); } },
+                e -> { if (consent.canRequestAds()) startNative(activity, call, unit, c); else { nativeBusy = false; nativeDone(call, false); } });
+        });
+    }
+
+    private void startNative(Activity activity, PluginCall call, String unit, JSObject c) {
+        Runnable go = () -> new AdLoader.Builder(activity, unit)
+            .forNativeAd(ad -> activity.runOnUiThread(() -> {
+                nativeBusy = false;
+                if (activity.isDestroyed()) { ad.destroy(); nativeDone(call, false); return; }
+                if (nativeAd != null) nativeAd.destroy();
+                nativeAd = ad;
+                buildNativeView(activity, ad, c);
+                nativeDone(call, true);
+            }))
+            .withAdListener(new AdListener() {
+                @Override public void onAdFailedToLoad(@NonNull LoadAdError error) { nativeBusy = false; nativeDone(call, false); }
+            })
+            .withNativeAdOptions(new NativeAdOptions.Builder()
+                .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT).build())
+            .build()
+            .loadAd(new AdRequest.Builder().build());
+        if (started) go.run();
+        else MobileAds.initialize(activity.getApplicationContext(), status -> { started = true; go.run(); });
+    }
+
+    private static int colour(JSObject c, String key, String fallback) {
+        try { return Color.parseColor(c.getString(key, fallback)); } catch (Exception e) { return Color.parseColor(fallback); }
+    }
+
+    private void buildNativeView(Activity activity, NativeAd ad, JSObject c) {
+        removeNativeView();
+        float d = activity.getResources().getDisplayMetrics().density;
+        int text = colour(c, "text", "#ffffff"), muted = colour(c, "muted", "#9a9a9a");
+        int card = colour(c, "card", "#141414"), border = colour(c, "border", "#2a2a2a");
+        int accent = colour(c, "accent", "#ffffff"), onAccent = colour(c, "onAccent", "#000000");
+        int line = Math.max(1, Math.round(d));
+
+        NativeAdView view = new NativeAdView(activity);
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = Math.round(14 * d);
+        box.setPadding(pad, pad, pad, pad);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(card); bg.setCornerRadius(16 * d); bg.setStroke(line, border);
+        box.setBackground(bg);
+
+        TextView badge = new TextView(activity);
+        badge.setText("AD");
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        badge.setTypeface(Typeface.DEFAULT_BOLD);
+        badge.setTextColor(muted);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setCornerRadius(4 * d); badgeBg.setStroke(line, border);
+        badge.setBackground(badgeBg);
+        badge.setPadding(Math.round(5 * d), Math.round(1 * d), Math.round(5 * d), Math.round(1 * d));
+        box.addView(badge, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView headline = new TextView(activity);
+        headline.setText(ad.getHeadline());
+        headline.setTextColor(text);
+        headline.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        headline.setTypeface(Typeface.DEFAULT_BOLD);
+        headline.setMaxLines(1);
+        headline.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hl.topMargin = Math.round(6 * d);
+        box.addView(headline, hl);
+        view.setHeadlineView(headline);
+
+        if (ad.getBody() != null) {
+            TextView body = new TextView(activity);
+            body.setText(ad.getBody());
+            body.setTextColor(muted);
+            body.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+            body.setMaxLines(2);
+            body.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bl.topMargin = Math.round(2 * d);
+            box.addView(body, bl);
+            view.setBodyView(body);
+        }
+
+        MediaView media = new MediaView(activity);
+        media.setImageScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        ml.topMargin = Math.round(10 * d);
+        ml.bottomMargin = Math.round(12 * d);
+        box.addView(media, ml);
+        view.setMediaView(media);
+
+        if (ad.getCallToAction() != null) {
+            TextView cta = new TextView(activity);
+            cta.setText(ad.getCallToAction().toUpperCase());
+            cta.setTextColor(onAccent);
+            cta.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            cta.setTypeface(Typeface.DEFAULT_BOLD);
+            cta.setGravity(Gravity.CENTER);
+            GradientDrawable ctaBg = new GradientDrawable();
+            ctaBg.setColor(accent); ctaBg.setCornerRadius(22 * d);
+            cta.setBackground(ctaBg);
+            box.addView(cta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.round(44 * d)));
+            view.setCallToActionView(cta);
+        }
+
+        view.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        view.setNativeAd(ad);
+
+        WebView web = getBridge().getWebView();
+        ViewGroup parent = (ViewGroup) web.getParent();
+        ScrollThroughFrame wrap = new ScrollThroughFrame(activity, web);
+        wrap.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        wrap.setVisibility(View.INVISIBLE);
+        parent.addView(wrap, new ViewGroup.LayoutParams(1, 1));
+        nativeView = view;
+        nativeWrap = wrap;
+    }
+
+    /** Where the page's gap for the ad is now, in CSS pixels from the top left
+     *  of the page, and between which heights it may show (under the header
+     *  card, above the player). visible false hides it. */
+    @PluginMethod
+    public void placeNative(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity == null) { call.resolve(); return; }
+        boolean visible = Boolean.TRUE.equals(call.getBoolean("visible", false));
+        float x = call.getFloat("x", 0f), y = call.getFloat("y", 0f);
+        float w = call.getFloat("w", 0f), h = call.getFloat("h", 0f);
+        float top = call.getFloat("clipTop", 0f), bottom = call.getFloat("clipBottom", 100000f);
+        activity.runOnUiThread(() -> {
+            View v = nativeWrap;
+            if (v == null) return;
+            float d = activity.getResources().getDisplayMetrics().density;
+            int wp = Math.round(w * d), hp = Math.round(h * d);
+            int from = Math.max(0, Math.round((top - y) * d)), to = Math.min(hp, Math.round((bottom - y) * d));
+            if (!visible || wp <= 0 || hp <= 0 || to <= from) { v.setVisibility(View.INVISIBLE); return; }
+            ViewGroup.LayoutParams lp = v.getLayoutParams();
+            if (lp.width != wp || lp.height != hp) { lp.width = wp; lp.height = hp; v.setLayoutParams(lp); }
+            WebView web = getBridge().getWebView();
+            v.setX(web.getX() + x * d);
+            v.setY(web.getY() + y * d);
+            v.setClipBounds(from == 0 && to == hp ? null : new Rect(0, from, wp, to));
+            v.setVisibility(View.VISIBLE);
+        });
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void destroyNative(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity != null) activity.runOnUiThread(() -> {
+            removeNativeView();
+            if (nativeAd != null) { nativeAd.destroy(); nativeAd = null; }
+        });
+        call.resolve();
+    }
+
+    private void removeNativeView() {
+        if (nativeWrap != null && nativeWrap.getParent() instanceof ViewGroup) ((ViewGroup) nativeWrap.getParent()).removeView(nativeWrap);
+        nativeWrap = null;
+        nativeView = null;
+    }
+
+    private static void nativeDone(PluginCall call, boolean loaded) {
+        JSObject r = new JSObject();
+        r.put("loaded", loaded);
+        call.resolve(r);
+    }
+
     private boolean online() {
         ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return true;
         NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
         return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    }
+    /** The ad lies over the page, so a finger on it never reached the page and
+     *  the page could not be scrolled from there. Every touch now also goes to
+     *  the page underneath (where the ad's gap is empty), and once the finger
+     *  moves up or down the ad lets go: a scroll, not a tap on the ad. */
+    static class ScrollThroughFrame extends FrameLayout {
+        private final WebView web;
+        private final int slop;
+        private float downX, downY;
+        private boolean scrolling = false;
+
+        ScrollThroughFrame(Context context, WebView web) {
+            super(context);
+            this.web = web;
+            this.slop = ViewConfiguration.get(context).getScaledTouchSlop();
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent ev) {
+            MotionEvent copy = MotionEvent.obtain(ev);
+            copy.offsetLocation(getX() - web.getX(), getY() - web.getY());
+            web.dispatchTouchEvent(copy);
+            copy.recycle();
+
+            int action = ev.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) { scrolling = false; downX = ev.getX(); downY = ev.getY(); }
+            if (scrolling) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) scrolling = false;
+                return true;
+            }
+            if (action == MotionEvent.ACTION_MOVE && Math.abs(ev.getY() - downY) > slop && Math.abs(ev.getY() - downY) > Math.abs(ev.getX() - downX)) {
+                scrolling = true;
+                MotionEvent cancel = MotionEvent.obtain(ev);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                super.dispatchTouchEvent(cancel);
+                cancel.recycle();
+                return true;
+            }
+            return super.dispatchTouchEvent(ev);
+        }
     }
 }

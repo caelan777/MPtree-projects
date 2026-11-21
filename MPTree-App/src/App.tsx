@@ -1,4 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from "react";
+import { viewW, sideW, applyColumn, sideOnRight, setSideOnRight } from "./utils";
+import { SidePlayer } from "./components/SidePlayer";
 import { createPortal } from "react-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
@@ -14,6 +16,7 @@ import { makeCutId } from "./types";
 import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, DARK } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
+import { LayoutIcon, LIST_LAYOUTS, layoutName, isListLayout, type ListLayout } from "./components/LayoutIcon";
 import { Toast, type ToastAction } from "./components/Toast";
 import { EditSheet } from "./components/EditSheet";
 import { SongMenuSheet } from "./components/SongMenuSheet";
@@ -21,45 +24,51 @@ import { AddToPlaylistSheet } from "./components/AddToPlaylistSheet";
 import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
+import { Marquee } from "./components/Marquee";
 import { ConfirmSheet } from "./components/ConfirmSheet";
-import { MusicHint, MusicHowSheet, HintArrow } from "./components/MusicHint";
-import { countDaily } from "./counter";
-import { CutTrackSheet } from "./components/CutTrackSheet";
+import { MusicHint, MusicHowSheet, HintBalloon } from "./components/MusicHint";
+import { countDaily, countFirstLibrary } from "./counter";
+import { shrinkCovers } from "./covers";
 import { SettingsSheet, type UiSize } from "./components/SettingsSheet";
 import { WelcomeScreen, type MusicAccess } from "./components/WelcomeScreen";
 import { Switch } from "./components/Switch";
 import { applyLang, isLang, t, tn, fmtBytes, type LangPref } from "./i18n";
 import { BinView } from "./components/BinView";
 import { MultiSelectBar, SelectCheck, SELECT_TOP_H, SELECT_BOTTOM_H } from "./components/MultiSelectBar";
-import { EQSheet } from "./components/EQSheet";
 import { LoadingScreen } from "./components/LoadingScreen";
-import { ProSheet } from "./components/ProSheet";
+import { ProSheet, type ProFrom } from "./components/ProSheet";
+import { ListenCard } from "./components/ListenCard";
+import { useListenCard, loadListen, setListening, closeListenCard } from "./listen";
 import { AdDayPrompt, type AdDayStage } from "./components/AdDayPrompt";
 import { HalloweenScare, HalloweenSheet } from "./components/HalloweenScare";
-import { LookSheet } from "./components/LookSheet";
-import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK } from "./flowers";
+import { LookSheet, CutTrackSheet, EQSheet, preloadSheets, lookReady, loadLookSheet } from "./lazySheets";
+import { NextUpPanel } from "./components/NextUpPanel";
+import { groundFlowers, cardFlowers, cornerFlowers, logoFlower, toneOf, AVIELA_PINK, type Tone } from "./flowers";
+import { StickerLayer } from "./components/Stickers";
+import { setupById } from "./stickers";
+import { loadWidget, sendWidgetPalette, sendWidgetRecord, sendWidgetPro } from "./widget";
 import { lanternBackdrop } from "./lanternFigure";
 import { LANTERN_GREEN, lanternAccent } from "./lantern";
 import { CleanupSheet } from "./components/CleanupSheet";
 import { AccountSheet } from "./components/AccountSheet";
 import {
-  prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, type Host,
+  prepareSync, initSync, syncChanged, useSync, beforeDeleteForever, deleteWarnings, restoreDeleted, ROOM_MARGIN, type Host,
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
-import { useBackground, loadBackground } from "./background";
-import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack, isLanternRecord } from "./look";
-import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, giveDay } from "./pro";
+import { useBackground, loadBackground, STRENGTH_MAX } from "./background";
+import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack } from "./look";
+import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, adOkText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
-import { isMissingArtist, extractDominantColor }  from "./utils";
+import { isMissingArtist, extractDominantColor, indexById }  from "./utils";
 import { planPlayNext, mergePins } from "./queue";
 import { PlaylistsView }    from "./components/PlaylistsView";
 import { DiscoverView, DiscoverIcon, NewBadge, WALL_MS } from "./components/DiscoverView";
 import { artDataUrl, forgetSaved, baseName, type FreeTrack } from "./discover";
 import { Capacitor } from "@capacitor/core";
-import { BackupSheet }      from "./components/BackupSheet";
-import type { BackupSheetState, BackupOptions } from "./components/BackupSheet";
+import { BackupPage } from "./components/BackupPage";
+import { restoreOf, songIdsFor, bytesOf, backOf, pickText, CLOUD_NAME, type BackupPick, type BackupStep } from "./backupPick";
 import type { Playlist, SmartPlaylist } from "./types";
 import { useMultiSelect } from "./hooks/useMultiSelect";
 import { usePageSwipe } from "./hooks/usePageSwipe";
@@ -70,11 +79,11 @@ import {
   loadSession, saveSession,
   loadMeta, saveMeta, saveMetaNow,
   loadPlaylists, savePlaylists,
-  exportBackup, parseBackup, importBackup, scanBackupFolder, zipBackupFolder, collectSettings,
+  parseBackup, importBackup, scanBackupFolder, collectSettings,
 } from "./storage";
 import type { BackupData } from "./storage";
 
-import { MusicScanner, AudioPlayer, System } from "./plugins";
+import { MusicScanner, AudioPlayer, System, BackupNative, type CloudApp, type BackupPicked } from "./plugins";
 import { checkForUpdate, checkForPlayUpdate, dismissUpdate, NOTICES_KEY, type UpdateInfo } from "./updateCheck";
 
 
@@ -187,6 +196,10 @@ const HAS_DISCOVER = Capacitor.getPlatform() !== "ios";
 
 export default function App() {
   const [songs,          setSongs]         = useState<Song[]>([]);
+  // New music since MPTree was last open (NewMusicJob): when that was, for a
+  // "3 new" under the search. 0 the first time, and once looked at.
+  const [newSince, setNewSince] = useState(0);
+  useEffect(() => { System.takeNewSongs().then(r => setNewSince(r.since || 0)).catch(() => {}); }, []);
   const [removedSongs,   setRemovedSongs]  = useState<Song[]>([]);
   const [meta,           setMeta]          = useState<Record<string, SongMeta>>({});
   const [queue,          setQueue]         = useState<Song[]>([]);
@@ -207,6 +220,17 @@ export default function App() {
   // you routinely want both (this artist, newest first).
   const [artistFilter,   setArtistFilter]  = useState<string | null>(null);
   const [filterOpen,     setFilterOpen]    = useState(false);
+  // How the songs are laid out: rows (as always), compact rows, or covers in a
+  // grid of two or three, from the button next to the sort in the header
+  // card. Kept, and in sync and backups (storage.ts).
+  const [songsLayout,    setSongsLayoutRaw] = useState<ListLayout>("list");
+  useEffect(() => {
+    Preferences.get({ key: "mptree_songs_layout" }).then(r => { if (isListLayout(r.value)) setSongsLayoutRaw(r.value); }).catch(() => {});
+  }, []);
+  const setSongsLayout = (l: ListLayout) => {
+    setSongsLayoutRaw(l);
+    Preferences.set({ key: "mptree_songs_layout", value: l }).catch(() => {});
+  };
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [binOpen,        setBinOpen]       = useState(false);
   const [theme,          setTheme]         = useState<Theme>("dark");
@@ -215,6 +239,9 @@ export default function App() {
   // The song whose "⋮" action sheet is open (null = closed). This replaced
   // `activeMenu`, which expanded the row inline on long-press.
   const [menuSong,       setMenuSong]      = useState<Song | null>(null);
+  // "Add to" in the player's menu opens the song menu on its playlist picker.
+  const [menuStartPlaylists, setMenuStartPlaylists] = useState(false);
+  useEffect(() => { if (!menuSong) setMenuStartPlaylists(false); }, [menuSong]);
   const [editSong,       setEditSong]      = useState<Song | null>(null);
   // "Photo" in the song menu is the same edit sheet, opened straight onto the
   // picker. One sheet rather than two that would drift apart.
@@ -232,6 +259,8 @@ export default function App() {
   const [cutSong,        setCutSong]       = useState<Song | null>(null);
   const [cutDuration,    setCutDuration]   = useState(0);
   const [playerExpanded, setPlayerExpanded]= useState(false);
+  /** Landscape: Next up open over the list, from a tap on the side player. */
+  const [nextUpOpen, setNextUpOpen] = useState(false);
   const [toast,          setToast]         = useState<{ msg: string; action?: ToastAction } | null>(null);
   const [currentTime,    setCurrentTime]   = useState(0);
   const [duration,       setDuration]      = useState(0);
@@ -243,10 +272,22 @@ export default function App() {
   // Height of the scroll viewport, measured for list virtualization. Updated on
   // mount and resize. Falls back to a sensible default before first measure.
   const [listViewportH,  setListViewportH] = useState(0);
-  const [widePhone,      setWidePhone]     = useState(() => window.innerWidth >= WIDE_PHONE);
+  // The player's room on the left when the phone is sideways (utils sideW).
+  const [side, setSide] = useState(() => sideW());
+  const [sideRight, setSideRight] = useState(() => sideOnRight());
+  useEffect(() => {
+    const update = () => { applyColumn(); setSide(sideW()); };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => { window.removeEventListener("resize", update); window.removeEventListener("orientationchange", update); };
+  }, []);
+  const [widePhone,      setWidePhone]     = useState(() => viewW() >= WIDE_PHONE);
   // The height of a song row (it follows the Size setting), for the effect
   // that scrolls to the playing song by counting rows.
   const rowHRef = useRef(64);
+  // How many songs one line of the list holds: more than one in the grid layouts.
+  const colsRef = useRef(1);
 
   // ── Floating header geometry ───────────────────────────────────────────────
   // Everything the folding header needs, measured in one pass so no consumer can
@@ -288,7 +329,7 @@ export default function App() {
         cardTop: Math.max(0, Math.round(card.getBoundingClientRect().top)),
         innerH:  Math.round(inner.getBoundingClientRect().height),
         extraH:  extra ? Math.round(extra.getBoundingClientRect().height) : 0,
-        vw:      window.innerWidth,
+        vw:      viewW(),
         vh:      window.innerHeight,
       });
     };
@@ -332,6 +373,16 @@ export default function App() {
   const insetJumpRef = useRef(false);
   // The Playlists tab moves its own list the same way, and says so through this.
   const markInsetJump = useCallback(() => { insetJumpRef.current = true; }, []);
+
+  // The sheets kept out of the start-up code (lazySheets.ts) are fetched once
+  // the app has settled, so opening one later never waits.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+      if (idle) idle(preloadSheets); else preloadSheets();
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, []);
   // Options panel opened by holding the logo. Declared here with the rest of
   // the chrome state so the Back handler, defined further down, can see it.
   const [chromeMenuOpen, setChromeMenuOpen] = useState(false);
@@ -398,19 +449,20 @@ export default function App() {
   const programmaticCap   = useRef(0);
   const beginProgrammaticScroll = useCallback(() => {
     const now = Date.now();
-    programmaticUntil.current = now + 800;
-    programmaticCap.current   = now + 3000;
+    programmaticUntil.current = now + 4000;
+    programmaticCap.current   = now + 4000;
+    window.dispatchEvent(new Event("mptree-autoscroll"));
   }, []);
   // A smooth scroll across a long list (shuffle jumps anywhere) outlasts any
   // fixed wait, and its last events used to fold the header and the player
   // away right after the tap that had opened them. So while the app's own
   // scroll is still producing events, it is still the app's scroll.
-  const programmaticScrolling = () => {
-    const now = Date.now();
-    if (now >= programmaticUntil.current) return false;
-    programmaticUntil.current = Math.min(programmaticCap.current, Math.max(programmaticUntil.current, now + 250));
-    return true;
-  };
+  // It stays the app's until that scroll has come to rest (scrollend), a
+  // finger touches the screen, or four seconds have passed. It used to end
+  // when the events paused for a quarter of a second, and a phone busy with
+  // the new song pauses longer than that: the rest of the scroll then folded
+  // the header away after a shuffle or a skip.
+  const programmaticScrolling = () => Date.now() < programmaticUntil.current;
   // A scroll the app starts, kept until it has arrived. Unfolding the header
   // moves the list's scroll position in the same frame (see the fold's layout
   // effect), and setting scrollTop stops a smooth scroll dead: the scroll-to-top
@@ -427,8 +479,24 @@ export default function App() {
   // A finger on the screen takes over: from there on a scroll is the user's.
   useEffect(() => {
     const takeOver = () => { programmaticUntil.current = 0; pendingScroll.current = null; };
+    // A scroll that has come to rest: the app's own is over. Not while a
+    // fold is still to start one again (pendingScroll), and not in the first
+    // moments: setting scrollTop for the fold ends a scroll of its own.
+    let armedAt = 0;
+    const settled = () => {
+      if (pendingScroll.current) return;
+      const now = Date.now();
+      if (programmaticUntil.current > now && now - armedAt > 200) programmaticUntil.current = now + 150;
+    };
+    const arm = () => { armedAt = Date.now(); };
     window.addEventListener("touchstart", takeOver, { passive: true, capture: true });
-    return () => window.removeEventListener("touchstart", takeOver, { capture: true });
+    window.addEventListener("scrollend", settled, { passive: true, capture: true });
+    window.addEventListener("mptree-autoscroll", arm);
+    return () => {
+      window.removeEventListener("touchstart", takeOver, { capture: true });
+      window.removeEventListener("scrollend", settled, { capture: true });
+      window.removeEventListener("mptree-autoscroll", arm);
+    };
   }, []);
 
   // Bring the chrome back. Playing something — tapping a song, hitting shuffle
@@ -496,6 +564,11 @@ export default function App() {
   const musicAccess: MusicAccess = !musicAsked ? "unasked"
     : permissionDenied ? "denied"
     : libraryReady ? "allowed" : "asking";
+  // Once the music may be read, Android asks once for notifications (the
+  // note about new songs); asked after the files, not before or with them.
+  useEffect(() => {
+    if (libraryReady && !permissionDenied) System.askNotifications().catch(() => {});
+  }, [libraryReady, permissionDenied]);
   useEffect(() => {
     // Key is versioned: v2 = the spotlight tour. Bumping the key makes the new
     // tour show once even for users who completed the old card-based one.
@@ -673,14 +746,17 @@ export default function App() {
   useEffect(() => { sleepUntilRef.current      = sleepUntil;      }, [sleepUntil]);
   useEffect(() => { sleepEndOfTrackRef.current = sleepEndOfTrack; }, [sleepEndOfTrack]);
 
-  // ── Backup / Restore sheet state machine ──────────────────────────────────
-  const [backupSheet, setBackupSheet] = useState<BackupSheetState>({ kind: "closed" });
+  // ── Backup (BackupPage) ───────────────────────────────────────────────────
+  // null: closed. The page draws the step; the work is done here.
+  const [backupStep, setBackupStep] = useState<BackupStep | null>(null);
+  const backupStepRef = useRef<BackupStep | null>(null);
+  useEffect(() => { backupStepRef.current = backupStep; }, [backupStep]);
   const backupCancelRef = useRef(false);
-  // Holds the JSON file URI after a successful export (for sharing)
-  const exportJsonUriRef = useRef<string>("");
-  const exportFolderNameRef = useRef<string>("");
-  // Hidden file input for picking the backup JSON
-  const importFileInputRef = useRef<HTMLInputElement>(null);
+  // Which cloud apps are on the phone, and the last backup made.
+  const [backupClouds, setBackupClouds] = useState<Record<CloudApp, boolean> | null>(null);
+  const [lastBackup, setLastBackup] = useState<{ at: number; app: CloudApp } | null>(null);
+  // A backup picked to restore from, between reading it and restoring it.
+  const pickedBackupRef = useRef<{ data: BackupData; picked: BackupPicked } | null>(null);
 
   // ── Playlists ─────────────────────────────────────────────────────────────
   const [playlists,     setPlaylists]     = useState<Playlist[]>([]);
@@ -694,6 +770,8 @@ export default function App() {
   const discoverOpenRef = useRef(false);
   discoverOpenRef.current = discoverOpen;
   const discoverBackRef = useRef<(() => boolean) | null>(null);
+  /** Account & sync's own Back: a window on it, or How sync works, first. */
+  const accountBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
   const discoverPanelRef = useRef<HTMLDivElement | null>(null);
   const openDiscover = () => {
@@ -724,10 +802,14 @@ export default function App() {
   // shuffle button. Started from Playlists it spotlit things that were not on
   // screen, so it always goes to Songs with the header open first, and waits
   // for that to have finished moving before measuring anything.
+  // From Discover, Discover closes first (it lies over Songs), and the tour
+  // waits for the wall that takes it away.
   const startTutorial = (delayMs: number) => {
+    const fromDiscover = discoverOpenRef.current;
+    if (fromDiscover) leaveDiscover();
     setPage("songs");
     openChrome();
-    window.setTimeout(() => setShowOnboarding(true), delayMs);
+    window.setTimeout(() => setShowOnboarding(true), fromDiscover ? Math.max(delayMs, WALL_MS + 100) : delayMs);
   };
   // The search field used to unmount when you left the Songs tab, which took the
   // Android keyboard with it. It stays mounted now (see the header card), so the
@@ -826,7 +908,7 @@ export default function App() {
   // on every one of those stalled the main thread on a timer, which is what the
   // spinning record kept catching. Mark it dirty on change; write it only then.
   useEffect(() => { metaRef.current = meta; metaDirtyRef.current = true; }, [meta]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { isPlayingRef.current = isPlaying; setListening(isPlaying); }, [isPlaying]);
   useEffect(() => { crossfadeMsRef.current  = crossfadeMs;  }, [crossfadeMs]);
   useEffect(() => { playbackSpeedRef.current = playbackSpeed; }, [playbackSpeed]);
   useEffect(() => { eqEnabledRef.current    = eqEnabled;    }, [eqEnabled]);
@@ -839,7 +921,16 @@ export default function App() {
   // look.ts); App only reads them and opens the sheets.
   const look = useLook();
   const pro  = usePro();
-  const [proOpen,     setProOpen]     = useState(false);
+  const layoutNow: ListLayout = songsLayout;
+  // Pro, for the widgets that are part of it (Card and Record, and Clear).
+  useEffect(() => { sendWidgetPro(pro); }, [pro]);
+  const [proOpen,     setProOpenState] = useState(false);
+  // Where the Pro page was opened from, for the counter (ProSheet).
+  const [proFrom,     setProFrom]     = useState<ProFrom>("other");
+  const setProOpen = (open: boolean, from: ProFrom = "other") => { setProFrom(from); setProOpenState(open); };
+  // Ten hours of music: a thank-you card at the top of the songs, once.
+  const listenCard = useListenCard();
+  const [listenCardH, setListenCardH] = useState(0);
   // A day of Pro for an ad that is up: MPTree asks for another ad, and pro.ts
   // keeps Pro on until it is answered. After the second "Not now", one last
   // word on how to get Pro back.
@@ -852,7 +943,7 @@ export default function App() {
   };
   const adWatch = async () => {
     const r = await watchAdForPro();
-    if (r === "pro") { setProOffNote(false); showToast(t("Pro is on for 24 hours")); return true; }
+    if (r === "pro" || r === "pro-free") { setProOffNote(false); showToast(adOkText(r)); return true; }
     showToast(adFailText(r));
     return false;
   };
@@ -866,23 +957,45 @@ export default function App() {
     setSettingsOpen(true);
   };
   const closeHalloween = () => { setHalloween(null); setSettingsOpen(true); };
+  const [accountOpen, setAccountOpen] = useState(false);
   const [lookOpen,    setLookOpen]    = useState(false);
   // Personalize shows the app behind it, changing as you choose. Discover is
   // left out of that (it flickered there): it steps aside while Personalize
   // is open and comes back when it closes.
   const lookFromDiscover = useRef(false);
+  // Whether Personalise's code is read, so it can cover Settings at once.
+  const [lookLoaded, setLookLoaded] = useState(lookReady);
+  // Personalise drawn once, out of sight, a while after start-up: its first
+  // real opening waited on drawing it (and its pictures) the first time.
+  const [lookWarm, setLookWarm] = useState(false);
+  useEffect(() => {
+    let off = 0;
+    const id = window.setTimeout(() => {
+      loadLookSheet().then(() => { setLookWarm(true); off = window.setTimeout(() => setLookWarm(false), 1500); }).catch(() => {});
+    }, 7000);
+    return () => { window.clearTimeout(id); window.clearTimeout(off); };
+  }, []);
   const openLook = () => {
     if (discoverOpenRef.current) { lookFromDiscover.current = true; setDiscoverOpen(false); }
+    // Personalise goes over everything: Account & sync too, which was left
+    // open above it after buying Pro from there.
+    setAccountOpen(false);
+    // The small copy of the app in Personalise is always the songs, with the
+    // header and the player open: folded, it was a strange thing to choose by.
+    setPage("songs");
+    setChromeOpen(true);
+    setPlayerFolded(false);
     setLookOpen(true);
+    // A beat after the code is read, so Personalise has drawn before Settings goes.
+    if (!lookReady()) loadLookSheet().then(() => setTimeout(() => setLookLoaded(true), 60)).catch(() => setLookLoaded(true));
   };
   const closeLook = () => {
     setLookOpen(false);
     if (lookFromDiscover.current) { lookFromDiscover.current = false; setDiscoverOpen(true); }
   };
   const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const sync = useSync();
-  useEffect(() => { loadLook(); loadBackground(); loadPro(); }, []);
+  useEffect(() => { loadLook(); loadBackground(); loadPro(); loadListen(); }, []);
 
   // Keep the WebView below the Android status bar. CSS env(safe-area-inset-top)
   // is unreliable on Capacitor Android (often reports 0), so we explicitly turn
@@ -891,8 +1004,10 @@ export default function App() {
   // Shuffle and selection are violet, except in the two styles with a name,
   // which bring their own colour for them: pink in Aviela, green in Lantern.
   // Aviela is on while there are flowers, Lantern while its record is.
-  const styleTint = look.flowers !== "none" ? AVIELA_PINK
-    : isLanternRecord(theme === "dark" ? look.vinylDark : look.vinylLight) ? LANTERN_GREEN : null;
+  // Shuffle and selection wear the style's own colour in Aviela and Lantern,
+  // violet everywhere else. Which world is on says it (look.env), not the
+  // flowers or the record: Custom may wear either without becoming a style.
+  const styleTint = look.env === "aviela" ? AVIELA_PINK : look.env === "lantern" ? LANTERN_GREEN : null;
   // Lantern goes further and lights the accent too (lanternAccent).
   const tinted = <P extends { violet: string; bg: string; accent: string }>(p: P): P => {
     if (!styleTint) return p;
@@ -905,6 +1020,10 @@ export default function App() {
   // What the style draws on the ground: Aviela's flowers or Lantern's light.
   const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
+  // The background photo belongs to Custom: Aviela and Lantern have their own.
+  // One of MPTree's own (Lantern's light) goes before the photo when picked.
+  const bgPreset = look.env === "custom" ? background.preset : null;
+  const bgPhoto = look.env === "custom" && !bgPreset ? background.photo : undefined;
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -1022,7 +1141,8 @@ export default function App() {
     if (!src) return;
     setPlaySource(src);
     const pl = src.startsWith("pl:") ? storedPlaylistsRef.current.find(p => `pl:${p.id}` === src) : undefined;
-    const own = pl ? pl.songIds.map(id => saved.find(s => s.id === id)).filter((s): s is Song => !!s) : [];
+    const savedById = indexById(saved);
+    const own = pl ? pl.songIds.map(id => savedById.get(id)).filter((s): s is Song => !!s) : [];
     playContextRef.current = own.length ? own : saved;
   };
 
@@ -1065,6 +1185,12 @@ export default function App() {
       try {
         const scanned = await scanMusic(pendingBin);
         const session = pendingSession;
+        // Someone new: whether MPTree found any music, found none, or was not
+        // let in. Counted once per install (counter.ts).
+        if (firstRunRef.current) {
+          if (scanned.length > 0) countFirstLibrary("songs");
+          else MusicScanner.hasAccess().then(r => countFirstLibrary(r.granted ? "empty" : "denied")).catch(() => {});
+        }
 
         const resynced = await resyncFromNative(scanned, session);
         if (!resynced && session.currentId) {
@@ -1360,7 +1486,7 @@ export default function App() {
   useEffect(() => {
     const measure = () => {
       if (scrollRef.current) setListViewportH(scrollRef.current.clientHeight);
-      setWidePhone(window.innerWidth >= WIDE_PHONE);
+      setWidePhone(viewW() >= WIDE_PHONE);
     };
     measure();
     window.addEventListener("resize", measure);
@@ -1405,12 +1531,45 @@ export default function App() {
       // was when the track changed, and the padding is mid-transition during a
       // fold anyway. getComputedStyle gives the pixel that is actually there.
       const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
-      const target = Math.max(0, pad + idx * ROW - cont.clientHeight / 2 + ROW / 2);
+      const target = Math.max(0, pad + Math.floor(idx / colsRef.current) * ROW - cont.clientHeight / 2 + ROW / 2);
       cont.scrollTo({ top: target, behavior: "smooth" });
     }), 120);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
+
+  // A new layout keeps the list where it was: the playing song in the middle,
+  // else the song that was at the top stays at the top. The list kept its
+  // scroll in pixels before, and a grid is so much shorter than a list that
+  // it landed somewhere else entirely (Caelan, 21 Nov).
+  const layoutAnchorRef = useRef<{ id: string; center: boolean; offset: number } | null>(null);
+  const takeLayoutAnchor = () => {
+    const list = displayListRef.current;
+    const cont = scrollRef.current;
+    const cur = curRef.current;
+    if (!cont || !list.length) return null;
+    if (cur && list.some(s => s.id === cur.id)) return { id: cur.id, center: true, offset: 0 };
+    const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
+    // At the top it stays at the top.
+    if (cont.scrollTop <= pad) return null;
+    const line = Math.max(0, Math.floor((cont.scrollTop - pad) / rowHRef.current));
+    const s = list[Math.min(list.length - 1, line * colsRef.current)];
+    return s ? { id: s.id, center: false, offset: pad + line * rowHRef.current - cont.scrollTop } : null;
+  };
+  useLayoutEffect(() => {
+    const a = layoutAnchorRef.current;
+    layoutAnchorRef.current = null;
+    const cont = scrollRef.current;
+    if (!a || !cont) return;
+    const idx = displayListRef.current.findIndex(s => s.id === a.id);
+    if (idx < 0) return;
+    beginProgrammaticScroll();
+    const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
+    const ROW = rowHRef.current;
+    const rowTop = pad + Math.floor(idx / colsRef.current) * ROW;
+    cont.scrollTop = Math.max(0, a.center ? rowTop - cont.clientHeight / 2 + ROW / 2 : rowTop - a.offset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songsLayout]);
 
   // ── Position polling ─────────────────────────────────
   useEffect(() => {
@@ -1596,7 +1755,7 @@ export default function App() {
     void reviewSongPlayed();
   };
 
-  const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string) => {
+  const playSong = async (s: Song, q: Song[], titleOverride?: string, artistOverride?: string, blend = false) => {
     // Starting a track makes the app scroll to it. Flag that here, in the click
     // handler itself, rather than relying on the effect that performs the
     // scroll: effects run after paint and can be delayed, and a scroll event
@@ -1606,7 +1765,9 @@ export default function App() {
       setQueue(q); setCurrent(s); setCurrentTime(0); setDuration(0); setPlaying(true); loadedRef.current = true;
       const title  = titleOverride  ?? getMeta(s).customName   ?? s.title;
       const artist = artistOverride ?? getMeta(s).customArtist ?? (!isMissingArtist(s.artist) ? s.artist : "");
-      await AudioPlayer.play({ path: s.uri, title, artist, ...cutBounds(s) });
+      // Next and previous blend into the song when crossfade is on (native
+      // decides: not into or out of a cut, not while paused).
+      await AudioPlayer.play({ path: s.uri, title, artist, ...cutBounds(s), ...(blend && !s.isCut ? { blend: true } : null) });
       if (s.isCut && s.cutFrom && s.cutFrom > 0) { setCurrentTime(s.cutFrom); currentTimeRef.current = s.cutFrom; }
       const idx = q.findIndex(x => x.id === s.id);
       AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: idx }).catch(() => {});
@@ -1619,6 +1780,10 @@ export default function App() {
     try {
       if (!loadedRef.current) {
         await AudioPlayer.play({ path: currentSong.uri, title: dispName(currentSong), artist: dispArtist(currentSong), ...cutBounds(currentSong) });
+        // The queue too, or next and previous (the widget's, the notification's)
+        // had nothing to go by until a song was skipped in the app.
+        { const q = queueRef.current.length ? queueRef.current : [currentSong];
+          AudioPlayer.setQueue({ tracks: q.map(toNativeTrack), currentIndex: Math.max(0, q.findIndex(x => x.id === currentSong.id)) }).catch(() => {}); }
         const seekTarget = currentSong.isCut && currentTime <= (currentSong.cutFrom ?? 0) ? (currentSong.cutFrom ?? 0) : currentTime;
         if (seekTarget > 0) await AudioPlayer.seekTo({ milliseconds: seekTarget });
         loadedRef.current = true; setPlaying(true); return;
@@ -1654,6 +1819,7 @@ export default function App() {
     const nxt = q[idx + dir] ?? (repeatAll ? q[(idx + dir + q.length) % q.length] : undefined);
     if (!nxt) return;
     if (q !== queue) setQueue(q);
+    // Next and previous switch at once; crossfade is for songs that end.
     playSong(nxt, q);
   };
 
@@ -1707,7 +1873,8 @@ export default function App() {
   // ticked. Splicing into the queue (not just recording ids) matters for the
   // reason given above: native advances on its own and never reads playNextQueue.
   const handlePlayManyNext = useCallback((ids: string[]) => {
-    const chosen = displayListRef.current.filter(s => ids.includes(s.id));
+    const want = new Set(ids);
+    const chosen = displayListRef.current.filter(s => want.has(s.id));
     if (!chosen.length) return;
 
     const cur = curRef.current;
@@ -1839,9 +2006,9 @@ export default function App() {
    *  whatever was put on "Play next", then the rest. Changing the mode never
    *  loses or reorders what someone lined up by hand. */
   const requeue = (cur: Song, rest: Song[]) => {
-    const all = queueRef.current;
+    const all = indexById(queueRef.current);
     const lined = playNextQueueRef.current
-      .map(id => all.find(s => s.id === id))
+      .map(id => all.get(id))
       .filter((s): s is Song => !!s && s.id !== cur.id);
     const held = new Set([cur.id, ...lined.map(s => s.id)]);
     const q = [cur, ...lined, ...rest.filter(s => !held.has(s.id))];
@@ -1891,6 +2058,24 @@ export default function App() {
   const [titleDragX, setTitleDragX] = useState(0);
   const [titleDir,   setTitleDir]   = useState<1 | -1>(1);
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
+  // The mini player goes into the big player and comes back out of it
+  // (Caelan, 21 Nov): "out" while the big one opens and is open, "in" while
+  // it comes back. A tap opens the big one from where the mini player is
+  // (riseFrom, its top); a drag pulls it up from the bottom as before.
+  const miniCardEl = useRef<HTMLDivElement | null>(null);
+  const [miniMorph, setMiniMorph] = useState<null | "out" | "in">(null);
+  const [riseFrom,  setRiseFrom]  = useState<number | null>(null);
+  const expandFromMini = () => {
+    const r = miniCardEl.current?.getBoundingClientRect();
+    setRiseFrom(r ? r.top : null);
+    openedByDragRef.current = false;
+    setMiniMorph("out");
+    setPlayerExpanded(true);
+  };
+  const miniBack = () => setMiniMorph(m => (m === "out" ? "in" : m));
+  // Closed without its animation too (a sheet of its own took over): it comes
+  // back all the same. "in" ends with its animation (onAnimationEnd below).
+  const miniPhase = miniMorph === "out" && !playerExpanded && expandDrag === null ? "in" : miniMorph;
   const playerAxisRef   = useRef<"h" | "v" | null>(null); // gesture axis lock
   const playerSwipeT    = useRef(0);       // when the touch began, for a flick
 
@@ -1961,6 +2146,8 @@ export default function App() {
         // Committed: hand over to the fully-open sheet without re-animating.
         openedByDragRef.current = true;
         hapticImpact("light");
+        setRiseFrom(null);
+        setMiniMorph("out");
         setPlayerExpanded(true);
         setExpandDrag(null);
       } else {
@@ -1991,302 +2178,231 @@ export default function App() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ── EXPORT FLOW ───────────────────────────────────────────────────────────
+  // ── BACKUP ────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────
+  // BackupPage draws the steps; the work is here.
+  // Make: the songs picked are copied into Download/<name>/music next to a
+  // JSON with everything else (storage.ts exportBackup), packed into
+  // Download/<name>.zip, and handed to the cloud app, which asks where in it
+  // to save it (BackupNative.sendTo). The folder goes once the zip is made.
+  // Restore: the backup is picked in the cloud app or anywhere on the phone,
+  // copied here and read (BackupNative.pick); only what was picked comes back,
+  // its songs unpacked into Music/MPTree/<backup> (BackupNative.unpack).
 
-  /** Called when user taps "Export backup" in SettingsSheet */
-  const handleExportOpen = useCallback(() => {
-    setBackupSheet({ kind: "exportInfo" });
+  const LAST_BACKUP_KEY = "mptree_last_backup";
+  // Restored settings (theme, size, language, look) are read once at start,
+  // so a restore that brought some starts the app again on Done.
+  const reloadAfterRestoreRef = useRef(false);
+
+  const openBackup = useCallback(() => {
+    backupCancelRef.current = false;
+    setBackupStep({ kind: "home" });
+    BackupNative.clouds().then(setBackupClouds).catch(() => setBackupClouds(null));
+    Preferences.get({ key: LAST_BACKUP_KEY })
+      .then(r => setLastBackup(r.value ? JSON.parse(r.value) as { at: number; app: CloudApp } : null))
+      .catch(() => {});
   }, []);
 
-  /** Called when user taps "Start backup" in ExportInfoSheet */
-  const doExport = useCallback(async (backupName: string, opts: BackupOptions) => {
+  const closeBackup = useCallback(() => {
+    backupCancelRef.current = true;
+    BackupNative.stopPack().catch(() => {});
+    if (pickedBackupRef.current) { pickedBackupRef.current = null; BackupNative.discard().catch(() => {}); }
+    setBackupStep(null);
+    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
+  }, []);
+
+  /** Makes a backup of what was picked and hands it to `app`. */
+  const doBackup = useCallback(async (pick: BackupPick, app: CloudApp) => {
     backupCancelRef.current = false;
-
     const now = Date.now();
-
-    // Song details and covers live in the same store, so each is cut out of
-    // it when it is not wanted.
+    const name = `MPTree_Backup_${makeDateTag()}`;
+    const ids = songIdsFor(pick, songs.map(s => s.id), playlists);
+    const inBackup = songs.filter(s => ids.has(s.id));
+    const chosen = playlists.filter(pl => pick.playlists.includes(pl.id));
+    const songsById = indexById(songs);
+    const nameOf = (s: Song) => metaRef.current[s.id]?.customName ?? s.title;
+    const artistOf = (s: Song) => metaRef.current[s.id]?.customArtist ?? s.artist;
     const metaOut: Record<string, SongMeta> = {};
-    if (opts.details || opts.covers) {
-      for (const [id, m] of Object.entries(metaRef.current)) {
-        const { customPhoto, ...rest } = m;
-        const entry: SongMeta = opts.details ? { ...rest } : {};
-        if (opts.covers && customPhoto) entry.customPhoto = customPhoto;
-        if (Object.keys(entry).length) metaOut[id] = entry;
-      }
-    }
+    for (const [id, m] of Object.entries(metaRef.current)) if (ids.has(id)) metaOut[id] = m;
 
-    const backupData: BackupData = {
+    const data: BackupData = {
       version:    2,
       exportedAt: now,
-      parts: {
-        playlists: opts.playlists, covers: opts.covers, details: opts.details,
-        bin: opts.bin, settings: opts.settings,
-      },
-      settings: opts.settings ? await collectSettings() : undefined,
-      playlists: !opts.playlists ? [] : playlists.map(pl => ({
+      // Likes, covers, names and settings always go along; the bin does not.
+      parts: { playlists: chosen.length > 0, covers: true, details: true, bin: false, settings: true },
+      settings: await collectSettings(),
+      playlists: chosen.map(pl => ({
         id:         pl.id,
         name:       pl.name,
         createdAt:  pl.createdAt,
-        coverPhoto: opts.covers ? pl.coverPhoto : undefined,
+        coverPhoto: pl.coverPhoto,
         songs:      pl.songIds
-          .map(id => songs.find(s => s.id === id))
+          .map(id => songsById.get(id))
           .filter((s): s is Song => s != null)
-          .map(s => ({
-            id:       s.id,
-            title:    metaRef.current[s.id]?.customName   ?? s.title,
-            artist:   metaRef.current[s.id]?.customArtist ?? s.artist,
-            path:     s.uri,
-            duration: s.duration,
-          })),
+          .map(s => ({ id: s.id, title: nameOf(s), artist: artistOf(s), path: s.uri, duration: s.duration })),
       })),
       meta: metaOut,
-      removedSongs: !opts.bin ? [] : removedSongs.map(s => ({
-        id:        s.id,
-        title:     s.title,
-        artist:    s.artist,
-        path:      s.uri,
-        dateAdded: s.dateAdded,
-      })),
-      cutTracks: !opts.details ? [] : songs
-        .filter(s => s.isCut)
-        .map(s => ({
-          id:      s.id,
-          title:   metaRef.current[s.id]?.customName   ?? s.title,
-          artist:  metaRef.current[s.id]?.customArtist ?? s.artist,
-          path:    s.uri,
-          cutFrom: s.cutFrom,
-          cutTo:   s.cutTo,
-        })),
-      liked: !opts.details ? [] : songs
-        .filter(s => metaRef.current[s.id]?.liked)
-        .map(s => s.uri),
+      removedSongs: [],
+      cutTracks: inBackup.filter(s => s.isCut)
+        .map(s => ({ id: s.id, title: nameOf(s), artist: artistOf(s), path: s.uri, cutFrom: s.cutFrom, cutTo: s.cutTo })),
+      liked: inBackup.filter(s => metaRef.current[s.id]?.liked).map(s => s.uri),
     };
-
-    const picked = new Set(opts.songIds);
-    const allPathSet = new Set<string>();
-    for (const s of songs) {
-      if (opts.songs === "all" || (opts.songs === "some" && picked.has(s.id))) allPathSet.add(s.uri);
+    const songPaths = [...new Set(inBackup.map(s => s.uri))];
+    // The same fields storage.ts exportBackup wrote, so a restore reads the
+    // songs' old places the way it always did.
+    data.includeMusic = songPaths.length > 0;
+    data.musicDir     = songPaths.length > 0 ? `Download/${name}` : undefined;
+    data.musicFiles   = songPaths.length > 0 ? songPaths : undefined;
+    const making = (done: number, total: number) => setBackupStep({
+      kind: "busy", title: t("Making your backup"), unit: "songs", done, total, stop: true,
+      line: t("When it is packed, {app} opens so you can save it.", { app: CLOUD_NAME[app] }),
+    });
+    // Too little room is about this phone, never the cloud: the zip is made
+    // here first, and the cloud app looks at its own room when it gets it.
+    // So the message says which, and how much (Caelan, 21 Nov).
+    const phoneFull = (need: number, free: number) => t(
+      "This phone is full, not {app}. The backup is made on the phone first and needs {need}; {free} is free. Free up {short}, or pick fewer songs or playlists.",
+      { app: CLOUD_NAME[app], need: fmtBytes(need), free: fmtBytes(Math.max(0, free)), short: fmtBytes(Math.max(0, need - free)) });
+    making(0, songPaths.length);
+    const room = await BackupNative.room({ paths: songPaths }).catch(() => null);
+    if (room && room.need > room.free) {
+      setBackupStep({ kind: "error", back: "home", message: phoneFull(room.need, room.free) });
+      return;
     }
-    if (opts.bin) for (const s of removedSongs) allPathSet.add(s.uri);
-    const songPaths = [...allPathSet];
-    const total     = songPaths.length;
-
-    // Show progress sheet immediately
-    setBackupSheet({ kind: "exportProgress", done: 0, total, cancelled: false });
-
+    const sub = await BackupNative.addListener("progress", p => {
+      if (p.phase === "pack" && !backupCancelRef.current) making(p.done, p.total);
+    });
     try {
-      const result = await exportBackup(
-        backupData,
-        songPaths,
-        backupName,
-        (done, tot) => {
-          if (backupCancelRef.current) return;
-          setBackupSheet({ kind: "exportProgress", done, total: tot, cancelled: false });
-        },
-        backupCancelRef,
-      );
-
-      if (backupCancelRef.current) {
-        setBackupSheet({ kind: "closed" });
+      // Straight into the zip: no copies of the songs in a folder first, so
+      // a backup needs its own size free, not twice that (BackupPlugin.pack).
+      const packed = await BackupNative.pack({ name, at: String(now), json: JSON.stringify(data, null, 2), paths: songPaths });
+      if (packed.stopped || backupCancelRef.current) {
+        if (backupStepRef.current) setBackupStep({ kind: "where", pick });
         showToast(t("Backup cancelled"));
         return;
       }
-
-      exportJsonUriRef.current = result.jsonUri;
-      exportFolderNameRef.current = result.folderName;
-      setBackupSheet({
-        kind:        "exportSuccess",
-        folderName:  result.folderName,
-        jsonUri:     result.jsonUri,
-        failedCount: result.failedCount > 0 ? result.failedCount : undefined,
-      });
+      const size = packed.size ?? bytesOf(inBackup.map(s => s.duration));
+      const sent = await BackupNative.sendTo({ path: packed.uri ?? "", app });
+      if (!sent.sent) { setBackupStep({ kind: "where", pick }); return; }
+      const last = { at: now, app };
+      setLastBackup(last);
+      Preferences.set({ key: LAST_BACKUP_KEY, value: JSON.stringify(last) }).catch(() => {});
+      setBackupStep({ kind: "made", app, what: `${pickText(pick, playlists.length)}, ${fmtBytes(size)}` });
     } catch (e: any) {
-      if (e?.isStorageFull) {
-        exportJsonUriRef.current = e.jsonUri ?? "";
-        setBackupSheet({
-          kind:         "exportError",
-          message:      t("Not enough storage space. Free up space and try again."),
-          copiedCount:  e.copiedCount ?? 0,
-        });
-      } else {
-        setBackupSheet({
-          kind:         "exportError",
-          message:      t("Export failed: {error}", { error: String(e) }),
-          copiedCount:  0,
-        });
-      }
+      const full = e?.code === "full" || String(e?.message ?? e).includes("full");
+      setBackupStep({
+        kind: "error", back: "home",
+        message: full
+          ? phoneFull(Number(e?.data?.need ?? room?.need ?? 0), Number(e?.data?.free ?? room?.free ?? 0))
+          : t("Export failed: {error}", { error: String(e?.message ?? e) }),
+      });
+    } finally {
+      sub.remove();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlists, songs, removedSongs]);
+  }, [songs, playlists]);
 
-  /** Share the whole backup folder (JSON + music) as a zip via Android share sheet */
-  const handleShareBackup = useCallback(async () => {
-    const folderName = exportFolderNameRef.current;
-    if (!folderName) { showToast(t("Nothing to share")); return; }
-
-    setBackupSheet({ kind: "sharing" });
+  /** Lets the person pick a backup in `from`, then shows what is in it. */
+  const doPickBackup = useCallback(async (from: CloudApp | "phone") => {
+    setBackupStep({ kind: "busy", title: t("Getting your backup"), unit: "none", done: 0, total: 0, line: t("Choose your backup in the window that opens.") });
+    const sub = await BackupNative.addListener("progress", p => {
+      if (p.phase === "read") setBackupStep({ kind: "busy", title: t("Getting your backup"), unit: p.total > 0 ? "bytes" : "none", done: p.done, total: p.total, line: t("Reading the backup") });
+    });
+    const unknown = () => setBackupStep({ kind: "error", back: "from", message: t("File not recognized. This doesn't look like an MPTree backup.") });
     try {
-      const { zipUri } = await zipBackupFolder(folderName);
-      await Share.share({
-        title: t("MPTree backup"),
-        files: [zipUri],
-        dialogTitle: t("Share backup"),
-      });
-      // Restore the success sheet so the user can still tap "Done".
-      setBackupSheet({ kind: "exportSuccess", folderName });
+      const picked = await BackupNative.pick(from === "phone" ? {} : { app: from });
+      if (picked.cancelled || !picked.json) { setBackupStep({ kind: "from" }); return; }
+      let data: BackupData;
+      try { data = parseBackup(picked.json); } catch { BackupNative.discard().catch(() => {}); unknown(); return; }
+      if (data.version > 2) {
+        BackupNative.discard().catch(() => {});
+        setBackupStep({ kind: "error", back: "from", message: t("Backup is from a newer version of MPTree. Please update the app.") });
+        return;
+      }
+      pickedBackupRef.current = { data, picked };
+      setBackupStep({ kind: "restorePick", data });
     } catch (e) {
-      showToast(t("Couldn't prepare backup for sharing"));
-      setBackupSheet({ kind: "exportSuccess", folderName });
+      const msg = String((e as { message?: string })?.message ?? e);
+      if (msg.includes("not a backup")) unknown();
+      else setBackupStep({
+        kind: "error", back: "from",
+        // Copying the backup in from the cloud app: it is this phone that is full.
+        message: msg.includes("full") ? t("This phone is too full to read the backup. Free up some space on it and try again.") : t("File not recognized. Could not read the file."),
+      });
+    } finally {
+      sub.remove();
     }
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // ── IMPORT FLOW ───────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /** Called when user taps "Restore backup" in SettingsSheet */
-  const handleImportOpen = useCallback(() => {
-    setBackupSheet({ kind: "importInfo" });
-  }, []);
-
-  /** Called from ImportInfoSheet — opens the hidden file picker */
-  const handleOpenImportPicker = useCallback(() => {
-    importFileInputRef.current?.click();
-  }, []);
-
-  /** Processes the selected JSON file */
-  const handleImportFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (importFileInputRef.current) importFileInputRef.current.value = "";
-
-    // Move to progress state before parsing
-    setBackupSheet({ kind: "importProgress", phase: t("Reading backup…") });
-
-    const json = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = ev => resolve(ev.target?.result as string);
-      reader.onerror = ()  => reject(new Error("Could not read file"));
-      reader.readAsText(file);
-    }).catch(() => null);
-
-    if (!json) {
-      setBackupSheet({ kind: "importError", message: t("File not recognized. Could not read the file.") });
-      return;
-    }
-
-    let data: BackupData;
+  /** Puts back what was picked from the backup read by doPickBackup. */
+  const doRestoreBackup = useCallback(async (pick: BackupPick) => {
+    const held = pickedBackupRef.current;
+    if (!held) { setBackupStep({ kind: "from" }); return; }
+    const { data, files } = restoreOf(held.data, pick);
+    const sub = await BackupNative.addListener("progress", p => {
+      if (p.phase === "unpack") setBackupStep({ kind: "busy", title: t("Restoring"), unit: "songs", done: p.done, total: p.total, line: t("Unpacking songs") });
+    });
     try {
-      data = parseBackup(json);
-    } catch {
-      setBackupSheet({ kind: "importError", message: t("File not recognized. This doesn't look like an MPTree backup.") });
-      return;
-    }
-
-    // Check version compatibility
-    if (data.version > 2) {
-      setBackupSheet({ kind: "importError", message: t("Backup is from a newer version of MPTree. Please update the app.") });
-      return;
-    }
-
-    try {
+      let musicAbsDir: string | null = null;
+      if (held.picked.kind === "zip" && held.picked.zip && files.length) {
+        const inZip = new Set(held.picked.names ?? []);
+        const names = [...new Set(files.map(f => f.split(/[\\/]/).pop() ?? f))].filter(n => inZip.has(n));
+        setBackupStep({ kind: "busy", title: t("Restoring"), unit: "songs", done: 0, total: names.length, line: t("Unpacking songs") });
+        const folder = (held.data.musicDir?.split("/").pop() || `MPTree_Backup_${held.data.exportedAt}`).replace(/[\\/:*?"<>|]/g, "_");
+        musicAbsDir = (await BackupNative.unpack({ zip: held.picked.zip, names, to: `Music/MPTree/${folder}` })).folder;
+      } else if (held.picked.kind === "json" && data.includeMusic && data.musicDir) {
+        // A backup from before 1.6.3: its songs are in its folder on this phone.
+        const { uri } = await Filesystem.getUri({ directory: Directory.ExternalStorage, path: `${data.musicDir}/music` });
+        musicAbsDir = uri.replace(/^file:\/\//, "");
+      }
       let pathRemap: Map<string, string> | undefined;
-
-      if (data.includeMusic && data.musicDir) {
-        setBackupSheet({ kind: "importProgress", phase: t("Indexing music…") });
-
-        const { uri: musicAbsUri } = await Filesystem.getUri({
-          directory: Directory.ExternalStorage,
-          path: `${data.musicDir}/music`,
-        });
-        const musicAbsDir = musicAbsUri.replace(/^file:\/\//, "");
-
-        pathRemap = new Map<string, string>();
-        const allBackupPaths = new Set<string>();
-        for (const pl of data.playlists)    for (const s of pl.songs)   allBackupPaths.add(s.path);
-        for (const s  of data.removedSongs)                              allBackupPaths.add(s.path);
-        for (const s  of data.cutTracks)                                 allBackupPaths.add(s.path);
-        for (const p  of data.liked)                                     allBackupPaths.add(p);
-        for (const key of Object.keys(data.meta))                        allBackupPaths.add(key);
-
-        // Version 2 says which files it copied; only those point at the
-        // backup's folder. A song left out of the backup is still wherever
-        // it was.
-        const copied = data.musicFiles ? new Set(data.musicFiles) : null;
-        for (const origPath of allBackupPaths) {
-          if (copied && !copied.has(origPath)) continue;
-          const filename = origPath.split("/").pop();
-          if (filename) {
-            pathRemap.set(origPath, `${musicAbsDir}/${filename}`);
-          }
+      if (musicAbsDir) {
+        pathRemap = new Map();
+        for (const orig of files) {
+          const file = orig.split(/[\\/]/).pop();
+          if (file) pathRemap.set(orig, `${musicAbsDir}/${file}`);
         }
-
         await scanBackupFolder(musicAbsDir);
       }
 
-      setBackupSheet({ kind: "importProgress", phase: t("Restoring playlists…") });
-
-      const { playlists: pl, meta: m, removedSongs: rs, cutTracks: ct } =
-        await importBackup(data, pathRemap, {
-          playlists, meta: metaRef.current, removedSongs: removedRef.current,
-          cutTracks: songs.filter(s => s.isCut),
-        });
-
-      setPlaylists(pl);
-      setMeta(m);
-      metaRef.current = m;
-      setRemovedSongs(rs);
-      removedRef.current = rs;
-
-      if (data.includeMusic) {
-        await scanMusic(rs);
-      }
-
+      setBackupStep({ kind: "busy", title: t("Restoring"), unit: "none", done: 0, total: 0, line: t("Restoring playlists…") });
+      const { playlists: pl, meta: m, removedSongs: rs, cutTracks: ct } = await importBackup(data, pathRemap, {
+        playlists: playlistsRef.current, meta: metaRef.current, removedSongs: removedRef.current,
+        cutTracks: songsRef.current.filter(s => s.isCut),
+      }, { mergePlaylists: true });
+      playlistsRef.current = pl; setPlaylists(pl);
+      metaRef.current = m; setMeta(m);
+      removedRef.current = rs; setRemovedSongs(rs);
+      if (musicAbsDir) await scanMusic(rs);
       if (ct.length > 0) {
         setSongs(prev => {
           const cutIds = new Set(ct.map(s => s.id));
           return [...ct, ...prev.filter(s => !cutIds.has(s.id))];
         });
       }
-
-      // Count total song references for the success screen
-      const songCount = new Set([
-        ...pl.flatMap(p => p.songIds),
-        ...rs.map(s => s.id),
-      ]).size;
-
       if (data.settings) reloadAfterRestoreRef.current = true;
-      setBackupSheet({
-        kind:          "importSuccess",
-        playlistCount: pl.length,
-        songCount,
+      pickedBackupRef.current = null;
+      BackupNative.discard().catch(() => {});
+      const songCount = files.length || new Set(data.playlists.flatMap(p => p.songs.map(s => s.path))).size;
+      setBackupStep({ kind: "restored", songs: songCount, playlists: data.playlists.length });
+    } catch (e) {
+      const msg = String((e as { message?: string })?.message ?? e);
+      // Unpacking checks the room first and says how much (BackupPlugin.unpack).
+      const room = (e as { data?: { need?: number; free?: number } })?.data;
+      setBackupStep({
+        kind: "error", back: "from",
+        message: msg.includes("full")
+          ? (room?.need
+            ? t("This phone has no room for these songs. They need {need}; {free} is free. Free up {short}, or pick fewer.", { need: fmtBytes(room.need), free: fmtBytes(Math.max(0, room.free ?? 0)), short: fmtBytes(Math.max(0, room.need - (room.free ?? 0))) })
+            : t("Not enough storage space. Free up space and try again."))
+          : /permission/i.test(msg) ? t("Storage permission needed. Please grant file access and try again.")
+          : t("Restore failed. The backup may be incomplete or corrupted."),
       });
-    } catch (e: any) {
-      const msg = String(e);
-      if (msg.includes("permission") || msg.includes("Permission")) {
-        setBackupSheet({ kind: "importError", message: t("Storage permission needed. Please grant file access and try again.") });
-      } else {
-        setBackupSheet({ kind: "importError", message: t("Restore failed. The backup may be incomplete or corrupted.") });
-      }
+    } finally {
+      sub.remove();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanMusic]);
-
-  // Restored settings (theme, size, language, look) are read once at start,
-  // so a restore that brought some starts the app again on Done.
-  const reloadAfterRestoreRef = useRef(false);
-  const closeBackupSheet = useCallback(() => {
-    backupCancelRef.current = true;
-    setBackupSheet({ kind: "closed" });
-    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
-  }, []);
-
-  const doneBackupSheet = useCallback(() => {
-    setBackupSheet({ kind: "closed" });
-    if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
-  }, []);
 
   // ── MPTree account ────────────────────────────────────────────────────────
   // The engine (src/sync/engine.ts) reads the library through these and puts
@@ -2296,6 +2412,41 @@ export default function App() {
   useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
   const songsRef = useRef<Song[]>([]);
   useEffect(() => { songsRef.current = songs; }, [songs]);
+
+  // Covers that together pass 20 MB are made smaller, quietly, so Android's
+  // own backup of the settings (25 MB at most) still takes them (covers.ts).
+  // Once per start, a while after it. Only a cover that is still the one made
+  // smaller is swapped: one changed in the meantime keeps the change.
+  const coversCheckedRef = useRef(false);
+  useEffect(() => {
+    if (isInitializing || !libraryReady || coversCheckedRef.current) return;
+    coversCheckedRef.current = true;
+    const timer = window.setTimeout(() => {
+      const before = { meta: metaRef.current, playlists: playlistsRef.current };
+      shrinkCovers(before.meta, before.playlists).then(async r => {
+        if (!r) return;
+        const nextMeta = { ...metaRef.current };
+        let metaChanged = false;
+        for (const [id, m] of Object.entries(r.meta)) {
+          const was = before.meta[id]?.customPhoto;
+          if (m.customPhoto === was || nextMeta[id]?.customPhoto !== was) continue;
+          nextMeta[id] = { ...nextMeta[id], customPhoto: m.customPhoto };
+          metaChanged = true;
+        }
+        const swapped = new Map(r.playlists.map((p, i) => [before.playlists[i]?.id, { was: before.playlists[i]?.coverPhoto, now: p.coverPhoto }]));
+        let listsChanged = false;
+        const nextLists = playlistsRef.current.map(p => {
+          const s = swapped.get(p.id);
+          if (!s || s.now === s.was || p.coverPhoto !== s.was) return p;
+          listsChanged = true;
+          return { ...p, coverPhoto: s.now };
+        });
+        if (metaChanged) { metaRef.current = nextMeta; setMeta(nextMeta); await saveMetaNow(nextMeta); }
+        if (listsChanged) { playlistsRef.current = nextLists; setPlaylists(nextLists); await savePlaylists(nextLists); }
+      }).catch(() => {});
+    }, 15000);
+    return () => window.clearTimeout(timer);
+  }, [isInitializing, libraryReady]);
   const syncHostRef = useRef<Host | null>(null);
   // Refreshed after every render, so the engine always calls this render's
   // functions.
@@ -2343,8 +2494,8 @@ export default function App() {
       // to their style: when the account brings another style, such an icon
       // goes with it (to the new style's own, or back to the plain one).
       const dark = (session.theme ?? themeNowRef.current) === "dark";
-      const style = !dark && l.light === "pink" && l.flowers !== "none" ? "aviela"
-        : isLanternRecord(dark ? l.vinylDark : l.vinylLight) && l.flowers === "none" ? "lantern" : null;
+      void dark;
+      const style = l.env === "custom" ? null : l.env;
       let after = l.icon;
       if ((after === "aviela" || after === "lantern") && after !== style) {
         after = style ?? "classic";
@@ -2567,7 +2718,8 @@ export default function App() {
   }, []);
 
   const shuffleMany = useCallback((ids: string[]) => {
-    const chosen = songs.filter(s => ids.includes(s.id));
+    const want = new Set(ids);
+    const chosen = songs.filter(s => want.has(s.id));
     if (!chosen.length) return;
     const shuffled = [...chosen].sort(() => Math.random() - 0.5);
     setPlayMode("shuffle");
@@ -2825,7 +2977,8 @@ export default function App() {
    *  a stretch of another file, so it has no file of its own to send. */
   const SHARE_MAX = 50;
   const shareSongs = useCallback(async (ids: string[], title?: string) => {
-    const picked = ids.map(id => songsRef.current.find(s => s.id === id)).filter((s): s is Song => !!s);
+    const byId = indexById(songsRef.current);
+    const picked = ids.map(id => byId.get(id)).filter((s): s is Song => !!s);
     const files = picked.filter(s => !s.isCut);
     const skipped = picked.length - files.length;
     if (!files.length) { showToast(t("These songs are cuts kept in MPTree only, so they cannot be shared.")); return; }
@@ -3049,21 +3202,19 @@ export default function App() {
   useEffect(() => {
     backHandlerRef.current = () => {
       // Topmost layers first. Each branch returns after handling one level.
-      if (backupSheet.kind !== "closed") {
-        // Never interrupt an in-flight backup/restore; those sheets drive a
-        // long native job and dismissing mid-way would orphan it. Every other
-        // state is either a prompt or a finished result, so Back dismisses it.
-        const busy = backupSheet.kind === "exportProgress"
-          || backupSheet.kind === "importProgress"
-          || backupSheet.kind === "sharing";
-        if (!busy) setBackupSheet({ kind: "closed" });
+      if (backupStep) {
+        // A step back, as the page's own arrow goes. Never out of a backup or
+        // restore under way: that drives a long native job.
+        const to = backOf(backupStep);
+        if (to === null) closeBackup();
+        else if (to !== "stay") setBackupStep(to);
         return;
       }
       if (showOnboarding)      { finishOnboarding(); return; }
       if (halloween)           { if (halloween !== "scare") closeHalloween(); return; }
       if (proOpen)             { setProOpen(false); return; }
       if (showAdPrompt)        { adNotNow(); return; }
-      if (accountOpen)         { setAccountOpen(false); return; }
+      if (accountOpen)         { if (!accountBackRef.current?.()) setAccountOpen(false); return; }
       if (eqOpen)              { setEqOpen(false); return; }
       // The page asks before it throws unapplied changes away.
       if (musicHowOpen)        { setMusicHowOpen(false); return; }
@@ -3077,6 +3228,7 @@ export default function App() {
       if (binManyIds)          { setBinManyIds(null); return; }
       if (editSong)            { setEditSong(null); return; }
       if (playerExpanded)      { setPlayerExpanded(false); openedByDragRef.current = false; return; }
+      if (nextUpOpen)          { setNextUpOpen(false); return; }
       if (updateInfo)          { const v = updateInfo.version; setUpdateInfo(null); dismissUpdate(v); return; }
       if (filterOpen)          { setFilterOpen(false); return; }
       if (chromeMenuOpen)      { setChromeMenuOpen(false); return; }
@@ -3289,6 +3441,16 @@ export default function App() {
   const CT = ownCard === TH ? TH : tinted(ownCard);
   // Aviela's flowers on the card take their colours from the card's ground.
   const flowerTone = toneOf(theme === "dark" ? look.cardDark : look.cardLight, theme === "dark", look.light);
+  // The home screen widgets: their saved colour and cover once, and the app's
+  // own colours whenever they change, for widgets set to "Same as app".
+  useEffect(() => { loadWidget().catch(() => {}); }, []);
+  useEffect(() => { sendWidgetPalette(TH); }, [TH]);
+  // The record the app has on, for the Record widget.
+  const widgetVinyl = theme === "dark" ? look.vinylDark : look.vinylLight;
+  useEffect(() => { void sendWidgetRecord(widgetVinyl, look.photoDisc); }, [widgetVinyl, look.photoDisc]);
+  // Stickers (Personalise): the setup that is on, and the paint for the page.
+  const stickerSet = setupById(look.stickers, look.stickerSetups);
+  const pageTone: Tone = theme === "dark" ? "black" : look.light === "pink" ? "pink" : "white";
   const CARD_SKIN: React.CSSProperties = {
     background: CT.playerBg,
     border: `1px solid ${CT.border}`,
@@ -3332,6 +3494,7 @@ export default function App() {
   const playerCardRef = useCallback((el: HTMLDivElement | null) => {
     playerObserver.current?.disconnect();
     playerObserver.current = null;
+    miniCardEl.current = el;
     if (!el) return;
     const ro = new ResizeObserver(() => setPlayerCardH(Math.round(el.offsetHeight)));
     ro.observe(el, { box: "border-box" });
@@ -3342,7 +3505,9 @@ export default function App() {
   // Gestures (a thin strip with a handle in the middle): into the strip, just
   // above the handle. No bar at all: 12px.
   const playerBottom = safeB === 0 ? 12 : safeB >= 32 ? safeB + 6 : Math.max(6, safeB - 6);
-  const playerH    = currentSong && !selecting && !playerHidden ? playerBottom - safeB + playerCardH : 0;
+  // Sideways, the player is on the left (SidePlayer) and the card at the
+  // bottom is not drawn, so the list gets the whole height.
+  const playerH    = currentSong && !selecting && !playerHidden && !side ? playerBottom - safeB + playerCardH : 0;
   // The selection bar, on either tab: the Playlists tab pads its songs by this
   // too, or the last ones sat under the bar.
   const selectBarH = selecting ? SELECT_BOTTOM_H : 0;
@@ -3360,7 +3525,6 @@ export default function App() {
   const allSelectedLiked = selectedSongs.length > 0 && selectedSongs.every(s => isLiked(s));
 
   // Default backup name (date-based)
-  const defaultBackupName = `MPTree_Backup_${makeDateTag()}`;
 
   // Measure the scroll viewport height for virtualization. Re-measures on
   // window resize / orientation change. cheap and runs rarely.
@@ -3383,6 +3547,19 @@ export default function App() {
     return undefined;
   };
 
+  // Landscape: a tap on the side player lists what plays next over the
+  // list's column (NextUpPanel). The first hundred; the full player has the rest.
+  const sideQueue = useMemo(() => {
+    if (!nextUpOpen || !currentSong || !side) return [];
+    const at = queue.findIndex(s => s.id === currentSong.id);
+    const pinned = new Set(playNextQueue);
+    return (at >= 0 ? queue.slice(at + 1, at + 101) : []).map(s => ({
+      id: s.id, title: dispName(s), artist: dispArtist(s), photo: getMeta(s).customPhoto,
+      path: s.uri, albumId: s.albumId, pinned: pinned.has(s.id),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextUpOpen, currentSong, side, queue, playNextQueue, meta]);
+
 
   // ── List virtualization ───────────────────────────────────────────────────
   // Render only the rows near the viewport (plus a buffer), with spacer divs
@@ -3399,7 +3576,6 @@ export default function App() {
   // row actually had 10px padding and came out at 68px, so every row the
   // virtual window skipped was 4px short and the list shuffled as it scrolled.
   const ROW_H = SIZE_TABLE[uiSize].row + (widePhone ? WIDE_ROW_EXTRA : 0);
-  rowHRef.current = ROW_H;
   const ART   = ROW_H - 20;       // 10px above and below
   // The two lines of a row: the name, and under it the length on the left
   // and the artist on the right. A step bigger on a big phone, like the row.
@@ -3410,12 +3586,24 @@ export default function App() {
   // Songs on their way between devices are shown in Settings, under Account
   // & sync (SettingsSheet), not over the list.
   const showMusicHint = musicHint && !selectMode;
-  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0);
+  // The ten-hour card: not with the music hint, not while picking songs.
+  const showListenCard = listenCard && !pro && !showMusicHint && !selectMode;
+  const pullOffset = (refreshing ? 46 : pullDist) + (showMusicHint ? musicHintH : 0) + (showListenCard ? listenCardH : 0);
   // Virtualization assumes a uniform ROW_H. That used to be broken by the
   // long-press menu expanding a row inline, hence an `!activeMenu` guard here;
   // the menu is a sheet now, so every row is the same height at all times.
   const virtualize = displayList.length > VIRT_THRESHOLD;
   const vpH = listViewportH || 640;
+  // The layout decides what one line of the list is: a row, a compact row, or
+  // a row of two or three covers. The virtual window counts lines.
+  const cols = layoutNow === "grid" ? 2 : layoutNow === "grid3" ? 3 : 1;
+  const GRID_PAD = 14, GRID_GAP = cols === 2 ? 12 : 8;
+  const listW = scrollRef.current?.clientWidth || viewW();
+  const cellW = Math.max(60, Math.floor((listW - GRID_PAD * 2 - GRID_GAP * (cols - 1)) / cols));
+  const LINE_H = cols > 1 ? cellW + (cols === 2 ? 58 : 52) : layoutNow === "compact" ? Math.round(ROW_H * 0.72) : ROW_H;
+  rowHRef.current = LINE_H;
+  colsRef.current = cols;
+  const lineCount = Math.ceil(displayList.length / cols);
 
   let virtStart = 0;
   let virtEnd = displayList.length;
@@ -3430,20 +3618,80 @@ export default function App() {
     // about a row and a half. VIRT_BUFFER * ROW_H (8 * 64 = 512px) absorbs that
     // with room to spare, and has to keep doing so.
     const scrolled = Math.max(0, listScrollTop - pullOffset - songsInset);
-    virtStart = Math.max(0, Math.floor(scrolled / ROW_H) - VIRT_BUFFER);
-    const visibleCount = Math.ceil(vpH / ROW_H) + VIRT_BUFFER * 2;
-    virtEnd = Math.min(displayList.length, virtStart + visibleCount);
+    virtStart = Math.max(0, Math.floor(scrolled / LINE_H) - VIRT_BUFFER);
+    const visibleCount = Math.ceil(vpH / LINE_H) + VIRT_BUFFER * 2;
+    virtEnd = Math.min(lineCount, virtStart + visibleCount);
+  } else {
+    virtEnd = lineCount;
   }
-  const virtTopPad = virtualize ? virtStart * ROW_H : 0;
-  const virtBottomPad = virtualize ? (displayList.length - virtEnd) * ROW_H : 0;
-  const visibleSongs = virtualize ? displayList.slice(virtStart, virtEnd) : displayList;
+  const virtTopPad = virtualize ? virtStart * LINE_H : 0;
+  const virtBottomPad = virtualize ? (lineCount - virtEnd) * LINE_H : 0;
+  const visibleSongs = virtualize ? displayList.slice(virtStart * cols, virtEnd * cols) : displayList;
 
+
+  // A song in the grid layouts: its cover large, the name and the artist
+  // under it. A tap plays it and a hold opens its menu, as on a row.
+  const gridCell = (song: Song) => {
+    const isActive   = currentSong?.id === song.id && !playSource;
+    const isSelected = selected.has(song.id);
+    const m          = getMeta(song);
+    const name       = dispName(song);
+    const artist     = dispArtist(song);
+    const corner     = cols === 2 ? 14 : 10;
+    return (
+      <div key={song.id} ref={el => { if (el) songRowRefs.current.set(song.id, el); else songRowRefs.current.delete(song.id); }}
+        data-song-row=""
+        onTouchStart={e => onPressStart(song.id, e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={e => onPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={onPressEnd} onTouchCancel={onPressEnd}
+        onMouseDown={e => onPressStart(song.id, e.clientX, e.clientY)}
+        onMouseMove={e => onPressMove(e.clientX, e.clientY)}
+        onMouseUp={onPressEnd} onMouseLeave={onPressEnd}
+        onClick={e => handleTap(song, e.timeStamp)}
+        style={{ width: cellW, cursor: "pointer", minWidth: 0 }}>
+        <div style={{
+          position: "relative", width: cellW, height: cellW, borderRadius: corner,
+          boxShadow: isSelected ? `0 0 0 2px ${TH.violet}` : isActive ? `0 0 0 2px ${TH.accent}` : "none",
+        }}>
+          <AlbumArt title={name} size={cellW} radius={corner} big active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
+          {selectMode && <span style={{ position: "absolute", right: 6, top: 6, display: "flex" }}><SelectCheck on={isSelected} T={TH} /></span>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 7 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: cols === 2 ? 14 : 13, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+            <div style={{ fontSize: 12, color: TH.textSub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</div>
+          </div>
+          {!selectMode && cols === 2 && (
+            <button
+              onClick={e => { e.stopPropagation(); setMenuSong(song); }}
+              onTouchStart={e => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              aria-label={t("More options for {name}", { name })}
+              style={{ background: "transparent", border: "none", cursor: "pointer", padding: "4px 0 4px 4px", display: "flex", flexShrink: 0, color: TH.muted }}
+            >
+              <IC.Dots />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+  const gridLines = (songs: Song[]) => {
+    const lines: Song[][] = [];
+    for (let i = 0; i < songs.length; i += cols) lines.push(songs.slice(i, i + cols));
+    return lines.map(line => (
+      <div key={`line:${line[0].id}`} style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${cellW}px)`, columnGap: GRID_GAP, padding: `0 ${GRID_PAD}px`, height: LINE_H, boxSizing: "border-box", alignContent: "start" }}>
+        {line.map(gridCell)}
+      </div>
+    ));
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
         * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html { background:${TH.bg}; --mp-side:${TH.bg}; }
         body { margin:0; background:${TH.bg}; }
         ::placeholder { color:${TH.muted}; opacity:0.6; }
         input { -webkit-appearance:none; }
@@ -3475,6 +3723,17 @@ export default function App() {
         .mp-title-r { animation: mpTitleFromR 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .mp-title-l { animation: mpTitleFromL 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
+        /* The mini player into the big one and back (miniMorph). Only a "to"
+           going out and only a "from" coming back, so each starts from or
+           ends at wherever the mini player really is (a finger may have
+           lifted it already). */
+        @keyframes mpMiniOut { to { opacity: 0; transform: translateY(-28px) scale(0.97); } }
+        @keyframes mpMiniIn  { from { opacity: 0; transform: translateY(-28px) scale(0.97); } }
+        .mp-mini-out { animation: mpMiniOut 0.2s cubic-bezier(0.3, 0, 0.6, 1) both; }
+        .mp-mini-in  { animation: mpMiniIn 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) 0.04s backwards; }
+        /* Still a blink of "in" with less motion: its end is what lets the
+           mini player go back under the sheets (onAnimationEnd). */
+        @media (prefers-reduced-motion: reduce) { .mp-mini-out { animation: none; opacity: 0; } .mp-mini-in { animation-duration: 1ms; animation-delay: 0s; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
         /* Bars on the album art of the track that is playing. Defined here
            rather than in AlbumArt so a single rule serves every list that
@@ -3497,13 +3756,22 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ backgroundColor: TH.bg, ...(background.photo ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...(bgPhoto || bgPreset ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+        {/* Stickers on the songs page: over the background, under everything else. */}
+        {stickerSet && page === "songs" && !discoverOpen && <StickerLayer items={stickerSet.items} place="page" tone={pageTone} fixed />}
         {/* Their own photo, under a veil of the app's colour, and Aviela's
             flowers or Lantern's light over both. Behind everything else in
             the app: the shell is its own layer, so -1 is still inside it. */}
-        {background.photo && <>
-          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${background.photo}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
+        {bgPhoto && <>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${bgPhoto}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundColor: TH.bg, opacity: 1 - background.strength }} />
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
+        </>}
+        {/* MPTree's own: Lantern's light as Lantern has it, dark or light
+            with the app. Made for the app's own colour, so no veil: the
+            strength is how much of it shows (all of it at the top). */}
+        {bgPreset === "lantern" && <>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...lanternBackdrop(theme === "dark"), opacity: background.strength / STRENGTH_MAX }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
         </>}
 
@@ -3518,6 +3786,7 @@ export default function App() {
             expression and the measured `dims.cardTop` are one number read two
             ways: change one and change the other. */}
         <div
+          data-header-card=""
           ref={headerCardRef}
           style={{
             position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 2px)", left: 12, zIndex: 60,
@@ -3541,13 +3810,17 @@ export default function App() {
           {[cardFlowers(look.flowers, flowerTone), cornerFlowers(look.flowers, flowerTone)].map((layer, i) => layer && (
             <div key={i} aria-hidden="true" style={{ ...layer, opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
           ))}
+          {stickerSet && (
+            <StickerLayer items={stickerSet.items} place="card" tone={flowerTone}
+              style={{ opacity: chromeCollapsed ? 0 : 1, transition: chromeAnimate ? "opacity 0.15s ease" : "none" }} />
+          )}
           {/* Full header. Kept mounted and at its natural width while collapsed
               (just clipped) so it never reflows — a reflow would corrupt the
               measured height the card animates to. */}
           <div
             ref={headerInnerRef}
             style={{
-              boxSizing: "border-box", width: "calc(100vw - 26px)", padding: "8px 14px 12px",
+              boxSizing: "border-box", width: "calc(var(--mp-col, 100vw) - 26px)", padding: "8px 14px 12px",
               opacity: chromeCollapsed ? 0 : 1,
               // `selecting` too: the card's own "none" does not reach a child
               // that says "auto", so the hidden sort button stayed tappable.
@@ -3696,6 +3969,15 @@ export default function App() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: discoverOpen ? 1 : undefined }}>
                   <span style={{ fontSize: 12, color: CT.muted, flexShrink: discoverOpen ? 1 : 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{discoverOpen ? t("Free music from Audius and the Internet Archive") : tn(displayList.length, "{n} song", "{n} songs")}</span>
+                  {!discoverOpen && newSince > 0 && (() => {
+                    const n = songs.filter(x => x.dateAdded > newSince).length;
+                    return n > 0 && (
+                      <button onClick={() => { setFilter("newest"); setNewSince(0); }}
+                        style={{ background: CT.accent, color: CT.playBtnFg, border: "none", borderRadius: 20, padding: "3px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                        {tn(n, "{n} new", "{n} new")}
+                      </button>
+                    );
+                  })()}
                   {/* An active artist filter has to be visible and undoable from
                       here. Buried in the sort menu it reads as "my songs are
                       missing" rather than "you filtered them out". */}
@@ -3714,9 +3996,26 @@ export default function App() {
                     card (see "Sort menu" further down): the card clips its
                     overflow so it can animate its height, which silently cut
                     the dropdown off and made the sort options unusable. */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {/* How the list is laid out: each tap the next of the four.
+                    Free for everyone. */}
+                {!discoverOpen && (
+                  <button onClick={() => {
+                      setFilterOpen(false);
+                      hapticImpact("light");
+                      layoutAnchorRef.current = takeLayoutAnchor();
+                      setSongsLayout(LIST_LAYOUTS[(LIST_LAYOUTS.indexOf(layoutNow) + 1) % LIST_LAYOUTS.length]);
+                    }}
+                    tabIndex={page === "songs" ? undefined : -1}
+                    aria-label={`${t("Layout")}: ${layoutName(layoutNow)}`}
+                    style={{ position: "relative", width: 38, height: 30, flexShrink: 0, display: "grid", placeItems: "center", padding: 0, borderRadius: 16, border: `1px solid ${CT.border}`, background: CT.surface, color: CT.chipColor, cursor: "pointer", fontFamily: "inherit" }}>
+                    <LayoutIcon kind={layoutNow} />
+                  </button>
+                )}
                 <button onClick={() => setFilterOpen(v => !v)} tabIndex={page === "songs" && !discoverOpen ? undefined : -1} style={{ visibility: discoverOpen ? "hidden" : "visible", maxWidth: discoverOpen ? 0 : "none", overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: discoverOpen ? "5px 0" : "5px 11px 5px 13px", borderRadius: 16, border: `1px solid ${isFavFilter ? CT.accent : CT.border}`, background: CT.surface, color: isFavFilter ? CT.accent : CT.chipColor, cursor: "pointer", fontSize: 13, fontWeight: "600", fontFamily: "inherit" }}>
                   <span>{filterText}</span><IC.Chevron />
                 </button>
+                </div>
               </div>
           </div>
           </div>
@@ -3760,7 +4059,7 @@ export default function App() {
             this the header and player just disappear on a scroll and nothing
             suggests the little round logo is the way back. Shown three times
             total (counted in Preferences), then never again. */}
-        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && !discoverDragging && <HintArrow target={discoverBtnRef} T={TH} />}
+        {showMusicHint && HAS_DISCOVER && page === "songs" && !chromeCollapsed && !discoverOpen && !discoverDragging && <HintBalloon target={discoverBtnRef} onDone={musicHintDone} T={TH} />}
 
         {chromeCollapsed && collapseHint && (
           <div
@@ -3947,7 +4246,7 @@ export default function App() {
                 // re-rendered all of this component on every scroll event, some
                 // sixty times a second through a fling, to draw the same thing.
                 const base = pullOffset + songsInset;
-                const rowOf = (v: number) => Math.floor(Math.max(0, v - base) / ROW_H);
+                const rowOf = (v: number) => Math.floor(Math.max(0, v - base) / LINE_H);
                 if (rowOf(top) !== rowOf(listScrollTop) || (top > songsInset) !== (listScrollTop > songsInset)) {
                   setListScrollTop(top);
                 }
@@ -3958,9 +4257,29 @@ export default function App() {
                 {(pullDist > 10 || refreshing) && <span className={refreshing ? "pulse" : ""} style={{ color: TH.muted, fontSize: 12, fontWeight: "700", letterSpacing: "0.1em", textTransform: "uppercase" }}>{refreshing ? t("Refreshing…") : pullDist > 55 ? t("Release to refresh") : t("Pull to refresh")}</span>}
               </div>
 
-              {showMusicHint && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} target={HAS_DISCOVER ? discoverBtnRef : undefined} T={TH} />}
+              {showListenCard && (
+                <ListenCard T={TH} onHeight={setListenCardH} onClose={closeListenCard}
+                  onPro={() => { closeListenCard(); setProOpen(true, "listen"); }} />
+              )}
 
-              {displayList.length === 0 ? (
+              {showMusicHint && !HAS_DISCOVER && <MusicHint onDone={musicHintDone} onHow={() => setMusicHowOpen(true)} onHeight={setMusicHintH} T={TH} />}
+
+              {displayList.length === 0 && search.trim() ? (
+                // Searched and nothing matched: say so, and offer the free
+                // music search with the same words.
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted, textAlign: "center" }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <div style={{ marginTop: 12, color: TH.text, fontWeight: 600, wordBreak: "break-word" }}>{t("No results for \"{q}\"", { q: search.trim() })}</div>
+                  {HAS_DISCOVER && (
+                    <button
+                      onClick={() => { hapticImpact("light"); openDiscover(); setDq(search.trim()); setDqSignal(n => n + 1); }}
+                      style={{ marginTop: 18, background: TH.accent, color: TH.playBtnFg, border: "none", borderRadius: 20, padding: "9px 18px", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}
+                    >
+                      {t("Search free music")}
+                    </button>
+                  )}
+                </div>
+              ) : displayList.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 20px", color: TH.muted }}>
                   <IC.Heart filled={false} size={28} />
                   <div style={{ marginTop: 12 }}>{t("No songs found")}</div>
@@ -3969,7 +4288,7 @@ export default function App() {
               ) : (
                 <>
                   {virtTopPad > 0 && <div style={{ height: virtTopPad }} aria-hidden="true" />}
-                  {visibleSongs.map((song) => {
+                  {cols > 1 ? gridLines(visibleSongs) : visibleSongs.map((song) => {
                     // Not marked here when it plays from a playlist: it plays there.
                     const isActive   = currentSong?.id === song.id && !playSource;
                     const liked      = isLiked(song);
@@ -3991,7 +4310,7 @@ export default function App() {
                             onClick={e => handleTap(song, e.timeStamp)}
                             style={{
                               display: "flex", alignItems: "center", padding: "0 8px", margin: "0 8px", gap: 10, cursor: "pointer",
-                              height: ROW_H, boxSizing: "border-box",
+                              height: LINE_H, boxSizing: "border-box",
                               // The playing row is a rounded tile with moving
                               // bars on its art. The accent bar that ran down
                               // its left edge is gone: the tile says it alone.
@@ -4000,8 +4319,14 @@ export default function App() {
                               boxShadow: isSelected ? `inset 0 0 0 1.5px ${TH.violet}55` : isActive ? `inset 0 0 0 1px ${TH.border}` : "none",
                               transition: "background 0.15s, box-shadow 0.15s",
                             }}>
-                            <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />
-                            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                            {layoutNow !== "compact" && <AlbumArt title={name} size={ART} active={isActive && !selectMode} playing={isActive && isPlaying && !selectMode} customPhoto={m.customPhoto} songPath={song.uri} albumId={song.albumId} T={TH} />}
+                            {layoutNow === "compact" ? (
+                              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8, paddingLeft: 4 }}>
+                                <span style={{ fontSize: ROW_TITLE, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flexShrink: 1 }}>{name}</span>
+                                <span style={{ flex: 1, minWidth: 0, fontSize: ROW_SUB, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
+                                {rowLength(song) > 0 && <span style={{ fontSize: ROW_SUB, color: TH.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(rowLength(song))}</span>}
+                              </div>
+                            ) : <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                 <div style={{ fontSize: ROW_TITLE, fontWeight: isActive ? "700" : "600", color: isActive ? TH.accent : TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                                 {song.isCut && <span style={{ fontSize: 10, background: TH.dim, color: TH.textSub, borderRadius: 4, padding: "1px 5px", fontWeight: "700", flexShrink: 0 }}>CUT</span>}
@@ -4014,7 +4339,7 @@ export default function App() {
                                 {rowLength(song) > 0 && <span style={{ fontSize: ROW_SUB, color: TH.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{fmt(rowLength(song))}</span>}
                                 <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: ROW_SUB, color: TH.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</span>
                               </div>
-                            </div>
+                            </div>}
                             {!selectMode && liked && (
                               <button onClick={e => { e.stopPropagation(); hapticImpact("light"); setMeta(prev => ({ ...prev, [song.id]: { ...(prev[song.id] || {}), liked: false } })); showToast(t("Removed from favorites")); }} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 6, display: "flex", flexShrink: 0, color: TH.accent }}>
                                 <IC.Heart filled={true} size={16} />
@@ -4046,16 +4371,21 @@ export default function App() {
                 <div style={{ padding: "18px 0 8px" }}>
                   <div style={{ padding: "0 19px 8px", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: TH.muted }}>
-                      {t("Not on this device yet")}
+                      {t("Coming from your other devices")}
                     </span>
                     <span style={{ fontSize: 12, color: TH.muted }}>{sync.songs.absent.length}</span>
                   </div>
                   <div style={{ padding: "0 19px 10px", fontSize: 12.5, color: TH.muted, lineHeight: 1.45 }}>
-                    {sync.songs.note === "phone-full"
-                      ? t("Not enough room. Free up {size} to get them all.", { size: fmtBytes(Math.max(0, (sync.songs.needBytes ?? 0) - Math.max(0, (sync.songs.freeBytes ?? 0) - 500 * 1024 * 1024))) })
-                      : sync.songs.note === "wifi" ? t("They come in on wifi.")
-                      : sync.songs.waitingOn.length ? t("Still on {phones}. Open MPTree there to bring them here.", { phones: sync.songs.waitingOn.join(", ") })
-                      : t("On their way.")}
+                    {sync.problem === "offline" ? t("Paused: no internet.")
+                      : sync.problem === "drive" ? t("Paused: Google Drive can't be reached.")
+                      : sync.problem === "full" ? t("Paused: your Google storage is full.")
+                      : sync.problem === "signin" ? t("Paused: sign in again under Account & sync.")
+                      : sync.songs.note === "phone-full"
+                      ? t("Not enough room. Free up {size} to get them all.", { size: fmtBytes(Math.max(0, (sync.songs.needBytes ?? 0) - Math.max(0, (sync.songs.freeBytes ?? 0) - ROOM_MARGIN))) })
+                      : sync.songs.note === "wifi" ? t("They come in when you're on wifi.")
+                      : sync.songs.note === "mobile-limit" ? t("Today's mobile data is used. They come in on wifi, or tomorrow.")
+                      : sync.songs.waitingOn.length ? t("Still on {phones}. Open MPTree there to send them.", { phones: sync.songs.waitingOn.join(", ") })
+                      : t("On their way. Keep MPTree open until they're here.")}
                   </div>
                   {sync.songs.absent.slice(0, 200).map(a => (
                     <div key={a.fp} style={{ display: "flex", alignItems: "center", gap: 10, height: ROW_H, padding: "0 16px 0 19px", boxSizing: "border-box", opacity: 0.42 }}>
@@ -4203,6 +4533,7 @@ export default function App() {
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
+              onAutoScroll={beginProgrammaticScroll}
               onInsetJump={markInsetJump}
               onOpenName={onOpenPlaylistName}
               listSignal={playlistListSignal}
@@ -4240,7 +4571,42 @@ export default function App() {
         </div>
 
         {/* ═══ BOTTOM PLAYER ═══════════════════════════════════════════════ */}
-        {currentSong && !selecting && !(discoverOpen && discoverActive) && (() => {
+        {side > 0 && (
+          <SidePlayer
+            width={side}
+            colW={viewW()}
+            onRight={sideRight}
+            onSwap={() => { const next = !sideRight; setSideOnRight(next); setSideRight(next); }}
+            song={!!currentSong}
+            title={currentSong ? dispName(currentSong) : ""}
+            artist={currentSong ? dispArtist(currentSong) : ""}
+            photo={currentSong ? nowPlayingPhoto(currentSong) : undefined}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            shuffle={playMode === "shuffle"}
+            onTogglePlay={togglePlay}
+            onSkip={skip}
+            onToggleShuffle={toggleShuffleFromPlayer}
+            onSeek={ms => setCurrentTime(ms)}
+            onSeekStart={() => setDragging(true)}
+            onSeekEnd={async ms => { setDragging(false); await seekTo(ms); }}
+            onOpen={() => { hapticImpact("light"); setNextUpOpen(o => !o); }}
+            onSwipeUp={() => { if (currentSong) { hapticImpact("light"); setNextUpOpen(true); } }}
+            onSwipeDown={() => setNextUpOpen(false)}
+            T={TH}
+          />
+        )}
+        {side > 0 && nextUpOpen && currentSong && (
+          <NextUpPanel
+            items={sideQueue}
+            onPlay={id => { const s = queueRef.current.find(x => x.id === id); if (s) playFromQueue(s); }}
+            onMove={moveInQueue}
+            onClose={() => setNextUpOpen(false)}
+            T={TH}
+          />
+        )}
+        {currentSong && !selecting && !(discoverOpen && discoverActive) && !side && (() => {
           const tint = nowPlayingColor && nowPlayingColor.id === currentSong.id ? nowPlayingColor.rgb : null;
           const miniPlayerBg = tint
             ? `linear-gradient(180deg, ${tint.replace("rgb(", "rgba(").replace(")", ", 0.22)")} 0%, ${TH.playerBg} 65%)`
@@ -4248,15 +4614,19 @@ export default function App() {
           return (
             <div
               ref={playerCardRef}
+              className={miniPhase === "out" ? "mp-mini-out" : miniPhase === "in" ? "mp-mini-in" : undefined}
+              onAnimationEnd={e => { if (e.animationName === "mpMiniIn") setMiniMorph(null); }}
               style={{
                 position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
-                zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
+                // Over the big player while it goes into it and comes back out.
+                zIndex: miniPhase ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : "translateY(0)",
-                opacity: playerHidden ? 0 : 1,
-                pointerEvents: playerHidden ? "none" : "auto",
+                // Pulled up by a finger, it lifts and fades with the big player.
+                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : expandDrag ? `translateY(${-Math.round(expandDrag * 28)}px)` : "translateY(0)",
+                opacity: playerHidden ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 1.8) : 1,
+                pointerEvents: playerHidden || miniPhase === "out" ? "none" : "auto",
                 transition: chromeAnimate
                   ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
@@ -4270,7 +4640,7 @@ export default function App() {
                   player's sheet handle, with a gentle upward "swipe me" nudge
                   animation. Tapping it also expands. */}
               <div
-                onClick={() => setPlayerExpanded(true)}
+                onClick={expandFromMini}
                 aria-label={t("Expand player")}
                 style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 64, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               >
@@ -4282,7 +4652,7 @@ export default function App() {
                   ate horizontal swipes meant for skipping tracks. */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div
-                  onClick={() => setPlayerExpanded(true)}
+                  onClick={expandFromMini}
                   style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1, cursor: "pointer" }}>
                   <AlbumArt title={dispName(currentSong)} size={40} active playing={isPlaying} customPhoto={nowPlayingPhoto(currentSong)} T={TH} />
                   {/* Keyed on the song so every track change remounts this and
@@ -4297,7 +4667,8 @@ export default function App() {
                       transition: titleDragX ? "none" : "transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
+                    {/* A long name moves, as in the big player (Marquee). */}
+                    <Marquee text={dispName(currentSong)} style={{ fontSize: 14, fontWeight: "700", color: TH.text, maxWidth: 160 }} />
                     <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
                   </div>
                 </div>
@@ -4387,6 +4758,7 @@ export default function App() {
         {menuSong && (
           <SongMenuSheet
             song={menuSong}
+            startOnPlaylists={menuStartPlaylists}
             dispName={dispName(menuSong)}
             dispArtist={dispArtist(menuSong)}
             customPhoto={getMeta(menuSong).customPhoto}
@@ -4427,8 +4799,8 @@ export default function App() {
           <SettingsSheet
             binCount={removedSongs.length}
             pro={pro}
-            hidden={lookOpen}
-            onOpenPro={() => setProOpen(true)}
+            hidden={lookOpen && lookLoaded}
+            onOpenPro={() => setProOpen(true, "settings")}
             onOpenLook={openLook}
             onOpenAccount={() => setAccountOpen(true)}
             onOpenCleanup={() => (pro ? setCleanupOpen : setProOpen)(true)}
@@ -4440,7 +4812,7 @@ export default function App() {
               // Long enough for the page slide and the header unfolding.
               startTutorial(page === "songs" && chromeOpen ? 250 : 500);
             }}
-            onBackup={() => setBackupSheet({ kind: "choose" })}
+            onBackup={openBackup}
             sleepUntil={sleepUntil}
             sleepEndOfTrack={sleepEndOfTrack}
             hasCurrentSong={!!currentSong}
@@ -4459,16 +4831,18 @@ export default function App() {
             T={TH} />
         )}
 
-        {lookOpen && (() => {
+        {(lookOpen || lookWarm) && (() => {
           // What the small player shows: the song that is on, or the first.
           const lookSong = currentSong ?? displayList[0];
           return (
+          <div key="look" aria-hidden={!lookOpen || undefined} style={lookOpen ? undefined : { position: "fixed", inset: 0, visibility: "hidden", pointerEvents: "none", zIndex: -1 }}>
           <LookSheet
             theme={theme} onSetTheme={setTheme}
             // The real player, for the small screen next to the copy of the
             // list. Its buttons do nothing there; it is only looked at.
             player={lookSong ? (
               <PlayerExpandSheet
+              rowSize={{ h: ROW_H, art: ART, title: ROW_TITLE, sub: ROW_SUB }}
                 onNoCover={() => {}}
                 song={lookSong}
                 dispName={dispName(lookSong)}
@@ -4501,12 +4875,10 @@ export default function App() {
                 onRemove={() => {}}
                 onShare={() => {}}
                 lyrics={getMeta(lookSong).customLyrics}
-                onAddLyrics={() => {}}
                 onSkipUpNext={() => {}}
                 onQueueMove={() => {}}
                 onPlayFromQueue={() => {}}
                 onOpenSongMenu={() => {}}
-                onOpenMenu={() => {}}
                 onClose={() => {}}
                 dragProgress={null}
                 dragSettling={false}
@@ -4514,10 +4886,11 @@ export default function App() {
                 T={TH}
               />
             ) : undefined}
-            onNeedPro={() => setProOpen(true)}
+            onNeedPro={() => setProOpen(true, "look")}
             onToast={showToast}
             onClose={closeLook}
             T={TH} />
+          </div>
           );
         })()}
         {cleanupOpen && (
@@ -4535,9 +4908,9 @@ export default function App() {
         {accountOpen && (
           <AccountSheet
             pro={pro}
-            onOpenPro={() => setProOpen(true)}
             onClose={() => setAccountOpen(false)}
             onToast={showToast}
+            backRef={accountBackRef}
             T={TH} />
         )}
         {proOpen && (
@@ -4546,6 +4919,8 @@ export default function App() {
             onToast={showToast}
             onOpenStore={() => openExternal("market://details?id=com.caelan.mptree", t("Could not open Google Play"))}
             onOpenAccount={() => { setProOpen(false); setAccountOpen(true); }}
+            onOpenLook={() => { setProOpen(false); openLook(); }}
+            from={proFrom}
             T={TH} />
         )}
         {halloween === "scare" && (
@@ -4557,7 +4932,7 @@ export default function App() {
           <HalloweenSheet treat={halloween.treat} onClose={closeHalloween} T={TH} />
         )}
         {showAdPrompt && adStage !== null && (
-          <AdDayPrompt stage={adStage} onWatch={adWatch} onBuy={() => setProOpen(true)} onNotNow={adNotNow} T={TH} />
+          <AdDayPrompt stage={adStage} onWatch={adWatch} onBought={() => { setProOffNote(false); showToast(t("Pro unlocked. Thank you!")); }} onToast={showToast} onNotNow={adNotNow} T={TH} />
         )}
 
         {welcome && (
@@ -4604,34 +4979,29 @@ export default function App() {
           />
         )}
 
-        {/* ═══ BACKUP SHEET ════════════════════════════════════════════════ */}
-        <BackupSheet
-          songs={songs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
-          binSongs={removedSongs.map(x => ({ id: x.id, title: dispName(x), artist: dispArtist(x), duration: x.duration }))}
-          state={backupSheet}
-          defaultBackupName={defaultBackupName}
-          onStartBackup={doExport}
-          onCancelBackup={closeBackupSheet}
-          onShare={handleShareBackup}
-          onDone={doneBackupSheet}
-          onOpenImportPicker={handleOpenImportPicker}
-          onChoose={what => (what === "export" ? handleExportOpen() : handleImportOpen())}
-          onClose={closeBackupSheet}
-          T={TH}
-        />
-
-        {/* Hidden file input for import — outside BackupSheet so it persists */}
-        <input
-          ref={importFileInputRef}
-          type="file"
-          accept=".json,application/json"
-          style={{ display: "none" }}
-          onChange={handleImportFileChange}
-        />
+        {backupStep && (
+          <BackupPage
+            step={backupStep}
+            onStep={setBackupStep}
+            onClose={closeBackup}
+            songs={songs}
+            playlists={playlists}
+            meta={meta}
+            clouds={backupClouds}
+            last={lastBackup}
+            onSave={(pick, app) => { void doBackup(pick, app); }}
+            onGetApp={app => { BackupNative.getApp({ app }).catch(() => {}); }}
+            onStop={() => { backupCancelRef.current = true; BackupNative.stopPack().catch(() => {}); }}
+            onFrom={from => { void doPickBackup(from); }}
+            onRestore={pick => { void doRestoreBackup(pick); }}
+            T={TH}
+          />
+        )}
 
         {(playerExpanded || expandDrag !== null) && currentSong && (() => {
           return (
             <PlayerExpandSheet
+              rowSize={{ h: ROW_H, art: ART, title: ROW_TITLE, sub: ROW_SUB }}
               onNoCover={() => showToast(t("This song has no cover. Add one with Edit."))}
               onChangePhoto={() => { setEditFocusPhoto(true); setEditSong(currentSong); }}
               song={currentSong}
@@ -4665,17 +5035,37 @@ export default function App() {
               onRemove={() => setRemoveSong(currentSong)}
               onShare={() => shareSong(currentSong)}
               lyrics={getMeta(currentSong).customLyrics}
-              onAddLyrics={() => openLyricsSheet(currentSong)}
+              onSaveLyrics={l => saveLyrics(currentSong, l)}
+              onSearchLyrics={() => searchLyricsOnline(currentSong)}
               sourceLabel={playSourceLabel}
               onSkipUpNext={skipUpNext}
               onQueueMove={moveInQueue}
               onPlayFromQueue={playFromQueue}
               onOpenSongMenu={s => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(s); }}
-              onOpenMenu={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMenuSong(currentSong); }}
+              menuActions={(() => {
+                // What opens a sheet of its own closes the player first, as the
+                // menu did when it was a sheet; the rest happens in place.
+                const away = (go: () => void) => () => { setPlayerExpanded(false); openedByDragRef.current = false; go(); };
+                return {
+                  isLiked: isLiked(currentSong),
+                  onPlay: () => { void seekTo(0); },
+                  onPlayNext: () => handlePlayNext(currentSong),
+                  onAddToPlaylist: away(() => { setMenuStartPlaylists(true); setMenuSong(currentSong); }),
+                  onToggleLike: () => { hapticImpact("light"); setMeta(prev => { const cur = prev[currentSong.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [currentSong.id]: { ...cur, liked: nowLiked } }; }); },
+                  onShare: () => shareSong(currentSong),
+                  onCut: away(() => openCutSheet(currentSong)),
+                  onSetRingtone: away(() => setSongAsRingtone(currentSong)),
+                  onChangePhoto: () => { setEditFocusPhoto(true); setEditSong(currentSong); },
+                  onEdit: () => { setEditFocusPhoto(false); setEditSong(currentSong); },
+                  onBin: () => setRemoveSong(currentSong),
+                };
+              })()}
               onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
               dragProgress={playerExpanded ? null : expandDrag}
               dragSettling={expandSettling}
               skipEnter={openedByDragRef.current}
+              riseFrom={riseFrom}
+              onCloseStart={miniBack}
               T={TH}
             />
           );
