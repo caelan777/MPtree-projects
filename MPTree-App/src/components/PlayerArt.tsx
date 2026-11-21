@@ -4,6 +4,7 @@ import { t } from "../i18n";
 import type { PlayerStyle } from "../look";
 import { SpinningDisc } from "./SpinningDisc";
 import { Logo } from "./Logo";
+import { FitWords, Marquee } from "./Marquee";
 
 // ─── WHAT THE PLAYER SHOWS ───────────────────────────────────────────────────
 // The big picture in the player's card, in the style picked on the Player page
@@ -82,12 +83,14 @@ function Words({ size, height, title, artist, T }: { size: number; height: numbe
   const big = Math.round(Math.max(30, Math.min(48, size * 0.16)));
   return (
     <div style={{ width: size, height, display: "flex", flexDirection: "column", justifyContent: "center", textAlign: "left", boxSizing: "border-box", padding: "0 4px" }}>
-      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: T.muted }}>{t("Now playing")}</span>
-      <div style={{
-        fontSize: big, fontWeight: 900, lineHeight: 1.04, color: T.text, marginTop: 12, letterSpacing: "-0.01em",
-        display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word",
-      }}>{title}</div>
-      <div style={{ fontSize: 17, color: T.textSub, marginTop: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist}</div>
+      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: T.muted, flexShrink: 0 }}>{t("Now playing")}</span>
+      {/* The whole name, always: smaller letters for a long one, and a slow
+          roll for one too long even then (FitWords). It was cut off after
+          four lines. */}
+      <FitWords text={title} max={big} style={{
+        flex: "0 1 auto", fontWeight: 900, lineHeight: 1.04, color: T.text, marginTop: 12, letterSpacing: "-0.01em",
+      }} />
+      <Marquee text={artist} style={{ fontSize: 17, color: T.textSub, marginTop: 14, flexShrink: 0 }} />
     </div>
   );
 }

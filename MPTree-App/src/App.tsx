@@ -24,6 +24,7 @@ import { AddToPlaylistSheet } from "./components/AddToPlaylistSheet";
 import { BulkEditSheet, type BulkEdit } from "./components/BulkEditSheet";
 import { LyricsSheet } from "./components/LyricsSheet";
 import { PlayerExpandSheet } from "./components/PlayerExpandSheet";
+import { Marquee } from "./components/Marquee";
 import { ConfirmSheet } from "./components/ConfirmSheet";
 import { MusicHint, MusicHowSheet, HintBalloon } from "./components/MusicHint";
 import { countDaily, countFirstLibrary } from "./counter";
@@ -55,7 +56,7 @@ import {
 } from "./sync/engine";
 import { findSuspects } from "./cleanup";
 import { startReview, reviewSongPlayed } from "./review";
-import { useBackground, loadBackground } from "./background";
+import { useBackground, loadBackground, STRENGTH_MAX } from "./background";
 import { useLook, loadLook, saveLook, endPreview, setLookMode, getLook, lookBack } from "./look";
 import { usePro, loadPro, useAdDay, notNowAdDay, watchAdForPro, adFailText, adOkText, giveDay } from "./pro";
 import { halloweenDue, markHalloweenDone } from "./halloween";
@@ -78,7 +79,7 @@ import {
   loadSession, saveSession,
   loadMeta, saveMeta, saveMetaNow,
   loadPlaylists, savePlaylists,
-  exportBackup, parseBackup, importBackup, scanBackupFolder, zipBackupFolder, collectSettings,
+  parseBackup, importBackup, scanBackupFolder, collectSettings,
 } from "./storage";
 import type { BackupData } from "./storage";
 
@@ -1020,7 +1021,9 @@ export default function App() {
   const ground = styleTint === LANTERN_GREEN ? lanternBackdrop(theme === "dark") : groundFlowers(look.flowers);
   const background = useBackground();
   // The background photo belongs to Custom: Aviela and Lantern have their own.
-  const bgPhoto = look.env === "custom" ? background.photo : undefined;
+  // One of MPTree's own (Lantern's light) goes before the photo when picked.
+  const bgPreset = look.env === "custom" ? background.preset : null;
+  const bgPhoto = look.env === "custom" && !bgPreset ? background.photo : undefined;
   const statusBarColor = TH.bg;
   useEffect(() => {
     const dark = theme === "dark";
@@ -1535,6 +1538,39 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong]);
 
+  // A new layout keeps the list where it was: the playing song in the middle,
+  // else the song that was at the top stays at the top. The list kept its
+  // scroll in pixels before, and a grid is so much shorter than a list that
+  // it landed somewhere else entirely (Caelan, 21 Nov).
+  const layoutAnchorRef = useRef<{ id: string; center: boolean; offset: number } | null>(null);
+  const takeLayoutAnchor = () => {
+    const list = displayListRef.current;
+    const cont = scrollRef.current;
+    const cur = curRef.current;
+    if (!cont || !list.length) return null;
+    if (cur && list.some(s => s.id === cur.id)) return { id: cur.id, center: true, offset: 0 };
+    const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
+    // At the top it stays at the top.
+    if (cont.scrollTop <= pad) return null;
+    const line = Math.max(0, Math.floor((cont.scrollTop - pad) / rowHRef.current));
+    const s = list[Math.min(list.length - 1, line * colsRef.current)];
+    return s ? { id: s.id, center: false, offset: pad + line * rowHRef.current - cont.scrollTop } : null;
+  };
+  useLayoutEffect(() => {
+    const a = layoutAnchorRef.current;
+    layoutAnchorRef.current = null;
+    const cont = scrollRef.current;
+    if (!a || !cont) return;
+    const idx = displayListRef.current.findIndex(s => s.id === a.id);
+    if (idx < 0) return;
+    beginProgrammaticScroll();
+    const pad = parseFloat(getComputedStyle(cont).paddingTop) || 0;
+    const ROW = rowHRef.current;
+    const rowTop = pad + Math.floor(idx / colsRef.current) * ROW;
+    cont.scrollTop = Math.max(0, a.center ? rowTop - cont.clientHeight / 2 + ROW / 2 : rowTop - a.offset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [songsLayout]);
+
   // ── Position polling ─────────────────────────────────
   useEffect(() => {
     if (!isPlaying || !currentSong) return;
@@ -2022,6 +2058,24 @@ export default function App() {
   const [titleDragX, setTitleDragX] = useState(0);
   const [titleDir,   setTitleDir]   = useState<1 | -1>(1);
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
+  // The mini player goes into the big player and comes back out of it
+  // (Caelan, 21 Nov): "out" while the big one opens and is open, "in" while
+  // it comes back. A tap opens the big one from where the mini player is
+  // (riseFrom, its top); a drag pulls it up from the bottom as before.
+  const miniCardEl = useRef<HTMLDivElement | null>(null);
+  const [miniMorph, setMiniMorph] = useState<null | "out" | "in">(null);
+  const [riseFrom,  setRiseFrom]  = useState<number | null>(null);
+  const expandFromMini = () => {
+    const r = miniCardEl.current?.getBoundingClientRect();
+    setRiseFrom(r ? r.top : null);
+    openedByDragRef.current = false;
+    setMiniMorph("out");
+    setPlayerExpanded(true);
+  };
+  const miniBack = () => setMiniMorph(m => (m === "out" ? "in" : m));
+  // Closed without its animation too (a sheet of its own took over): it comes
+  // back all the same. "in" ends with its animation (onAnimationEnd below).
+  const miniPhase = miniMorph === "out" && !playerExpanded && expandDrag === null ? "in" : miniMorph;
   const playerAxisRef   = useRef<"h" | "v" | null>(null); // gesture axis lock
   const playerSwipeT    = useRef(0);       // when the touch began, for a flick
 
@@ -2092,6 +2146,8 @@ export default function App() {
         // Committed: hand over to the fully-open sheet without re-animating.
         openedByDragRef.current = true;
         hapticImpact("light");
+        setRiseFrom(null);
+        setMiniMorph("out");
         setPlayerExpanded(true);
         setExpandDrag(null);
       } else {
@@ -2149,13 +2205,11 @@ export default function App() {
 
   const closeBackup = useCallback(() => {
     backupCancelRef.current = true;
+    BackupNative.stopPack().catch(() => {});
     if (pickedBackupRef.current) { pickedBackupRef.current = null; BackupNative.discard().catch(() => {}); }
     setBackupStep(null);
     if (reloadAfterRestoreRef.current) { reloadAfterRestoreRef.current = false; window.location.reload(); }
   }, []);
-
-  const removeBackupFolder = (name: string) =>
-    Filesystem.rmdir({ path: `Download/${name}`, directory: Directory.ExternalStorage, recursive: true }).catch(() => {});
 
   /** Makes a backup of what was picked and hands it to `app`. */
   const doBackup = useCallback(async (pick: BackupPick, app: CloudApp) => {
@@ -2194,38 +2248,56 @@ export default function App() {
       liked: inBackup.filter(s => metaRef.current[s.id]?.liked).map(s => s.uri),
     };
     const songPaths = [...new Set(inBackup.map(s => s.uri))];
+    // The same fields storage.ts exportBackup wrote, so a restore reads the
+    // songs' old places the way it always did.
+    data.includeMusic = songPaths.length > 0;
+    data.musicDir     = songPaths.length > 0 ? `Download/${name}` : undefined;
+    data.musicFiles   = songPaths.length > 0 ? songPaths : undefined;
     const making = (done: number, total: number) => setBackupStep({
       kind: "busy", title: t("Making your backup"), unit: "songs", done, total, stop: true,
       line: t("When it is packed, {app} opens so you can save it.", { app: CLOUD_NAME[app] }),
     });
+    // Too little room is about this phone, never the cloud: the zip is made
+    // here first, and the cloud app looks at its own room when it gets it.
+    // So the message says which, and how much (Caelan, 21 Nov).
+    const phoneFull = (need: number, free: number) => t(
+      "This phone is full, not {app}. The backup is made on the phone first and needs {need}; {free} is free. Free up {short}, or pick fewer songs or playlists.",
+      { app: CLOUD_NAME[app], need: fmtBytes(need), free: fmtBytes(Math.max(0, free)), short: fmtBytes(Math.max(0, need - free)) });
     making(0, songPaths.length);
+    const room = await BackupNative.room({ paths: songPaths }).catch(() => null);
+    if (room && room.need > room.free) {
+      setBackupStep({ kind: "error", back: "home", message: phoneFull(room.need, room.free) });
+      return;
+    }
+    const sub = await BackupNative.addListener("progress", p => {
+      if (p.phase === "pack" && !backupCancelRef.current) making(p.done, p.total);
+    });
     try {
-      const result = await exportBackup(data, songPaths, name,
-        (done, total) => { if (!backupCancelRef.current) making(done, total); }, backupCancelRef);
-      if (backupCancelRef.current) {
-        await removeBackupFolder(name);
+      // Straight into the zip: no copies of the songs in a folder first, so
+      // a backup needs its own size free, not twice that (BackupPlugin.pack).
+      const packed = await BackupNative.pack({ name, at: String(now), json: JSON.stringify(data, null, 2), paths: songPaths });
+      if (packed.stopped || backupCancelRef.current) {
         if (backupStepRef.current) setBackupStep({ kind: "where", pick });
         showToast(t("Backup cancelled"));
         return;
       }
-      setBackupStep({ kind: "busy", title: t("Making your backup"), unit: "none", done: 0, total: 0, line: t("Packing the backup") });
-      const { zipUri } = await zipBackupFolder(result.folderName);
-      // The zip holds it all now: the copies in the folder can go.
-      await removeBackupFolder(name);
-      const size = (await Filesystem.stat({ path: `Download/${name}.zip`, directory: Directory.ExternalStorage }).catch(() => null))?.size
-        ?? bytesOf(inBackup.map(s => s.duration));
-      const sent = await BackupNative.sendTo({ path: zipUri, app });
+      const size = packed.size ?? bytesOf(inBackup.map(s => s.duration));
+      const sent = await BackupNative.sendTo({ path: packed.uri ?? "", app });
       if (!sent.sent) { setBackupStep({ kind: "where", pick }); return; }
       const last = { at: now, app };
       setLastBackup(last);
       Preferences.set({ key: LAST_BACKUP_KEY, value: JSON.stringify(last) }).catch(() => {});
       setBackupStep({ kind: "made", app, what: `${pickText(pick, playlists.length)}, ${fmtBytes(size)}` });
     } catch (e: any) {
-      await removeBackupFolder(name);
+      const full = e?.code === "full" || String(e?.message ?? e).includes("full");
       setBackupStep({
         kind: "error", back: "home",
-        message: e?.isStorageFull ? t("Not enough storage space. Free up space and try again.") : t("Export failed: {error}", { error: String(e?.message ?? e) }),
+        message: full
+          ? phoneFull(Number(e?.data?.need ?? room?.need ?? 0), Number(e?.data?.free ?? room?.free ?? 0))
+          : t("Export failed: {error}", { error: String(e?.message ?? e) }),
       });
+    } finally {
+      sub.remove();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [songs, playlists]);
@@ -2254,7 +2326,8 @@ export default function App() {
       if (msg.includes("not a backup")) unknown();
       else setBackupStep({
         kind: "error", back: "from",
-        message: msg.includes("full") ? t("Not enough storage space. Free up space and try again.") : t("File not recognized. Could not read the file."),
+        // Copying the backup in from the cloud app: it is this phone that is full.
+        message: msg.includes("full") ? t("This phone is too full to read the backup. Free up some space on it and try again.") : t("File not recognized. Could not read the file."),
       });
     } finally {
       sub.remove();
@@ -2314,9 +2387,14 @@ export default function App() {
       setBackupStep({ kind: "restored", songs: songCount, playlists: data.playlists.length });
     } catch (e) {
       const msg = String((e as { message?: string })?.message ?? e);
+      // Unpacking checks the room first and says how much (BackupPlugin.unpack).
+      const room = (e as { data?: { need?: number; free?: number } })?.data;
       setBackupStep({
         kind: "error", back: "from",
-        message: msg.includes("full") ? t("Not enough storage space. Free up space and try again.")
+        message: msg.includes("full")
+          ? (room?.need
+            ? t("This phone has no room for these songs. They need {need}; {free} is free. Free up {short}, or pick fewer.", { need: fmtBytes(room.need), free: fmtBytes(Math.max(0, room.free ?? 0)), short: fmtBytes(Math.max(0, room.need - (room.free ?? 0))) })
+            : t("Not enough storage space. Free up space and try again."))
           : /permission/i.test(msg) ? t("Storage permission needed. Please grant file access and try again.")
           : t("Restore failed. The backup may be incomplete or corrupted."),
       });
@@ -3416,6 +3494,7 @@ export default function App() {
   const playerCardRef = useCallback((el: HTMLDivElement | null) => {
     playerObserver.current?.disconnect();
     playerObserver.current = null;
+    miniCardEl.current = el;
     if (!el) return;
     const ro = new ResizeObserver(() => setPlayerCardH(Math.round(el.offsetHeight)));
     ro.observe(el, { box: "border-box" });
@@ -3644,6 +3723,17 @@ export default function App() {
         .mp-title-r { animation: mpTitleFromR 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .mp-title-l { animation: mpTitleFromL 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
+        /* The mini player into the big one and back (miniMorph). Only a "to"
+           going out and only a "from" coming back, so each starts from or
+           ends at wherever the mini player really is (a finger may have
+           lifted it already). */
+        @keyframes mpMiniOut { to { opacity: 0; transform: translateY(-28px) scale(0.97); } }
+        @keyframes mpMiniIn  { from { opacity: 0; transform: translateY(-28px) scale(0.97); } }
+        .mp-mini-out { animation: mpMiniOut 0.2s cubic-bezier(0.3, 0, 0.6, 1) both; }
+        .mp-mini-in  { animation: mpMiniIn 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) 0.04s backwards; }
+        /* Still a blink of "in" with less motion: its end is what lets the
+           mini player go back under the sheets (onAnimationEnd). */
+        @media (prefers-reduced-motion: reduce) { .mp-mini-out { animation: none; opacity: 0; } .mp-mini-in { animation-duration: 1ms; animation-delay: 0s; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
         /* Bars on the album art of the track that is playing. Defined here
            rather than in AlbumArt so a single rule serves every list that
@@ -3666,7 +3756,7 @@ export default function App() {
         .chip { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; border-radius:20px; border:1px solid ${TH.chipBorder}; background:${TH.chipBg}; color:${TH.chipColor}; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; font-family:inherit; }
         .chip.red { color:#e8445a; border-color:${TH.binBorder}; background:${TH.binBg}; }
       `}</style>
-      <div data-app-shell style={{ backgroundColor: TH.bg, ...(bgPhoto ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
+      <div data-app-shell style={{ backgroundColor: TH.bg, ...(bgPhoto || bgPreset ? {} : ground), color: TH.text, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", userSelect: "none", overflow: "hidden", position: "relative", isolation: "isolate" }}>
         {/* Stickers on the songs page: over the background, under everything else. */}
         {stickerSet && page === "songs" && !discoverOpen && <StickerLayer items={stickerSet.items} place="page" tone={pageTone} fixed />}
         {/* Their own photo, under a veil of the app's colour, and Aviela's
@@ -3675,6 +3765,13 @@ export default function App() {
         {bgPhoto && <>
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundImage: `url("${bgPhoto}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", backgroundColor: TH.bg, opacity: 1 - background.strength }} />
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
+        </>}
+        {/* MPTree's own: Lantern's light as Lantern has it, dark or light
+            with the app. Made for the app's own colour, so no veil: the
+            strength is how much of it shows (all of it at the top). */}
+        {bgPreset === "lantern" && <>
+          <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...lanternBackdrop(theme === "dark"), opacity: background.strength / STRENGTH_MAX }} />
           <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", ...ground }} />
         </>}
 
@@ -3906,6 +4003,7 @@ export default function App() {
                   <button onClick={() => {
                       setFilterOpen(false);
                       hapticImpact("light");
+                      layoutAnchorRef.current = takeLayoutAnchor();
                       setSongsLayout(LIST_LAYOUTS[(LIST_LAYOUTS.indexOf(layoutNow) + 1) % LIST_LAYOUTS.length]);
                     }}
                     tabIndex={page === "songs" ? undefined : -1}
@@ -4516,15 +4614,19 @@ export default function App() {
           return (
             <div
               ref={playerCardRef}
+              className={miniPhase === "out" ? "mp-mini-out" : miniPhase === "in" ? "mp-mini-in" : undefined}
+              onAnimationEnd={e => { if (e.animationName === "mpMiniIn") setMiniMorph(null); }}
               style={{
                 position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
-                zIndex: 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
+                // Over the big player while it goes into it and comes back out.
+                zIndex: miniPhase ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : "translateY(0)",
-                opacity: playerHidden ? 0 : 1,
-                pointerEvents: playerHidden ? "none" : "auto",
+                // Pulled up by a finger, it lifts and fades with the big player.
+                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : expandDrag ? `translateY(${-Math.round(expandDrag * 28)}px)` : "translateY(0)",
+                opacity: playerHidden ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 1.8) : 1,
+                pointerEvents: playerHidden || miniPhase === "out" ? "none" : "auto",
                 transition: chromeAnimate
                   ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
@@ -4538,7 +4640,7 @@ export default function App() {
                   player's sheet handle, with a gentle upward "swipe me" nudge
                   animation. Tapping it also expands. */}
               <div
-                onClick={() => setPlayerExpanded(true)}
+                onClick={expandFromMini}
                 aria-label={t("Expand player")}
                 style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 64, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
               >
@@ -4550,7 +4652,7 @@ export default function App() {
                   ate horizontal swipes meant for skipping tracks. */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div
-                  onClick={() => setPlayerExpanded(true)}
+                  onClick={expandFromMini}
                   style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1, cursor: "pointer" }}>
                   <AlbumArt title={dispName(currentSong)} size={40} active playing={isPlaying} customPhoto={nowPlayingPhoto(currentSong)} T={TH} />
                   {/* Keyed on the song so every track change remounts this and
@@ -4565,7 +4667,8 @@ export default function App() {
                       transition: titleDragX ? "none" : "transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: "700", color: TH.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispName(currentSong)}</div>
+                    {/* A long name moves, as in the big player (Marquee). */}
+                    <Marquee text={dispName(currentSong)} style={{ fontSize: 14, fontWeight: "700", color: TH.text, maxWidth: 160 }} />
                     <div style={{ fontSize: 12, color: TH.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{dispArtist(currentSong) || t("Unknown Artist")}</div>
                   </div>
                 </div>
@@ -4888,7 +4991,7 @@ export default function App() {
             last={lastBackup}
             onSave={(pick, app) => { void doBackup(pick, app); }}
             onGetApp={app => { BackupNative.getApp({ app }).catch(() => {}); }}
-            onStop={() => { backupCancelRef.current = true; }}
+            onStop={() => { backupCancelRef.current = true; BackupNative.stopPack().catch(() => {}); }}
             onFrom={from => { void doPickBackup(from); }}
             onRestore={pick => { void doRestoreBackup(pick); }}
             T={TH}
@@ -4961,6 +5064,8 @@ export default function App() {
               dragProgress={playerExpanded ? null : expandDrag}
               dragSettling={expandSettling}
               skipEnter={openedByDragRef.current}
+              riseFrom={riseFrom}
+              onCloseStart={miniBack}
               T={TH}
             />
           );

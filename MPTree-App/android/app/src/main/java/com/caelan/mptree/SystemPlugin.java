@@ -409,6 +409,29 @@ public class SystemPlugin extends Plugin {
     // formats get the name only. The cache folder is emptied each time.
     /** The navigation bar: its colour (older Android; newer ones draw the page
      *  behind it) and dark or light buttons, to suit the theme. */
+    /** The colours of the home screen's wallpaper, for the icon on a drawn home
+     *  screen (Personalise, Icons). Android gives these to any app; the
+     *  wallpaper itself only with an all-files permission. Empty when there
+     *  are none (Android 8.0 and older, some live wallpapers). */
+    @PluginMethod
+    public void wallpaperColors(PluginCall call) {
+        JSArray out = new JSArray();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            try {
+                android.app.WallpaperColors wc = android.app.WallpaperManager.getInstance(getContext())
+                        .getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM);
+                if (wc != null) {
+                    for (Color c : new Color[]{ wc.getPrimaryColor(), wc.getSecondaryColor(), wc.getTertiaryColor() }) {
+                        if (c != null) out.put(String.format(Locale.ROOT, "#%06X", 0xFFFFFF & c.toArgb()));
+                    }
+                }
+            } catch (Exception ignored) { }
+        }
+        JSObject r = new JSObject();
+        r.put("colors", out);
+        call.resolve(r);
+    }
+
     @PluginMethod
     public void setNavBar(PluginCall call) {
         boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));

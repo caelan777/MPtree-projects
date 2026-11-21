@@ -64,3 +64,17 @@ html, body {
 @keyframes mpRecordRow { to { transform: translateX(-50%); } }
 .mp-record-row { animation: mpRecordRow var(--mp-row-time, 60s) linear infinite; }
 @media (prefers-reduced-motion: reduce) { .mp-record-row { animation: none; } }
+
+/* A song name that does not fit its line (Marquee.tsx). It stands still for
+   the first 22% of a round, then moves left by the name plus the gap, where
+   the copy behind it stands exactly where the name began: the next round
+   starts without a jump. The left edge fades only while it moves. */
+@property --mp-mq-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes mpMqMove { 0%, 22% { transform: translateX(0); } 100% { transform: translateX(var(--mp-mq-d)); } }
+@keyframes mpMqEdge { 0%, 22% { --mp-mq-l: 0px; } 26%, 97% { --mp-mq-l: 16px; } 100% { --mp-mq-l: 0px; } }
+.mp-mq-run { animation-name: mpMqMove; animation-timing-function: linear; animation-iteration-count: infinite; will-change: transform; }
+/* The big words of Text only, too long even at the smallest size: up, a
+   pause, back down, a pause. */
+@keyframes mpMqRoll { 0%, 18% { transform: translateY(0); } 82%, 100% { transform: translateY(var(--mp-mq-y)); } }
+.mp-mq-roll { animation: mpMqRoll 10s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .mp-mq-run, .mp-mq-roll { animation: none; } }

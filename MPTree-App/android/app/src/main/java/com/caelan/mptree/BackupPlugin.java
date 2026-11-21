@@ -23,6 +23,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,8 +39,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * A backup to and from the person's own cloud: Google Drive, OneDrive or
@@ -371,6 +374,141 @@ public class BackupPlugin extends Plugin {
                 call.reject(isFull(e) ? "full" : "unpack failed: " + e.getMessage());
             }
         }).start();
+    }
+
+    // ── Making a backup ──────────────────────────────────────────────────────
+    // The songs go straight from where they are into the zip in Download.
+    // Up to 1.6.3 they were copied into a folder there first and that folder
+    // was zipped, so a backup needed twice its size free on the phone for a
+    // while, and "not enough storage" came far sooner than it had to (Caelan,
+    // 21 Nov). The room is looked at first, on the phone: it is the phone that
+    // has to hold the zip. The cloud app looks at its own room itself.
+    private volatile boolean packStop = false;
+
+    private static File downloads() {
+        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+    }
+
+    private static long need(JSArray paths, long jsonBytes) {
+        long sum = jsonBytes;
+        for (int i = 0; i < paths.length(); i++) {
+            File f = new File(paths.optString(i, ""));
+            if (f.isFile()) sum += f.length();
+        }
+        // The zip's own bookkeeping, and a little to spare.
+        return sum + sum / 100 + 4L * 1024 * 1024;
+    }
+
+    private static long free() {
+        try {
+            File d = downloads();
+            //noinspection ResultOfMethodCallIgnored
+            d.mkdirs();
+            return new StatFs(d.getAbsolutePath()).getAvailableBytes();
+        } catch (Exception e) { return Long.MAX_VALUE; }
+    }
+
+    /** What a backup of these songs needs on the phone, and what is free. */
+    @PluginMethod
+    public void room(PluginCall call) {
+        JSArray paths = call.getArray("paths", new JSArray());
+        new Thread(() -> {
+            JSObject r = new JSObject();
+            r.put("need", need(paths, 0));
+            r.put("free", free());
+            call.resolve(r);
+        }).start();
+    }
+
+    /** Packs `json` (as mptree_backup_<at>.json) and the songs at `paths` into
+     *  Download/<name>.zip, the same zip storage.ts used to make from a
+     *  folder, so every MPTree from 1.6.3 on can restore it. */
+    @PluginMethod
+    public void pack(PluginCall call) {
+        final String name = call.getString("name", "");
+        final String json = call.getString("json", "");
+        final String at   = call.getString("at", String.valueOf(System.currentTimeMillis()));
+        final JSArray paths = call.getArray("paths", new JSArray());
+        if (name.isEmpty() || name.contains("/") || name.contains("\\")) { call.reject("bad name"); return; }
+        packStop = false;
+        new Thread(() -> {
+            byte[] text = json.getBytes(StandardCharsets.UTF_8);
+            long needed = need(paths, text.length), room = free();
+            if (needed > room) {
+                JSObject err = new JSObject();
+                err.put("need", needed);
+                err.put("free", room);
+                call.reject("full", "full", err);
+                return;
+            }
+            File out = new File(downloads(), name + ".zip");
+            int total = paths.length(), done = 0, failed = 0;
+            Set<String> taken = new HashSet<>();
+            byte[] buf = new byte[256 * 1024];
+            try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(out), 256 * 1024))) {
+                zos.putNextEntry(new ZipEntry(name + "/mptree_backup_" + at + ".json"));
+                zos.write(text);
+                zos.closeEntry();
+                // Songs are packed already: squeezing them again only costs time.
+                zos.setLevel(Deflater.NO_COMPRESSION);
+                progress("pack", 0, total);
+                for (int i = 0; i < total; i++) {
+                    if (packStop) break;
+                    File f = new File(paths.optString(i, ""));
+                    String base = baseName(f.getName());
+                    // Two songs of one name: the backup can hold one of them,
+                    // as the folder could.
+                    if (!f.isFile() || base.isEmpty() || !taken.add(base)) { failed++; }
+                    else {
+                        try (InputStream in = new FileInputStream(f)) {
+                            zos.putNextEntry(new ZipEntry(name + "/music/" + base));
+                            int n;
+                            while ((n = in.read(buf)) > 0) {
+                                if (packStop) break;
+                                zos.write(buf, 0, n);
+                            }
+                            zos.closeEntry();
+                        } catch (IOException e) {
+                            if (isFull(e)) throw e;
+                            failed++;
+                        }
+                    }
+                    done++;
+                    progress("pack", done, total);
+                }
+            } catch (IOException e) {
+                //noinspection ResultOfMethodCallIgnored
+                out.delete();
+                if (isFull(e)) {
+                    JSObject err = new JSObject();
+                    err.put("need", needed);
+                    err.put("free", free());
+                    call.reject("full", "full", err);
+                } else {
+                    call.reject("pack failed: " + e.getMessage());
+                }
+                return;
+            }
+            JSObject r = new JSObject();
+            if (packStop) {
+                //noinspection ResultOfMethodCallIgnored
+                out.delete();
+                r.put("stopped", true);
+                call.resolve(r);
+                return;
+            }
+            r.put("uri", Uri.fromFile(out).toString());
+            r.put("size", out.length());
+            r.put("failed", failed);
+            call.resolve(r);
+        }).start();
+    }
+
+    /** Stop button while a backup is being packed. */
+    @PluginMethod
+    public void stopPack(PluginCall call) {
+        packStop = true;
+        call.resolve();
     }
 
     /** The copy of the backup is no longer needed. */

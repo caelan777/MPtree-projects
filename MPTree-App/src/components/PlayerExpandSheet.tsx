@@ -1,10 +1,11 @@
-import { useState, useRef, memo } from "react";
+import { useState, useRef, useLayoutEffect, memo } from "react";
 import { viewW, COLUMN_QUERY } from "../utils";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
 import { PlayerArt } from "./PlayerArt";
+import { Marquee } from "./Marquee";
 import { Timeline } from "./Timeline";
 import { useLook } from "../look";
 import { IC } from "./Icons";
@@ -139,6 +140,11 @@ type PlayerExpandSheetProps = {
   dragSettling?: boolean;
   /** Skip the enter keyframe (the drag already brought the sheet into place). */
   skipEnter?: boolean;
+  /** Where the top of the mini player was when it was tapped (px from the top
+   *  of the screen): the player grows up out of it and goes back into it. */
+  riseFrom?: number | null;
+  /** The close starts (its animation), so the mini player can come back with it. */
+  onCloseStart?: () => void;
   T: T;
 };
 
@@ -154,6 +160,7 @@ export function PlayerExpandSheet({
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
   lyrics, onSaveLyrics, onSearchLyrics, menuActions, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
+  riseFrom = null, onCloseStart,
   T,
 }: PlayerExpandSheetProps) {
   // The record gives way to the words, and back. Tied to the song, so moving to
@@ -245,11 +252,29 @@ export function PlayerExpandSheet({
   // during the animation don't call onClose twice.
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
+
+  // ── Out of the mini player and back into it ───────────────────────────────
+  // Opened by a tap, the player used to come up from the bottom of the screen
+  // while the mini player stood still under it. Now its top starts where the
+  // mini player's top is and grows up from there, as the mini player fades into
+  // it; closing goes back down into the mini player (Caelan, 21 Nov). The
+  // distance is the sheet's own top, measured before the first paint: offsetTop
+  // is where it lies, whatever the animation does to it.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [riseBy, setRiseBy] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = sheetRef.current;
+    if (riseFrom == null || skipEnter || !el) return;
+    setRiseBy(Math.max(0, Math.round(riseFrom - el.offsetTop)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const animatedClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
-    setTimeout(onClose, 180); // matches .pes-sheet-out duration
+    onCloseStart?.();
+    setTimeout(onClose, riseBy != null ? 240 : 180); // matches .pes-sheet-sink / -out
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -329,6 +354,7 @@ export function PlayerExpandSheet({
       if (closeDragY > vh() * 0.12 || flick) {
         if (closingRef.current) return;
         closingRef.current = true;
+        onCloseStart?.();
         setCloseSnap(true);
         setCloseDragY(vh());         // glide the rest of the way down
         setTimeout(onClose, 230);    // just after the 0.22 s glide, never mid-way
@@ -512,17 +538,30 @@ export function PlayerExpandSheet({
         .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
         .pes-sheet-in    { animation: pesSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .pes-sheet-out   { animation: pesSlideDown 0.18s ease-in both; }
+        /* Out of the mini player: the top starts at the mini player's top
+           (--pes-from below where the sheet lies) and the sheet is clear at
+           first, so the mini player seems to grow into it. */
+        @keyframes pesRise { from { transform: translateY(var(--pes-from)); opacity: 0; } 38% { opacity: 1; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes pesSink { from { transform: translateY(0); opacity: 1; } 62% { opacity: 1; } to { transform: translateY(var(--pes-from)); opacity: 0; } }
+        .pes-sheet-rise  { animation: pesRise 0.34s cubic-bezier(0.2, 0.85, 0.25, 1) backwards; }
+        .pes-sheet-sink  { animation: pesSink 0.24s cubic-bezier(0.4, 0, 0.7, 0.2) both; }
         @media (prefers-reduced-motion: reduce) {
-          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
+          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out, .pes-sheet-rise, .pes-sheet-sink { animation: none; }
         }
       `}</style>
       {/* A sheet from the bottom, as tall as the player needs, with the list
           dimmed above it. Never taller than the screen under the status bar
           (the WebView runs edge to edge); on a short screen it scrolls. */}
       <div
-        className={closing ? "pes-sheet-out" : dragProgress !== null || skipEnter ? undefined : "pes-sheet-in"}
+        ref={sheetRef}
+        className={
+          closing ? (riseBy != null ? "pes-sheet-sink" : "pes-sheet-out")
+          : dragProgress !== null || skipEnter ? undefined
+          : riseFrom != null ? (riseBy != null ? "pes-sheet-rise" : undefined)
+          : "pes-sheet-in"}
         onClick={e => e.stopPropagation()}
         style={{
+          ...(riseBy != null ? { ["--pes-from" as string]: `${riseBy}px` } : null),
           position: "absolute", left: 0, right: 0, bottom: 0,
           maxHeight: "calc(100% - env(safe-area-inset-top, 0px) - 8px)",
           display: "flex", flexDirection: "column",
@@ -629,18 +668,17 @@ export function PlayerExpandSheet({
                 </div>
               )}
               <div style={{ width: "100%", textAlign: "center", minWidth: 0, ...(land ? { gridColumn: 2, gridRow: 1, alignSelf: "end", marginBottom: 16 } : null), ...(look.playerStyle === "text" && !panel ? { display: "none" } : null) }}>
-                <div style={{ fontSize: 18, fontWeight: "700", color: T.accent, wordBreak: "break-word", lineHeight: 1.3 }}>
-                  {dispName}
-                </div>
+                {/* One line each, moving when too long (Marquee): a name on
+                    two or three lines made the player grow and shrink from
+                    song to song (Caelan, 21 Nov). */}
+                <Marquee text={dispName} align="center" style={{ fontSize: 18, fontWeight: "700", color: T.accent, lineHeight: 1.3 }} />
                 {song.isCut && (
                   <span style={{
                     fontSize: 10, background: T.dim, color: T.textSub,
                     borderRadius: 4, padding: "1px 5px", fontWeight: "700", display: "inline-block", marginTop: 6,
                   }}>CUT</span>
                 )}
-                <div style={{ fontSize: 14, color: T.textSub, marginTop: 6, wordBreak: "break-word" }}>
-                  {dispArtist}
-                </div>
+                <Marquee text={dispArtist} align="center" style={{ fontSize: 14, color: T.textSub, marginTop: 6, lineHeight: 1.3 }} />
               </div>
             </div>
             )}

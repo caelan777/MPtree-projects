@@ -90,6 +90,9 @@ export type SystemPlugin = {
   shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;
   /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
   setNavBar(options: { light: boolean; color?: string }): Promise<void>;
+  /** Up to three colours of the home screen's wallpaper ("#rrggbb"), as
+   *  Android gives them to any app; empty when it gives none. */
+  wallpaperColors(): Promise<{ colors: string[] }>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
@@ -196,6 +199,8 @@ export type SyncPlugin = {
 const SystemWeb: SystemPlugin = {
   prepareShare:  async ({ path }) => ({ path }),
   setNavBar:     async () => {},
+  // A phone with a blue evening wallpaper, so the Icons page looks as it will.
+  wallpaperColors: async () => ({ colors: ["#24395a", "#4f6f8f", "#d9b48f"] }),
   shareFiles:    async () => { throw new Error("unavailable"); },
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
@@ -319,7 +324,13 @@ export interface BackupNativePlugin {
   pick(options: { app?: CloudApp }): Promise<BackupPicked>;
   unpack(options: { zip: string; names: string[]; to: string }): Promise<{ folder: string; files: number }>;
   discard(): Promise<void>;
-  addListener(event: "progress", handler: (p: { phase: "read" | "unpack"; done: number; total: number }) => void): Promise<{ remove(): void }>;
+  /** What a backup of these songs needs on the phone (bytes), and what is free. */
+  room(options: { paths: string[] }): Promise<{ need: number; free: number }>;
+  /** The backup as Download/<name>.zip, the songs packed straight from where
+   *  they are. Rejects "full" (data: need, free) when the phone has no room. */
+  pack(options: { name: string; at: string; json: string; paths: string[] }): Promise<{ stopped?: boolean; uri?: string; size?: number; failed?: number }>;
+  stopPack(): Promise<void>;
+  addListener(event: "progress", handler: (p: { phase: "read" | "unpack" | "pack"; done: number; total: number }) => void): Promise<{ remove(): void }>;
 }
 
 // In the browser demo there are no cloud apps to hand a file to.
@@ -330,6 +341,9 @@ const BackupWeb: BackupNativePlugin = {
   pick:        async () => ({ cancelled: true }),
   unpack:      async () => { throw new Error("not available"); },
   discard:     async () => {},
+  room:        async () => ({ need: 0, free: Number.MAX_SAFE_INTEGER }),
+  pack:        async () => { throw new Error("not available"); },
+  stopPack:    async () => {},
   addListener: async () => ({ remove() {} }),
 };
 

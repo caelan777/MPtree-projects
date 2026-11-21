@@ -13,8 +13,9 @@ import { System } from "../plugins";
 import { MARK_PATH, Logo } from "./Logo";
 import { CropSheet } from "../lazySheets";
 import {
-  useBackground, previewBackground, keepBackground, endBackgroundPreview, hasBackgroundChanges, STRENGTH_MIN, STRENGTH_MAX,
+  useBackground, previewBackground, keepBackground, endBackgroundPreview, hasBackgroundChanges, hasBackground, STRENGTH_MIN, STRENGTH_MAX,
 } from "../background";
+import { lanternBackdrop } from "../lanternFigure";
 import {
   useLook, getLook, previewLook, keepPreview, endPreview, hasLookChanges, isFreeLook, setLookBack, isFreeVinyl, loadLanternLock, lanternLockDays, lockLantern, unlockLantern,
   lanternAsked, markLanternAsked, FREE, FLOWER_RECORDS, FLOWER_KINDS, AVIELA_CARDS, LANTERN_RECORDS, LANTERN_CARDS, LANTERN_COLOURS,
@@ -377,6 +378,64 @@ function IconArt({ icon, size }: { icon: AppIcon; size: number }) {
   );
 }
 
+// ─── the icon on a home screen ───────────────────────────────────────────────
+// Design 17A (Caelan, 21 Nov): the icon among others on a home screen in the
+// colours of the person's own wallpaper. Android hands any app those colours
+// (System.wallpaperColors); the wallpaper itself only with an all-files
+// permission a music player cannot have on Play, so this is drawn, not shot.
+// The other apps are blank tiles: no one else's logos.
+const NO_COLOURS = ["#24395a", "#4f6f8f", "#d9b48f"];
+function luminance(hex: string): number {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+function HomePreview({ icon, width, height }: { icon: AppIcon; width: number; height: number }) {
+  const [colours, setColours] = useState<string[]>(NO_COLOURS);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    System.wallpaperColors().then(r => { if (r.colors?.length) setColours(r.colors); }).catch(() => {});
+    const tick = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
+  const c = [colours[0], colours[1] ?? colours[0], colours[2] ?? colours[1] ?? colours[0]];
+  const light = (luminance(c[0]) + luminance(c[1]) + luminance(c[2])) / 3 > 0.45;
+  const ink = light ? "#111111" : "#ffffff";
+  const blank = light ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.26)";
+  const size = Math.round(Math.max(28, Math.min(50, height * 0.155)));
+  const rows = height >= 250 ? 2 : 1;
+  const gap = Math.round(size * 0.3);
+  const app = (mine: boolean, key: number) => (
+    <div key={key} style={{ width: size + 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      {mine
+        ? <div style={{ borderRadius: "26%", boxShadow: "0 4px 14px rgba(0,0,0,0.3)" }}><IconArt icon={icon} size={size} /></div>
+        : <div style={{ width: size, height: size, borderRadius: "30%", background: blank }} />}
+      <span style={{ fontSize: 10.5, fontWeight: 600, color: ink, height: 13, lineHeight: "13px" }}>{mine ? "MPTree" : ""}</span>
+    </div>
+  );
+  return (
+    <div style={{ position: "absolute", inset: 0, width, height, background: `linear-gradient(160deg, ${c[0]} 0%, ${c[1]} 50%, ${c[2]} 100%)`, color: ink, overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: 20, top: Math.round(height * 0.06), fontSize: Math.round(Math.max(22, Math.min(54, height * 0.15))), fontWeight: 300, letterSpacing: "-0.02em", lineHeight: 1 }}>
+        {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      </div>
+      {rows > 1 && (
+        <div style={{ position: "absolute", left: 22, top: Math.round(height * 0.06 + height * 0.17), fontSize: 13, fontWeight: 600 }}>
+          {now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "long" })}
+        </div>
+      )}
+      <div style={{ position: "absolute", left: 16, right: 16, bottom: size + 34, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", rowGap: gap, justifyItems: "center" }}>
+        {Array.from({ length: rows * 4 }, (_, i) => app(i === (rows - 1) * 4 + 1, i))}
+      </div>
+      <div style={{ position: "absolute", left: 12, right: 12, bottom: 10, height: size + 18, borderRadius: 22, background: light ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.16)", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", alignItems: "center", justifyItems: "center" }}>
+        {[0, 1, 2, 3].map(i => <div key={i} style={{ width: size - 6, height: size - 6, borderRadius: "30%", background: blank }} />)}
+      </div>
+    </div>
+  );
+}
+
 type Point = { x: number; y: number };
 /** The pages under the small screens: the list of choices, a style's own
  *  page, or one kind of choice on its own. */
@@ -432,11 +491,13 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   // that scrolls with the page and then sticks with only its bottom showing,
   // so nothing below them moves when they change size: the page's own height
   // never changes, which is what kept the list from jumping on the way up.
-  // Two screens, the songs and the player; the Stickers page only needs the songs.
-  const withPlayer = !!player && page !== "stickers";
+  // Two screens, the songs and the player; the Stickers page only needs the
+  // songs, and so does Background, where that one screen is larger (Caelan,
+  // 21 Nov: the player told nothing there, and there was room to spare).
+  const withPlayer = !!player && page !== "stickers" && page !== "background";
   const panes = withPlayer ? 2 : 1;
   const room = win.w - 32 - (panes - 1) * 12;
-  const big = Math.min(0.42, room / panes / win.w);
+  const big = Math.min(page === "background" ? 0.56 : 0.42, room / panes / win.w);
   const small = Math.min(big, 0.2);
   const PAD = 16;
   const bigH = Math.round(win.h * big) + PAD;
@@ -497,7 +558,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
   // What has been changed and not applied, and whether it needs Pro to keep.
   const changed = hasLookChanges() || theme !== keptTheme || hasBackgroundChanges();
-  const needsPro = !pro && (!isFreeLook(look) || !!bg.photo);
+  const needsPro = !pro && (!isFreeLook(look) || hasBackground(bg));
   const apply = () => {
     keepPreview();
     void keepBackground();
@@ -728,7 +789,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
     reader.readAsDataURL(file);
   };
 
-  const stamp = `${theme}|${JSON.stringify(look)}|${bg.photo?.length ?? 0}|${bg.strength}`;
+  const stamp = `${theme}|${JSON.stringify(look)}|${bg.photo?.length ?? 0}|${bg.strength}|${bg.preset}`;
 
   // ── The list of choices, as Android lays out its own ──
   // What Custom is set to: as worn while it is on, as kept while a style is.
@@ -808,11 +869,16 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   const cSetup = setupById(cv.stickers, look.stickerSetups);
   const stickerName = cSetup ? cSetup.name : cv.flowers !== "none" ? `Aviela, ${FLOWER_NAMES[cv.flowers]}` : t("None");
   const dot = (s: React.CSSProperties) => <span style={{ width: 34, height: 34, borderRadius: "50%", display: "block", ...s }} />;
+  // A tile on the Background page: the shape of a screen.
+  const bgTile: React.CSSProperties = { width: 64, height: 112, borderRadius: 12, overflow: "hidden", boxSizing: "border-box" };
   const choices: { id: Page; title: string; sub: string; art: ReactNode }[] = [
     {
       id: "background", title: t("Background"),
-      sub: bg.photo ? t("Your photo, {n}%", { n: Math.round(bg.strength * 100) }) : t("None"),
-      art: bg.photo
+      sub: bg.preset ? `Lantern, ${Math.round(bg.strength / STRENGTH_MAX * 100)}%`
+        : bg.photo ? t("Your photo, {n}%", { n: Math.round(bg.strength * 100) }) : t("None"),
+      art: bg.preset
+        ? <span style={{ display: "block", width: "100%", height: "100%", background: T.bg, ...lanternBackdrop(theme === "dark"), backgroundSize: "170% auto" }} />
+        : bg.photo
         ? <img src={bg.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
         : <span style={{ color: T.text, display: "flex", transform: "scale(1.3)" }}><IC.Photo /></span>,
     },
@@ -935,16 +1001,23 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
               all but the small size has scrolled away. */}
           <div aria-hidden="true" style={{ position: "sticky", top: -range, height: bigH, zIndex: 2, background: T.sheetBg }}>
             <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", gap: 12, padding: `2px 16px ${PAD - 2}px` }}>
-              <div style={pane}>
-                <AppCopy stamp={stamp} width={win.w} height={win.h} scale={scale} />
-              </div>
-              {withPlayer && (
-                <div style={pane}>
-                  <div style={{ position: "absolute", top: 0, left: 0, width: win.w, height: win.h, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }}>
-                    {player}
-                  </div>
+              {page === "icons" ? (
+                // Icons: the icon on a home screen, as wide as both screens.
+                <div style={{ ...pane, width: win.w - 32 }}>
+                  <HomePreview icon={look.icon} width={win.w - 32} height={Math.round(win.h * scale)} />
                 </div>
-              )}
+              ) : <>
+                <div style={pane}>
+                  <AppCopy stamp={stamp} width={win.w} height={win.h} scale={scale} />
+                </div>
+                {withPlayer && (
+                  <div style={pane}>
+                    <div style={{ position: "absolute", top: 0, left: 0, width: win.w, height: win.h, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }}>
+                      {player}
+                    </div>
+                  </div>
+                )}
+              </>}
             </div>
           </div>
 
@@ -1062,38 +1135,43 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
                 <div style={note}>{t("Aviela's flowers on your own colours, or your own stickers put down by hand. They sit behind your songs and buttons, so they never cover anything you tap.")}</div>
               </>
             ) : page === "background" ? (
-              <div style={{ padding: "4px 16px 0" }}>
+              // Design 16B (Caelan, 21 Nov): everything as tiles. Their own
+              // photo is the first (a tap on it when it is on picks another),
+              // then none, then MPTree's own. The long note about the photo
+              // under the tiles went; how strong it is sits under them.
+              <div style={{ padding: "0 4px" }}>
                 <input ref={picker} type="file" accept="image/*" style={{ display: "none" }} onChange={onPhoto} />
-                {bg.photo ? (
-                  <>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, background: T.surface, borderRadius: 18, padding: 12 }}>
-                      <img src={bg.photo} alt="" style={{ width: 56, height: 96, objectFit: "cover", borderRadius: 10, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{t("Photo strength")}</span>
-                          <span style={{ fontSize: 13, color: T.muted }}>{Math.round(bg.strength * 100)}%</span>
-                        </div>
-                        <input className="slider" type="range" min={STRENGTH_MIN} max={STRENGTH_MAX} step={0.01} value={bg.strength}
-                          aria-label={t("Photo strength")}
-                          onChange={e => previewBackground({ strength: Number(e.target.value) })}
-                          style={{ width: "100%", margin: "12px 0 4px", accentColor: T.accent }} />
-                        <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.4 }}>{t("Less keeps the text easy to read.")}</div>
-                      </div>
+                <Grid>
+                  <Tile T={T} label={t("Your photo")} selected={!!bg.photo && !bg.preset} locked={!pro}
+                    onClick={() => { if (bg.photo && bg.preset) previewBackground({ preset: null }); else choosePhoto(); }}>
+                    <div style={{ ...bgTile, background: T.accent, color: T.playBtnFg, display: "grid", placeItems: "center" }}>
+                      {bg.photo
+                        ? <img src={bg.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>}
                     </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                      <button onClick={choosePhoto} style={{ ...sh.saveBtn, flex: 1, background: T.surface, color: T.text, fontSize: 14 }}>{t("Another photo")}</button>
-                      <button onClick={() => previewBackground({ photo: null })} style={{ ...sh.saveBtn, flex: 1, background: T.surface, color: T.text, fontSize: 14 }}>{t("Remove photo")}</button>
+                  </Tile>
+                  <Tile T={T} label={t("None")} selected={!hasBackground(bg)} onClick={() => previewBackground({ photo: null, preset: null })}>
+                    <div style={{ ...bgTile, background: T.bg, border: `1px solid ${T.border}`, display: "grid", placeItems: "center", color: T.muted }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="8" /><path d="M6.5 17.5l11-11" /></svg>
                     </div>
-                  </>
-                ) : (
-                  <button onClick={choosePhoto} style={{ ...sh.saveBtn, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    <IC.Photo />{t("Choose a photo")}
-                  </button>
+                  </Tile>
+                  <Tile T={T} label="Lantern" selected={bg.preset === "lantern"} locked={!pro} onClick={() => previewBackground({ preset: "lantern" })}>
+                    <div style={{ ...bgTile, background: T.bg, ...lanternBackdrop(theme === "dark"), backgroundSize: "190% auto" }} />
+                  </Tile>
+                </Grid>
+                {hasBackground(bg) && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "18px 16px 0" }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: T.text, flexShrink: 0 }}>{t("Strength")}</span>
+                    <input className="slider" type="range" min={STRENGTH_MIN} max={STRENGTH_MAX} step={0.01} value={bg.strength}
+                      aria-label={t("Strength")}
+                      onChange={e => previewBackground({ strength: Number(e.target.value) })}
+                      style={{ flex: 1, minWidth: 0, accentColor: T.accent }} />
+                    <span style={{ fontSize: 13, color: T.muted, width: 38, textAlign: "right", flexShrink: 0 }}>
+                      {Math.round((bg.preset ? bg.strength / STRENGTH_MAX : bg.strength) * 100)}%
+                    </span>
+                  </div>
                 )}
-                <div style={{ ...note, padding: "12px 4px 0" }}>
-                  {t("Your photo goes behind the whole app, under its colour. It stays on this device: it is not synced and not in a backup.")}
-                </div>
-                {!pro && <div style={{ ...note, padding: "8px 4px 0" }}>{t("Try it as much as you like. Keeping it needs Pro.")}</div>}
+                {!pro && <div style={{ ...note, padding: "14px 16px 0" }}>{t("Try it as much as you like. Keeping it needs Pro.")}</div>}
               </div>
             ) : page === "colours" ? (
               <>
@@ -1263,7 +1341,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
 
         {cropSrc && (
           <CropSheet src={cropSrc} shape="background" T={T} onCancel={() => setCropSrc(null)}
-            onUse={d => { previewBackground({ photo: d }); setCropSrc(null); }} />
+            onUse={d => { previewBackground({ photo: d, preset: null }); setCropSrc(null); }} />
         )}
 
         {confirming && (
