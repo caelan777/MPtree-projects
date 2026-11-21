@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useId, useRef } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { pageGround, type T } from "../themes";
 import { t } from "../i18n";
 
@@ -104,9 +105,10 @@ export function EQSheet({
   onToggleEnabled, onLevelsChange, onCrossfadeChange, onClose, T,
 }: Props) {
 
-  const [localLevels, setLocalLevels] = useState<number[]>(() =>
-    eqInfo?.bandFreqsHz.map((_, i) => bandLevels[i] ?? 0) ?? []
-  );
+  // What was changed here; until then the levels the app has, also when the
+  // equalizer's bands arrive after the page opened (it opens at once now).
+  const [edited, setLocalLevels] = useState<number[] | null>(null);
+  const localLevels = edited ?? (eqInfo?.bandFreqsHz.map((_, i) => bandLevels[i] ?? 0) ?? []);
   const [cfIndex, setCfIndex] = useState(() => indexFromMs(crossfadeMs));
   const [activePreset, setActivePreset] = useState<string | null>(null);
 
@@ -141,17 +143,15 @@ export function EQSheet({
   const head: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 16, fontWeight: 700, color: T.text };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 431, display: "flex", flexDirection: "column", color: T.text }}>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 431, display: "flex", flexDirection: "column", color: T.text }}>
+      <PageInStyle />
       <style>{`
         .mp-au-range { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px; outline: none; margin: 0; }
         .mp-au-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: ${T.accent}; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
         .mp-au-chip { transition: background-color .15s ease, color .15s ease; }
       `}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "calc(env(safe-area-inset-top, 0px) + 8px) 10px 6px", flexShrink: 0 }}>
-        <button onClick={onClose} aria-label={t("Back")}
-          style={{ width: 44, height: 44, borderRadius: 22, display: "grid", placeItems: "center", background: "transparent", border: "none", color: T.text, cursor: "pointer", padding: 0 }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
-        </button>
+        <BackButton onClick={onClose} T={T} />
         <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>{t("Audio Effects")}</span>
       </div>
 
@@ -181,7 +181,7 @@ export function EQSheet({
               <span>{t("Equalizer")}</span>
               {eqAvailable && <Switch checked={eqEnabled} onChange={onToggleEnabled} T={T} />}
             </div>
-            {!eqAvailable ? (
+            {eqInfo === null ? null : !eqAvailable ? (
               <div style={{ fontSize: 14, color: T.muted, marginTop: 10 }}>{t("Not available on this device.")}</div>
             ) : (
               <>

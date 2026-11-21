@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { viewW, viewLeft } from "../utils";
 import { makeSH, cardPalette, isDarkPalette, SHADE_PREVIEW, type T } from "../themes";
 import type { Theme } from "../types";
@@ -957,6 +958,7 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 420, display: "flex", alignItems: "flex-end" }} onClick={leave}>
       <div
+        className={PAGE_IN}
         style={{
           ...sh.sheet, paddingBottom: 0, height: "100%", borderRadius: 0,
           paddingTop: "env(safe-area-inset-top, 0px)",
@@ -964,20 +966,16 @@ export function LookSheet({ theme, onSetTheme, player, onNeedPro, onToast, onClo
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ ...sh.hdr, padding: "14px 20px 10px", gap: 10 }}>
+        <PageInStyle />
+        <div style={{ ...sh.hdr, padding: "8px 16px 6px 10px", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flex: 1 }}>
-            {page !== "main" && (
-              <button onClick={() => go("main")} style={{ ...sh.xBtn, color: T.text, padding: "6px 8px 6px 0", marginLeft: -2 }} aria-label={t("Back")}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 5 8 12 15 19" /></svg>
-              </button>
-            )}
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{TITLES[page]}</span>
+            {/* Back on every page: to the list from a page, out from the list. */}
+            <BackButton onClick={page === "main" ? leave : () => go("main")} T={T} />
+            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{TITLES[page]}</span>
           </div>
           {/* On a page of its own the way out is the back arrow, and the
               corner is where a change is kept. */}
-          {page === "main" ? (
-            <button onClick={leave} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
-          ) : changed && (
+          {page !== "main" && changed && (
             // Short, in two lines: in one, "Keep it, free with an ad" was
             // wider than a small phone and lay over the back arrow.
             <button onClick={needsPro ? () => setQuick(true) : apply} style={{

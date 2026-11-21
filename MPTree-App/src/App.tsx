@@ -2058,16 +2058,19 @@ export default function App() {
   const [titleDragX, setTitleDragX] = useState(0);
   const [titleDir,   setTitleDir]   = useState<1 | -1>(1);
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
-  // The mini player goes into the big player and comes back out of it
-  // (Caelan, 21 Nov): "out" while the big one opens and is open, "in" while
-  // it comes back. A tap opens the big one from where the mini player is
-  // (riseFrom, its top); a drag pulls it up from the bottom as before.
+  // The mini player IS the big player (Caelan, 21 Nov): the big one grows out
+  // of the mini player's card and shrinks back into it (PlayerExpandSheet,
+  // fromRect). The mini player's own insides only fade on top of it: "out"
+  // while the big one opens and is open, "in" as it comes back.
   const miniCardEl = useRef<HTMLDivElement | null>(null);
   const [miniMorph, setMiniMorph] = useState<null | "out" | "in">(null);
-  const [riseFrom,  setRiseFrom]  = useState<number | null>(null);
-  const expandFromMini = () => {
+  const [miniRect,  setMiniRect]  = useState<{ top: number; left: number; right: number; bottom: number } | null>(null);
+  const takeMiniRect = () => {
     const r = miniCardEl.current?.getBoundingClientRect();
-    setRiseFrom(r ? r.top : null);
+    setMiniRect(r ? { top: r.top, left: r.left, right: r.right, bottom: r.bottom } : null);
+  };
+  const expandFromMini = () => {
+    takeMiniRect();
     openedByDragRef.current = false;
     setMiniMorph("out");
     setPlayerExpanded(true);
@@ -2113,6 +2116,8 @@ export default function App() {
     }
     if (playerAxisRef.current === "v" && dy > 0) {
       const vh = window.innerHeight || 800;
+      // The card it grows out of, taken as the pull begins.
+      if (expandDrag === null) takeMiniRect();
       setExpandDrag(Math.min(1, dy / (vh * 0.45)));
     }
     // Damped so the text trails the finger instead of racing it.
@@ -2146,7 +2151,6 @@ export default function App() {
         // Committed: hand over to the fully-open sheet without re-animating.
         openedByDragRef.current = true;
         hapticImpact("light");
-        setRiseFrom(null);
         setMiniMorph("out");
         setPlayerExpanded(true);
         setExpandDrag(null);
@@ -2162,20 +2166,24 @@ export default function App() {
   // ── EQ / Audio effects sheet ──────────────────────────────────────────────
   // Not a useCallback: its one caller is Settings, which is not memoised, so
   // there was nothing for the memo to save.
-  const openEQSheet = async () => {
-    let info = eqInfo;
-    if (!info) {
-      try {
-        info = await AudioPlayer.getEqualizerInfo();
-        setEqInfo(info);
-      } catch (e) {
-        showError(t("Could not load equalizer info: ") + e);
-        return;
-      }
-    }
+  const openEQSheet = () => {
+    // At once: the page used to wait for the phone to say what its equalizer
+    // has, the first time it was opened (Caelan, 21 Nov). The page fills its
+    // equalizer in when the answer comes; Settings asks already as it opens.
+    if (!eqInfo) AudioPlayer.getEqualizerInfo().then(setEqInfo).catch(e => showError(t("Could not load equalizer info: ") + e));
     // Settings stays open underneath, so closing Audio Effects goes back to it.
     setEqOpen(true);
   };
+  // Settings open: what its pages need is read now, so the first tap on
+  // Personalise or Audio Effects opens them at once, also in the first
+  // seconds after start-up, before the idle preload has come.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    preloadSheets();
+    loadLookSheet().catch(() => {});
+    if (!eqInfo) AudioPlayer.getEqualizerInfo().then(setEqInfo).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // ── BACKUP ────────────────────────────────────────────────────────────────
@@ -3727,10 +3735,10 @@ export default function App() {
            going out and only a "from" coming back, so each starts from or
            ends at wherever the mini player really is (a finger may have
            lifted it already). */
-        @keyframes mpMiniOut { to { opacity: 0; transform: translateY(-28px) scale(0.97); } }
-        @keyframes mpMiniIn  { from { opacity: 0; transform: translateY(-28px) scale(0.97); } }
-        .mp-mini-out { animation: mpMiniOut 0.2s cubic-bezier(0.3, 0, 0.6, 1) both; }
-        .mp-mini-in  { animation: mpMiniIn 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) 0.04s backwards; }
+        @keyframes mpMiniOut { to { opacity: 0; } }
+        @keyframes mpMiniIn  { from { opacity: 0; } }
+        .mp-mini-out { animation: mpMiniOut 0.14s ease-out both; }
+        .mp-mini-in  { animation: mpMiniIn 0.16s ease-out 0.2s backwards; }
         /* Still a blink of "in" with less motion: its end is what lets the
            mini player go back under the sheets (onAnimationEnd). */
         @media (prefers-reduced-motion: reduce) { .mp-mini-out { animation: none; opacity: 0; } .mp-mini-in { animation-duration: 1ms; animation-delay: 0s; } }
@@ -4623,9 +4631,9 @@ export default function App() {
                 zIndex: miniPhase ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
-                // Pulled up by a finger, it lifts and fades with the big player.
-                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : expandDrag ? `translateY(${-Math.round(expandDrag * 28)}px)` : "translateY(0)",
-                opacity: playerHidden ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 1.8) : 1,
+                // Pulled up by a finger, it fades as the big player grows out of it.
+                transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))` : "translateY(0)",
+                opacity: playerHidden ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 3) : 1,
                 pointerEvents: playerHidden || miniPhase === "out" ? "none" : "auto",
                 transition: chromeAnimate
                   ? `${move("transform", "opacity")}, background 0.4s ease`
@@ -5064,7 +5072,7 @@ export default function App() {
               dragProgress={playerExpanded ? null : expandDrag}
               dragSettling={expandSettling}
               skipEnter={openedByDragRef.current}
-              riseFrom={riseFrom}
+              fromRect={miniRect}
               onCloseStart={miniBack}
               T={TH}
             />

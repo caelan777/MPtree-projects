@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { Loading } from "./Loading";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
@@ -79,14 +80,13 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 410, display: "flex", flexDirection: "column" }}>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 410, display: "flex", flexDirection: "column" }}>
+      <PageInStyle />
       {/* The app draws edge to edge, so a full-screen page has to step over the
           status bar itself. Without this the close button sat under the clock. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px", borderBottom: deleted ? "none" : `1px solid ${T.border}` }}>
-        <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, padding: 4 }}>
-          <IC.Close />
-        </button>
-        <span style={{ fontSize: 17, fontWeight: "700", color: T.text }}>{t("Removed Songs")}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px 10px", borderBottom: deleted ? "none" : `1px solid ${T.border}` }}>
+        <BackButton onClick={onClose} T={T} />
+        <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: T.text }}>{t("Removed Songs")}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {!showDeleted && <span style={{ fontSize: 13, color: T.muted }}>{tn(removedSongs.length, "{n} song", "{n} songs")}</span>}
           {!showDeleted && removedSongs.length > 0 && (

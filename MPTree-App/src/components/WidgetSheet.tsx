@@ -1,4 +1,5 @@
 import type { T } from "../themes";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { t } from "../i18n";
 import { System } from "../plugins";
 import { Logo } from "./Logo";
@@ -106,13 +107,12 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
   // The wallpaper behind the preview: the clear widget needs one to be seen.
   const wall = "radial-gradient(130% 120% at 20% 10%, #4d4d4d 0%, #1c1c1c 55%, #050505 100%)";
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 430, background: T.sheetBg, color: T.text, display: "flex", flexDirection: "column", paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      {/* Its own page over Settings, closed with an X like Personalise. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 20px 10px" }}>
-        <span style={{ fontSize: 16, fontWeight: 700 }}>{t("Home screen widget")}</span>
-        <button onClick={onClose} aria-label={t("Close")} style={{ background: "transparent", border: "none", color: T.muted, padding: 4, cursor: "pointer", display: "flex" }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, zIndex: 430, background: T.sheetBg, color: T.text, display: "flex", flexDirection: "column", paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <PageInStyle />
+      {/* Its own page over Settings, with the back arrow as every page has. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "8px 16px 6px 10px" }}>
+        <BackButton onClick={onClose} T={T} />
+        <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>{t("Home screen widget")}</span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
         <div style={{ margin: "4px 16px 0", height: 200, borderRadius: 22, background: wall, display: "grid", placeItems: "center", overflow: "hidden" }}>

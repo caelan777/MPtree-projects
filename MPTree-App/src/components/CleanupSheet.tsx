@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { FullPage } from "./FullPage";
 import { makeSH, type T } from "../themes";
 import type { Song, SongMeta } from "../types";
 import { t, tn } from "../i18n";
@@ -51,13 +52,7 @@ export function CleanupSheet({ suspects, meta, onBin, onPlay, onTogglePlay, curr
   const all = picked.size === suspects.length;
 
   return (
-    <div style={{ ...sh.overlay, zIndex: 420 }} onClick={onClose}>
-      <div style={{ ...sh.sheet, paddingBottom: 0, height: "86vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={sh.handle} />
-        <div style={sh.hdr}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t("Clean up")}</span>
-          <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
-        </div>
+    <FullPage title={t("Clean up")} onBack={onClose} T={T} z={420} scroll={false}>
 
         {suspects.length === 0 ? (
           <div style={{ padding: "30px 28px", textAlign: "center", color: T.textSub, fontSize: 14, lineHeight: 1.6 }}>
@@ -151,7 +146,6 @@ export function CleanupSheet({ suspects, meta, onBin, onPlay, onTogglePlay, curr
             </div>
           </>
         )}
-      </div>
-    </div>
+    </FullPage>
   );
 }

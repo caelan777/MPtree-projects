@@ -140,9 +140,9 @@ type PlayerExpandSheetProps = {
   dragSettling?: boolean;
   /** Skip the enter keyframe (the drag already brought the sheet into place). */
   skipEnter?: boolean;
-  /** Where the top of the mini player was when it was tapped (px from the top
-   *  of the screen): the player grows up out of it and goes back into it. */
-  riseFrom?: number | null;
+  /** The mini player's card on the screen when it was tapped or pulled:
+   *  the big player grows out of it and shrinks back into it. */
+  fromRect?: { top: number; left: number; right: number; bottom: number } | null;
   /** The close starts (its animation), so the mini player can come back with it. */
   onCloseStart?: () => void;
   T: T;
@@ -160,7 +160,7 @@ export function PlayerExpandSheet({
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
   lyrics, onSaveLyrics, onSearchLyrics, menuActions, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
-  riseFrom = null, onCloseStart,
+  fromRect = null, onCloseStart,
   T,
 }: PlayerExpandSheetProps) {
   // The record gives way to the words, and back. Tied to the song, so moving to
@@ -253,28 +253,40 @@ export function PlayerExpandSheet({
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
 
-  // ── Out of the mini player and back into it ───────────────────────────────
-  // Opened by a tap, the player used to come up from the bottom of the screen
-  // while the mini player stood still under it. Now its top starts where the
-  // mini player's top is and grows up from there, as the mini player fades into
-  // it; closing goes back down into the mini player (Caelan, 21 Nov). The
-  // distance is the sheet's own top, measured before the first paint: offsetTop
-  // is where it lies, whatever the animation does to it.
+  // ── The mini player, grown ────────────────────────────────────────────────
+  // The mini player IS the big player (Caelan, 21 Nov): the sheet starts as
+  // the mini player's own card, solid all the way, and grows from there to its
+  // full size, by a tap or under the finger; closing shrinks it back into the
+  // card. The big player's insides come up as it grows (a veil of the sheet's
+  // colour over them lifts), while the mini player's own fade on top of it
+  // (App.tsx, miniPhase). The card is cut out of the sheet with clip-path, so
+  // nothing in the player is moved or scaled. `grow` 0 is the card, 1 the sheet.
   const sheetRef = useRef<HTMLDivElement>(null);
-  const [riseBy, setRiseBy] = useState<number | null>(null);
+  const [card, setCard] = useState<{ t: number; r: number; b: number; l: number } | null>(null);
+  const [armed, setArmed] = useState(false);
   useLayoutEffect(() => {
     const el = sheetRef.current;
-    if (riseFrom == null || skipEnter || !el) return;
-    setRiseBy(Math.max(0, Math.round(riseFrom - el.offsetTop)));
+    if (!fromRect || (skipEnter && dragProgress === null) || !el) return;
+    setCard({
+      t: Math.max(0, Math.round(fromRect.top - el.offsetTop)),
+      r: Math.max(0, Math.round(window.innerWidth - fromRect.right)),
+      b: Math.max(0, Math.round(window.innerHeight - fromRect.bottom)),
+      l: Math.max(0, Math.round(fromRect.left)),
+    });
+    // The card is drawn first, then it grows: two frames on.
+    let second = 0;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => setArmed(true)); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const grow = dragProgress !== null ? dragProgress : closing || !armed ? 0 : 1;
 
   const animatedClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
     setClosing(true);
     onCloseStart?.();
-    setTimeout(onClose, riseBy != null ? 240 : 180); // matches .pes-sheet-sink / -out
+    setTimeout(onClose, card ? 300 : 180); // the card shrinking, or .pes-sheet-out
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -538,15 +550,9 @@ export function PlayerExpandSheet({
         .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
         .pes-sheet-in    { animation: pesSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .pes-sheet-out   { animation: pesSlideDown 0.18s ease-in both; }
-        /* Out of the mini player: the top starts at the mini player's top
-           (--pes-from below where the sheet lies) and the sheet is clear at
-           first, so the mini player seems to grow into it. */
-        @keyframes pesRise { from { transform: translateY(var(--pes-from)); opacity: 0; } 38% { opacity: 1; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes pesSink { from { transform: translateY(0); opacity: 1; } 62% { opacity: 1; } to { transform: translateY(var(--pes-from)); opacity: 0; } }
-        .pes-sheet-rise  { animation: pesRise 0.34s cubic-bezier(0.2, 0.85, 0.25, 1) backwards; }
-        .pes-sheet-sink  { animation: pesSink 0.24s cubic-bezier(0.4, 0, 0.7, 0.2) both; }
         @media (prefers-reduced-motion: reduce) {
-          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out, .pes-sheet-rise, .pes-sheet-sink { animation: none; }
+          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
+          .pes-grow { transition: none !important; }
         }
       `}</style>
       {/* A sheet from the bottom, as tall as the player needs, with the list
@@ -555,24 +561,42 @@ export function PlayerExpandSheet({
       <div
         ref={sheetRef}
         className={
-          closing ? (riseBy != null ? "pes-sheet-sink" : "pes-sheet-out")
-          : dragProgress !== null || skipEnter ? undefined
-          : riseFrom != null ? (riseBy != null ? "pes-sheet-rise" : undefined)
+          card ? "pes-grow"
+          : closing ? "pes-sheet-out"
+          : dragProgress !== null || skipEnter || fromRect ? undefined
           : "pes-sheet-in"}
         onClick={e => e.stopPropagation()}
         style={{
-          ...(riseBy != null ? { ["--pes-from" as string]: `${riseBy}px` } : null),
           position: "absolute", left: 0, right: 0, bottom: 0,
           maxHeight: "calc(100% - env(safe-area-inset-top, 0px) - 8px)",
           display: "flex", flexDirection: "column",
           background: T.sheetBg,
           borderRadius: "20px 20px 0 0",
           overflow: "hidden",
-          transform: sheetTransform,
-          transition: isDraggingOpen || isDraggingClose ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
+          // Out of the mini player's card (see `grow`); before the card is
+          // measured, the whole sheet is held to nothing so it never flashes.
+          ...(card ? {
+            clipPath: grow >= 1
+              ? "inset(0px 0px 0px 0px round 20px 20px 0px 0px)"
+              : `inset(${Math.round(card.t * (1 - grow))}px ${Math.round(card.r * (1 - grow))}px ${Math.round(card.b * (1 - grow))}px ${Math.round(card.l * (1 - grow))}px round ${Math.round(22 - 2 * grow)}px)`,
+          } : fromRect && !(skipEnter && dragProgress === null) ? { clipPath: "inset(100% 0px 0px 0px)" } : null),
+          transform: card && dragProgress !== null ? undefined : sheetTransform,
+          // The card itself is drawn at once; only from there on does it move.
+          transition: isDraggingOpen || isDraggingClose || (card && !armed && dragProgress === null) ? "none"
+            : card ? `clip-path ${closing ? "0.3s cubic-bezier(0.3, 0, 0.8, 0.15)" : "0.38s cubic-bezier(0.2, 0, 0, 1)"}, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)`
+            : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
+        {/* The veil: the sheet's colour over the player while it is still the
+            card, lifting as it grows, so the card is solid from the start. */}
+        {card && (
+          <div aria-hidden="true" style={{
+            position: "absolute", inset: 0, zIndex: 30, pointerEvents: "none", background: T.sheetBg,
+            opacity: dragProgress !== null ? Math.max(0, 1 - dragProgress * 1.6) : grow >= 1 ? 0 : 1,
+            transition: isDraggingOpen ? "none" : closing ? "opacity 0.16s ease" : "opacity 0.24s ease 0.1s",
+          }} />
+        )}
 
         {/* ── The player ─────────────────────────────────────────────────── */}
         <div

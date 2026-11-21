@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { Browser } from "@capacitor/browser";
 import { makeSH, pageGround, type T } from "../themes";
 import { IC } from "./Icons";
@@ -521,14 +522,14 @@ function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, o
   onClose: () => void;
   T: T;
 }) {
-  const sh = makeSH(T);
   const [sub, setSub] = useState<null | "faq" | "licences">(null);
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
-      <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 4px", flexShrink: 0 }}>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <PageInStyle />
+      <div style={{ ...column, display: "flex", alignItems: "center", gap: 2, padding: "calc(env(safe-area-inset-top, 0px) + 8px) 10px 4px", flexShrink: 0 }}>
+        <BackButton onClick={onClose} T={T} />
         <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("About MPTree")}</span>
-        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>

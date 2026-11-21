@@ -69,7 +69,7 @@ export function LanguageSheet({ value, onPick, onClose, T }: {
     ...LANGS.map(l => ({ id: l, flag: l, label: LANG_NAMES[l] })),
   ];
   return (
-    <InfoSheet title={t("Language")} onClose={onClose} T={T}>
+    <InfoSheet page title={t("Language")} onClose={onClose} T={T}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {options.map(o => (
           <button

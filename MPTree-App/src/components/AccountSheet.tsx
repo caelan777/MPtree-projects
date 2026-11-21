@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode, type MutableRefObject } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { LoadLine } from "./LoadLine";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
@@ -450,17 +451,13 @@ export function AccountSheet({ pro, onClose, onToast, backRef, T }: Props) {
   // edge, so it steps over the status bar and the gesture bar itself.
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <PageInStyle />
       <LoadLine on={busy || s.phase === "joining"} T={T} />
-      <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px", flexShrink: 0 }}>
-        {how ? (
-          <button onClick={() => setHow(false)} aria-label={t("Back")}
-            style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "none", padding: 0, margin: "0 0 0 -6px", cursor: "pointer", color: T.text, fontFamily: "inherit", textAlign: "left" }}>
-            <span style={{ display: "flex", flexShrink: 0 }}><Icon n="back" size={24} /></span>
-            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1.2 }}>{title}</span>
-          </button>
-        ) : <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{title}</span>}
-        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
+      {/* The back arrow: out of "how it works" first, then out of the page. */}
+      <div style={{ ...column, display: "flex", alignItems: "center", gap: 2, padding: "calc(env(safe-area-inset-top, 0px) + 8px) 10px 8px", flexShrink: 0 }}>
+        <BackButton onClick={() => (how ? setHow(false) : onClose())} T={T} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em", lineHeight: 1.2 }}>{title}</span>
       </div>
       <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column" }}>
         <div style={{ ...column, padding: "0 20px 16px", flex: 1, display: "flex", flexDirection: "column" }}>{body}</div>

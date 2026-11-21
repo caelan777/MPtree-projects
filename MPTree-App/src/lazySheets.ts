@@ -35,8 +35,12 @@ export const CutTrackSheet = sheet(loadCut);
 export const EQSheet       = sheet(loadEQ);
 export const CropSheet     = sheet(loadCrop);
 
-/** Fetches every sheet above in the background. Called once, after start-up. */
+/** Fetches every sheet above in the background: after start-up, or as soon
+ *  as Settings opens, whichever comes first. Once is enough. */
+let preloaded = false;
 export function preloadSheets(): void {
+  if (preloaded) return;
+  preloaded = true;
   for (const load of [loadLook, loadCut, loadEQ, loadCrop]) load().catch(() => {});
   // Personalise's first opening waited on decoding every record's picture;
   // decoded now, while nothing happens, it opens at once.
