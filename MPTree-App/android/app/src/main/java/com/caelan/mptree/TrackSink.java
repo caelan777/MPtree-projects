@@ -79,16 +79,29 @@ final class TrackSink implements AudioEngine.Sink {
 
     @Override public synchronized void flush() {
         if (track == null) return;
+        // The track's clock starts again from 0 at a flush, at once on some
+        // phones and a moment later on others: either way it counts on from
+        // here. It used to go back by what had played (seen on the emulator,
+        // 21 Nov), and a position after a seek or a next went with it.
+        long before = playedFramesLocked();
         try { track.flush(); } catch (Exception ignored) {}
+        long head = rawHead();
+        base = before - head;
+        lastHead = head;
     }
 
     @Override public synchronized long playedFrames() { return playedFramesLocked(); }
 
+    private long rawHead() {
+        try { return track.getPlaybackHeadPosition() & 0xffffffffL; } catch (Exception e) { return lastHead; }
+    }
+
     private long playedFramesLocked() {
         if (track == null) return base + lastHead;
-        long head;
-        try { head = track.getPlaybackHeadPosition() & 0xffffffffL; } catch (Exception e) { return base + lastHead; }
-        if (head + AudioEngine.RATE < lastHead) base += lastHead;   // started again from 0
+        long head = rawHead();
+        // Lower than before: it started again from 0 (a flush that came late,
+        // or 2^32 frames). It never goes back otherwise.
+        if (head < lastHead) base += lastHead;
         lastHead = head;
         return base + head;
     }

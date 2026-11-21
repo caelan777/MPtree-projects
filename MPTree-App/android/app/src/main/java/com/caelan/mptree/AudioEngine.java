@@ -190,6 +190,9 @@ final class AudioEngine {
     private boolean fadeExact;
 
     private final Thread audioThread, decodeThread;
+    /** What the decode thread does now, and how often it read nothing in a row (debug()). */
+    private volatile String decodeDoing = "";
+    private volatile int decodeZeros;
 
     AudioEngine(SourceFactory factory, Sink sink, Listener listener, Executor callbacks) {
         this.factory = factory; this.sink = sink; this.listener = listener; this.callbacks = callbacks;
@@ -362,6 +365,20 @@ final class AudioEngine {
         }
     }
 
+    /** What it is doing, for a test that waits too long. */
+    String debug() {
+        synchronized (lock) {
+            return "decode=" + decodeDoing + " zeros=" + decodeZeros + " playing=" + playing + " nextAsked=" + nextAsked + " fading=" + fading + " written=" + written
+                    + " cur=" + deckInfo(cur) + " next=" + deckInfo(next);
+        }
+    }
+
+    private static String deckInfo(Deck d) {
+        if (d == null) return "none";
+        return d.item.title + "[opened=" + d.opened + " eos=" + d.eos + " failed=" + d.failed + " dead=" + d.dead
+                + " ring=" + d.ring.size() + " free=" + d.ring.free() + " pos=" + d.position() + " end=" + d.endFrame + " seek=" + d.seekUs + "]";
+    }
+
     void release() {
         synchronized (lock) {
             alive = false;
@@ -508,7 +525,24 @@ final class AudioEngine {
 
     // ── the audio thread ───────────────────────────────────────────────────
 
+    /** Never ends by an error: one that slips through is caught here, and
+     *  the thread carries on (a thread that died left the music silent for
+     *  good). The song on is given up after a few in a row. */
     private void audioLoop() {
+        int fails = 0;
+        while (true) {
+            try { audioLoopInner(); return; }
+            catch (Throwable t) {
+                synchronized (lock) {
+                    if (!alive) return;
+                    if (++fails >= 3 && cur != null) { cur.failed = true; cur.error = "audio: " + t; fails = 0; }
+                    try { lock.wait(50); } catch (InterruptedException e) { return; }
+                }
+            }
+        }
+    }
+
+    private void audioLoopInner() {
         final float[] mix = new float[CHUNK * 2];
         final float[] a = new float[CHUNK * 2];
         final float[] b = new float[CHUNK * 2];
@@ -636,6 +670,11 @@ final class AudioEngine {
                 finishCurrent();
             }
         }
+        // Room was made in the buffers: the decode thread fills them again. It
+        // slept once they were full and nothing woke it, so a song longer
+        // than the buffer went quiet some 12 s in (seen on the emulator,
+        // 21 Nov, before anyone heard it on a phone).
+        if (n > 0) lock.notifyAll();
         // Over 1 is clipping: held at the edge.
         for (int i = 0; i < n * 2; i++) {
             float v = out[i] * volume;
@@ -663,7 +702,20 @@ final class AudioEngine {
         return null;
     }
 
+    /** As the audio thread: an error that is not a file's own never ends it. */
     private void decodeLoop() {
+        while (true) {
+            try { decodeLoopInner(); return; }
+            catch (Throwable t) {
+                synchronized (lock) {
+                    if (!alive) return;
+                    try { lock.wait(50); } catch (InterruptedException e) { return; }
+                }
+            }
+        }
+    }
+
+    private void decodeLoopInner() {
         final float[] tmp = new float[8192 * 2];
         while (true) {
             Deck d;
@@ -673,7 +725,9 @@ final class AudioEngine {
             List<Deck> closing;
             synchronized (lock) {
                 while (alive && toClose.isEmpty() && needsWork() == null) {
-                    try { lock.wait(); } catch (InterruptedException e) { return; }
+                    decodeDoing = "waiting";
+                    // Woken when room is made; and looks again by itself, to be sure.
+                    try { lock.wait(500); } catch (InterruptedException e) { return; }
                 }
                 if (!alive) break;
                 closing = new ArrayList<>(toClose);
@@ -688,6 +742,7 @@ final class AudioEngine {
                 } else { seek = -1; gen = 0; open = false; room = 0; }
             }
             for (Deck x : closing) {
+                decodeDoing = "closing " + x.item.title;
                 try { x.src.close(); } catch (Exception ignored) {}
                 synchronized (lock) { x.ring.clear(); rings.add(x.ring); }
             }
@@ -705,7 +760,9 @@ final class AudioEngine {
                     continue;
                 }
                 if (seek >= 0) { d.src.seek(seek); continue; }
+                decodeDoing = "reading " + d.item.title + " room=" + room;
                 int got = d.src.read(tmp, room);
+                decodeZeros = got == 0 ? decodeZeros + 1 : 0;
                 synchronized (lock) {
                     if (d.dead || d.gen != gen) continue;          // a seek came meanwhile
                     if (got < 0) {

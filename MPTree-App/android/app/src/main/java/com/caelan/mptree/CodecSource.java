@@ -33,6 +33,10 @@ final class CodecSource implements AudioEngine.Source {
     private boolean inEos, outEos;
     private int inRate = AudioEngine.RATE, inCh = 2, enc = AudioFormat.ENCODING_PCM_16BIT;
     private long durUs = -1;
+    /** Opus: what its decoder leaves out by itself after a seek (its seek
+     *  pre-roll, 80 ms). The times on what comes out do not count it, so it
+     *  is not dropped a second time. */
+    private long preRollUs = 0;
     /** After a seek: what comes before this (in µs) is dropped, the decoder
      *  starts at the frame before. -1 when nothing is to be dropped. */
     private long dropUntilUs = -1;
@@ -67,6 +71,7 @@ final class CodecSource implements AudioEngine.Source {
         if (fmt.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) inCh = Math.max(1, fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT));
         if (fmt.containsKey(MediaFormat.KEY_DURATION)) durUs = fmt.getLong(MediaFormat.KEY_DURATION);
         if (fmt.containsKey(MediaFormat.KEY_PCM_ENCODING)) enc = fmt.getInteger(MediaFormat.KEY_PCM_ENCODING);
+        if ("audio/opus".equals(mime)) preRollUs = 80_000;
         codec = MediaCodec.createDecoderByType(mime);
         codec.configure(fmt, null, null, 0);
         codec.start();
@@ -147,9 +152,12 @@ final class CodecSource implements AudioEngine.Source {
 
     // ──────────────────────────────────────────────────────────────────────
 
+    /** A tenth of a second early, and what comes before `us` dropped: Opus
+     *  needs that much decoded before it sounds right again, and MP3 a frame
+     *  (seen on the emulator, 21 Nov: the first moments after a seek were off). */
     private void seekExtractor(long us) {
-        ex.seekTo(us, MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
-        dropUntilUs = us;
+        ex.seekTo(Math.max(0, us - 100_000), MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
+        dropUntilUs = Math.max(0, us - preRollUs);
     }
 
     /** One piece of the file into the decoder. */

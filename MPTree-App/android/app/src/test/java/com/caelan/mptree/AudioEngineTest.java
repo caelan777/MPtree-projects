@@ -387,6 +387,20 @@ public class AudioEngineTest {
         assertEquals(3000, engine.positionMs());
     }
 
+    @Test public void aSongLongerThanTheBufferPlaysToTheEnd() {
+        // The buffer holds 12 s; a song of 20 s needs the decoder woken again
+        // and again as the buffer empties. Without that it went quiet at 12 s.
+        start(0, 100);
+        AudioEngine.Item a = item(1, 20 * R), b = item(2, 15 * R);
+        after = it -> it.title.equals("S1") ? b : null;
+        engine.play(a, 0, true);
+        await("end", this::ended, 20_000);
+        float[] out = sink.all();
+        assertEquals(35 * R, out.length / 2);
+        assertEquals(20 * R, framesOf(out, 1));
+        assertEquals(15 * R, framesOf(out, 2));
+    }
+
     @Test public void aStartByHandComesUpWithoutAClick() {
         start(AudioEngine.RATE / 100, 300);
         AudioEngine.Item a = item(1, R / 2);
