@@ -23,6 +23,9 @@ type SongMenuSheetProps = {
   dispArtist: string;
   customPhoto?: string;
   isLiked: boolean;
+  /** Set to play next / the phone's ringtone: their tiles light up. */
+  isNext?: boolean;
+  isRingtone?: boolean;
   playlists: Playlist[];
   onPlay: () => void;
   onPlayNext: () => void;
@@ -52,7 +55,7 @@ type SongMenuSheetProps = {
 };
 
 export function SongMenuSheet({
-  song, dispName, dispArtist, customPhoto, isLiked, playlists,
+  song, dispName, dispArtist, customPhoto, isLiked, isNext, isRingtone, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
   onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist,
   inPlaylistName, startOnPlaylists = false, onClose, T,
@@ -114,7 +117,7 @@ export function SongMenuSheet({
 
         {pane === "actions" ? (
           <SongActionTiles T={T} a={{
-            isLiked, onPlay, onPlayNext, onToggleLike, onShare, onEditLyrics, onCut, onSetRingtone,
+            isLiked, isNext, isRingtone, onPlay, onPlayNext, onToggleLike, onShare, onEditLyrics, onCut, onSetRingtone,
             onChangePhoto, onEdit, onRemoveFromPlaylist, onBin: onRemove,
             onAddToPlaylist: () => setPane("playlists"),
           }} />

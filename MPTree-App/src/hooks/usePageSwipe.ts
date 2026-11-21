@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { TAB_MOTION } from "../themes";
 import { viewW } from "../utils";
 import type React from "react";
 
@@ -203,7 +204,7 @@ export function usePageSwipe({
   })();
   const panelTransition = pageDragging
     ? "none"
-    : "transform 0.2s cubic-bezier(0.22,0.61,0.36,1)";
+    : `transform ${TAB_MOTION}`;
 
   return {
     pageDragX,

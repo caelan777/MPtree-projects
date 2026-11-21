@@ -919,4 +919,35 @@ public class MusicScannerPlugin extends Plugin {
             call.reject("Could not set ringtone: " + e.getMessage(), e);
         }
     }
+
+    // ── getRingtone ──────────────────────────────────────────────────────────
+    //
+    // The file the phone rings with now, so the song menu can light the
+    // Ringtone tile of that song. Reading the setting needs no permission; the
+    // file behind it is looked up in MediaStore, which the scan's media
+    // permission covers. A tone of the phone's own, no permission yet, or
+    // anything going wrong: no path, and so no tile lit.
+    @PluginMethod
+    public void getRingtone(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            Uri uri = android.media.RingtoneManager.getActualDefaultRingtoneUri(
+                    getContext(), android.media.RingtoneManager.TYPE_RINGTONE);
+            if (uri != null && "media".equals(uri.getAuthority())) {
+                Cursor c = getContext().getContentResolver().query(
+                        uri, new String[]{ MediaStore.Audio.Media.DATA }, null, null, null);
+                if (c != null) {
+                    try {
+                        if (c.moveToFirst()) {
+                            String path = c.getString(0);
+                            if (path != null) ret.put("path", path);
+                        }
+                    } finally { c.close(); }
+                }
+            }
+        } catch (Exception ignored) {
+            // See above: no path.
+        }
+        call.resolve(ret);
+    }
 }

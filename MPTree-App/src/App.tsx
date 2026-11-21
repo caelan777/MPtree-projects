@@ -13,7 +13,7 @@ import { Logo } from "./components/Logo";
 
 import type { Song, SongMeta, PlayMode, FilterId, Theme } from "./types";
 import { makeCutId } from "./types";
-import { FILTER_OPTIONS, CHROME_MOTION, paletteFor, cardPalette, isDarkPalette, DARK } from "./themes";
+import { FILTER_OPTIONS, CHROME_MOTION, TAB_MS, TAB_MOTION, paletteFor, cardPalette, isDarkPalette, DARK } from "./themes";
 import { IC } from "./components/Icons";
 import { AlbumArt } from "./components/AlbumArt";
 import { LayoutIcon, LIST_LAYOUTS, layoutName, isListLayout, type ListLayout } from "./components/LayoutIcon";
@@ -772,6 +772,7 @@ export default function App() {
   const discoverBackRef = useRef<(() => boolean) | null>(null);
   /** Account & sync's own Back: a window on it, or How sync works, first. */
   const accountBackRef = useRef<(() => boolean) | null>(null);
+  const settingsBackRef = useRef<(() => boolean) | null>(null);
   const discoverBtnRef = useRef<HTMLButtonElement | null>(null);
   const discoverPanelRef = useRef<HTMLDivElement | null>(null);
   const openDiscover = () => {
@@ -1045,6 +1046,12 @@ export default function App() {
   const dispArtist = (s: Song) =>
     getMeta(s).customArtist || (!isMissingArtist(s.artist) ? s.artist : "");
   const isLiked    = (s: Song) => !!getMeta(s).liked;
+  // Lit tiles in the song menus (SongActionTiles): set to play next, and the
+  // song the phone rings with. That one is asked of Android at the start and
+  // on every return to the app, as it can be changed in the phone's settings.
+  const isNextUp   = (s: Song) => playNextQueue.includes(s.id);
+  const [ringtonePath, setRingtonePath] = useState<string | null>(null);
+  const isRingtone = (s: Song) => ringtonePath !== null && s.uri === ringtonePath;
   const showToast  = (m: string, action?: ToastAction) => setToast({ msg: m, action });
   const showError  = useCallback((m: string) => setToast({ msg: "⚠ " + m }), []);
   const fmt        = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`; };
@@ -1277,8 +1284,10 @@ export default function App() {
     };
     initialize();
     countDaily("open");
+    const readRingtone = () => { MusicScanner.getRingtone().then(r => setRingtonePath(r.path ?? null)).catch(() => {}); };
+    readRingtone();
     const sub = CapApp.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) countDaily("open");
+      if (isActive) { countDaily("open"); readRingtone(); }
       // Dismiss the per-song action sheet across a background/foreground
       // transition, so returning to the app never lands on a stale menu for a
       // song you have since scrolled away from.
@@ -2060,25 +2069,47 @@ export default function App() {
   const openedByDragRef = useRef(false);   // skip the enter keyframe when drag already brought it up
   // The mini player IS the big player (Caelan, 21 Nov): the big one grows out
   // of the mini player's card and shrinks back into it (PlayerExpandSheet,
-  // fromRect). The mini player's own insides only fade on top of it: "out"
-  // while the big one opens and is open, "in" as it comes back.
+  // fromRect). The mini player's own insides only fade on top of it: "lift"
+  // on top of the big one the moment it is tapped, "out" from the frame the
+  // big one starts to grow (onGrow) and while it is open, "in" as it comes
+  // back. Closing is opening backwards (Caelan, 21 Nov).
   const miniCardEl = useRef<HTMLDivElement | null>(null);
-  const [miniMorph, setMiniMorph] = useState<null | "out" | "in">(null);
+  const [miniMorph, setMiniMorph] = useState<null | "lift" | "out" | "in">(null);
   const [miniRect,  setMiniRect]  = useState<{ top: number; left: number; right: number; bottom: number } | null>(null);
   const takeMiniRect = () => {
-    const r = miniCardEl.current?.getBoundingClientRect();
+    const el = miniCardEl.current;
+    const r = el?.getBoundingClientRect();
     setMiniRect(r ? { top: r.top, left: r.left, right: r.right, bottom: r.bottom } : null);
+    el?.style.setProperty("--mp-drag", "0px");
   };
   const expandFromMini = () => {
     takeMiniRect();
     openedByDragRef.current = false;
-    setMiniMorph("out");
+    setMiniMorph("lift");
     setPlayerExpanded(true);
   };
-  const miniBack = () => setMiniMorph(m => (m === "out" ? "in" : m));
+  const miniGrow = () => setMiniMorph(m => (m === "lift" ? "out" : m));
+  const miniBack = () => setMiniMorph(m => (m === "out" || m === "lift" ? "in" : m));
+  // Pulled down on the big player: the hidden mini player keeps to its top, so
+  // it comes back from there. Straight onto the element, no render per move.
+  const miniDrag = (dy: number) => { miniCardEl.current?.style.setProperty("--mp-drag", `${dy}px`); };
   // Closed without its animation too (a sheet of its own took over): it comes
-  // back all the same. "in" ends with its animation (onAnimationEnd below).
-  const miniPhase = miniMorph === "out" && !playerExpanded && expandDrag === null ? "in" : miniMorph;
+  // back all the same. "in" lasts as long as the big player is there (it ends
+  // in the player's onClose), so the mini player stays over the shrunk card
+  // to the end; with the player gone at once, it ends with its fade
+  // (onTransitionEnd below) or just after, if there was nothing to fade.
+  const miniPhase = (miniMorph === "out" || miniMorph === "lift") && !playerExpanded && expandDrag === null ? "in" : miniMorph;
+  // A safety net too: "lift" waits for the big player's first frame (onGrow),
+  // never longer than a moment.
+  useEffect(() => {
+    if (miniPhase === "lift") {
+      const id = window.setTimeout(() => setMiniMorph(m => (m === "lift" ? "out" : m)), 400);
+      return () => window.clearTimeout(id);
+    }
+    if (miniPhase !== "in" || playerExpanded) return;
+    const id = window.setTimeout(() => setMiniMorph(null), TAB_MS + 150);
+    return () => window.clearTimeout(id);
+  }, [miniPhase, playerExpanded]);
   // How far up the big player's top is from the mini player's (PlayerExpandSheet onCardTop).
   const [cardTop, setCardTop] = useState<number | null>(null);
   const miniRise = miniRect && cardTop !== null ? Math.min(0, Math.round(cardTop - miniRect.top)) : 0;
@@ -2107,7 +2138,7 @@ export default function App() {
     if (expandDrag !== null) {
       setExpandSettling(true);
       setExpandDrag(0);
-      window.setTimeout(() => { setExpandSettling(false); setExpandDrag(null); }, 280);
+      window.setTimeout(() => { setExpandSettling(false); setExpandDrag(null); }, TAB_MS + 40);
     }
   };
   const onPlayerSwipeMove = (clientX: number, clientY: number) => {
@@ -2161,7 +2192,7 @@ export default function App() {
         // Not far enough: settle back down smoothly, then unmount.
         setExpandSettling(true);
         setExpandDrag(0);
-        window.setTimeout(() => { setExpandSettling(false); setExpandDrag(null); }, 280);
+        window.setTimeout(() => { setExpandSettling(false); setExpandDrag(null); }, TAB_MS + 40);
       }
     }
   };
@@ -2805,6 +2836,7 @@ export default function App() {
     try {
       const res = await MusicScanner.setAsRingtone({ path: s.uri });
       if (res.ok) {
+        setRingtonePath(s.uri);
         showToast(t("Ringtone set"));
       } else if (res.needsPermission) {
         showToast(t("Allow MPTree to change system settings, then try again"));
@@ -3232,7 +3264,7 @@ export default function App() {
       if (lookOpen)            { if (lookBack()) return; endPreview(); closeLook(); return; }
       if (cleanupOpen)         { setCleanupOpen(false); return; }
       if (binOpen)             { setBinOpen(false); return; }
-      if (settingsOpen)        { setSettingsOpen(false); return; }
+      if (settingsOpen)        { if (!settingsBackRef.current?.()) setSettingsOpen(false); return; }
       if (cutSong)             { setCutSong(null); return; }
       if (removeSong)          { setRemoveSong(null); return; }
       if (removeMultiConfirm)  { setRemoveMultiConfirm(false); return; }
@@ -3734,17 +3766,6 @@ export default function App() {
         .mp-title-r { animation: mpTitleFromR 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         .mp-title-l { animation: mpTitleFromL 0.18s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
         @media (prefers-reduced-motion: reduce) { .mp-title-r, .mp-title-l { animation: none; } }
-        /* The mini player into the big one and back (miniMorph). Only a "to"
-           going out and only a "from" coming back, so each starts from or
-           ends at wherever the mini player really is (a finger may have
-           lifted it already). */
-        @keyframes mpMiniOut { to { opacity: 0; } }
-        @keyframes mpMiniIn  { from { opacity: 0; } }
-        .mp-mini-out { animation: mpMiniOut 0.14s ease-out both; }
-        .mp-mini-in  { animation: mpMiniIn 0.16s ease-out 0.2s backwards; }
-        /* Still a blink of "in" with less motion: its end is what lets the
-           mini player go back under the sheets (onAnimationEnd). */
-        @media (prefers-reduced-motion: reduce) { .mp-mini-out { animation: none; opacity: 0; } .mp-mini-in { animation-duration: 1ms; animation-delay: 0s; } }
         .pulse { animation:pulse 1s ease-in-out infinite; }
         /* Bars on the album art of the track that is playing. Defined here
            rather than in AlbumArt so a single rule serves every list that
@@ -4541,6 +4562,8 @@ export default function App() {
               onRemoveSong={(song) => setRemoveSong(song)}
               onBinMany={ids => setBinManyIds(ids)}
               isLiked={isLiked}
+              isNext={isNextUp}
+              isRingtone={isRingtone}
               onHaptic={() => hapticImpact("medium")}
               onDetailChange={setPlaylistDetailOpen}
               onBodyScroll={top => handleChromeScroll(top, lastPlaylistScrollTopRef, "playlists")}
@@ -4625,12 +4648,12 @@ export default function App() {
           return (
             <div
               ref={playerCardRef}
-              onTransitionEnd={e => { if (miniPhase === "in" && e.propertyName === "opacity" && e.target === e.currentTarget) setMiniMorph(null); }}
+              onTransitionEnd={e => { if (miniPhase === "in" && !playerExpanded && e.propertyName === "opacity" && e.target === e.currentTarget) setMiniMorph(null); }}
               style={{
                 position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
                 // Over the big player while it goes into it and comes back out.
-                zIndex: miniPhase ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
+                zIndex: miniPhase || expandDrag !== null ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
                 // Pulled up by a finger, it fades as the big player grows out of it.
@@ -4640,11 +4663,18 @@ export default function App() {
                 transform: playerHidden ? `translateY(calc(100% + ${8 + playerBottom}px))`
                   : miniPhase === "out" ? `translateY(${miniRise}px)`
                   : expandDrag ? `translateY(${Math.round(miniRise * expandDrag)}px)` : "translateY(0)",
+                // A pull down on the open player (miniDrag), on top of that;
+                // it goes back to nothing with the rest as the player closes.
+                translate: miniPhase === "out" ? "0 var(--mp-drag, 0px)" : miniPhase === "in" ? "0 0" : undefined,
                 opacity: playerHidden ? 0 : miniPhase === "out" ? 0 : expandDrag ? Math.max(0, 1 - expandDrag * 1.5) : 1,
-                pointerEvents: playerHidden || miniPhase === "out" ? "none" : "auto",
-                transition: expandDrag !== null ? "background 0.4s ease"
-                  : miniPhase === "out" ? "transform 0.3s cubic-bezier(0.2, 0, 0, 1), opacity 0.3s ease, background 0.4s ease"
-                  : miniPhase === "in" ? "transform 0.28s cubic-bezier(0.3, 0, 0.8, 0.15), opacity 0.2s ease 0.08s, background 0.4s ease"
+                pointerEvents: playerHidden || miniPhase === "out" || miniPhase === "lift" ? "none" : "auto",
+                // At the big player's speed both ways, the same curve, so it
+                // stays on its top edge; the fade is even, so closing is
+                // opening played back.
+                transition: expandDrag !== null ? (expandSettling ? `transform ${TAB_MOTION}, opacity ${TAB_MS}ms linear, background 0.4s ease` : "background 0.4s ease")
+                  : miniPhase === "lift" ? "background 0.4s ease"
+                  : miniPhase === "out" ? `transform ${TAB_MOTION}, opacity ${TAB_MS}ms linear, background 0.4s ease`
+                  : miniPhase === "in" ? `transform ${TAB_MOTION}, translate ${TAB_MOTION}, opacity ${TAB_MS}ms linear, background 0.4s ease`
                   : chromeAnimate ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
               }}
@@ -4714,18 +4744,28 @@ export default function App() {
             onPlayNext={() => { handlePlayManyNext([...selected]); exitSelectMode(); }}
             onShare={() => { void shareSongs([...selected]); }}
             onDelete={() => setRemoveMultiConfirm(true)}
+            // One song picked by a long press: only Play leaves the picking,
+            // the rest is done and you are still there (Caelan, 21 Nov). The
+            // bin takes the song off the list, so that goes back too.
             single={onePicked ? {
                 isLiked: isLiked(onePicked),
+                isNext: isNextUp(onePicked),
+                isRingtone: isRingtone(onePicked),
                 onPlay: () => { exitSelectMode(); playTapped(onePicked); },
-                onPlayNext: () => { exitSelectMode(); handlePlayNext(onePicked); },
+                onPlayNext: () => handlePlayNext(onePicked),
                 onAddToPlaylist: () => { setMultiIds([onePicked.id]); setMultiAddOpen(true); },
-                onToggleLike: () => multiLikeWithMeta(!isLiked(onePicked)),
+                // Not multiLikeWithMeta: that one ends the picking.
+                onToggleLike: () => {
+                  hapticImpact("light");
+                  const s = onePicked;
+                  setMeta(prev => { const cur = prev[s.id] || {}; const nowLiked = !cur.liked; showToast(nowLiked ? t("Liked") : t("Removed from favorites")); return { ...prev, [s.id]: { ...cur, liked: nowLiked } }; });
+                },
                 onShare: () => { void shareSong(onePicked); },
-                onEditLyrics: () => { exitSelectMode(); openLyricsSheet(onePicked); },
-                onCut: () => { exitSelectMode(); void openCutSheet(onePicked); },
-                onSetRingtone: () => { exitSelectMode(); void setSongAsRingtone(onePicked); },
-                onChangePhoto: () => { exitSelectMode(); setEditFocusPhoto(true); setEditSong(onePicked); },
-                onEdit: () => { exitSelectMode(); setEditFocusPhoto(false); setEditSong(onePicked); },
+                onEditLyrics: () => openLyricsSheet(onePicked),
+                onCut: () => { void openCutSheet(onePicked); },
+                onSetRingtone: () => { void setSongAsRingtone(onePicked); },
+                onChangePhoto: () => { setEditFocusPhoto(true); setEditSong(onePicked); },
+                onEdit: () => { setEditFocusPhoto(false); setEditSong(onePicked); },
                 onBin: () => { exitSelectMode(); setRemoveSong(onePicked); },
             } : null}
             onBulkEdit={() => { setMultiIds([...selected]); setBulkEditOpen(true); }}
@@ -4763,8 +4803,9 @@ export default function App() {
           <AddToPlaylistSheet
             count={multiIds.length}
             playlists={playlists}
-            onAddToPlaylist={id => { handleAddManyToPlaylist(id, multiIds); setMultiAddOpen(false); exitSelectMode(); }}
-            onCreatePlaylist={name => { handleCreatePlaylistWithSongs(name, multiIds); setMultiAddOpen(false); exitSelectMode(); }}
+            // One long-pressed song stays picked (see single above).
+            onAddToPlaylist={id => { handleAddManyToPlaylist(id, multiIds); setMultiAddOpen(false); if (multiIds.length > 1) exitSelectMode(); }}
+            onCreatePlaylist={name => { handleCreatePlaylistWithSongs(name, multiIds); setMultiAddOpen(false); if (multiIds.length > 1) exitSelectMode(); }}
             onClose={() => setMultiAddOpen(false)}
             T={TH}
           />,
@@ -4780,6 +4821,8 @@ export default function App() {
             dispArtist={dispArtist(menuSong)}
             customPhoto={getMeta(menuSong).customPhoto}
             isLiked={isLiked(menuSong)}
+            isNext={isNextUp(menuSong)}
+            isRingtone={isRingtone(menuSong)}
             playlists={playlists}
             onPlay={() => { const s = menuSong; setMenuSong(null); handleTap(s); }}
             onPlayNext={() => handlePlayNext(menuSong)}
@@ -4845,6 +4888,7 @@ export default function App() {
               : undefined}
             onPrivacy={() => { Browser.open({ url: "https://mp-tree.net/privacy.html" }).catch(() => {}); }}
             onClose={() => setSettingsOpen(false)}
+            backRef={settingsBackRef}
             T={TH} />
         )}
 
@@ -5065,6 +5109,7 @@ export default function App() {
                 const away = (go: () => void) => () => { setPlayerExpanded(false); openedByDragRef.current = false; go(); };
                 return {
                   isLiked: isLiked(currentSong),
+                  isRingtone: isRingtone(currentSong),
                   onPlay: () => { void seekTo(0); },
                   onPlayNext: () => handlePlayNext(currentSong),
                   onAddToPlaylist: away(() => { setMenuStartPlaylists(true); setMenuSong(currentSong); }),
@@ -5077,12 +5122,14 @@ export default function App() {
                   onBin: () => setRemoveSong(currentSong),
                 };
               })()}
-              onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; }}
+              onClose={() => { setPlayerExpanded(false); openedByDragRef.current = false; setMiniMorph(null); }}
               dragProgress={playerExpanded ? null : expandDrag}
               dragSettling={expandSettling}
               skipEnter={openedByDragRef.current}
               fromRect={miniRect}
               onCardTop={setCardTop}
+              onGrow={miniGrow}
+              onCloseDrag={miniDrag}
               onCloseStart={miniBack}
               T={TH}
             />

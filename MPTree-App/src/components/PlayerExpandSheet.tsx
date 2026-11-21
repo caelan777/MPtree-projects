@@ -1,6 +1,6 @@
 import { useState, useRef, useLayoutEffect, memo } from "react";
 import { viewW, COLUMN_QUERY } from "../utils";
-import type { T } from "../themes";
+import { TAB_MS, TAB_MOTION, type T } from "../themes";
 import { t, tn } from "../i18n";
 import type { Song, PlayMode } from "../types";
 import { AlbumArt } from "./AlbumArt";
@@ -145,6 +145,12 @@ type PlayerExpandSheetProps = {
   fromRect?: { top: number; left: number; right: number; bottom: number } | null;
   /** The close starts (its animation), so the mini player can come back with it. */
   onCloseStart?: () => void;
+  /** The card starts to grow (the frame after it is drawn): the mini player
+   *  starts moving then too, so the two move as one from the first frame. */
+  onGrow?: () => void;
+  /** The open player pulled down by this many pixels (0 when let go): the
+   *  mini player, hidden on top of it, keeps to its top edge. */
+  onCloseDrag?: (dy: number) => void;
   /** Where the sheet's top lies on the screen, measured as it opens. */
   onCardTop?: (top: number) => void;
   T: T;
@@ -162,7 +168,7 @@ export function PlayerExpandSheet({
   onSkipUpNext, onQueueMove, onPlayFromQueue, onOpenSongMenu,
   lyrics, onSaveLyrics, onSearchLyrics, menuActions, onClose, onNoCover, onChangePhoto,
   dragProgress = null, dragSettling = false, skipEnter = false,
-  fromRect = null, onCloseStart, onCardTop,
+  fromRect = null, onCloseStart, onCardTop, onGrow, onCloseDrag,
   T,
 }: PlayerExpandSheetProps) {
   // The record gives way to the words, and back. Tied to the song, so moving to
@@ -278,7 +284,7 @@ export function PlayerExpandSheet({
     // Where the sheet's top will be: the mini player moves up to it (App).
     onCardTop?.(el.offsetTop);
     // The card is drawn first, then it grows, one frame on.
-    const first = requestAnimationFrame(() => setArmed(true));
+    const first = requestAnimationFrame(() => { onGrow?.(); setArmed(true); });
     return () => cancelAnimationFrame(first);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -289,7 +295,7 @@ export function PlayerExpandSheet({
     closingRef.current = true;
     setClosing(true);
     onCloseStart?.();
-    setTimeout(onClose, card ? 290 : 180); // the card shrinking, or .pes-sheet-out
+    setTimeout(onClose, TAB_MS + 40); // just after the card shrinks, or .pes-sheet-out
   };
 
   // ── The "Next up" page ────────────────────────────────────────────────────
@@ -308,11 +314,11 @@ export function PlayerExpandSheet({
   };
   const openUpNext = () => {
     setUpSnap(true); setUpOpen(true); setUpPull(0);
-    setTimeout(() => setUpSnap(false), 240);
+    setTimeout(() => setUpSnap(false), TAB_MS + 20);
   };
   const closeUpNext = () => {
     setUpSnap(true); setUpOpen(false); setUpPull(0);
-    setTimeout(() => setUpSnap(false), 240);
+    setTimeout(() => setUpSnap(false), TAB_MS + 20);
   };
 
   // ── Drags ─────────────────────────────────────────────────────────────────
@@ -354,7 +360,7 @@ export function PlayerExpandSheet({
         d.mode = dy > 0 && atTop ? "close" : dy < 0 && atBottom ? "up" : "none";
       }
     }
-    if (d.mode === "close") setCloseDragY(Math.max(0, dy));
+    if (d.mode === "close") { setCloseDragY(Math.max(0, dy)); onCloseDrag?.(Math.max(0, dy)); }
     else if (d.mode === "up") setUpPull(Math.max(0, -dy));
     else if (d.mode === "back") setUpPull(Math.max(0, dy));
   };
@@ -370,13 +376,21 @@ export function PlayerExpandSheet({
         if (closingRef.current) return;
         closingRef.current = true;
         onCloseStart?.();
-        setCloseSnap(true);
-        setCloseDragY(vh());         // glide the rest of the way down
-        setTimeout(onClose, 230);    // just after the 0.22 s glide, never mid-way
+        if (card) {
+          // From where the finger let go back into the mini player's card,
+          // the same way a tap closes it (Caelan, 21 Nov).
+          setClosing(true);
+          setCloseDragY(0);
+        } else {
+          setCloseSnap(true);
+          setCloseDragY(vh());       // glide the rest of the way down
+        }
+        setTimeout(onClose, TAB_MS + 40); // just after, never mid-way
       } else {
         setCloseSnap(true);
         setCloseDragY(0);            // snap back up
-        setTimeout(() => setCloseSnap(false), 220);
+        onCloseDrag?.(0);
+        setTimeout(() => setCloseSnap(false), TAB_MS + 20);
       }
     } else if (d.mode === "up") {
       if (upPull > vh() * 0.08 || flick) openUpNext(); else closeUpNext();
@@ -422,9 +436,14 @@ export function PlayerExpandSheet({
   const sheetTransform =
     dragProgress !== null ? `translateY(${Math.round((1 - dragProgress) * 100)}%)` :
     (closeDragY > 0 || closeSnap) ? `translateY(${Math.round(closeDragY)}px)` : undefined;
-  const overlayOpacity =
-    dragProgress !== null ? dragProgress :
-    closeDragY > 0 ? Math.max(0, 1 - closeDragY / (vh() * 0.7)) : undefined;
+  // The dim over the list. Only the dim fades: the player itself never does
+  // (Caelan, 21 Nov: the mini player IS the big one, solid all the way).
+  const scrimOpacity =
+    dragProgress !== null ? dragProgress
+    : closing ? 0
+    : closeDragY > 0 ? Math.max(0, 1 - closeDragY / (vh() * 0.7))
+    : card && !armed ? 0
+    : 1;
   // Where the "Next up" page stands: off the bottom when closed, pulled up by
   // the finger, at the top when open, pulled down by the finger.
   const upTransform = upOpen
@@ -534,28 +553,31 @@ export function PlayerExpandSheet({
 
   return (
     <div
-      className={closing ? "pes-overlay-out" : dragProgress !== null || skipEnter ? undefined : "pes-overlay-in"}
-      style={{ position: "fixed", inset: 0, background: T.overlayBg, zIndex: 400, opacity: overlayOpacity, transition: isDraggingOpen || isDraggingClose ? "none" : "opacity 0.25s ease" }}
+      style={{ position: "fixed", inset: 0, zIndex: 400 }}
       onClick={() => { if (upOpen) closeUpNext(); else animatedClose(); }}
     >
+      <div aria-hidden="true"
+        className={fromRect || closing || dragProgress !== null || skipEnter ? "pes-scrim" : "pes-scrim pes-overlay-in"}
+        style={{
+          position: "absolute", inset: 0, background: T.overlayBg, opacity: scrimOpacity,
+          transition: isDraggingOpen || isDraggingClose || (card && !armed) ? "none" : `opacity ${TAB_MS}ms linear`,
+        }} />
       <style>{`
         @keyframes pesSlideUp   { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes pesSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
         @keyframes pesFadeIn    { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes pesFadeOut   { from { opacity: 1; } to { opacity: 0; } }
         /* Enter animations use fill-mode "backwards", NOT "both". With "both"
            the finished animation keeps asserting transform/opacity forever,
            which outranks the inline styles the drag-to-close writes — so a
            sheet opened by TAP could not be dragged back down. "backwards"
            hands control back once the animation ends. The exit animations do
            need "both" to hold their final state until unmount. */
-        .pes-overlay-in  { animation: pesFadeIn 0.22s ease backwards; }
-        .pes-overlay-out { animation: pesFadeOut 0.24s ease both; }
-        .pes-sheet-in    { animation: pesSlideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-        .pes-sheet-out   { animation: pesSlideDown 0.18s ease-in both; }
+        .pes-overlay-in  { animation: pesFadeIn ${TAB_MS}ms linear backwards; }
+        .pes-sheet-in    { animation: pesSlideUp ${TAB_MOTION} backwards; }
+        .pes-sheet-out   { animation: pesSlideDown ${TAB_MOTION} both; }
         @media (prefers-reduced-motion: reduce) {
-          .pes-overlay-in, .pes-overlay-out, .pes-sheet-in, .pes-sheet-out { animation: none; }
-          .pes-grow { transition: none !important; }
+          .pes-overlay-in, .pes-sheet-in, .pes-sheet-out { animation: none; }
+          .pes-grow, .pes-scrim { transition: none !important; }
         }
       `}</style>
       {/* A sheet from the bottom, as tall as the player needs, with the list
@@ -589,9 +611,10 @@ export function PlayerExpandSheet({
           transform: card && !(closeDragY > 0 || closeSnap) ? `translateY(${Math.round(card.t * (1 - grow))}px)` : sheetTransform,
           // The card itself is drawn at once; only from there on does it move.
           transition: isDraggingOpen || isDraggingClose || (card && !armed && dragProgress === null) ? "none"
-            // Opening about as quick as closing (Caelan, 21 Nov).
-            : card ? (closing ? "clip-path 0.28s cubic-bezier(0.3, 0, 0.8, 0.15), transform 0.28s cubic-bezier(0.3, 0, 0.8, 0.15)" : "clip-path 0.3s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.2, 0, 0, 1)")
-            : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
+            // Closing is opening backwards, both as quick as a tab switch
+            // (Caelan, 21 Nov).
+            : card ? `clip-path ${TAB_MOTION}, transform ${TAB_MOTION}`
+            : `transform ${TAB_MOTION}`,
         }}
       >
         <Backdrop photo={backdropPhoto} sheetBg={T.sheetBg} />
@@ -601,7 +624,7 @@ export function PlayerExpandSheet({
           <div aria-hidden="true" style={{
             position: "absolute", inset: 0, zIndex: 30, pointerEvents: "none", background: T.sheetBg,
             opacity: dragProgress !== null ? Math.max(0, 1 - dragProgress * 2) : grow >= 1 ? 0 : 1,
-            transition: isDraggingOpen ? "none" : closing ? "opacity 0.18s ease 0.06s" : "opacity 0.2s ease",
+            transition: isDraggingOpen ? "none" : `opacity ${TAB_MS}ms linear`,
           }} />
         )}
 
@@ -825,7 +848,7 @@ export function PlayerExpandSheet({
             boxShadow: upOpen || upPull > 0 ? "0 -8px 30px rgba(0,0,0,0.35)" : "none",
             display: "flex", flexDirection: "column",
             transform: upTransform,
-            transition: upMoving ? "none" : "transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)",
+            transition: upMoving ? "none" : `transform ${TAB_MOTION}`,
             visibility: upOpen || upPull > 0 || upSnap ? "visible" : "hidden",
           }}
         >

@@ -159,6 +159,11 @@ export const SHADE_PREVIEW = {
 // PlaylistsView.tsx each used to carry their own copy of the literal, which is
 // two places for the same number to drift apart in.
 export const CHROME_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
+// Going from Songs to Playlists (usePageSwipe). The big player opens, closes
+// and moves at this speed too (Caelan, 21 Nov: as fast as switching tabs).
+export const TAB_MS = 200;
+export const TAB_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+export const TAB_MOTION = `${TAB_MS}ms ${TAB_EASE}`;
 
 export function makeSH(T: T): Record<string, React.CSSProperties> {
   return {

@@ -80,6 +80,9 @@ interface Props {
   onBinMany:          (ids: string[]) => void;
   /** Whether a song is liked, for the long-press menu label. */
   isLiked:            (song: Song) => boolean;
+  /** Set to play next, and the phone's ringtone: lit tiles. */
+  isNext?:            (song: Song) => boolean;
+  isRingtone?:        (song: Song) => boolean;
   /** Optional light haptic on long-press. */
   onHaptic?:          () => void;
   /** Reports whether a playlist/smart-playlist DETAIL view is open, so App can
@@ -303,7 +306,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onPlaySong, playingFrom = null, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
-  isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
+  isLiked, isNext, isRingtone, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
   onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
@@ -1673,7 +1676,9 @@ export const PlaylistsView: React.FC<Props> = ({
             : undefined}
           onDelete={() => { const ids = [...selectedIds]; exitSelect(); onBinMany(ids); }}
           single={(() => {
-            // One song picked: everything its "⋮" menu has.
+            // One song picked: everything its "⋮" menu has. Only Play leaves
+            // the picking (Caelan, 21 Nov); out of the playlist and the bin
+            // take the song off this list, so those go back too.
             const s = selectedIds.size === 1 ? songs.find(x => selectedIds.has(x.id)) : undefined;
             if (!s) return null;
             const leave = (then: () => void) => () => { exitSelect(); then(); };
@@ -1681,16 +1686,18 @@ export const PlaylistsView: React.FC<Props> = ({
             const source = activePlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`;
             return {
               isLiked: isLiked(s),
+              isNext: isNext?.(s),
+              isRingtone: isRingtone?.(s),
               onPlay: leave(() => onPlaySong(s, list.length ? list : [s], source)),
-              onPlayNext: leave(() => onPlayNext(s)),
+              onPlayNext: () => onPlayNext(s),
               onAddToPlaylist: () => onAddManyToPlaylist([s.id]),
               onToggleLike: () => onToggleLike(s),
               onShare: () => onShareSong(s),
-              onEditLyrics: leave(() => onEditLyrics(s)),
-              onCut: leave(() => onCutSong(s)),
-              onSetRingtone: leave(() => onSetRingtone(s)),
-              onChangePhoto: leave(() => onChangePhoto(s)),
-              onEdit: leave(() => onEditSong(s)),
+              onEditLyrics: () => onEditLyrics(s),
+              onCut: () => onCutSong(s),
+              onSetRingtone: () => onSetRingtone(s),
+              onChangePhoto: () => onChangePhoto(s),
+              onEdit: () => onEditSong(s),
               onRemoveFromPlaylist: activePlaylist ? leave(() => removeFromPlaylist(s.id)) : undefined,
               onBin: leave(() => onRemoveSong(s)),
             };
@@ -1714,6 +1721,8 @@ export const PlaylistsView: React.FC<Props> = ({
           dispArtist={dispArtist(menuSong.song)}
           customPhoto={meta[menuSong.song.id]?.customPhoto}
           isLiked={isLiked(menuSong.song)}
+          isNext={isNext?.(menuSong.song)}
+          isRingtone={isRingtone?.(menuSong.song)}
           playlists={playlists}
           onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song], m.inPlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`); }}
           onPlayNext={() => { onPlayNext(menuSong.song); setMenuSong(null); }}

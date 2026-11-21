@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode, type MutableRefObject } from "react";
 import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { Browser } from "@capacitor/browser";
 import { makeSH, pageGround, type T } from "../themes";
@@ -147,6 +147,9 @@ type SettingsSheetProps = {
   onRate?: () => void;
   onPrivacy: () => void;
   onClose: () => void;
+  /** Android back: a page opened from here closes first (true), so back
+   *  lands in Settings, not on the songs (Caelan, 21 Nov). */
+  backRef?: MutableRefObject<(() => boolean) | null>;
   T: T;
 };
 
@@ -159,7 +162,7 @@ export function SettingsSheet({
   uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, onSetMix,
   onFeedback, onRate, onPrivacy,
-  onClose, T,
+  onClose, backRef, T,
 }: SettingsSheetProps) {
   const sh = makeSH(T);
   const adDay = useAdDay();
@@ -183,6 +186,17 @@ export function SettingsSheet({
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
   const [sub, setSub] = useState<null | "language" | "about" | "widget">(null);
+  // About's own pages (Questions, licences), held here so back can close them.
+  const [aboutSub, setAboutSub] = useState<null | "faq" | "licences">(null);
+  useEffect(() => {
+    if (!backRef) return;
+    backRef.current = () => {
+      if (aboutSub) { setAboutSub(null); return true; }
+      if (sub) { setSub(null); return true; }
+      return false;
+    };
+    return () => { backRef.current = null; };
+  }, [backRef, sub, aboutSub]);
   const widget = useWidget();
 
   // Live remaining-time label for an active fixed-clock timer.
@@ -499,7 +513,7 @@ export function SettingsSheet({
         {sub === "about" && (
           <AboutPage
             onShowTutorial={onShowTutorial} onFeedback={onFeedback} onRate={onRate} onPrivacy={onPrivacy}
-            adPrivacy={adPrivacy} onClose={() => setSub(null)} T={T}
+            adPrivacy={adPrivacy} sub={aboutSub} setSub={setAboutSub} onClose={() => { setAboutSub(null); setSub(null); }} T={T}
           />
         )}
       </div>
@@ -513,7 +527,9 @@ export function SettingsSheet({
 // one row for it. The questions and the licences open on top of this page,
 // inside it, so closing them comes back here.
 
-function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, onClose, T }: {
+function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, sub, setSub, onClose, T }: {
+  sub: null | "faq" | "licences";
+  setSub: (s: null | "faq" | "licences") => void;
   onShowTutorial: () => void;
   onFeedback: () => void;
   onRate?: () => void;
@@ -522,7 +538,6 @@ function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, o
   onClose: () => void;
   T: T;
 }) {
-  const [sub, setSub] = useState<null | "faq" | "licences">(null);
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
     <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>

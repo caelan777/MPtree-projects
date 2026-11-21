@@ -42,6 +42,9 @@ export type MusicScannerPlugin = {
   // screen, meaning "ask again once they have flipped it".
   setAsRingtone(options: { path: string }):
     Promise<{ ok: boolean; needsPermission?: boolean; reason?: string }>;
+  // The file the phone rings with now, when it is a song on the phone (a tone
+  // of the phone's own has no path here).
+  getRingtone(): Promise<{ path?: string }>;
   // Lyrics from a sidecar file next to the audio (song.lrc / song.txt). Always
   // local: see the note in MusicScannerPlugin.getLyrics.
   getLyrics(options: { path: string }): Promise<{ lyrics: string; source?: string }>;
