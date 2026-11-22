@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MPTree for Android</title>
-<meta name="description" content="MPTree for Android is on Google Play. How to move over from a copy downloaded from this website.">
-<meta name="robots" content="noindex">
+<title>Download MPTree</title>
+<meta name="description" content="Download MPTree, the free offline music player, for Android from Google Play or for Windows from the Microsoft Store.">
+<link rel="canonical" href="https://mp-tree.net/download.html">
 <meta name="theme-color" content="#000000">
 <meta property="og:type" content="website">
-<meta property="og:title" content="MPTree for Android">
-<meta property="og:description" content="MPTree for Android is on Google Play. How to move over from a copy downloaded from this website.">
+<meta property="og:title" content="Download MPTree">
+<meta property="og:description" content="The free offline music player, for Android and Windows.">
 <meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=45">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=45">
@@ -19,7 +19,7 @@
 <link rel="apple-touch-icon" href="assets/icon/apple-touch-icon-180.png">
 
 <link rel="stylesheet" href="assets/tokens.css?v=45">
-<link rel="stylesheet" href="assets/site.css?v=50">
+<link rel="stylesheet" href="assets/site.css?v=51">
 </head>
 <body>
 
@@ -30,64 +30,48 @@
       <span>MPTree</span>
     </a>
     <nav class="bar-nav bar-nav-dl">
+      <a href="/#look">How it looks</a>
       <a href="/#features">Features</a>
-      <a href="/#support">Support</a>
     </nav>
   </div>
 </header>
 
-<main id="main" class="wrap dl">
+<main id="main" class="wrap dlp">
 
-  <!-- The website no longer hands out its own Android copy: Google Play is the
-       one way in (October 2026). This page stays because copies downloaded here
-       before still point at it when they say a new version is out. -->
-  <section class="dl-head">
-    <p class="kicker">Free music player for Android</p>
-    <h1>MPTree for Android</h1>
-    <p class="lede">MPTree for Android comes from Google Play, which keeps it up to date for you.</p>
-    <div class="dl-actions">
+  <section class="dlp-head">
+    <img src="assets/img/mptree-mark-white.svg" alt="" width="64" height="64" class="dlp-mark">
+    <h1>Get MPTree</h1>
+    <p>Free. Plays the music on your device. No account needed.</p>
+  </section>
+
+  <!-- One card per store. The Store link keeps its cid so the Microsoft
+       Store dashboard can count website installs. -->
+  <section class="dlp-stores" aria-label="Stores">
+    <div class="dlp-card">
+      <h2>Android</h2>
+      <p>Android 7.0 or newer</p>
       <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.caelan.mptree" target="_blank" rel="noopener"><img src="assets/img/google-play-badge.png?v=47" alt="Get it on Google Play" width="564" height="168"></a>
+    </div>
+    <div class="dlp-card">
+      <h2>Windows</h2>
+      <p>Windows 10 or 11</p>
+      <a class="store-badge" href="https://get.microsoft.com/installer/download/9PN3L88V4H58?cid=website_cta_psi"><img src="assets/img/microsoft-store-badge.svg?v=48" alt="Download from the Microsoft Store" width="161" height="44"></a>
     </div>
   </section>
 
-  <section class="section-flush">
-    <h2>Got MPTree from this website before?</h2>
-    <p class="section-lede">
-      That copy no longer gets updates. The one on Google Play is signed differently, so
-      Android will not install it on top: the old one goes first. Your music files stay
-      where they are, and a backup brings back your playlists, likes and settings.
-    </p>
-    <ol class="guide">
-      <li>
-        <span class="g-n">1</span>
-        <div class="g-c">
-          <b>Make a backup</b>
-          <p>In MPTree, open <strong>Settings</strong>, then <strong>Backup &amp; Restore</strong>, and export a backup.</p>
-        </div>
-      </li>
-      <li>
-        <span class="g-n">2</span>
-        <div class="g-c">
-          <b>Uninstall the old MPTree</b>
-          <p>Hold its icon and choose <strong>Uninstall</strong>.</p>
-        </div>
-      </li>
-      <li>
-        <span class="g-n">3</span>
-        <div class="g-c">
-          <b>Install it from Google Play</b>
-          <p>Tap <strong>Get it on Google Play</strong> above, then <strong>Install</strong>.</p>
-        </div>
-      </li>
-      <li>
-        <span class="g-n">4</span>
-        <div class="g-c">
-          <b>Restore your backup</b>
-          <p>Open MPTree, go to <strong>Settings</strong>, then <strong>Restore backup</strong>, and pick the backup you made.</p>
-        </div>
-      </li>
+  <!-- Copies downloaded from this website before October 2026 still point
+       here when they say a new version is out, so the move-over steps stay,
+       folded away. -->
+  <details class="dlp-old">
+    <summary>Got MPTree for Android from this website before?</summary>
+    <p>That copy no longer gets updates, and Android will not install the Google Play one on top of it. Your music stays where it is.</p>
+    <ol>
+      <li>In MPTree, open <strong>Settings</strong>, then <strong>Backup &amp; Restore</strong>, and make a backup.</li>
+      <li>Uninstall the old MPTree.</li>
+      <li>Install MPTree from Google Play.</li>
+      <li>Open it, go to <strong>Settings</strong>, then <strong>Restore backup</strong>.</li>
     </ol>
-  </section>
+  </details>
 
 </main>
 

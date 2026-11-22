@@ -551,3 +551,38 @@ a { color: inherit; text-decoration: none; }
 .soon-h { vertical-align: middle; margin-left: 8px; position: relative; top: -4px; }
 .dl-meta { text-decoration: none; cursor: default; }
 .dl-meta:hover { color: var(--mp-muted); }
+
+/* ── Download page, simple (November 2026) ─────────────────────────────── */
+.btn .heart { margin-right: 8px; flex: none; color: var(--mp-state-like); }
+.dlp { padding-top: 56px; padding-bottom: 24px; max-width: 760px; }
+.dlp-head { text-align: center; }
+.dlp-mark { display: block; margin: 0 auto 20px; }
+.dlp-head h1 {
+  margin: 0;
+  font-size: clamp(34px, 6vw, 56px);
+  font-weight: var(--mp-weight-heavy);
+  letter-spacing: -0.04em;
+  line-height: 1.04;
+}
+.dlp-head p { margin: 14px auto 0; color: var(--mp-text-sub); font-size: var(--mp-text-body); max-width: 40ch; }
+.dlp-stores { margin-top: 44px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.dlp-card {
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius-lg);
+  padding: 28px 20px 24px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.dlp-card h2 { margin: 0; font-size: var(--mp-text-title); font-weight: var(--mp-weight-bold); letter-spacing: -0.02em; }
+.dlp-card p { margin: 6px 0 22px; color: var(--mp-muted); font-size: var(--mp-text-small); }
+.dlp-card .store-badge { margin-top: auto; display: flex; align-items: center; height: 54px; }
+.dlp-card .store-badge img { height: 54px; width: auto; }
+.dlp-old { margin: 40px auto 0; max-width: 560px; color: var(--mp-text-sub); font-size: var(--mp-text-small); }
+.dlp-old summary { cursor: pointer; text-align: center; color: var(--mp-muted); list-style: none; }
+.dlp-old summary::-webkit-details-marker { display: none; }
+.dlp-old summary:hover { color: var(--mp-text); }
+.dlp-old[open] summary { margin-bottom: 12px; color: var(--mp-text); }
+.dlp-old ol { margin: 12px 0 0; padding-left: 20px; line-height: 1.7; }
+@media (max-width: 560px) {
+  .dlp { padding-top: 36px; }
+  .dlp-stores { grid-template-columns: 1fr; }
+}
