@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FullPage } from "./FullPage";
 import { makeSH, type T } from "../themes";
 import { IC } from "./Icons";
 import { t } from "../i18n";
@@ -9,15 +10,27 @@ import { t } from "../i18n";
  * what's new, the language picker, the Bluetooth sheet), so each of them is
  * only its content.
  */
-export function InfoSheet({ title, onClose, children, footer, T }: {
+export function InfoSheet({ title, onClose, children, footer, page, T }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   /** Pinned under the scrolling part, for a single closing button. */
   footer?: ReactNode;
+  /** A page of its own, as every page Settings opens (FullPage). */
+  page?: boolean;
   T: T;
 }) {
   const sh = makeSH(T);
+  if (page) {
+    return (
+      <FullPage title={title} onBack={onClose} T={T} z={460} scroll={false}>
+        <div style={{ overflowY: "auto", flex: 1, padding: "4px 20px 24px", WebkitOverflowScrolling: "touch" }}>
+          {children}
+        </div>
+        {footer && <div style={{ flexShrink: 0, padding: "0 20px calc(env(safe-area-inset-bottom, 0px) + 28px)" }}>{footer}</div>}
+      </FullPage>
+    );
+  }
   return (
     <div style={{ ...sh.overlay, zIndex: 420 }} onClick={onClose}>
       <div

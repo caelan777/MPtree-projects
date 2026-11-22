@@ -1,19 +1,23 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { DiscoverAd } from "./DiscoverAd";
+import { viewW } from "../utils";
 import { createPortal } from "react-dom";
 import { Browser } from "@capacitor/browser";
+import { Preferences } from "@capacitor/preferences";
 import type { T } from "../themes";
 import { t } from "../i18n";
 import { IC } from "./Icons";
 import { Sync } from "../plugins";
+import { count, countDaily } from "../counter";
 import {
-  SHELVES, POPULAR, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
+  SHELVES, POPULAR, POPULAR_ALL, loadShelf, listShelf, pageSize, loadSaved, markSaved, type Shelf,
   saveName, licenceChip, nextArt, baseName, onSavedChange, type FreeTrack,
   searchAll, artistsOf, artistTracks, type Artist,
 } from "../discover";
 
 // ─── DISCOVER ────────────────────────────────────────────────────────────────
 // Free music to download, as shelves of covers per genre, from Audius and the
-// Internet Archive, under Popular songs and Popular artists. It is the first page,
+// Internet Archive, under Popular this week and Popular artists. It is the first page,
 // left of Songs, under the same header card: the download button in the card
 // slides it in, and Back or a tab takes you back. It is not swiped, so the
 // rows of covers can scroll sideways freely. The header's search box searches both sources while you are here.
@@ -77,14 +81,28 @@ function DiscoverViewInner({
   animateInsets?: boolean;
 }) {
   const [shelves, setShelves] = useState<Record<string, FreeTrack[] | "error">>({});
+  // The week had too few free songs: the first list is the most played ever.
+  const [popAll, setPopAll] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [dl, setDl] = useState<Record<string, Dl>>({});
   const [list, setList] = useState<null | ListOf & { tracks: FreeTrack[]; more: boolean; busy: boolean; error?: boolean }>(null);
   const [failNote, setFailNote] = useState<string | null>(null);
+  // Add more music: a site of their own choosing, typed in once, then one
+  // tap opens it in the browser. Kept on the phone only.
+  const [ownLink, setOwnLink] = useState<string | null>(null);
+  const [ownEdit, setOwnEdit] = useState<string | null>(null);
+  useEffect(() => { Preferences.get({ key: OWN_KEY }).then(r => setOwnLink(r.value || null)).catch(() => {}); }, []);
+  const saveOwn = (raw: string) => {
+    const url = toLink(raw);
+    if (raw.trim() && !url) return;
+    setOwnLink(url);
+    setOwnEdit(null);
+    (url ? Preferences.set({ key: OWN_KEY, value: url }) : Preferences.remove({ key: OWN_KEY })).catch(() => {});
+  };
   // `loading`: asked to play, no sound yet (starting, or buffering).
   const [preview, setPreview] = useState<Preview | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const small = typeof window !== "undefined" && window.innerWidth < 390;
+  const small = typeof window !== "undefined" && viewW() < 390;
 
   // The song that came forward. `fly` is where Songs is, once it is saved.
   const [card, setCard] = useState<null | { track: FreeTrack; fly?: { x: number; y: number } }>(null);
@@ -123,6 +141,8 @@ function DiscoverViewInner({
     window.setTimeout(() => setPasses(p => p.filter(x => x.id !== id)), WALL_MS);
   }, [open]);
 
+  // The anonymous counter (counter.ts): Discover opened, once a day.
+  useEffect(() => { if (open) countDaily("discover"); }, [open]);
   // Gone from the screen: next time it opens on its home, not on an old list.
   useEffect(() => { if (!shown) { setCard(null); setList(null); } }, [shown]);
   useEffect(() => { onActiveChange(!!preview); }, [!!preview]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -135,12 +155,33 @@ function DiscoverViewInner({
   // ── Shelves ───────────────────────────────────────────────────────────────
   const loadAll = useCallback(() => {
     setShelves({});
+    setPopAll(false);
     [POPULAR, ...SHELVES].forEach(s => {
-      loadShelf(s)
+      const load = s === POPULAR
+        ? loadShelf(s).catch(() => loadShelf(POPULAR_ALL).then(tracks => { setPopAll(true); return tracks; }))
+        : loadShelf(s);
+      load
         .then(tracks => setShelves(prev => ({ ...prev, [s.key]: tracks })))
         .catch(() => setShelves(prev => ({ ...prev, [s.key]: "error" })));
     });
   }, []);
+
+  // Whether the phone has internet. The page says so straight away instead of
+  // showing grey rows that never fill, and loads again once it is back.
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
+  const shelvesRef = useRef(shelves);
+  useEffect(() => { shelvesRef.current = shelves; }, [shelves]);
+  useEffect(() => {
+    const down = () => setOffline(true);
+    const up = () => {
+      setOffline(false);
+      const s = shelvesRef.current;
+      if ([POPULAR, ...SHELVES].some(x => s[x.key] === "error" || s[x.key] === undefined)) loadAll();
+    };
+    window.addEventListener("offline", down);
+    window.addEventListener("online", up);
+    return () => { window.removeEventListener("offline", down); window.removeEventListener("online", up); };
+  }, [loadAll]);
 
   const started = useRef(false);
   useEffect(() => {
@@ -201,6 +242,7 @@ function DiscoverViewInner({
     a.src = track.stream;
     void a.play().catch(() => setPreview(null));
     setPreview({ track, playing: true, loading: true, pos: 0 });
+    count("discover-play");
   };
 
   /** To a point in the song, in seconds. Starts it when it is not the one playing. */
@@ -210,6 +252,7 @@ function DiscoverViewInner({
       onPreview();
       a.src = track.stream;
       setPreview({ track, playing: true, loading: true, pos: sec });
+      count("discover-play");
       const go = () => { a.currentTime = sec; a.removeEventListener("loadedmetadata", go); };
       a.addEventListener("loadedmetadata", go);
       void a.play().catch(() => setPreview(null));
@@ -273,6 +316,7 @@ function DiscoverViewInner({
       await markSaved(track.id, out.path);
       setSaved(s => ({ ...s, [track.id]: out.path! }));
       setDl(d => ({ ...d, [track.id]: "done" }));
+      count("discover-download");
       if (!flyCard(track.id)) flyCover(track, from);
       await onSaved(track, out.path);
     } catch (e) {
@@ -498,8 +542,9 @@ function DiscoverViewInner({
     </div>
   );
 
-  // Popular songs: columns of four, numbered, a column at a time.
+  // Popular this week: columns of four, numbered, a column at a time.
   const popular = shelves[POPULAR.key];
+  const popTitle = popAll ? t("Popular songs") : t("Popular this week");
   const popularSection = () => {
     if (popular === "error" || (Array.isArray(popular) && popular.length === 0)) return null;
     const cols: (FreeTrack | null)[][] = [];
@@ -507,7 +552,7 @@ function DiscoverViewInner({
     for (let i = 0; i < items.length; i += 4) cols.push(items.slice(i, i + 4));
     return (
       <div>
-        {sectionTitle(t("Popular songs"), popular ? () => openList({ title: t("Popular songs"), shelf: POPULAR }) : undefined)}
+        {sectionTitle(popTitle, popular ? () => openList({ title: popTitle, shelf: popAll ? POPULAR_ALL : POPULAR }) : undefined)}
         <div data-hscroll="" style={{ display: "flex", gap: 16, padding: "0 16px", overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain", scrollSnapType: "x proximity", scrollPaddingInline: 16 }}>
           {cols.map((col, c) => (
             <div key={c} style={{ flex: "0 0 calc(100% - 28px)", minWidth: 0, scrollSnapAlign: "end" }}>
@@ -568,6 +613,23 @@ function DiscoverViewInner({
     </button>
   );
 
+  /** Add more music: unset, a tap asks for the link; set, a tap opens it
+   *  and the pencil changes it. */
+  const ownCard = () => (
+    <div className="mp-press" role="button" onClick={() => (ownLink ? openSite(ownLink) : setOwnEdit(""))} style={{ height: 64, padding: "0 6px 0 12px", borderRadius: 16, border: `1px solid ${T.border}`, background: T.card, color: T.text, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+      <span style={{ width: 40, height: 40, borderRadius: 11, background: T.text, color: T.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IC.Plus /></span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{t("Add more music")}</span>
+        <span style={{ display: "block", fontSize: 12.5, color: T.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {ownLink ? ownLink.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : t("Add a link to a site you get music from")}
+        </span>
+      </span>
+      {ownLink ? (
+        <button onClick={e => { e.stopPropagation(); setOwnEdit(ownLink); }} aria-label={t("Change the link")} style={{ width: 40, height: 40, border: "none", background: "transparent", color: T.muted, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}><IC.Edit /></button>
+      ) : null}
+    </div>
+  );
+
   const allFailed = [POPULAR, ...SHELVES].every(s => shelves[s.key] === "error");
   const cardPreview = card && preview?.track.id === card.track.id ? preview : null;
 
@@ -583,6 +645,9 @@ function DiscoverViewInner({
   // Drawn again only when something on it changes: not on every render of
   // App, and not on each tick of the playing song's clock.
   const previewKey = preview ? `${preview.track.id}|${preview.playing}|${preview.loading}` : "";
+  // The ad's gap shows only on the page's home, with nothing over it.
+  const adActive = open && !list && !card;
+  const adBottom = preview ? playerBottom + 62 : bottomInset;
   const homeView = useMemo(() => (
           <div>
             {/* More music elsewhere: the sites themselves, never a search on
@@ -591,10 +656,13 @@ function DiscoverViewInner({
               {siteCard(t("More music on Internet Archive"), "https://archive.org/details/audio", ARCHIVE_MARK)}
               {siteCard(t("Buy music on Bandcamp"), "https://bandcamp.com", BANDCAMP_MARK)}
             </div>
-            {popularSection()}{artistsSection()}{SHELVES.map(s => shelf(s))}
+            <div style={{ padding: "10px 16px 0" }}>{ownCard()}</div>
+            {popularSection()}
+            <DiscoverAd active={adActive} topInset={topInset} bottomInset={adBottom} T={T} />
+            {artistsSection()}{SHELVES.map(s => shelf(s))}
           </div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [shelves, saved, dl, libraryNames, previewKey, small, T]);
+  ), [shelves, saved, dl, libraryNames, previewKey, small, T, ownLink, adActive, topInset, adBottom]);
   const listView = useMemo(() => !list ? null : (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px 6px" }}>
@@ -653,7 +721,13 @@ function DiscoverViewInner({
         style={{ position: "absolute", inset: 0, overflowY: "auto", touchAction: "pan-y", paddingTop: pad, paddingBottom: preview ? playerBottom + 62 + 24 : bottomInset + 12, boxSizing: "border-box", overflowAnchor: "none" }}
       >
         <div style={{ transform: shift || !scrolled ? `translateY(${shift}px)` : "none", transition: animateInsets && !scrolled ? `transform ${FOLD_MOTION}` : "none" }}>
-        {list ? listView : allFailed ? (
+        {offline && (
+          <div role="status" style={{ margin: "4px 16px 10px", padding: "10px 14px", borderRadius: 12, background: T.card, border: `1px solid ${T.border}`, color: T.text, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 10 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 13a10 10 0 0 1 5.24-2.76"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+            {t("No internet. Your own music still plays; downloads come back when you are online.")}
+          </div>
+        )}
+        {list ? listView : allFailed && !offline ? (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 14, padding: "80px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             {t("No connection. Check your internet and try again.")}
             <button onClick={loadAll} style={{ borderRadius: 12, padding: "9px 16px", fontSize: 14, fontWeight: 700, background: T.accent, color: T.playBtnFg, border: "none", cursor: "pointer", fontFamily: "inherit" }}>{t("Try again")}</button>
@@ -661,6 +735,16 @@ function DiscoverViewInner({
         ) : homeView}
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, padding: "28px 20px 8px", textAlign: "center" }}>
           {t("Music from Audius and the Internet Archive. Only songs that may be shared freely, with the artist's name kept on them.")}
+          {/* Audius' API terms ask apps to give their users these. */}
+          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", justifyContent: "center", columnGap: 14, rowGap: 2 }}>
+            {([
+              [t("Audius privacy policy"), "https://audius.co/legal/privacy-policy"],
+              [t("Audius API terms"), "https://audius.co/legal/api-terms"],
+              ["Open Music License", "https://openaudiofoundation.org/open-music-license.pdf"],
+            ] as const).map(([label, url]) => (
+              <button key={url} onClick={() => openSite(url)} style={{ border: "none", background: "transparent", color: T.muted, fontFamily: "inherit", fontSize: 12, padding: "6px 0", textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer" }}>{label}</button>
+            ))}
+          </div>
         </div>
         </div>
       </div>
@@ -701,6 +785,22 @@ function DiscoverViewInner({
           they fly into its Songs tab. */}
       {createPortal(
         <>
+          {ownEdit !== null && (
+            <div onClick={() => setOwnEdit(null)} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)", color: T.text, padding: 20 }}>
+              <form noValidate onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); saveOwn(ownEdit); }} style={{ width: "min(340px, 100%)", background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20, padding: 18, boxShadow: "0 30px 60px rgba(0,0,0,0.5)" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Add more music")}</div>
+                <div style={{ fontSize: 13, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{t("The site you get music from. A tap on the card then opens it in your browser.")}</div>
+                <input autoFocus type="url" inputMode="url" value={ownEdit} onChange={e => setOwnEdit(e.target.value)} placeholder="example.com" aria-label={t("Link")}
+                  style={{ width: "100%", boxSizing: "border-box", marginTop: 14, height: 46, borderRadius: 12, border: `1px solid ${ownEdit.trim() && !toLink(ownEdit) ? T.text : T.border}`, background: T.card, color: T.text, fontSize: 16, padding: "0 12px", fontFamily: "inherit", outline: "none" }} />
+                {ownEdit.trim() && !toLink(ownEdit) && <div style={{ fontSize: 12.5, color: T.muted, marginTop: 6 }}>{t("That is not a web address.")}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                  {ownLink && <button type="button" onClick={() => saveOwn("")} style={{ marginRight: "auto", border: "none", background: "transparent", color: T.muted, fontSize: 14, fontWeight: 600, fontFamily: "inherit", padding: "9px 4px", cursor: "pointer" }}>{t("Remove")}</button>}
+                  <button type="button" onClick={() => setOwnEdit(null)} style={{ border: "none", background: "transparent", color: T.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", padding: "9px 12px", cursor: "pointer" }}>{t("Cancel")}</button>
+                  <button type="submit" disabled={!toLink(ownEdit)} style={{ border: "none", borderRadius: 12, background: T.accent, color: T.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", padding: "9px 16px", cursor: "pointer", opacity: toLink(ownEdit) ? 1 : 0.4 }}>{t("Save")}</button>
+                </div>
+              </form>
+            </div>
+          )}
           {card && (
             <div onClick={closeCard} style={{ position: "fixed", inset: 0, zIndex: 380, display: "flex", alignItems: "center", justifyContent: "center", background: card.fly ? "rgba(0,0,0,0)" : "rgba(0,0,0,0.55)", transition: `background ${FLY_MS}ms ease, opacity 0.16s ease`, opacity: cardOut ? 0 : 1, animation: "mptree-fade-in 0.22s ease backwards", color: T.text }}>
               <style>{KEYFRAMES}</style>
@@ -740,6 +840,15 @@ function DiscoverViewInner({
                     <Seek pos={cardPreview?.pos ?? 0} dur={card.track.duration} color={T.playBtnFg} onSeek={sec => seek(card.track, sec)} />
                     <span style={{ fontSize: 11.5, fontVariantNumeric: "tabular-nums", opacity: 0.7, width: 34, flexShrink: 0 }}>{fmt(card.track.duration)}</span>
                   </div>
+                  {/* The credit the licence asks for: who made it, under which
+                      licence, and a link to the song where it lives. */}
+                  <div style={{ margin: "0 16px", height: 1, background: "currentColor", opacity: 0.14 }} />
+                  <div style={{ padding: "8px 8px 10px 16px", display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+                    <span style={{ flex: 1, minWidth: 0, opacity: 0.65, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{credit(card.track)}</span>
+                    <button onClick={() => openSite(card.track.permalink)} style={{ border: "none", background: "transparent", color: T.playBtnFg, fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", flexShrink: 0 }}>
+                      {card.track.source === "archive" ? "Internet Archive" : "Audius"}{ARROW}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -775,6 +884,18 @@ export const DiscoverView = React.memo(DiscoverViewInner, (a, b) => {
   return true;
 });
 
+const OWN_KEY = "mptree_own_source";
+/** "example.com/music" → "https://example.com/music"; null for anything that
+ *  is not a web address. */
+function toLink(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || /\s/.test(v)) return null;
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(v) ? v : "https://" + v);
+    return (u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes(".") ? u.href : null;
+  } catch { return null; }
+}
+
 const FLY_MS = 600;
 export const WALL_MS = 900;
 
@@ -804,7 +925,7 @@ const TORN = "polygon(0 12px, 9% 34px, 18% 4px, 27% 30px, 36% 8px, 45% 32px, 54%
 function Wall({ up }: { up: boolean }) {
   const cols = 6;
   const tiles = useMemo(() => {
-    const size = window.innerWidth / cols;
+    const size = viewW() / cols;
     const rows = Math.ceil((window.innerHeight + 80) / size) + 1;
     return Array.from({ length: rows * cols }, (_, i) => SLEEVES[(i * 7 + (i >> 3)) % SLEEVES.length]);
   }, []);
@@ -819,6 +940,15 @@ function Wall({ up }: { up: boolean }) {
       </div>
     </div>
   );
+}
+
+/** "© Artist · Open Music License", "© Artist · CC BY 3.0", or no © when
+ *  the song is in the public domain. */
+function credit(track: FreeTrack): string {
+  const chip = licenceChip(track.license);
+  const free = chip === "CC0" || chip === "PD";
+  const licence = track.source === "archive" ? track.license : chip === "OML" ? "Open Music License" : chip;
+  return [track.artist ? (free ? track.artist : `© ${track.artist}`) : "", licence].filter(Boolean).join(" · ");
 }
 
 const ARROW = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><polyline points="8 7 17 7 17 16"/></svg>;

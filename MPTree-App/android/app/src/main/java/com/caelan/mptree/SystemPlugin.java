@@ -63,6 +63,97 @@ public class SystemPlugin extends Plugin {
 
     private AppUpdateInfo pendingUpdate = null;
 
+    // ── Home screen widgets (WidgetRenderer) ─────────────────────────────────
+    /** The widgets' colour ("app", "black", "white", "clear"), whether they
+     *  show the cover, and the app's own colours for "app". Every MPTree
+     *  widget on the home screen is drawn again with them at once. */
+    @PluginMethod
+    public void setWidgetConfig(PluginCall call) {
+        android.content.Context ctx = getContext();
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences(WidgetRenderer.PREFS, android.content.Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor ed = prefs.edit();
+        String colour = call.getString("colour");
+        if (colour != null) ed.putString("colour", colour);
+        Boolean pro = call.getBoolean("pro");
+        if (pro != null) ed.putBoolean("pro", pro);
+        Boolean photoDisc = call.getBoolean("photoDisc");
+        if (photoDisc != null) ed.putBoolean("photoDisc", photoDisc);
+        for (String k : new String[] { "labelBg", "labelInk" }) {
+            String v = call.getString(k);
+            if (v == null) continue;
+            try { ed.putInt(k, Color.parseColor(v.trim())); } catch (Exception ignored) { /* not a colour */ }
+        }
+        // The record the app has on, as the app drew it, for the Record widget.
+        String record = call.getString("record");
+        if (record != null) {
+            try {
+                byte[] png = Base64.decode(record, Base64.DEFAULT);
+                File f = new File(ctx.getFilesDir(), WidgetRenderer.RECORD_FILE);
+                try (FileOutputStream out = new FileOutputStream(f)) { out.write(png); }
+                ed.putInt("recordVersion", prefs.getInt("recordVersion", 0) + 1);
+            } catch (Exception ignored) { /* the widget keeps the black record */ }
+        }
+        JSObject palette = call.getObject("palette");
+        if (palette != null) {
+            for (String k : new String[] { "bg", "text", "sub", "accent", "accentFg" }) {
+                String v = palette.getString(k);
+                if (v == null) continue;
+                try { ed.putInt(k, Color.parseColor(v.trim())); } catch (Exception ignored) { /* not a colour */ }
+            }
+        }
+        ed.putInt("version", prefs.getInt("version", 0) + 1);
+        ed.apply();
+        WidgetRenderer.refreshAll(ctx, true);
+        call.resolve();
+    }
+
+    /** Asks the launcher to put one of the widgets on the home screen. The
+     *  phone shows it first and asks; supported is false where it cannot. */
+    @PluginMethod
+    public void pinWidget(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean ok = false;
+        if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                android.appwidget.AppWidgetManager m = getContext().getSystemService(android.appwidget.AppWidgetManager.class);
+                if (m != null && m.isRequestPinAppWidgetSupported()) {
+                    ComponentName cn = new ComponentName(getContext(), WidgetRenderer.provider(WidgetRenderer.kindOf(call.getString("kind"))));
+                    ok = m.requestPinAppWidget(cn, null, null);
+                }
+            } catch (Exception ignored) { ok = false; }
+        }
+        ret.put("supported", ok);
+        call.resolve(ret);
+    }
+
+    // ── New music (NewMusicJob) ──────────────────────────────────────────────
+    /** Opening MPTree: the songs added since it was last open (as a time in
+     *  ms to compare with dateAdded), then all seen, and the watch set up. */
+    @PluginMethod
+    public void takeNewSongs(PluginCall call) {
+        android.content.Context ctx = getContext();
+        boolean first = !ctx.getSharedPreferences(NewMusicJob.PREFS, android.content.Context.MODE_PRIVATE).contains("seen");
+        long since = NewMusicJob.markSeen(ctx);
+        NewMusicJob.schedule(ctx);
+        JSObject ret = new JSObject();
+        ret.put("since", first ? 0 : since * 1000);
+        call.resolve(ret);
+    }
+
+    /** Once the music may be read: Android asks for notifications, once
+     *  ever, for the note about new songs. */
+    @PluginMethod
+    public void askNotifications(PluginCall call) {
+        android.content.Context ctx = getContext();
+        android.content.SharedPreferences p = ctx.getSharedPreferences(NewMusicJob.PREFS, android.content.Context.MODE_PRIVATE);
+        if (Build.VERSION.SDK_INT >= 33 && !p.getBoolean("askedNotify", false)
+                && ctx.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            p.edit().putBoolean("askedNotify", true).apply();
+            try { getActivity().requestPermissions(new String[] { "android.permission.POST_NOTIFICATIONS" }, 7302); } catch (Exception ignored) {}
+        }
+        call.resolve();
+    }
+
     @PluginMethod
     public void getDeviceInfo(PluginCall call) {
         JSObject ret = new JSObject();
@@ -318,6 +409,29 @@ public class SystemPlugin extends Plugin {
     // formats get the name only. The cache folder is emptied each time.
     /** The navigation bar: its colour (older Android; newer ones draw the page
      *  behind it) and dark or light buttons, to suit the theme. */
+    /** The colours of the home screen's wallpaper, for the icon on a drawn home
+     *  screen (Personalise, Icons). Android gives these to any app; the
+     *  wallpaper itself only with an all-files permission. Empty when there
+     *  are none (Android 8.0 and older, some live wallpapers). */
+    @PluginMethod
+    public void wallpaperColors(PluginCall call) {
+        JSArray out = new JSArray();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            try {
+                android.app.WallpaperColors wc = android.app.WallpaperManager.getInstance(getContext())
+                        .getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM);
+                if (wc != null) {
+                    for (Color c : new Color[]{ wc.getPrimaryColor(), wc.getSecondaryColor(), wc.getTertiaryColor() }) {
+                        if (c != null) out.put(String.format(Locale.ROOT, "#%06X", 0xFFFFFF & c.toArgb()));
+                    }
+                }
+            } catch (Exception ignored) { }
+        }
+        JSObject r = new JSObject();
+        r.put("colors", out);
+        call.resolve(r);
+    }
+
     @PluginMethod
     public void setNavBar(PluginCall call) {
         boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));

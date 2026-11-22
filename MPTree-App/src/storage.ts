@@ -229,7 +229,7 @@ export interface BackupParts {
 const SETTINGS_KEYS = [
   "mptree_ui_size", "mptree_lang", "mptree_update_notices",
   "mptree_mix_others", "mptree_auto_collapse",
-  "mptree_look",
+  "mptree_look", "mptree_pl_tiles", "mptree_songs_layout", "mptree_pl_layout",
 ];
 const SESSION_SETTINGS: (keyof Session)[] = ["filter", "playMode", "repeat", "repeatAll", "crossfadeMs", "playbackSpeed", "eqEnabled", "eqBandLevels", "theme"];
 
@@ -504,9 +504,14 @@ export async function scanBackupFolder(absoluteFolderPath: string): Promise<void
 
 // ── Parse ─────────────────────────────────────────────────────────────────────
 
+/** A backup's JSON. A version newer than this app knows is left for the
+ *  caller to say so (it reads `version`); only something that is no backup at
+ *  all throws. It used to take version 1 only, so every backup made since
+ *  version 2 (with parts and settings) was turned away as not a backup. */
 export function parseBackup(json: string): BackupData {
   const raw = JSON.parse(json) as Record<string, unknown>;
-  if (typeof raw !== "object" || raw === null || raw["version"] !== 1) {
+  if (typeof raw !== "object" || raw === null || typeof raw["version"] !== "number" || (raw["version"] as number) < 1
+    || !Array.isArray(raw["playlists"])) {
     throw new Error("Unsupported backup version");
   }
   return raw as unknown as BackupData;
@@ -518,6 +523,10 @@ export async function importBackup(
   data: BackupData,
   pathRemap: Map<string, string> | undefined,
   current: { playlists: Playlist[]; meta: SongMetaStore; removedSongs: Song[]; cutTracks: Song[] },
+  /** Add the backup's playlists to the ones here (one with the same id is
+   *  replaced), instead of putting the backup's in place of all of them: a
+   *  restore of a few playlists leaves the rest alone. */
+  options: { mergePlaylists?: boolean } = {},
 ): Promise<{
   playlists:    Playlist[];
   meta:         SongMetaStore;
@@ -528,15 +537,17 @@ export async function importBackup(
   // Version 1 backups hold everything but settings.
   const parts: BackupParts = data.parts ?? { playlists: true, covers: true, details: true, bin: true, settings: false };
 
-  const playlists: Playlist[] = parts.playlists
-    ? (data.playlists ?? []).map(pl => ({
-        id:         pl.id,
-        name:       pl.name,
-        songIds:    pl.songs.map(s => remap(s.path)),
-        createdAt:  pl.createdAt,
-        coverPhoto: pl.coverPhoto,
-      }))
-    : current.playlists;
+  const fromBackup: Playlist[] = (data.playlists ?? []).map(pl => ({
+    id:         pl.id,
+    name:       pl.name,
+    songIds:    pl.songs.map(s => remap(s.path)),
+    createdAt:  pl.createdAt,
+    coverPhoto: pl.coverPhoto,
+  }));
+  const incoming = new Set(fromBackup.map(p => p.id));
+  const playlists: Playlist[] = !parts.playlists ? current.playlists
+    : options.mergePlaylists ? [...current.playlists.filter(p => !incoming.has(p.id)), ...fromBackup]
+    : fromBackup;
 
   // Song details are merged per song: what the backup says wins, and a song
   // it says nothing about keeps what it has. So restoring covers alone adds

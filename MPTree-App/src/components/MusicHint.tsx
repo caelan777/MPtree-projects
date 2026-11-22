@@ -3,23 +3,21 @@ import { makeSH, type T } from "../themes";
 import { t } from "../i18n";
 import { floatCard } from "./cardStyles";
 
-// For someone new: on top of Songs, an arrow up to the Discover button with
-// "Download free music here". Where there is no Discover (the iPhone), the
-// card that says where the songs come from instead, and the sheet behind its
-// second button with every way to get songs onto the phone. Shown once, after
-// the welcome page, until it is answered.
+// For someone new: "Download free music here" in a balloon on the Discover
+// button (HintBalloon). Where there is no Discover (the iPhone), the card on
+// top of Songs that says where the songs come from instead, and the sheet
+// behind its second button with every way to get songs onto the phone. Shown
+// once, after the welcome page, until it is answered.
 
 type MusicHintProps = {
   onDone: () => void;
   onHow: () => void;
   /** Its height, so the list's virtualization can count it. */
   onHeight: (h: number) => void;
-  /** The Discover button the arrow points at. */
-  target?: React.RefObject<HTMLElement | null>;
   T: T;
 };
 
-export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps) {
+export function MusicHint({ onDone, onHow, onHeight, T }: MusicHintProps) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -31,18 +29,6 @@ export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const btn = { flex: 1, minWidth: 0, minHeight: 44, padding: "10px 8px", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } as const;
-  if (target) {
-    // The arrow itself is drawn by HintArrow, over the header, since this
-    // block sits under the header card and could not reach the button.
-    return (
-      <div ref={ref} data-hint-text="" style={{ position: "relative", padding: "22px 16px 14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: T.text }}>{t("Download free music here")}</div>
-          <button onClick={onDone} style={{ minHeight: 40, padding: "8px 16px", borderRadius: 12, border: `1px solid ${T.border}`, background: "transparent", color: T.textSub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{t("OK")}</button>
-        </div>
-      </div>
-    );
-  }
   return (
     <div ref={ref} style={{ padding: "4px 12px 12px" }}>
       <div style={{ background: T.playBtnBg, color: T.playBtnFg, borderRadius: 20, padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -59,43 +45,50 @@ export function MusicHint({ onDone, onHow, onHeight, target, T }: MusicHintProps
   );
 }
 
-/** The arrow from the hint up to the Discover button. Fixed on the screen and
- *  drawn over the header card, so it really ends at the button. It follows
- *  both ends every frame (the list scrolls, the header folds), and hides when
- *  the button is folded away or the hint has scrolled under the header. */
-export function HintArrow({ target, T }: { target: React.RefObject<HTMLElement | null>; T: T }) {
-  const [pts, setPts] = useState<null | { x1: number; y1: number; x2: number; y2: number }>(null);
+/** "Download free music here" in a balloon on the Discover button, its point
+ *  at the button. Caelan picked it (design B, 20 Nov 2026) over the long arrow
+ *  that ran from the hint over the search box. Fixed on the screen, over the
+ *  header card: it follows the button every frame, and hides when the button
+ *  is folded away. */
+export function HintBalloon({ target, onDone, T }: { target: React.RefObject<HTMLElement | null>; onDone: () => void; T: T }) {
+  const [at, setAt] = useState<null | { x: number; y: number; w: number }>(null);
   useEffect(() => {
     let raf = 0;
     let last = "";
     const tick = () => {
       const b = target.current?.getBoundingClientRect();
-      const h = document.querySelector("[data-hint-text]")?.getBoundingClientRect();
-      let next: typeof pts = null;
-      if (b && h && b.width > 20 && h.height > 0) {
-        const x2 = b.left + b.width / 2, y2 = b.bottom + 4;
-        const x1 = h.left + 34, y1 = h.top + 18;
-        if (y1 - y2 > 30) next = { x1, y1, x2, y2 };
-      }
-      const key = next ? `${Math.round(next.x1)},${Math.round(next.y1)},${Math.round(next.x2)},${Math.round(next.y2)}` : "";
-      if (key !== last) { last = key; setPts(next); }
+      const next = b && b.width > 20 && b.bottom > 0 ? { x: b.left + b.width / 2, y: b.bottom, w: window.innerWidth } : null;
+      const key = next ? `${Math.round(next.x)},${Math.round(next.y)},${next.w}` : "";
+      if (key !== last) { last = key; setAt(next); }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target]);
-  if (!pts) return null;
-  const { x1, y1, x2, y2 } = pts;
-  const d = `M ${x1} ${y1} C ${x1} ${y1 - (y1 - y2) * 0.55}, ${x2} ${y2 + (y1 - y2) * 0.45}, ${x2} ${y2}`;
-  const head = `M ${x2 - 7} ${y2 + 9} L ${x2} ${y2} L ${x2 + 7} ${y2 + 9}`;
+  if (!at) return null;
+  const width = Math.min(260, at.w - 24);
+  // The button is at the right of the header, so the balloon hangs mostly to
+  // its left, with the point under the button.
+  const left = Math.max(12, Math.min(at.x - width + 44, at.w - width - 12));
+  const point = Math.max(18, Math.min(at.x - left, width - 18));
   return (
-    <svg aria-hidden="true" style={{ position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", pointerEvents: "none", zIndex: 62, overflow: "visible" }}>
-      {/* A rim in the page colour, so the line stays readable over the search box. */}
-      <path d={d} fill="none" stroke={T.bg} strokeWidth="7" strokeLinecap="round" />
-      <path d={head} fill="none" stroke={T.bg} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-      <path d={d} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" />
-      <path d={head} fill="none" stroke={T.text} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="mp-balloon" role="dialog" aria-label={t("Download free music here")}
+      style={{ position: "fixed", left, top: at.y + 12, width, zIndex: 62, transformOrigin: `${point}px -8px`,
+        animation: "mpBalloonIn .5s cubic-bezier(.2,.9,.25,1.2) both, mpBalloonWiggle .7s ease-in-out .6s 1" }}>
+      <style>{`
+        @keyframes mpBalloonIn { from { opacity: 0; transform: translateY(-6px) scale(.86); } to { opacity: 1; transform: none; } }
+        @keyframes mpBalloonWiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-2.2deg); } 55% { transform: rotate(1.6deg); } 80% { transform: rotate(-.8deg); } }
+        @media (prefers-reduced-motion: reduce) { .mp-balloon { animation: none !important; } }
+      `}</style>
+      <div style={{ position: "absolute", left: point - 9, top: -7, width: 18, height: 18, background: T.accent, transform: "rotate(45deg)", borderRadius: 3 }} />
+      <div style={{ position: "relative", background: T.accent, color: T.playBtnFg, borderRadius: 16, padding: "14px 14px 8px", boxShadow: "0 10px 30px rgba(0,0,0,0.45)" }}>
+        <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.25, letterSpacing: "-0.01em" }}>{t("Download free music here")}</div>
+        <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4, lineHeight: 1.4 }}>{t("Songs you find here stay on your phone.")}</div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <button onClick={onDone} style={{ minHeight: 40, minWidth: 56, padding: "6px 10px", background: "transparent", border: "none", color: T.playBtnFg, fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>{t("OK")}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

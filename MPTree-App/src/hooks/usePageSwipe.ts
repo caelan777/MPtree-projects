@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import { TAB_MOTION } from "../themes";
+import { viewW } from "../utils";
 import type React from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -154,14 +156,14 @@ export function usePageSwipe({
     if (page === "songs" && dx < 0) {
       pageDraggingRef.current = true;
       setPageDragging(true);
-      setPageDragX(Math.max(dx, -window.innerWidth));
+      setPageDragX(Math.max(dx, -viewW()));
     } else if (page === "playlists" && dx > 0) {
       pageDraggingRef.current = true;
       setPageDragging(true);
-      setPageDragX(Math.min(dx, window.innerWidth));
+      setPageDragX(Math.min(dx, viewW()));
     } else if (page === "songs" && dx > 0 && discover) {
       if (!discoverOn.current) { discoverOn.current = true; setDiscoverDragging(true); }
-      discoverX.current = Math.min(dx, window.innerWidth);
+      discoverX.current = Math.min(dx, viewW());
       discover.drag(discoverX.current);
     }
   };
@@ -202,7 +204,7 @@ export function usePageSwipe({
   })();
   const panelTransition = pageDragging
     ? "none"
-    : "transform 0.2s cubic-bezier(0.22,0.61,0.36,1)";
+    : `transform ${TAB_MOTION}`;
 
   return {
     pageDragX,

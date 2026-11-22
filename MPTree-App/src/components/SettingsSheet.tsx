@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode, type MutableRefObject } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { Browser } from "@capacitor/browser";
 import { makeSH, pageGround, type T } from "../themes";
 import { IC } from "./Icons";
@@ -7,11 +8,15 @@ import { Switch } from "./Switch";
 import { FaqSheet } from "./FaqSheet";
 import { LicencesSheet } from "./LicencesSheet";
 import { LanguageSheet } from "./LanguageSheet";
+import { WidgetSheet, widgetName, widgetColourName } from "./WidgetSheet";
+import { useWidget } from "../widget";
 import { t, tn, phoneLang, LANG_NAMES, type LangPref } from "../i18n";
-import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON } from "../pro";
+import { useAdDay, useOwnsPro, adDayTimeLeft, ADS_ON, useProPrice } from "../pro";
+import { CyclingDisc } from "./ProArt";
 import { Ads } from "../plugins";
 import { useSync } from "../sync/engine";
 import { CloudIcon } from "./AccountSheet";
+import { syncStatus, syncSummary } from "../sync/status";
 
 export type UiSize = "small" | "medium" | "large";
 
@@ -34,6 +39,7 @@ const StarIcon     = () => <Svg><polygon points="12 2 15.09 8.26 22 9.27 17 14.1
 const ShieldIcon   = () => <Svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></Svg>;
 const FileIcon     = () => <Svg><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></Svg>;
 const BrushIcon    = () => <Svg><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></Svg>;
+const WidgetIcon   = () => <Svg><rect x="3" y="6" width="18" height="12" rx="4"/><circle cx="8" cy="12" r="2"/><path d="M13 11h5M13 14h3"/></Svg>;
 const BroomIcon    = () => <Svg><path d="M19 3l-7 7"/><path d="M12 10l-6 2-3 9 9-3 2-6z"/><path d="M8 15l-2 2"/></Svg>;
 const InfoIcon     = () => <Svg><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Svg>;
 /** A note with a flick on its stem, for TikTok, without being its logo. */
@@ -141,6 +147,9 @@ type SettingsSheetProps = {
   onRate?: () => void;
   onPrivacy: () => void;
   onClose: () => void;
+  /** Android back: a page opened from here closes first (true), so back
+   *  lands in Settings, not on the songs (Caelan, 21 Nov). */
+  backRef?: MutableRefObject<(() => boolean) | null>;
   T: T;
 };
 
@@ -153,10 +162,11 @@ export function SettingsSheet({
   uiSize, onSetUiSize, lang, onSetLang, updateNotices, onSetUpdateNotices,
   mixOthers, onSetMix,
   onFeedback, onRate, onPrivacy,
-  onClose, T,
+  onClose, backRef, T,
 }: SettingsSheetProps) {
   const sh = makeSH(T);
   const adDay = useAdDay();
+  const price = useProPrice();
   const ownsPro = useOwnsPro();
   const sync = useSync();
   const moving = sync.phase === "on" && !sync.pausedNoPro ? sync.songs.moving : undefined;
@@ -175,7 +185,19 @@ export function SettingsSheet({
   }, []);
   // Sheets opened from here stack on top of this one, so closing them lands
   // you back where you were in Settings rather than on the song list.
-  const [sub, setSub] = useState<null | "language" | "about">(null);
+  const [sub, setSub] = useState<null | "language" | "about" | "widget">(null);
+  // About's own pages (Questions, licences), held here so back can close them.
+  const [aboutSub, setAboutSub] = useState<null | "faq" | "licences">(null);
+  useEffect(() => {
+    if (!backRef) return;
+    backRef.current = () => {
+      if (aboutSub) { setAboutSub(null); return true; }
+      if (sub) { setSub(null); return true; }
+      return false;
+    };
+    return () => { backRef.current = null; };
+  }, [backRef, sub, aboutSub]);
+  const widget = useWidget();
 
   // Live remaining-time label for an active fixed-clock timer.
   const [now, setNow] = useState(() => Date.now());
@@ -275,15 +297,16 @@ export function SettingsSheet({
               cursor: "pointer", fontFamily: "inherit",
             }}
           >
+            {/* Without Pro, a record turning: what Pro is mostly about. */}
+            {!pro && <CyclingDisc size={48} />}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 15.5, fontWeight: 800 }}>
-                {pro ? t("MPTree Pro is on") : t("Get MPTree Pro")}
+                {pro ? t("MPTree Pro is on") : t("MPTree Pro")}
               </span>
               <span style={{ display: "block", fontSize: 12.5, opacity: 0.72, marginTop: 2, lineHeight: 1.4 }}>
                 {adDay.state === "live" && !ownsPro ? t("Pro for a day, {time} left.", { time: adDayTimeLeft(adDay.until) })
                   : pro ? t("Thank you for supporting MPTree.")
-                  : ADS_ON ? t("Free for a day with an ad, or pay once.")
-                  : t("Records, shades and more. Pay once.")}
+                  : t("Records, styles, sync. {price}, once.", { price })}
               </span>
             </span>
             <IC.ChevronR />
@@ -296,21 +319,16 @@ export function SettingsSheet({
             onClick={onOpenAccount}
             icon={<CloudIcon />}
             label={t("Account & sync")}
-            sub={sync.phase === "on"
-              ? (sync.pausedNoPro ? t("Paused. Syncing is part of MPTree Pro.") : sync.account?.email)
-              : pro ? t("Sign in to sync your songs between your devices.") : t("Your music on all your devices.")}
+            sub={syncSummary(sync, pro)}
             tag={!pro && <ProTag T={T} />}
           />
           {/* While a song is on its way from or to another device. */}
           {moving && (
-            <div style={{ padding: "10px 16px 12px", borderTop: `1px solid ${T.border}` }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5 }}>
-                <span style={{ fontWeight: 700, color: T.text, flexShrink: 0 }}>{t("Syncing songs between your devices")}</span>
-                <span style={{ color: T.muted, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{moving.name}</span>
-              </div>
-              <div style={{ height: 3, background: T.border, borderRadius: 2, marginTop: 7, overflow: "hidden" }}>
+            <div style={{ padding: "8px 16px 12px 52px" }}>
+              <div style={{ height: 3, background: T.border, borderRadius: 2, overflow: "hidden" }}>
                 <div style={{ width: `${moving.total > 0 ? Math.min(100, Math.round(moving.done / moving.total * 100)) : 0}%`, height: "100%", background: T.accent, transition: "width 0.3s" }} />
               </div>
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 6 }}>{syncStatus(sync).progress?.note}</div>
             </div>
           )}
         </Section>
@@ -323,8 +341,16 @@ export function SettingsSheet({
             onClick={onOpenLook}
             icon={<BrushIcon />}
             label={t("Personalise")}
-            sub={t("Styles, your own background, colours, icon and record.")}
+            sub={t("Styles, background, colours, stickers, icon and player.")}
             tag={!pro && <ProTag T={T} />}
+          />
+          {/* The home screen widgets: their own page, with the button that
+              puts one on the home screen. */}
+          <Row T={T}
+            onClick={() => setSub("widget")}
+            icon={<WidgetIcon />}
+            label={t("Home screen widget")}
+            sub={`${widgetName(widget.kind)} · ${widgetColourName(widget.colour)}`}
           />
           {/* Size: text and rows together. One control rather than two: a
               bigger font in a row that stays the same height is a row that
@@ -480,13 +506,14 @@ export function SettingsSheet({
       {/* Outside the sheet's own box so they are not moved by its drag, and
           stopped here so a tap on their backdrop closes only them. */}
       <div onClick={e => e.stopPropagation()}>
+        {sub === "widget" && <WidgetSheet T={T} pro={pro} onNeedPro={onOpenPro} onClose={() => setSub(null)} />}
         {sub === "language" && (
           <LanguageSheet value={lang} onPick={v => { onSetLang(v); setSub(null); }} onClose={() => setSub(null)} T={T} />
         )}
         {sub === "about" && (
           <AboutPage
             onShowTutorial={onShowTutorial} onFeedback={onFeedback} onRate={onRate} onPrivacy={onPrivacy}
-            adPrivacy={adPrivacy} onClose={() => setSub(null)} T={T}
+            adPrivacy={adPrivacy} sub={aboutSub} setSub={setAboutSub} onClose={() => { setAboutSub(null); setSub(null); }} T={T}
           />
         )}
       </div>
@@ -500,7 +527,9 @@ export function SettingsSheet({
 // one row for it. The questions and the licences open on top of this page,
 // inside it, so closing them comes back here.
 
-function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, onClose, T }: {
+function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, sub, setSub, onClose, T }: {
+  sub: null | "faq" | "licences";
+  setSub: (s: null | "faq" | "licences") => void;
   onShowTutorial: () => void;
   onFeedback: () => void;
   onRate?: () => void;
@@ -509,14 +538,13 @@ function AboutPage({ onShowTutorial, onFeedback, onRate, onPrivacy, adPrivacy, o
   onClose: () => void;
   T: T;
 }) {
-  const sh = makeSH(T);
-  const [sub, setSub] = useState<null | "faq" | "licences">(null);
   const column = { width: "100%", maxWidth: 560, margin: "0 auto", boxSizing: "border-box" } as const;
   return (
-    <div style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
-      <div style={{ ...column, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 16px) 20px 4px", flexShrink: 0 }}>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: pageGround(T), zIndex: 450, display: "flex", flexDirection: "column" }}>
+      <PageInStyle />
+      <div style={{ ...column, display: "flex", alignItems: "center", gap: 2, padding: "calc(env(safe-area-inset-top, 0px) + 8px) 10px 4px", flexShrink: 0 }}>
+        <BackButton onClick={onClose} T={T} />
         <span style={{ fontSize: 20, fontWeight: 800, color: T.text, letterSpacing: "-0.01em" }}>{t("About MPTree")}</span>
-        <button onClick={onClose} style={sh.xBtn} aria-label={t("Close")}><IC.Close /></button>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>

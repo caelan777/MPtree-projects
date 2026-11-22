@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BackButton, PAGE_IN, PageInStyle } from "./FullPage";
 import { Loading } from "./Loading";
 import type { T } from "../themes";
 import { t, tn } from "../i18n";
@@ -79,14 +80,13 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 410, display: "flex", flexDirection: "column" }}>
+    <div className={PAGE_IN} style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 410, display: "flex", flexDirection: "column" }}>
+      <PageInStyle />
       {/* The app draws edge to edge, so a full-screen page has to step over the
           status bar itself. Without this the close button sat under the clock. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px", borderBottom: deleted ? "none" : `1px solid ${T.border}` }}>
-        <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: T.muted, padding: 4 }}>
-          <IC.Close />
-        </button>
-        <span style={{ fontSize: 17, fontWeight: "700", color: T.text }}>{t("Removed Songs")}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px 10px", borderBottom: deleted ? "none" : `1px solid ${T.border}` }}>
+        <BackButton onClick={onClose} T={T} />
+        <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: T.text }}>{t("Removed Songs")}</span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {!showDeleted && <span style={{ fontSize: 13, color: T.muted }}>{tn(removedSongs.length, "{n} song", "{n} songs")}</span>}
           {!showDeleted && removedSongs.length > 0 && (
@@ -104,7 +104,7 @@ export function BinView({ removedSongs, meta, onRestore, onDeleteForever, onEmpt
         <div style={{ padding: "0 16px 12px", borderBottom: `1px solid ${T.border}` }}>
           <div role="tablist" style={{ display: "flex", gap: 2, background: T.surface, borderRadius: 12, padding: 3, border: `1px solid ${T.border}` }}>
             {tabBtn("bin", t("In the bin"), removedSongs.length)}
-            {tabBtn("deleted", t("Permanently deleted"), deleted.length)}
+            {tabBtn("deleted", t("Deleted here"), deleted.length)}
           </div>
         </div>
       )}
@@ -203,15 +203,15 @@ function DeletedList({ deleted, onRestore, T }: { deleted: Deleted[]; onRestore:
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: T.muted, gap: 10, padding: "0 32px", textAlign: "center" }}>
         <IC.Bin />
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{t("Nothing permanently deleted")}</div>
-        <div style={{ fontSize: 13, lineHeight: 1.5 }}>{t("A song you delete permanently stays on your other devices. It shows up here, and you can get it back from them.")}</div>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{t("Nothing deleted here")}</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5 }}>{t("Delete a song permanently, and it's only gone from this device. Your other devices keep it, and it shows up here so you can get it back.")}</div>
       </div>
     );
   }
   return (
     <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
       <div style={{ padding: "10px 16px 6px", fontSize: 12, color: T.muted, lineHeight: 1.5, display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <span style={{ flex: 1 }}>{t("Deleted from this device. Your other devices still have them, so you can get them back.")}</span>
+        <span style={{ flex: 1 }}>{t("Deleted from this device only. Your other devices still have them. Get one back, and it's copied here again.")}</span>
         {back.length > 1 && (
           <button onClick={() => onRestore(back.map(d => d.fp))}
             style={{ flexShrink: 0, padding: "6px 11px", background: T.dim, border: "none", borderRadius: 8, color: T.text, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>

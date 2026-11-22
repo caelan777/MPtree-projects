@@ -4,7 +4,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -149,6 +151,25 @@ public class AudioPlayerPlugin extends Plugin {
         return (val != null && !val.isEmpty()) ? val : def;
     }
 
+    // ── On the main thread ───────────────────────────────────────────────────
+    // The service's players, its crossfade and all its timers run on the main
+    // thread; Capacitor hands plugin calls to a thread of its own. Doing the
+    // work there raced with the fade: a next pressed during a crossfade could
+    // land between two steps of it, the fade timer then started the next song
+    // a second time, and it played twice over itself (Caelan, 21 Nov). Every
+    // call that changes playback goes to the main thread, in the order the
+    // app sent them, and answers the app once it is done.
+    private final Handler main = new Handler(Looper.getMainLooper());
+
+    private interface Work { void run() throws Exception; }
+
+    private void onMain(PluginCall call, Work work) {
+        main.post(() -> {
+            try { work.run(); call.resolve(); }
+            catch (Exception e) { call.reject("Playback failed: " + e.getMessage(), e); }
+        });
+    }
+
     // ── Plugin methods ───────────────────────────────────────────────────────
     @PluginMethod
     public void play(PluginCall call) {
@@ -157,24 +178,25 @@ public class AudioPlayerPlugin extends Plugin {
         String title  = getStringOrDefault(call, "title",  "Unknown");
         String artist = getStringOrDefault(call, "artist", "Unknown");
         if (path == null || path.isEmpty()) { call.reject("path is required"); return; }
-        try {
-            playerService.play(path, title, artist, call.getInt("cutFrom", 0), call.getInt("cutTo", 0));
-            call.resolve();
-        } catch (Exception e) {
-            call.reject("Playback failed: " + e.getMessage(), e);
-        }
+        final boolean blend = call.getBoolean("blend", false);
+        final int cutFrom = call.getInt("cutFrom", 0), cutTo = call.getInt("cutTo", 0);
+        onMain(call, () -> {
+            // blend: the app's next and previous, which crossfade when it is on.
+            if (blend) playerService.playBlended(path, title, artist);
+            else playerService.play(path, title, artist, cutFrom, cutTo);
+        });
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
-        if (bound) playerService.pause();
-        call.resolve();
+        if (!bound) { call.resolve(); return; }
+        onMain(call, () -> playerService.pause());
     }
 
     @PluginMethod
     public void resume(PluginCall call) {
-        if (bound) playerService.resume();
-        call.resolve();
+        if (!bound) { call.resolve(); return; }
+        onMain(call, () -> playerService.resume());
     }
 
     @PluginMethod
@@ -208,8 +230,9 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void seekTo(PluginCall call) {
-        if (bound) playerService.seekTo(call.getInt("milliseconds", 0));
-        call.resolve();
+        if (!bound) { call.resolve(); return; }
+        final int ms = call.getInt("milliseconds", 0);
+        onMain(call, () -> playerService.seekTo(ms));
     }
 
     /**
@@ -270,8 +293,9 @@ public class AudioPlayerPlugin extends Plugin {
                 return;
             }
         }
-        playerService.setQueue(tracks, currentIndex);
-        call.resolve();
+        // Read on the main thread too (next, the fade, the widget): a queue
+        // swapped from here halfway through one of those could throw there.
+        onMain(call, () -> playerService.setQueue(tracks, currentIndex));
     }
 
     /**
@@ -283,16 +307,16 @@ public class AudioPlayerPlugin extends Plugin {
     @PluginMethod
     public void setPlayMode(PluginCall call) {
         String mode = call.getString("mode", "off");
-        if (bound) playerService.setPlayMode(mode); else pendingMode = mode;
-        call.resolve();
+        if (!bound) { pendingMode = mode; call.resolve(); return; }
+        onMain(call, () -> playerService.setPlayMode(mode));
     }
 
     /** milliseconds: 0 disables crossfade entirely. */
     @PluginMethod
     public void setCrossfadeDuration(PluginCall call) {
         int ms = call.getInt("milliseconds", 0);
-        if (bound) playerService.setCrossfadeDuration(ms); else pendingCrossfade = ms;
-        call.resolve();
+        if (!bound) { pendingCrossfade = ms; call.resolve(); return; }
+        onMain(call, () -> playerService.setCrossfadeDuration(ms));
     }
 
     /** speed: playback rate multiplier. 1.0 == normal. Clamped natively. */
@@ -301,8 +325,7 @@ public class AudioPlayerPlugin extends Plugin {
         Double speed = call.getDouble("speed", 1.0);
         float value = speed != null ? speed.floatValue() : 1.0f;
         if (!bound) { pendingSpeed = value; call.resolve(); return; }
-        playerService.setPlaybackSpeed(value);
-        call.resolve();
+        onMain(call, () -> playerService.setPlaybackSpeed(value));
     }
 
     @PluginMethod
@@ -396,8 +419,8 @@ public class AudioPlayerPlugin extends Plugin {
     @PluginMethod
     public void setEqualizerEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
-        if (bound) playerService.setEqualizerEnabled(enabled);
-        call.resolve();
+        if (!bound) { call.resolve(); return; }
+        onMain(call, () -> playerService.setEqualizerEnabled(enabled));
     }
 
     /** levels: array of millibel ints, one per band, in the same order as
@@ -416,8 +439,7 @@ public class AudioPlayerPlugin extends Plugin {
             call.reject("Invalid levels payload: " + e.getMessage(), e);
             return;
         }
-        playerService.setEqualizerBandLevels(levels);
-        call.resolve();
+        onMain(call, () -> playerService.setEqualizerBandLevels(levels));
     }
 
     /**

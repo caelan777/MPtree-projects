@@ -7,10 +7,10 @@ import { collectShared, restoreShared } from "../storage";
 import { hasPro, subscribePro, ownsPro, proIsFor, proLost, setAccountPro, forgetAccountPro, PRO_MODE } from "../pro";
 import { findSuspects } from "../cleanup";
 import type { Song, SongMeta, Playlist } from "../types";
-import { openDrive, type Drive, type DriveFile } from "./drive";
+import { openDrive, isDriveFull, type Drive, type DriveFile } from "./drive";
 import {
   buildLocal, merge, apply, missingFrom, coverRefs, coverHash, same, fileOf, songSig, sigsOf, isCopy, namesOf, nameSize,
-  markDeleted, markRestored, deletedBy,
+  markDeleted, markRestored, deletedBy, noteOrphaned,
   type LibDoc, type Applied, type Inventory,
 } from "./model";
 import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type Session } from "./rtc";
@@ -50,7 +50,7 @@ import { startOffer, answerOffer, acceptAnswer, opened, close, runTransfer, type
 // Nothing runs while the app is in the background: Android freezes the WebView
 // there, which is fine, because both phones being open is the point.
 
-const MAX_DEVICES = 3;
+export const MAX_DEVICES = 3;
 const DEVICES = "devices.json";
 const LIB = "library.json";
 const COVERS = "covers.json";
@@ -103,8 +103,8 @@ const RELAY_BUDGET = 1024 * 1024 * 1024;
 const RELAY_MAX_AGE = 30 * 24 * 60 * 60_000;
 /** After a direct connection fails, use Drive for this long. */
 const DIRECT_PAUSE = 10 * 60_000;
-/** Always left free on a phone. */
-const ROOM_MARGIN = 500 * 1024 * 1024;
+/** Always left free on a phone. The account page says so. */
+export const ROOM_MARGIN = 500 * 1024 * 1024;
 /** At most this much over mobile data a day, when that is allowed at all. */
 export const MOBILE_DAILY = 500 * 1024 * 1024;
 /** A phone of the same name not used for this long is replaced on joining. */
@@ -146,7 +146,7 @@ export type SyncState = {
   saving: boolean;
   lastSaved?: number;
   /** Something went wrong on the last try, in plain words. */
-  problem?: "offline" | "drive" | "signin" | null;
+  problem?: "offline" | "drive" | "signin" | "full" | null;
   /** What the failed round actually said, for whoever has to find out why. */
   problemDetail?: string;
   songs: {
@@ -328,11 +328,31 @@ async function readFile<T>(name: string): Promise<T | null> {
   return body;
 }
 async function writeFile(name: string, body: unknown): Promise<void> {
-  const id = await connect().write(name, body, files.get(name)?.id);
+  let id: string;
+  try {
+    id = await connect().write(name, body, files.get(name)?.id);
+  } catch (e) {
+    if (!isDriveFull(e) || !(await makeRoom())) throw e;
+    id = await connect().write(name, body, files.get(name)?.id);
+  }
   const f = { id, name, modifiedTime: new Date().toISOString() };
   files.set(name, f);
   cache.delete(name);
 }
+/** The person's Google storage is full. The songs waiting in Drive for other
+ *  phones are copies (the phone that sent them still has them), so they go:
+ *  then the small files that keep the library in step fit again. Resolves
+ *  whether there was anything to clear. */
+async function makeRoom(): Promise<boolean> {
+  const waiting = [...files.values()].filter(f => f.name.startsWith("relay-"));
+  if (!waiting.length) return false;
+  for (const f of waiting) await removeFile(f.name).catch(() => {});
+  return true;
+}
+/** Left free in the person's Google storage: songs only go through Drive
+ *  while it has at least this much room besides, so MPTree never fills it. */
+export const DRIVE_KEEP_FREE = 1024 * 1024 * 1024;
+
 async function removeFile(name: string): Promise<void> {
   const f = files.get(name);
   if (!f) return;
@@ -443,7 +463,7 @@ let pendingJoin: StoredAccount | null = null;
 /** Signing in comes first, before buying Pro: the account is where Pro is
  *  kept. An account that has Pro already gives it to this device; without
  *  it the device is signed in and paused until Pro is bought. */
-export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed"> {
+export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "full" | "failed"> {
   set({ phase: "joining", problem: null, removedWhy: undefined });
   try {
     const r = await Account.signIn();
@@ -456,16 +476,19 @@ export async function signIn(): Promise<"ok" | "cancelled" | "limit" | "failed">
     if (!hasPro()) {
       // Bought on another device, maybe with another Google Play account.
       await listFiles();
-      if (takesPro(await readFile<ProFile>(PRO))) setAccountPro(true);
+      const note = await readFile<ProFile>(PRO);
+      if (takesPro(note) && !orphan(note, await devicesNow())) setAccountPro(true);
     }
     pendingJoin = { email: me.email, name: me.name, photo: me.photo, since: Date.now(), mobileData: false };
     set({ account: { email: me.email, name: me.name, photo: me.photo }, deviceId });
     return await nextJoinStep();
-  } catch {
+  } catch (e) {
     pendingJoin = null;
     if (!stored) setAccountPro(false);
-    set({ phase: "off", problem: "signin" });
-    return "failed";
+    // Keep what went wrong: "check your connection" alone hid a Drive refusal.
+    const full = isDriveFull(e);
+    set({ phase: "off", problem: full ? "full" : "signin", problemDetail: errorDetail(e) });
+    return full ? "full" : "failed";
   }
 }
 
@@ -501,6 +524,14 @@ async function standsInFor(id: string): Promise<void> {
   if (!id || id === deviceId || inherit.includes(id)) return;
   inherit = [...inherit, id];
   await writeJson(KEY_INHERIT, inherit);
+  // Pro that phone put in the account is this phone's now. Left under the
+  // old id it read as left behind by a phone gone from the account (orphan),
+  // and went: a reinstall took Pro out of the account, and a phone without
+  // Pro of its own (a test build) stopped syncing (Caelan, 22 Nov).
+  try {
+    const note = await readFile<ProFile>(PRO);
+    if (note?.by === id) await writeFile(PRO, { ...note, by: deviceId });
+  } catch { /* looked at again in the next round */ }
 }
 
 /** What was deleted for good on the devices this one stands in for stays
@@ -683,6 +714,12 @@ function kick(ms: number) {
   libTimer = setTimeout(() => { libDue = 0; void libraryCycle(); }, ms);
 }
 
+/** "Try now" on the account page: the next round straight away, instead of
+ *  within the minute it would come by itself. */
+export function retryNow(): void {
+  kick(0);
+}
+
 /** A round every minute while the app is open and signed in, so a change made
  *  on another phone shows up here without anyone doing anything. */
 function keepChecking() {
@@ -704,6 +741,13 @@ async function checkAccountPro() {
     await listFiles();
     const note = await readFile<ProFile>(PRO);
     if (await takeBack(note)) { await removeFile(PRO).catch(() => {}); return; }
+    // Left behind by a phone that is gone from the account: no Pro from it,
+    // and it goes. Only by a phone that is on the list itself.
+    const devices = await devicesNow();
+    if (orphan(note, devices)) {
+      if (devices.some(d => d.id === deviceId)) await removeFile(PRO).catch(() => {});
+      return;
+    }
     if (stored && takesPro(note) && (note.by !== deviceId || !ownsPro())) setAccountPro(true);
   } catch { /* next time */ }
 }
@@ -718,11 +762,28 @@ const givesPro = async () => ownsPro() && !!stored && await proIsFor(stored.emai
 const takeBack = async (note: ProFile | null) =>
   note?.by === deviceId && !(await givesPro()) && (ownsPro() || proLost());
 
+/** A note from a phone that is no longer on the account: it signed out, or
+ *  was taken off. Only the phone that wrote the note can take it back when its
+ *  Pro goes (refunded), and off the account it never will, so the note no
+ *  longer says anything. Pro in the account lasts while the phone that bought
+ *  it is on it. An empty or unread list proves nothing, so it never counts. */
+const orphan = (note: ProFile | null, devices: Device[]): boolean =>
+  noteOrphaned(note?.by, devices.map(d => d.id));
+
+/** The phones on the account, when its list can be read. */
+async function devicesNow(): Promise<Device[]> {
+  return files.has(DEVICES) ? await readDevices().catch(() => []) : [];
+}
+
 /** Keeps pro.json right: there while a device that bought Pro for this
  *  account is on it, gone when the one that put it there no longer has it
  *  (refunded). Every other device on the account has Pro while it is there. */
-async function syncPro() {
+async function syncPro(devices: Device[]) {
   let note = await readFile<ProFile>(PRO);
+  if (orphan(note, devices)) {
+    await removeFile(PRO).catch(() => {});
+    note = null;
+  }
   if (await givesPro()) {
     if (!note || (note.via !== proVia && proVia === "play")) {
       note = { by: deviceId, at: Date.now(), via: proVia };
@@ -785,6 +846,13 @@ async function scanAll(): Promise<Song[]> {
   return songs.map(s => ({ ...s, id: s.uri }));
 }
 
+/** A short line saying what failed: a Drive status and reason, or the
+ *  sign-in plugin's code and message. Shown small, so it can be reported. */
+export function errorDetail(e: unknown): string {
+  const err = e as { code?: string; status?: number; reason?: string; message?: string };
+  return [err?.status ?? err?.code, err?.reason || err?.message || String(e)].filter(Boolean).join(" ").slice(0, 160);
+}
+
 async function libraryCycle(): Promise<void> {
   if (!host || !accountOn()) return;
   if (running) { again = true; return; }
@@ -814,7 +882,7 @@ async function libraryCycle(): Promise<void> {
       return;
     }
     set({ devices });
-    await syncPro();
+    await syncPro(devices);
     if (!accountOn()) return;
     // "Still here", now and then, for "last used" on the other phones.
     const mine = files.get(peer(deviceId));
@@ -907,10 +975,10 @@ async function libraryCycle(): Promise<void> {
     });
     await songsCycle();
   } catch (e) {
-    const err = e as { code?: string; status?: number; reason?: string; message?: string };
+    const err = e as { code?: string };
     set({
-      problem: err?.code === "NEEDS_SIGN_IN" ? "signin" : "drive",
-      problemDetail: [err?.status, err?.reason || err?.message || String(e)].filter(Boolean).join(" ").slice(0, 160),
+      problem: err?.code === "NEEDS_SIGN_IN" ? "signin" : isDriveFull(e) ? "full" : "drive",
+      problemDetail: errorDetail(e),
     });
   } finally {
     set({ saving: false });
@@ -1605,6 +1673,8 @@ async function leaveFor(to: string, theirs: Inventory) {
   const waiting = [...files.values()].filter(f => f.name.startsWith(prefix));
   let used = waiting.reduce((n, f) => n + Number(f.size ?? 0), 0);
   const already = new Set(waiting.map(f => f.appProperties?.fp));
+  // Room in the person's Google storage, asked once, when a song is about to go.
+  let free: number | null | undefined;
   for (const [fp] of Object.entries(theirs)) {
     if (!active() || session) break;
     if (already.has(fp)) continue;
@@ -1615,6 +1685,8 @@ async function leaveFor(to: string, theirs: Inventory) {
     if ((await readFile<InvFile>(inv(to)))?.fps[fp]) continue;
     const song = find(fileOf(fp));
     if (!song || used + song.size > RELAY_BUDGET) continue;
+    if (free === undefined) free = await connect().space().catch(() => null);
+    if (free !== null && free - song.size < DRIVE_KEEP_FREE) { setSongs({ note: "drive-full" }); break; }
     if (onMobile && (await mobileUsed()) + song.size > MOBILE_DAILY) { setSongs({ note: "mobile-limit" }); break; }
     const tid = "up-" + fp;
     const to_ = nameOf(to);
@@ -1629,9 +1701,10 @@ async function leaveFor(to: string, theirs: Inventory) {
       });
       files.set(prefix + fp, { id, name: prefix + fp, modifiedTime: new Date().toISOString(), size: String(song.size), appProperties: { fp, name: song.name, from: deviceId } });
       used += song.size;
+      if (free !== null) free -= song.size;
       await countMobile(song.size);
     } catch (e) {
-      if (/storageQuotaExceeded|quota/i.test(String((e as Error)?.message))) { setSongs({ note: "drive-full" }); break; }
+      if (isDriveFull(e)) { setSongs({ note: "drive-full" }); break; }
     } finally {
       sub.remove();
     }

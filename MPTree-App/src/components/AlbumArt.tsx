@@ -31,6 +31,9 @@ type AlbumArtProps = {
   /** MediaStore album id, when the song has one. Lets every track on an album
    *  share a single cover lookup. */
   albumId?: number;
+  /** For the grid layouts: a bigger picture, and corners of this size. */
+  big?: boolean;
+  radius?: number;
   T: T;
 };
 
@@ -52,11 +55,11 @@ export function PlayingBars({ size, color, still = false }: { size: number; colo
   );
 }
 
-export function AlbumArt({ title, size, active = false, playing = false, customPhoto, songPath, albumId, T }: AlbumArtProps) {
+export function AlbumArt({ title, size, active = false, playing = false, customPhoto, songPath, albumId, big = false, radius: corner, T }: AlbumArtProps) {
   // The user's own photo always wins, and suppresses the lookup entirely.
-  const embedded = useAlbumArt(songPath, albumId, !customPhoto);
+  const embedded = useAlbumArt(songPath, albumId, !customPhoto, big);
   const photo = customPhoto || embedded || undefined;
-  const radius = size * 0.22;
+  const radius = corner ?? size * 0.22;
   // 0.58 of the tile. The note sat at half the tile and read as small and
   // tentative against the 48px rows.
   const glyph = Math.round(size * 0.58);
@@ -67,9 +70,9 @@ export function AlbumArt({ title, size, active = false, playing = false, customP
       overflow: "hidden",
       border: active ? `2px solid ${T.accent}` : "2px solid transparent",
       boxShadow: active ? `0 0 0 1px ${T.accent}33` : "none",
-      background: photo ? "transparent" : T.dim,
+      background: photo ? "transparent" : (T.coverBg ?? T.dim),
       display: "flex", alignItems: "center", justifyContent: "center",
-      transition: "border-color 0.2s", userSelect: "none", color: T.muted,
+      transition: "border-color 0.2s", userSelect: "none", color: T.coverFg ?? T.muted,
     }}>
       {photo
         ? <img src={photo} alt={title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />

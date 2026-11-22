@@ -42,6 +42,9 @@ export type MusicScannerPlugin = {
   // screen, meaning "ask again once they have flipped it".
   setAsRingtone(options: { path: string }):
     Promise<{ ok: boolean; needsPermission?: boolean; reason?: string }>;
+  // The file the phone rings with now, when it is a song on the phone (a tone
+  // of the phone's own has no path here).
+  getRingtone(): Promise<{ path?: string }>;
   // Lyrics from a sidecar file next to the audio (song.lrc / song.txt). Always
   // local: see the note in MusicScannerPlugin.getLyrics.
   getLyrics(options: { path: string }): Promise<{ lyrics: string; source?: string }>;
@@ -50,7 +53,7 @@ export type MusicScannerPlugin = {
 export type AudioPlayerPlugin = {
   /** cutFrom and cutTo: only this part of the file is played (a cut that is
    *  not a file of its own). The service starts and ends there by itself. */
-  play(options: { path: string; title?: string; artist?: string; cutFrom?: number; cutTo?: number }): Promise<void>;
+  play(options: { path: string; title?: string; artist?: string; cutFrom?: number; cutTo?: number; blend?: boolean }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   getCurrentPosition(): Promise<{ position: number }>;
@@ -90,6 +93,9 @@ export type SystemPlugin = {
   shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;
   /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
   setNavBar(options: { light: boolean; color?: string }): Promise<void>;
+  /** Up to three colours of the home screen's wallpaper ("#rrggbb"), as
+   *  Android gives them to any app; empty when it gives none. */
+  wallpaperColors(): Promise<{ colors: string[] }>;
   getDeviceInfo(): Promise<{ manufacturer: string; model: string; androidVersion: string; sdk: number }>;
   /** 0.9, 1 or 1.15, on top of the phone's own font size. */
   setTextZoom(options: { factor: number }): Promise<void>;
@@ -113,6 +119,20 @@ export type SystemPlugin = {
    *  it. Resolves supported:false when the launcher cannot pin shortcuts. The
    *  launcher shows its own confirmation; this does not wait for it. */
   pinPhotoShortcut(options: { dataUrl: string; label: string }): Promise<{ supported: boolean }>;
+  /** The home screen widgets' colour, whether they show the cover, and the
+   *  app's own colours for "Same as app" (WidgetRenderer.java). */
+  setWidgetConfig(options: {
+    colour?: string; palette?: Record<string, string>; pro?: boolean;
+    /** The record on, as a PNG in base64, with its label's colours. */
+    record?: string; labelBg?: string; labelInk?: string; photoDisc?: boolean;
+  }): Promise<void>;
+  /** Asks the launcher to add one of the widgets ("bar", "card", "record",
+   *  "pill"). supported:false where the launcher cannot. */
+  pinWidget(options: { kind: string }): Promise<{ supported: boolean }>;
+  /** The time (ms) MPTree was last opened, for new songs since; 0 the first time. */
+  takeNewSongs(): Promise<{ since: number }>;
+  /** Android asks for notifications, once ever (new-songs notes). */
+  askNotifications(): Promise<void>;
 };
 
 /** Google Play Billing, for MPTree Pro. Only works in a build Play installed. */
@@ -134,6 +154,10 @@ export type AdsPlugin = {
   /** Whether Settings must offer a way to change the consent answer. */
   privacyOptions(): Promise<{ required: boolean }>;
   showPrivacyOptions(): Promise<void>;
+  /** The native ad on Discover: drawn by Android over a gap the page leaves. */
+  loadNative(options: { adUnitId: string; colours: Record<string, string> }): Promise<{ loaded: boolean }>;
+  placeNative(options: { visible: boolean; x?: number; y?: number; w?: number; h?: number; clipTop?: number; clipBottom?: number }): Promise<void>;
+  destroyNative(): Promise<void>;
 };
 
 /** Sign in with Google, for the MPTree account. See AccountPlugin.java. */
@@ -178,6 +202,8 @@ export type SyncPlugin = {
 const SystemWeb: SystemPlugin = {
   prepareShare:  async ({ path }) => ({ path }),
   setNavBar:     async () => {},
+  // A phone with a blue evening wallpaper, so the Icons page looks as it will.
+  wallpaperColors: async () => ({ colors: ["#24395a", "#4f6f8f", "#d9b48f"] }),
   shareFiles:    async () => { throw new Error("unavailable"); },
   getDeviceInfo: async () => ({ manufacturer: "browser", model: navigator.userAgent.slice(0, 60), androidVersion: "", sdk: 0 }),
   setTextZoom:   async () => {},
@@ -188,6 +214,10 @@ const SystemWeb: SystemPlugin = {
   askReview:         async () => ({ asked: false }),
   setAppIcon:        async () => {},
   pinPhotoShortcut:  async () => ({ supported: false }),
+  setWidgetConfig:   async () => {},
+  pinWidget:         async () => ({ supported: false }),
+  takeNewSongs:      async () => ({ since: 0 }),
+  askNotifications:  async () => {},
 };
 
 const BillingWeb: BillingPlugin = {
@@ -201,6 +231,9 @@ const AdsWeb: AdsPlugin = {
   showRewarded:       async () => ({ rewarded: false, reason: "failed" }),
   privacyOptions:     async () => ({ required: false }),
   showPrivacyOptions: async () => {},
+  loadNative:         async () => ({ loaded: false }),
+  placeNative:        async () => {},
+  destroyNative:      async () => {},
 };
 
 // No Google sign-in in a browser. On the dev server a stand-in account can be
@@ -266,3 +299,57 @@ export const Account: AccountPlugin = isWeb
 export const Sync: SyncPlugin = isWeb
   ? SyncWeb
   : registerPlugin<SyncPlugin>("Sync");
+
+// ─── BACKUP ──────────────────────────────────────────────────────────────────
+// A backup to and from the person's own cloud app (BackupPlugin.java).
+
+export type CloudApp = "drive" | "onedrive" | "dropbox";
+
+export interface BackupPicked {
+  /** Nothing picked; `store` when the app was not there and its Play page opened. */
+  cancelled?: boolean;
+  store?: boolean;
+  /** "zip": a backup made from 1.6.3 on, songs inside. "json": an older one. */
+  kind?: "zip" | "json";
+  json?: string;
+  /** Where the copy of the zip is, for unpack. */
+  zip?: string;
+  /** The file names of the songs in the zip. */
+  names?: string[];
+}
+
+export interface BackupNativePlugin {
+  clouds(): Promise<Record<CloudApp, boolean>>;
+  /** Its Play Store page, for an app that is not on the phone. */
+  getApp(options: { app: CloudApp }): Promise<void>;
+  sendTo(options: { path: string; app: CloudApp }): Promise<{ sent: boolean; store?: boolean }>;
+  /** `app` left out: anywhere on the phone. */
+  pick(options: { app?: CloudApp }): Promise<BackupPicked>;
+  unpack(options: { zip: string; names: string[]; to: string }): Promise<{ folder: string; files: number }>;
+  discard(): Promise<void>;
+  /** What a backup of these songs needs on the phone (bytes), and what is free. */
+  room(options: { paths: string[] }): Promise<{ need: number; free: number }>;
+  /** The backup as Download/<name>.zip, the songs packed straight from where
+   *  they are. Rejects "full" (data: need, free) when the phone has no room. */
+  pack(options: { name: string; at: string; json: string; paths: string[] }): Promise<{ stopped?: boolean; uri?: string; size?: number; failed?: number }>;
+  stopPack(): Promise<void>;
+  addListener(event: "progress", handler: (p: { phase: "read" | "unpack" | "pack"; done: number; total: number }) => void): Promise<{ remove(): void }>;
+}
+
+// In the browser demo there are no cloud apps to hand a file to.
+const BackupWeb: BackupNativePlugin = {
+  clouds:      async () => ({ drive: true, onedrive: false, dropbox: false }),
+  getApp:      async () => {},
+  sendTo:      async () => ({ sent: false }),
+  pick:        async () => ({ cancelled: true }),
+  unpack:      async () => { throw new Error("not available"); },
+  discard:     async () => {},
+  room:        async () => ({ need: 0, free: Number.MAX_SAFE_INTEGER }),
+  pack:        async () => { throw new Error("not available"); },
+  stopPack:    async () => {},
+  addListener: async () => ({ remove() {} }),
+};
+
+export const BackupNative: BackupNativePlugin = isWeb
+  ? BackupWeb
+  : registerPlugin<BackupNativePlugin>("Backup");

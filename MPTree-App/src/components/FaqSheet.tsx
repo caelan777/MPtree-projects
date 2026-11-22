@@ -42,7 +42,7 @@ const FAQ: { q: string; a: string }[] = [
 export function FaqSheet({ onClose, T }: { onClose: () => void; T: T }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <InfoSheet title={t("Questions")} onClose={onClose} T={T}>
+    <InfoSheet page title={t("Questions")} onClose={onClose} T={T}>
       {FAQ.map((f, i) => {
         const isOpen = open === i;
         return (

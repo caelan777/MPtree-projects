@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from "react";
+import { LayoutIcon, layoutName, isListLayout, type ListLayout } from "./LayoutIcon";
+import { usePro } from "../pro";
 import { createPortal } from "react-dom";
 import type { Song, SongMeta, Playlist, SmartPlaylist, SmartPlaylistId } from "../types";
-import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX } from "../utils";
-import { CropSheet } from "./CropSheet";
+import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX, indexById } from "../utils";
+import { CropSheet } from "../lazySheets";
 import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
 import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
@@ -14,6 +16,7 @@ import { IC } from "./Icons";
 import type { T } from "../themes";
 import { useVinyl } from "../look";
 import { t as tr, tn } from "../i18n";
+import { Preferences } from "@capacitor/preferences";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +80,9 @@ interface Props {
   onBinMany:          (ids: string[]) => void;
   /** Whether a song is liked, for the long-press menu label. */
   isLiked:            (song: Song) => boolean;
+  /** Set to play next, and the phone's ringtone: lit tiles. */
+  isNext?:            (song: Song) => boolean;
+  isRingtone?:        (song: Song) => boolean;
   /** Optional light haptic on long-press. */
   onHaptic?:          () => void;
   /** Reports whether a playlist/smart-playlist DETAIL view is open, so App can
@@ -98,6 +104,9 @@ interface Props {
    *  for the header folding or unfolding, so App does not read that scroll as
    *  the finger's and fold the header straight back (the flicker). */
   onInsetJump?:       () => void;
+  /** Called just before this view scrolls by itself (to the playing song), so
+   *  App does not take that scroll for the finger's and fold the header. */
+  onAutoScroll?:      () => void;
   /** Mirrors App's `chromeAnimate`: whether the fold is being animated right
    *  now, or jumped (the scroll-to-top button). The insets here have to follow
    *  the same rule as the Songs list or the two tabs fold differently. */
@@ -118,6 +127,10 @@ interface Props {
 /** Shared icon tile: playlist list rows, the detail header, and the fallback
  *  when a playlist has no cover photo. Top level, so it keeps its identity
  *  across renders instead of being rebuilt as a new type each time. */
+// Until test build 127 there were only rows or tiles, under this key.
+const PL_TILES_KEY = "mptree_pl_tiles";
+const PL_LAYOUT_KEY = "mptree_pl_layout";
+
 function PlaylistArt({ photo, size, iconSize, onClick, playing, T: t }: {
   photo?: string; size: number; iconSize?: number; onClick?: () => void;
   /** The music is playing from this playlist: "on" moves the bars, "paused"
@@ -293,8 +306,8 @@ export const PlaylistsView: React.FC<Props> = ({
   onPlaySong, playingFrom = null, currentSongId, isPlaying = false, onToggleLike, onPlayNext,
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
-  isLiked, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
+  isLiked, isNext, isRingtone, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
+  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -323,6 +336,34 @@ export const PlaylistsView: React.FC<Props> = ({
   // Moving playlists: on from "Reorder", or by holding a playlist. Each row
   // then has a handle; dragging it moves the playlist, and the order is kept.
   const [reordering,      setReordering]     = useState(false);
+  // My playlists in the same four layouts as the songs: rows, compact rows,
+  // big tiles like the auto playlists, or small ones three to a line. Kept
+  // across restarts, and with the other settings in sync and backups.
+  const [plLayout, setPlLayoutRaw] = useState<ListLayout>("list");
+  useEffect(() => {
+    (async () => {
+      const now = (await Preferences.get({ key: PL_LAYOUT_KEY })).value;
+      if (isListLayout(now)) { setPlLayoutRaw(now); return; }
+      if ((await Preferences.get({ key: PL_TILES_KEY })).value === "1") setPlLayoutRaw("grid");
+    })().catch(() => {});
+  }, []);
+  const setPlLayout = (l: ListLayout) => {
+    onHaptic?.();
+    setPlLayoutRaw(l);
+    Preferences.set({ key: PL_LAYOUT_KEY, value: l }).catch(() => {});
+  };
+  // Rows and tiles were free before Pro had layouts; compact and small tiles
+  // are Pro. Without it the button steps between the two free ones.
+  const pro = usePro();
+  const PL_ORDER: ListLayout[] = pro ? ["list", "compact", "grid", "grid3"] : ["list", "grid"];
+  const plShown: ListLayout = PL_ORDER.includes(plLayout) ? plLayout : "list";
+  const stepPlLayout = () => setPlLayout(PL_ORDER[(PL_ORDER.indexOf(plShown) + 1) % PL_ORDER.length]);
+  const tiles = plShown === "grid" || plShown === "grid3";
+  const small = plShown === "grid3";
+  const compact = plShown === "compact";
+  // Looked up per playlist on every render: a Map, not a search through every song.
+  const songById = useMemo(() => indexById(songs), [songs]);
+  const songsOf = (pl: Playlist) => pl.songIds.map(id => songById.get(id)).filter((s): s is Song => !!s);
   const [plDrag,          setPlDrag]         = useState<{ from: number; over: number } | null>(null);
   const plRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const plPress   = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number; held: boolean }>({ timer: null, x: 0, y: 0, held: false });
@@ -403,8 +444,18 @@ export const PlaylistsView: React.FC<Props> = ({
     if (!currentSongId) return;
     const open = view === "detail" ? `pl:${activeId}` : `smart:${activeSmartId}`;
     if (playingFrom !== open) return;
+    // The app's own scroll: App must not fold the header for it. Folding
+    // moved the list under the scroll and stopped it short of the song.
+    // Only this list scrolls (scrollIntoView could move the page around it).
     const t = setTimeout(() => {
-      currentRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const el = scrollBodyRef.current, row = currentRowRef.current;
+      if (!el || !row) return;
+      const box = el.getBoundingClientRect(), r = row.getBoundingClientRect();
+      const target = el.scrollTop + r.top - box.top - (el.clientHeight - r.height) / 2;
+      const top = Math.max(0, Math.min(Math.round(target), el.scrollHeight - el.clientHeight));
+      if (Math.abs(top - el.scrollTop) < 2) return;
+      onAutoScroll?.();
+      el.scrollTo({ top, behavior: "smooth" });
     }, 120);
     return () => clearTimeout(t);
   }, [currentSongId, view, playingFrom, activeId, activeSmartId]);
@@ -1122,6 +1173,22 @@ export const PlaylistsView: React.FC<Props> = ({
               </span>
               {/* Making a playlist, where Reorder used to be. Moving them is
                   still a hold on a playlist; while that is on, this is Done. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {/* The layout, as for the songs. Gone while moving playlists,
+                  which always happens in rows. */}
+              {playlists.length > 0 && !reordering && (
+                <button
+                  onClick={stepPlLayout}
+                  aria-label={`${tr("Layout")}: ${layoutName(plShown)}`}
+                  style={{
+                    background: "transparent", color: t.text, border: `1px solid ${t.border}`, borderRadius: 16,
+                    height: 30, width: 38, display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", flexShrink: 0, padding: 0,
+                  }}
+                >
+                  <LayoutIcon kind={plShown} />
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (reordering) { onHaptic?.(); setReordering(false); return; }
@@ -1134,11 +1201,85 @@ export const PlaylistsView: React.FC<Props> = ({
               >
                 {reordering ? tr("Done") : tr("+ New playlist")}
               </button>
+              </div>
             </div>
             {playlists.length === 0 && !creating ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 20px 60px", color: t.muted, textAlign: "center" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No playlists yet")}</div>
                 <div style={{ fontSize: 13, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ New playlist\" to make your first one")}</div>
+              </div>
+            ) : tiles && !reordering ? (
+              /* Big tiles, the auto playlists' cards for your own. A hold
+                 still starts moving them, which switches back to rows. */
+              <div style={{ display: "grid", gridTemplateColumns: small ? "1fr 1fr 1fr" : "1fr 1fr", gap: small ? 10 : 12, padding: "10px 16px 8px" }}>
+                {playlists.map(pl => {
+                  const count = pl.songIds.filter(id => songById.has(id)).length;
+                  const playingHere = playingFrom === `pl:${pl.id}`;
+                  const photo = pl.coverPhoto;
+                  return (
+                    <div
+                      key={pl.id}
+                      onClick={e => {
+                        if (plPress.current.held) { plPress.current.held = false; return; }
+                        openFrom(e.currentTarget); setActiveId(pl.id); setView("detail");
+                      }}
+                      onTouchStart={e => plPressStart(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchMove={e => plPressMove(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchEnd={plPressEnd}
+                      onMouseDown={e => plPressStart(e.clientX, e.clientY)}
+                      onMouseMove={e => plPressMove(e.clientX, e.clientY)}
+                      onMouseUp={plPressEnd}
+                      onMouseLeave={plPressEnd}
+                      style={{
+                        position: "relative", height: small ? 112 : 160, borderRadius: small ? 12 : 16, padding: small ? 10 : 16,
+                        background: photo ? `center/cover no-repeat url(${photo})` : t.card,
+                        border: `1px solid ${playingHere ? t.accent : t.border}`,
+                        color: photo ? "#ffffff" : t.text,
+                        display: "flex", flexDirection: "column", justifyContent: "space-between",
+                        cursor: "pointer", overflow: "hidden", userSelect: "none",
+                      }}
+                    >
+                      {photo ? (
+                        // Dark at the top and bottom, so the name and the count read on any photo.
+                        <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0) 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.6))" }} />
+                      ) : (
+                        <div aria-hidden="true" style={{ position: "absolute", top: small ? 8 : 14, right: small ? 8 : 14, opacity: 0.16, lineHeight: 0, transform: small ? "scale(0.55)" : undefined, transformOrigin: "top right" }}>
+                          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={t.text} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                        </div>
+                      )}
+                      <div style={{
+                        position: "relative", fontSize: small ? 13 : 16, fontWeight: 700, lineHeight: 1.25, paddingRight: photo || small ? 0 : 46,
+                        overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word",
+                      }}>
+                        {pl.name}
+                      </div>
+                      <div style={{ position: "relative", fontSize: small ? 11 : 12, fontWeight: 500, color: photo ? "rgba(255,255,255,0.82)" : t.muted, paddingRight: small ? 32 : 44 }}>
+                        {tn(count, "{n} song", "{n} songs")}
+                      </div>
+                      {playingHere ? (
+                        <div aria-label={tr("Playing from this playlist")} style={{
+                          position: "absolute", right: small ? 8 : 12, bottom: small ? 8 : 12, width: small ? 28 : 34, height: small ? 28 : 34, borderRadius: 17,
+                          background: t.accent, display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <PlayingBars size={small ? 28 : 34} color={t.playBtnFg} still={!isPlaying} />
+                        </div>
+                      ) : count > 0 && (
+                        <button
+                          aria-label={tr("Play")}
+                          onTouchStart={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); onPlayPlaylist(songsOf(pl), false, `pl:${pl.id}`); }}
+                          style={{
+                            position: "absolute", right: small ? 8 : 12, bottom: small ? 8 : 12, width: small ? 28 : 34, height: small ? 28 : 34, borderRadius: 17,
+                            background: t.accent, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill={t.playBtnFg} aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div
@@ -1147,7 +1288,7 @@ export const PlaylistsView: React.FC<Props> = ({
                 onTouchCancel={plDrag ? plDragEnd : undefined}
               >
               {playlists.map((pl, i) => {
-                const count = pl.songIds.filter(id => songs.some(s => s.id === id)).length;
+                const count = pl.songIds.filter(id => songById.has(id)).length;
                 const isDragging = plDrag?.from === i;
                 const isOver = !!plDrag && plDrag.over === i && plDrag.from !== i;
                 return (
@@ -1169,7 +1310,7 @@ export const PlaylistsView: React.FC<Props> = ({
                     onMouseLeave={plPressEnd}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: reordering ? "12px 16px 12px 4px" : "12px 16px",
+                      padding: reordering ? "12px 16px 12px 4px" : compact ? "9px 16px" : "12px 16px",
                       borderBottom: `1px solid ${t.border}60`,
                       cursor: reordering ? "default" : "pointer",
                       opacity: isDragging ? 0.4 : 1,
@@ -1190,7 +1331,7 @@ export const PlaylistsView: React.FC<Props> = ({
                         </svg>
                       </div>
                     )}
-                    <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} playing={playingFrom === `pl:${pl.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />
+                    {(!compact || reordering) && <PlaylistArt photo={pl.coverPhoto} size={rowH - 16} playing={playingFrom === `pl:${pl.id}` ? (isPlaying ? "on" : "paused") : undefined} T={t} />}
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pl.name}</div>
@@ -1204,10 +1345,9 @@ export const PlaylistsView: React.FC<Props> = ({
                       <button
                         onClick={e => {
                           e.stopPropagation();
-                          const ps = pl.songIds.map(id => songs.find(s => s.id === id)).filter((s): s is Song => !!s);
-                          onPlayPlaylist(ps, false, `pl:${pl.id}`);
+                          onPlayPlaylist(songsOf(pl), false, `pl:${pl.id}`);
                         }}
-                        style={{ background: t.accent, border: "none", width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                        style={{ background: t.accent, border: "none", width: compact ? 30 : 36, height: compact ? 30 : 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill={t.playBtnFg}><polygon points="5 3 19 12 5 21 5 3"/></svg>
                       </button>
@@ -1536,7 +1676,9 @@ export const PlaylistsView: React.FC<Props> = ({
             : undefined}
           onDelete={() => { const ids = [...selectedIds]; exitSelect(); onBinMany(ids); }}
           single={(() => {
-            // One song picked: everything its "⋮" menu has.
+            // One song picked: everything its "⋮" menu has. Only Play leaves
+            // the picking (Caelan, 21 Nov); out of the playlist and the bin
+            // take the song off this list, so those go back too.
             const s = selectedIds.size === 1 ? songs.find(x => selectedIds.has(x.id)) : undefined;
             if (!s) return null;
             const leave = (then: () => void) => () => { exitSelect(); then(); };
@@ -1544,16 +1686,18 @@ export const PlaylistsView: React.FC<Props> = ({
             const source = activePlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`;
             return {
               isLiked: isLiked(s),
+              isNext: isNext?.(s),
+              isRingtone: isRingtone?.(s),
               onPlay: leave(() => onPlaySong(s, list.length ? list : [s], source)),
-              onPlayNext: leave(() => onPlayNext(s)),
+              onPlayNext: () => onPlayNext(s),
               onAddToPlaylist: () => onAddManyToPlaylist([s.id]),
               onToggleLike: () => onToggleLike(s),
               onShare: () => onShareSong(s),
-              onEditLyrics: leave(() => onEditLyrics(s)),
-              onCut: leave(() => onCutSong(s)),
-              onSetRingtone: leave(() => onSetRingtone(s)),
-              onChangePhoto: leave(() => onChangePhoto(s)),
-              onEdit: leave(() => onEditSong(s)),
+              onEditLyrics: () => onEditLyrics(s),
+              onCut: () => onCutSong(s),
+              onSetRingtone: () => onSetRingtone(s),
+              onChangePhoto: () => onChangePhoto(s),
+              onEdit: () => onEditSong(s),
               onRemoveFromPlaylist: activePlaylist ? leave(() => removeFromPlaylist(s.id)) : undefined,
               onBin: leave(() => onRemoveSong(s)),
             };
@@ -1568,8 +1712,12 @@ export const PlaylistsView: React.FC<Props> = ({
 
       {/* ── Per-song action menu ──────────────────────────────────────────
           The same sheet the Songs page uses, plus "Remove from playlist" when
-          the row belongs to a real (editable) playlist. Portalled to body so
-          it always sits above the floating mini-player. */}
+          the row belongs to a real (editable) playlist. Portalled out of the
+          sliding page so it sits above the floating mini-player; into the app
+          itself, not body, so the sheets it opens (App's, which stay inside
+          the app) and the toasts come over it while it stays open. Only Play,
+          out of the playlist and the bin close it: those last two take the
+          song off this list (Caelan, 21 Nov). */}
       {menuSong && createPortal(
         <SongMenuSheet
           song={menuSong.song}
@@ -1577,18 +1725,20 @@ export const PlaylistsView: React.FC<Props> = ({
           dispArtist={dispArtist(menuSong.song)}
           customPhoto={meta[menuSong.song.id]?.customPhoto}
           isLiked={isLiked(menuSong.song)}
+          isNext={isNext?.(menuSong.song)}
+          isRingtone={isRingtone?.(menuSong.song)}
           playlists={playlists}
           onPlay={() => { const m = menuSong; setMenuSong(null); const list = m.inPlaylist ? playlistSongs : smartPlaylistSongs; onPlaySong(m.song, list.length ? list : [m.song], m.inPlaylist ? `pl:${activeId}` : `smart:${activeSmartId}`); }}
-          onPlayNext={() => { onPlayNext(menuSong.song); setMenuSong(null); }}
-          onAddToPlaylist={id => { addSongToPlaylist(id, menuSong.song.id); setMenuSong(null); }}
-          onCreatePlaylistWithSong={name => { createPlaylistWithSong(name, menuSong.song.id); setMenuSong(null); }}
-          onEdit={() => { onEditSong(menuSong.song); setMenuSong(null); }}
-          onChangePhoto={() => { onChangePhoto(menuSong.song); setMenuSong(null); }}
-          onSetRingtone={() => { onSetRingtone(menuSong.song); setMenuSong(null); }}
-          onEditLyrics={() => { onEditLyrics(menuSong.song); setMenuSong(null); }}
-          onCut={() => { onCutSong(menuSong.song); setMenuSong(null); }}
-          onToggleLike={() => { onToggleLike(menuSong.song); setMenuSong(null); }}
-          onShare={() => { onShareSong(menuSong.song); setMenuSong(null); }}
+          onPlayNext={() => onPlayNext(menuSong.song)}
+          onAddToPlaylist={id => addSongToPlaylist(id, menuSong.song.id)}
+          onCreatePlaylistWithSong={name => createPlaylistWithSong(name, menuSong.song.id)}
+          onEdit={() => onEditSong(menuSong.song)}
+          onChangePhoto={() => onChangePhoto(menuSong.song)}
+          onSetRingtone={() => onSetRingtone(menuSong.song)}
+          onEditLyrics={() => onEditLyrics(menuSong.song)}
+          onCut={() => onCutSong(menuSong.song)}
+          onToggleLike={() => onToggleLike(menuSong.song)}
+          onShare={() => onShareSong(menuSong.song)}
           onRemove={() => { onRemoveSong(menuSong.song); setMenuSong(null); }}
           onRemoveFromPlaylist={menuSong.inPlaylist
             ? () => { removeFromPlaylist(menuSong.song.id); setMenuSong(null); }
@@ -1597,7 +1747,7 @@ export const PlaylistsView: React.FC<Props> = ({
           onClose={() => setMenuSong(null)}
           T={t}
         />,
-        document.body
+        document.querySelector<HTMLElement>("[data-app-shell]") ?? document.body
       )}
 
       {/* ── New playlist ──────────────────────────────────────────────────

@@ -147,7 +147,7 @@ export function WelcomeScreen({
           <div style={{ flex: 1 }} />
           {/* Without music access there is nothing to enter into, so Next
               goes to the page that says so, not past it. */}
-          <button style={primary} onClick={() => setStage(music === "allowed" ? "enter" : "permission")}>{t("Next")}</button>
+          <button style={primary} onClick={() => { setStage(music === "allowed" ? "enter" : "permission"); }}>{t("Next")}</button>
         </div>
       ) : shown === "permission" ? (
         <div

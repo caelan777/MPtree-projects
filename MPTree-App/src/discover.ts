@@ -61,6 +61,8 @@ export type Shelf = {
   ia?: string;
   /** How many songs one album may give the row; the rest is under See all. */
   perAlbum?: number;
+  /** Audius' trending of the last week instead of most played ever. */
+  week?: boolean;
 };
 
 /** The rows on the page, in order. */
@@ -280,34 +282,70 @@ async function iaShelf(shelf: Shelf, offset: number, albums: number, perAlbum: n
 /** A row's full list, a page at a time (See all). */
 export async function listShelf(shelf: Shelf, offset: number): Promise<FreeTrack[]> {
   if (shelf.source === "archive") return iaShelf(shelf, offset, 12, Math.max(4, shelf.perAlbum ?? 2));
+  // The week is one page: all of it comes at once.
+  if (shelf.week) return offset > 0 ? [] : weekFree();
   return findFree({ genre: shelf.genre, limit: 60, offset });
 }
 /** How far a page of listShelf moves `offset` on. */
 export const pageSize = (shelf: Shelf) => (shelf.source === "archive" ? 12 : 60);
 
-// A shelf is kept for a day, so opening the page again costs nothing.
+// Audius' API terms allow keeping their data only for the session, so an
+// Audius shelf lives in memory and is fetched again on the next start. An
+// Archive shelf is kept on the phone for a day, so it costs nothing to open.
 const DAY = 24 * 60 * 60 * 1000;
 const shelfKey = (key: string) => "mptree_discover5_" + key;
+const session = new Map<string, FreeTrack[]>();
+
+// Audius shelves that older versions kept on the phone: removed once.
+const forgetStored = Promise.resolve().then(() => Preferences.keys()).then(({ keys }) => Promise.all(keys
+  .filter(k => k.startsWith("mptree_discover") && k !== SAVED && !k.startsWith(shelfKey("ia-")))
+  .map(key => Preferences.remove({ key })))).catch(() => {});
 
 export async function loadShelf(shelf: Shelf): Promise<FreeTrack[]> {
-  try {
-    const v = (await Preferences.get({ key: shelfKey(shelf.key) })).value;
-    if (v) {
-      const c = JSON.parse(v) as { at: number; tracks: FreeTrack[] };
-      if (Date.now() - c.at < DAY && c.tracks.length) return c.tracks;
-    }
-  } catch { /* nothing cached */ }
+  if (shelf.source === "audius") {
+    const kept = session.get(shelf.key);
+    if (kept) return kept;
+  } else {
+    try {
+      const v = (await Preferences.get({ key: shelfKey(shelf.key) })).value;
+      if (v) {
+        const c = JSON.parse(v) as { at: number; tracks: FreeTrack[] };
+        if (Date.now() - c.at < DAY && c.tracks.length) return c.tracks;
+      }
+    } catch { /* nothing cached */ }
+  }
   const tracks = shelf.source === "archive"
     // A different handful of albums each day, from the 60 most downloaded.
     ? (await iaShelf(shelf, (Math.floor(Date.now() / DAY) % 5) * 12, 12, shelf.perAlbum ?? 2)).slice(0, 20)
+    : shelf.week ? (await weekFree()).slice(0, 20)
     // Most downloadable tracks are gated or loops, so ask for more than a shelf.
     : (await findFree({ genre: shelf.genre, limit: 80 })).slice(0, 20);
-  Preferences.set({ key: shelfKey(shelf.key), value: JSON.stringify({ at: Date.now(), tracks }) }).catch(() => {});
+  if (shelf.source === "audius") {
+    session.set(shelf.key, tracks);
+  } else {
+    // After the clean-up, or it could remove this one again.
+    forgetStored.then(() => Preferences.set({ key: shelfKey(shelf.key), value: JSON.stringify({ at: Date.now(), tracks }) })).catch(() => {});
+  }
   return tracks;
 }
 
-/** Popular songs: the most played free songs on Audius, all genres. */
-export const POPULAR: Shelf = { key: "popular", label: "Popular songs", source: "audius" };
+/** Popular this week: the free songs in Audius' trending of the last week.
+ *  Most of trending is not a free download, so the first 300 are read. */
+export const POPULAR: Shelf = { key: "popular-week", label: "Popular this week", source: "audius", week: true };
+/** Popular songs: the most played free songs on Audius, all genres. In place
+ *  of the week when that has too few free songs to make a list. */
+export const POPULAR_ALL: Shelf = { key: "popular", label: "Popular songs", source: "audius" };
+const MIN_WEEK = 4;
+
+async function weekFree(): Promise<FreeTrack[]> {
+  const pages = await Promise.all([0, 100, 200].map(offset =>
+    get("/tracks/trending", { time: "week", limit: 100, offset }).catch(() => null)));
+  if (pages.every(p => !p)) throw new Error("offline");
+  const seen = new Set<string>();
+  const tracks = pages.flatMap(p => p ?? []).map(toTrack).filter((t): t is FreeTrack => !!t && !seen.has(t.id) && !!seen.add(t.id));
+  if (tracks.length < MIN_WEEK) throw new Error("too few");
+  return tracks;
+}
 
 /** The artists behind the songs on the page, most followed first. */
 export function artistsOf(tracks: FreeTrack[], max = 16): Artist[] {

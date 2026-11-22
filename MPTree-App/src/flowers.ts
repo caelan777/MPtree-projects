@@ -360,3 +360,66 @@ export function groundFlowers(kind: Flowers): CSSProperties {
  *  sidebar has that button somewhere else and moves the picture there. */
 export const settingsHalo = (kind: Flowers): number | null => (kind === "bloom" ? 180 : null);
 
+
+// ─── STICKERS ────────────────────────────────────────────────────────────────
+// Aviela's flowers as loose pieces, for Stickers (stickers.ts): each one whole,
+// so it can sit anywhere and be turned, unlike the card's own, which grow in
+// from an edge and are cut off by it.
+
+/** The stickers there are. All of them Aviela's, for now. */
+export const STICKER_KINDS = ["sprig", "bunch", "bloom", "flower", "daisy", "garland", "vine", "lines", "meadow"] as const;
+export type StickerKind = typeof STICKER_KINDS[number];
+
+function drawSticker(kind: StickerKind, p: Paint): [number, number, string] {
+  switch (kind) {
+    case "sprig": return [130, 84,
+      stem("M130 4C104 6 84 16 66 34M112 10C110 30 104 44 96 58", p.stem)
+      + leaf(100, 12, 20, -150, p.leaf) + leaf(86, 20, 18, -60, p.leaf) + leaf(108, 30, 16, 120, p.leaf)
+      + flower(64, 36, 19, { n: 6, fill: p.main, heart: GOLD, turn: 10 })
+      + flower(96, 60, 14, { n: 5, fill: p.soft, heart: ROSE })
+      + flower(118, 22, 11, { n: 5, fill: p.deep, heart: WHITE, turn: 20 })
+      + flower(36, 12, 8, { n: 5, fill: p.soft, heart: p.deep })];
+    case "bunch": return [78, 56,
+      leaf(60, 16, 18, -120, p.leaf) + leaf(52, 24, 15, -40, p.leaf)
+      + flower(52, 22, 15, { n: 6, fill: p.main, heart: GOLD }) + flower(68, 42, 9, { n: 5, fill: p.deep, heart: WHITE, turn: 20 })
+      + flower(28, 12, 8, { n: 5, fill: p.soft, heart: p.deep })];
+    case "bloom": return [120, 120, flower(60, 60, 57, { n: 8, fill: p.soft, heart: GOLD, wide: 0.4 })];
+    case "flower": return [40, 40, flower(20, 20, 19, { n: 6, fill: ROSE, heart: GOLD })];
+    case "daisy": return [40, 40, flower(20, 20, 19, { n: 12, fill: p.daisy, heart: GOLD })];
+    case "garland": return [96, 32,
+      stem("M2 13C24 24 44 24 64 15S88 5 94 11", p.stem, 1.5)
+      + leaf(12, 15, 9, 200, p.leaf) + leaf(58, 20, 9, 160, p.leaf)
+      + flower(26, 18, 10, { n: 6, fill: p.main, heart: GOLD }) + flower(48, 21, 8, { n: 5, fill: p.deep, heart: WHITE, turn: 36 })
+      + flower(78, 12, 9, { n: 6, fill: p.soft, heart: GOLD, turn: 12 })];
+    case "vine": return [96, 24,
+      stem("M0 5C16 11 32 11 48 5S80 -1 96 5", p.stem, 1.5)
+      + leaf(12, 8, 9, 150, p.leaf) + leaf(60, 4, 9, 205, p.leaf) + leaf(84, 3, 8, 160, p.leaf)
+      + flower(30, 12, 7.5, { n: 5, fill: p.main, heart: GOLD }) + flower(74, 10, 6, { n: 5, fill: p.deep, heart: WHITE, turn: 30 })];
+    case "lines": return [130, 84,
+      stem("M130 6C106 8 88 18 70 36M114 12C112 32 106 44 98 58", p.line, 1.4)
+      + flower(66, 38, 19, { n: 6, fill: "none", heart: "none", line: p.line, turn: 10 })
+      + flower(98, 62, 13, { n: 5, fill: "none", heart: "none", line: p.line })
+      + flower(118, 24, 10, { n: 5, fill: "none", heart: "none", line: p.line, turn: 20 })];
+    case "meadow": {
+      const grow: [number, number, number, number][] = [[12, 32, 10, 0], [32, 12, 12, 1], [52, 38, 9, 2]];
+      return [64, 84, grow.map(([x, top, r, k]) =>
+        stem(`M${x} 84C${x + 3} ${r1((84 + top) / 2)} ${x - 3} ${top + 12} ${x} ${top}`, "#f1a3c0", 1.6)
+        + leaf(x, top + 26, 11, k % 2 ? 50 : -50, PINK)
+        + flower(x, top, r, k === 0 ? { n: 6, fill: WHITE, heart: GOLD } : k === 1 ? { n: 5, fill: ROSE, heart: WHITE } : { n: 12, fill: WHITE, heart: GOLD })).join("")];
+    }
+  }
+}
+
+const stickerCache = new Map<string, { src: string; w: number; h: number }>();
+/** One sticker as a picture, in the paint for what it lies on: white for a
+ *  light ground, black for a dark one, pink for Aviela's pink. */
+export function stickerArt(kind: StickerKind, tone: Tone): { src: string; w: number; h: number } {
+  const key = `${kind}:${tone}`;
+  let made = stickerCache.get(key);
+  if (!made) {
+    const [w, h, body] = drawSticker(kind, PAINT[tone]);
+    made = { src: uri(w, h, body), w, h };
+    stickerCache.set(key, made);
+  }
+  return made;
+}
