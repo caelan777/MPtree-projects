@@ -5,21 +5,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MPTree, an offline music player</title>
-<meta name="description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
+<title>MPTree: free offline music player for Android and Windows</title>
+<meta name="description" content="Free offline music player for Android and Windows. MPTree plays the MP3s and music files already on your device. No subscription, no internet needed.">
 <meta name="theme-color" content="#000000">
 
 <!-- Canonical domain: mp-tree.net, attached to the Cloudflare Pages project. -->
 <link rel="canonical" href="https://mp-tree.net/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="MPTree, an offline music player">
-<meta property="og:description" content="MPTree plays the music already on your device. Nothing streams, nothing uploads.">
+<meta property="og:title" content="MPTree: free offline music player for Android and Windows">
+<meta property="og:description" content="Free offline music player for Android and Windows. MPTree plays the MP3s and music files already on your device. No subscription, no internet needed.">
 <meta property="og:url" content="https://mp-tree.net/">
 <meta property="og:image" content="https://mp-tree.net/assets/img/og-image.png?v=45">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://mp-tree.net/assets/img/og-image.png?v=45">
+
+<!-- Structured data, so search engines know MPTree is an app. No rating on
+     purpose: add aggregateRating only with real Google Play numbers. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "MPTree",
+  "description": "A free offline music player for Android and Windows. It plays the music files already on your device, with no subscription and no internet needed.",
+  "url": "https://mp-tree.net/",
+  "image": "https://mp-tree.net/assets/img/og-image.png",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Android, Windows",
+  "downloadUrl": "https://mp-tree.net/download",
+  "offers": [
+    { "@type": "Offer", "name": "MPTree", "price": "0", "priceCurrency": "EUR" },
+    { "@type": "Offer", "name": "MPTree Pro", "price": "2.99", "priceCurrency": "EUR" }
+  ]
+}
+</script>
 
 <link rel="icon" type="image/svg+xml" href="assets/icon/favicon.svg?v=2">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icon/favicon-32.png?v=2">

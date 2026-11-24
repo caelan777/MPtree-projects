@@ -2,3 +2,5 @@
 # Without this file the site answered /robots.txt with the homepage.
 User-agent: *
 Allow: /
+
+Sitemap: https://mp-tree.net/sitemap.xml
