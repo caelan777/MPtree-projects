@@ -67,6 +67,13 @@ export function useMptreeStats(url: string) {
   return { stats: url ? stats : null, error: url ? error : null };
 }
 
+/** Every MPTree ever downloaded: Play installs plus the downloads from the
+ *  website (the APK and the Windows app). Null when neither is known. */
+export function totalDownloads(s: MptreeStats): number | null {
+  if (s.installs === null && s.downloads === null) return null;
+  return (s.installs ?? 0) + (s.downloads ?? 0);
+}
+
 /** 1284 → "1,284", 3400 → "3.4k". */
 export function short(v: number | null): string {
   if (v === null) return "–";

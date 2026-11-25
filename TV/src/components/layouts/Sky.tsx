@@ -1,7 +1,7 @@
 import { Shuffle } from "lucide-react";
 import { AllAppsTile, AppTile } from "../AppTile";
 import { inTime } from "../../home";
-import { short } from "../../stats";
+import { short, totalDownloads } from "../../stats";
 import { kicker } from "../../music";
 import { clock, deg, longDate } from "../../format";
 import { AppRow, Cover, HourStrip, MusicButtons, SongLine, type DayProps } from "./parts";
@@ -71,7 +71,7 @@ export function Sky({ now, home: h, music: m, shuffle, stats, dock, onOpenApp, o
         ) : null}
         {stats && (
           <div className="glass sk-stats">
-            <div><b>{short(stats.installs)}</b>MPTree installs</div>
+            <div><b>{short(totalDownloads(stats))}</b>MPTree downloads</div>
             <div><b>{stats.installsToday ? `+${stats.installsToday}` : "–"}</b>today</div>
             <div><b>{stats.rating ?? "–"}</b>rating</div>
           </div>

@@ -168,19 +168,20 @@ Asked for by the user for family use, no other limits. What changed is in
   (cover 360, two songs in Up next); Settings is a panel over the player card
   (`SettingsSheet tv`, class `tv-panel-veil`), without Size and Show tutorial;
   the remote reaches rows scrolled out of a sheet (`tvNav.scrolledAway`).
-- **MPTree numbers**: `STATS_URL` in `homeConfig.ts` (empty), no Settings section.
+- **MPTree numbers**: `STATS_URL` in `homeConfig.ts` =
+  `https://stats.mp-tree.net/mptree-tv.json`, no Settings section. Home shows one
+  total: Play installs plus website downloads (`totalDownloads` in `stats.ts`).
 - **Classic's left side**: of the five options on `design/v5-classic.html` the user
   picked the first, the ruled strip tidied (strip 880 px, taller, bigger figures).
 
 ## Open next
 
-1. **MPTree numbers on the TV.** The launcher reads `STATS_URL` in
-   `src/homeConfig.ts` (empty). Missing: somewhere to host `data.json`.
-   Recommended: have `Dashboard/collect.mjs` upload it to a public Cloudflare R2
-   bucket (`wrangler r2 object put … --remote`), run daily from Windows Task
-   Scheduler; keys stay on the PC (see `Dashboard/README.md`). Alternatives: Home
-   Assistant `www` folder, or via the MPTree account (most work). Waiting on the
-   user's choice.
+1. **MPTree numbers on the TV: built, the user still sets up Cloudflare.**
+   `node Dashboard/publish-tv.mjs` runs the collector, cuts `data.json` down to
+   the numbers the TV shows (`Dashboard/tv.json`, no review texts or commit
+   messages) and uploads it with Wrangler to the R2 bucket `mptree-tv`. The
+   bucket gets the custom domain `stats.mp-tree.net`; Windows Task Scheduler runs
+   it daily. Steps: `Dashboard/README.md`, "The TV". Not yet verified end to end.
 2. Merging both branches into `main` once tested on the TV. `CLAUDE.md` on `main`
    already lists `TV/`, but the folder only exists on `tv-launcher`. Both branches
    are 12 commits behind `main` (MPTree 1.3.6); merge `main` into the app branch

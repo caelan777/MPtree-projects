@@ -34,6 +34,8 @@ Branding/website-redesign/*.html
 # can read everything about the app in the Play Console.
 Dashboard/secrets.env
 Dashboard/data.json
+Dashboard/tv.json
+Dashboard/publish-tv.log
 Dashboard/*service-account*.json
 
 # The published dashboard, rebuilt by collect.mjs from dashboard.html

@@ -1,7 +1,7 @@
 import { Logo } from "./Logo";
 import { CONDITION, num, type Ha } from "../ha";
 import { HA } from "../homeConfig";
-import { short, type MptreeStats } from "../stats";
+import { short, type MptreeStats, totalDownloads } from "../stats";
 import { clock, deg, longDate } from "../format";
 import { usePhoto } from "../photos";
 
@@ -40,7 +40,7 @@ export function Saver({ now, ha, stats, photos }: Props) {
   const numbers = stats && (
     <>
       <div className="lh">MPTree</div>
-      <div className="li"><span>Play installs</span><span>{short(stats.installs)}{stats.installsToday ? ` (+${stats.installsToday})` : ""}</span></div>
+      <div className="li"><span>Downloads</span><span>{short(totalDownloads(stats))}{stats.installsToday ? ` (+${stats.installsToday})` : ""}</span></div>
       <div className="li"><span>Rating</span><span>{stats.rating ?? "–"}</span></div>
     </>
   );

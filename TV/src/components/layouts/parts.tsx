@@ -5,7 +5,7 @@ import type { TvApp } from "../../launcher";
 import { pickHours, type Home, type Hour } from "../../home";
 import { kicker, progressAt, type Music, type ShuffleAll } from "../../music";
 import { clock, deg } from "../../format";
-import { ago, short, type MptreeStats } from "../../stats";
+import { ago, short, type MptreeStats, totalDownloads } from "../../stats";
 
 /** What every layout gets. The layouts are Home's first page: the day, the music
  *  and the apps. The house (Home Assistant) is the second page, HouseView. */
@@ -146,13 +146,13 @@ export function MusicCard({ m, shuffle, now, onOpen, className }: { m: Music | n
   );
 }
 
-/** The MPTree numbers on one line: installs, today, rating. Nothing when not set up. */
+/** The MPTree numbers on one line: total downloads (Play plus website), today, rating. Nothing when not set up. */
 export function Nums({ stats, className = "nums" }: { stats: MptreeStats | null; className?: string }) {
   if (!stats) return null;
   return (
     <span className={className}>
       <span className="lg"><Logo size={30} />MPTree</span>
-      <span><b>{short(stats.installs)}</b> installs</span>
+      <span><b>{short(totalDownloads(stats))}</b> downloads</span>
       {stats.installsToday ? <span><b>+{stats.installsToday}</b> today</span> : null}
       {stats.rating ? <span><b>{stats.rating}</b> rating</span> : null}
     </span>

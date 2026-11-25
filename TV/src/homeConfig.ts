@@ -31,7 +31,9 @@ export const HA = {
   sun: "sun.sun",
 };
 
-/** The MPTree numbers: the address of a copy of Dashboard/data.json (what
- *  `node Dashboard/collect.mjs` writes on the PC). Empty: no numbers on Home.
+/** The MPTree numbers: Dashboard/tv.json, which `node Dashboard/publish-tv.mjs`
+ *  uploads from the PC to the R2 bucket "mptree-tv", connected to this name on
+ *  mp-tree.net (see Dashboard/README.md, "The TV"). Until that is set up the
+ *  address does not answer and Home simply shows no numbers.
  *  It lives here, not in Settings: it is one address, set once. */
-export const STATS_URL = "";
+export const STATS_URL = "https://stats.mp-tree.net/mptree-tv.json";

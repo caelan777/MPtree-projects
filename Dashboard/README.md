@@ -122,3 +122,46 @@ a request to anything extra. That was a deliberate choice over Cloudflare's Web
 Analytics product, which gives per page paths but only by loading a beacon from
 a tracking host on every visit. The privacy page was updated to say what is
 counted, in the same breath as the app's promise that it collects nothing.
+
+## The TV
+
+The TV launcher shows one number on Home: every MPTree ever downloaded, Play
+installs plus the website's downloads (the APK and the Windows app), with today's
+installs and the rating. It reads them from `https://stats.mp-tree.net/mptree-tv.json`.
+
+```bash
+node Dashboard/publish-tv.mjs
+```
+
+That runs `collect.mjs`, keeps only those numbers in `Dashboard/tv.json` (no keys,
+no review texts, no commit messages) and uploads that file to the R2 bucket
+`mptree-tv`. `--dry-run` writes `tv.json` without uploading.
+
+Once:
+
+1. `npx wrangler login` (a browser window asks you to allow it).
+2. `npx wrangler r2 bucket create mptree-tv`
+3. Cloudflare dashboard, **R2**, `mptree-tv`, **Settings**, **Custom Domains**,
+   **Connect Domain**: `stats.mp-tree.net`. Cloudflare adds the DNS record itself.
+4. `node Dashboard/publish-tv.mjs`, then open
+   `https://stats.mp-tree.net/mptree-tv.json` in a browser: it should show the numbers.
+
+Every day: `Dashboard/publish-tv.cmd` does the same and writes
+`Dashboard/publish-tv.log`. Let Windows Task Scheduler start it, by running these
+four lines once in PowerShell from the repo folder:
+
+```bash
+$a = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$PWD\Dashboard\publish-tv.cmd`""
+```
+```bash
+$t = New-ScheduledTaskTrigger -Daily -At 07:40
+```
+```bash
+$s = New-ScheduledTaskSettingsSet -StartWhenAvailable
+```
+```bash
+Register-ScheduledTask -TaskName "MPTree TV numbers" -Action $a -Trigger $t -Settings $s
+```
+
+Play writes its install reports once a day, so daily is enough. When the PC is off
+at 07:40, the task runs as soon as it is on again (`-StartWhenAvailable`).
