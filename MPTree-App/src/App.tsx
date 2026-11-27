@@ -2154,6 +2154,12 @@ export default function App() {
   // to the end; with the player gone at once, it ends with its fade
   // (onTransitionEnd below) or just after, if there was nothing to fade.
   const miniPhase = (miniMorph === "out" || miniMorph === "lift") && !playerExpanded && expandDrag === null ? "in" : miniMorph;
+  // Closed at once, by something in the big player that opens a page of its
+  // own (Add to playlist, Cut, the song's menu): there is no big player to
+  // ride down on, so the mini player is back in its place straight away and
+  // only fades in. It flew down from the middle of the screen before
+  // (Caelan, 27 Nov).
+  const miniJumpBack = (miniMorph === "out" || miniMorph === "lift") && !playerExpanded && expandDrag === null;
   // A safety net too: "lift" waits for the big player's first frame (onGrow),
   // never longer than a moment.
   useEffect(() => {
@@ -4750,7 +4756,8 @@ export default function App() {
                 position: "fixed", bottom: playerBottom, left: 12, right: 12, background: miniPlayerBg,
                 border: `1px solid ${TH.border}`, borderRadius: 22, padding: "32px 16px 20px",
                 // Over the big player while it goes into it and comes back out.
-                zIndex: miniPhase || expandDrag !== null ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
+                // (Not when it comes back on its own: then whatever opened is above it.)
+                zIndex: (miniPhase && !miniJumpBack) || expandDrag !== null ? 450 : 100, boxShadow: "0 10px 36px rgba(0,0,0,0.5)", overflow: "hidden",
                 // Kept mounted while collapsed and slid off the bottom instead,
                 // so it glides back up with the header rather than popping in.
                 // Pulled up by a finger, it fades as the big player grows out of it.
@@ -4768,10 +4775,16 @@ export default function App() {
                 // At the big player's speed both ways, the same curve, so it
                 // stays on its top edge; the fade is even, so closing is
                 // opening played back.
+                // Opening, it is gone by three fifths of the way, as when it is
+                // pulled up by a finger: fading over the whole way, its buttons
+                // were still there over the big player's top when that had
+                // arrived, and then went (Caelan, 27 Nov). Closing is that
+                // backwards: it comes in over the last three fifths.
                 transition: expandDrag !== null ? (expandSettling ? `transform ${TAB_MOTION}, opacity ${TAB_MS}ms linear, background 0.4s ease` : "background 0.4s ease")
                   : miniPhase === "lift" ? "background 0.4s ease"
-                  : miniPhase === "out" ? `transform ${TAB_MOTION}, opacity ${TAB_MS}ms linear, background 0.4s ease`
-                  : miniPhase === "in" ? `transform ${TAB_MOTION}, translate ${TAB_MOTION}, opacity ${TAB_MS}ms linear, background 0.4s ease`
+                  : miniPhase === "out" ? `transform ${TAB_MOTION}, opacity ${Math.round(TAB_MS * 0.6)}ms linear, background 0.4s ease`
+                  : miniJumpBack ? `opacity ${TAB_MS}ms linear, background 0.4s ease`
+                  : miniPhase === "in" ? `transform ${TAB_MOTION}, translate ${TAB_MOTION}, opacity ${Math.round(TAB_MS * 0.6)}ms linear ${Math.round(TAB_MS * 0.4)}ms, background 0.4s ease`
                   : chromeAnimate ? `${move("transform", "opacity")}, background 0.4s ease`
                   : "background 0.4s ease",
               }}
