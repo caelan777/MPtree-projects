@@ -196,6 +196,21 @@ const WIDE_ROW_EXTRA = 10;
 // Discover needs the native download, which the iPhone version does not have yet.
 const HAS_DISCOVER = Capacitor.getPlatform() !== "ios";
 
+
+/** The same songs, in the same order, with nothing about them changed. */
+function sameSongs(a: Song[], b: Song[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (x.id !== y.id || x.uri !== y.uri || x.title !== y.title || x.artist !== y.artist || x.dateAdded !== y.dateAdded
+      || x.duration !== y.duration || x.album !== y.album || x.albumId !== y.albumId || x.track !== y.track
+      || x.disc !== y.disc || x.year !== y.year || x.genre !== y.genre || x.isCut !== y.isCut
+      || x.cutFrom !== y.cutFrom || x.cutTo !== y.cutTo) return false;
+  }
+  return true;
+}
+
 export default function App() {
   /** A TV: the remote screen, src/tv. Guessed straight away (no touch screen),
    *  then Android's own answer, which only ever turns it on. */
@@ -1041,7 +1056,7 @@ export default function App() {
   // The navigation bar: the theme's, and black under Discover's black page.
   useEffect(() => {
     const dark = theme === "dark" || discoverOpen;
-    System.setNavBar({ light: !dark, color: discoverOpen ? "#000000" : statusBarColor }).catch(() => {});
+    System.setNavBar({ light: !dark, color: discoverOpen ? "#000000" : statusBarColor, ground: discoverOpen ? "#000000" : statusBarColor }).catch(() => {});
   }, [theme, statusBarColor, discoverOpen]);
 
   // What Clean up would offer. Counted even without Pro, for the Settings row.
@@ -1121,7 +1136,11 @@ export default function App() {
       const sorted = [...scannedWithIds].filter((s: Song) => !blocked.has(s.id)).sort((a: Song, b: Song) => (b.dateAdded || 0) - (a.dateAdded || 0));
       const cutIds = new Set(persistedCuts.filter((s: Song) => !blocked.has(s.id)).map((s: Song) => s.id));
       const result = [...persistedCuts.filter((s: Song) => cutIds.has(s.id)), ...sorted];
-      setSongs(() => result);
+      // Every return to the app scans again. When nothing changed the list
+      // stays the very same one, so coming back does not redraw every row
+      // (and everything that is worked out from the songs) in the frames the
+      // app is shown again, which showed as a flicker (Caelan, 27 Nov).
+      setSongs(prev => (sameSongs(prev, result) ? prev : result));
 
       return result;
     } catch (e) {
@@ -1182,10 +1201,17 @@ export default function App() {
     try {
       const native = await AudioPlayer.getCurrentSong();
       if (!native?.path) return false;
-      const match = scanned.find(s => s.uri === native.path);
+      // A cut and its source are the same file: the one on stays the one on.
+      const cur = curRef.current;
+      const match = cur && cur.uri === native.path && scanned.some(s => s.id === cur.id)
+        ? scanned.find(s => s.id === cur.id)!
+        : scanned.find(s => s.uri === native.path);
       if (!match) return false;
       const [{ position }, { duration: dur }] = await Promise.all([AudioPlayer.getCurrentPosition(), AudioPlayer.getDuration()]);
-      setCurrent(match); setCurrentTime(position); currentTimeRef.current = position;
+      // The same song stays the same object: a new one, after every return to
+      // the app, moved the list to it and loaded its cover again.
+      setCurrent(prev => (prev && prev.id === match.id && sameSongs([prev], [match]) ? prev : match));
+      setCurrentTime(position); currentTimeRef.current = position;
       if (dur > 0) setDuration(dur);
       setPlaying(native.isPlaying); loadedRef.current = true;
       const saved = session?.queueIds

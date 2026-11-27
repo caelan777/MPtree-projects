@@ -94,8 +94,9 @@ export type SystemPlugin = {
   /** The share sheet with these files, sent as files (documents), so apps
    *  like WhatsApp keep their names. Android only. */
   shareFiles(options: { paths: string[]; title?: string; dialogTitle?: string; text?: string }): Promise<void>;
-  /** Android's navigation bar: light (dark buttons) or dark, and its colour. */
-  setNavBar(options: { light: boolean; color?: string }): Promise<void>;
+  /** Android's navigation bar: light (dark buttons) or dark, and its colour.
+   *  `ground`: the page's background, for the window and the WebView behind it. */
+  setNavBar(options: { light: boolean; color?: string; ground?: string }): Promise<void>;
   /** Up to three colours of the home screen's wallpaper ("#rrggbb"), as
    *  Android gives them to any app; empty when it gives none. */
   wallpaperColors(): Promise<{ colors: string[] }>;

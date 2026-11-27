@@ -519,11 +519,23 @@ public class SystemPlugin extends Plugin {
     public void setNavBar(PluginCall call) {
         boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
         String color = call.getString("color");
+        String ground = call.getString("ground");
         getActivity().runOnUiThread(() -> {
             try {
                 Window w = getActivity().getWindow();
                 if (color != null) {
                     try { w.setNavigationBarColor(Color.parseColor(color)); } catch (IllegalArgumentException ignored) { }
+                }
+                // What is behind the page: the window and the WebView itself,
+                // in the page's own ground. They were black, which showed for a
+                // moment whenever MPTree came back to the front before the page
+                // was drawn again: a flicker on a light theme (Caelan, 27 Nov).
+                if (ground != null) {
+                    try {
+                        int g = Color.parseColor(ground);
+                        w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(g));
+                        if (getBridge() != null && getBridge().getWebView() != null) getBridge().getWebView().setBackgroundColor(g);
+                    } catch (IllegalArgumentException ignored) { }
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) w.setNavigationBarContrastEnforced(false);
                 WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
