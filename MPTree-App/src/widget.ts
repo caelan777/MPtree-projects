@@ -8,8 +8,9 @@ import { recordPicture } from "./components/SpinningDisc";
 // ─── HOME SCREEN WIDGETS ─────────────────────────────────────────────────────
 // What the Widget page (Settings, Home screen widget) decides: which of the
 // four widgets its button adds, and their colour. The four are drawn natively
-// (WidgetRenderer.java); the colour goes there at once and changes every
-// MPTree widget already on the home screen. The cover shows as it does in the
+// (WidgetRenderer.java). The colour is for the widget added next: one already
+// on the home screen keeps the colour it was added with (Caelan, 27 Nov: a
+// widget turned clear when Clear was tapped here). The cover shows as it does in the
 // player, always (test build 127 had a switch for it). Kept on this phone only:
 // widgets belong to a home screen, not to the account.
 

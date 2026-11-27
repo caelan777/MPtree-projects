@@ -18,4 +18,10 @@ public class NowPlayingWidgetProvider extends AppWidgetProvider {
     public void onAppWidgetOptionsChanged(Context context, AppWidgetManager appWidgetManager, int appWidgetId, Bundle newOptions) {
         WidgetRenderer.resized(context, appWidgetManager, appWidgetId, WidgetRenderer.BAR);
     }
+
+    /** Taken off the home screen: its colour is forgotten. */
+    @Override
+    public void onDeleted(Context context, int[] appWidgetIds) {
+        WidgetRenderer.forget(context, appWidgetIds);
+    }
 }

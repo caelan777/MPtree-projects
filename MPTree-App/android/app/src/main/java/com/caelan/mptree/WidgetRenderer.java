@@ -45,7 +45,10 @@ import java.io.File;
  * The colour ("Same as app", Black, White or Clear glass, which is Pro) is
  * chosen in the app (Settings, Home screen widget) and kept in the
  * "mptree_widget" preferences, with the app's own colours, its record and
- * whether Pro is on; it applies to every MPTree widget at once.
+ * whether Pro is on. Each widget keeps the colour that was chosen when it was
+ * put on the home screen ("colour_<id>"): choosing another one in the app is
+ * for the next widget, and no longer changes the ones already there (Caelan,
+ * 27 Nov: a widget turned clear when Clear was tapped in the app).
  *
  * Nothing here touches the player. What plays is read from what
  * MusicPlayerService.persistNowPlaying() wrote, and the buttons send the same
@@ -142,9 +145,41 @@ public final class WidgetRenderer {
         return c;
     }
 
-    static Colours colours(Context ctx) {
+    /** The colour this widget was put on the home screen with. A widget that
+     *  has none yet (just placed, or placed before widgets kept their own)
+     *  takes the one chosen in the app now, and keeps it. */
+    static String colourOf(Context ctx, int id) {
         SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String colour = p.getString("colour", "app");
+        String own = p.getString("colour_" + id, null);
+        if (own != null) return own;
+        String now = p.getString("colour", "app");
+        p.edit().putString("colour_" + id, now).apply();
+        return now;
+    }
+
+    /** Every MPTree widget on the home screen keeps the colour it has: called
+     *  before the app's choice changes, so widgets placed before this version
+     *  keep theirs too. */
+    public static synchronized void keepColours(Context ctx) {
+        try {
+            AppWidgetManager m = AppWidgetManager.getInstance(ctx);
+            for (Class<?> c : PROVIDERS) {
+                int[] ids = m.getAppWidgetIds(new ComponentName(ctx, c));
+                if (ids != null) for (int id : ids) colourOf(ctx, id);
+            }
+        } catch (Exception ignored) { /* they follow the new choice, as before */ }
+    }
+
+    /** Widgets taken off the home screen: their colours go too. */
+    public static void forget(Context ctx, int[] ids) {
+        if (ids == null) return;
+        SharedPreferences.Editor ed = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
+        for (int id : ids) ed.remove("colour_" + id);
+        ed.apply();
+    }
+
+    static Colours colours(Context ctx, String colour) {
+        SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         // Clear is part of Pro; without it the widget is black.
         if ("clear".equals(colour) && !p.getBoolean("pro", false)) colour = "black";
         switch (colour) {
@@ -194,7 +229,7 @@ public final class WidgetRenderer {
                 int[] ids = m.getAppWidgetIds(new ComponentName(ctx, PROVIDERS[kind]));
                 if (ids == null || ids.length == 0) continue;
                 for (int id : ids) {
-                    if (full) { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id))); }
+                    if (full) { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, id, st, widthOf(m, id))); }
                     else if (kind == CARD && st.has && proOn(ctx)) {
                         RemoteViews v = new RemoteViews(ctx.getPackageName(), LAYOUTS[CARD]);
                         timeline(v, st, null);
@@ -210,13 +245,13 @@ public final class WidgetRenderer {
     public static synchronized void update(Context ctx, AppWidgetManager m, int[] ids, int kind) {
         try {
             State st = read(ctx);
-            for (int id : ids) { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, st, widthOf(m, id))); }
+            for (int id : ids) { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, id, st, widthOf(m, id))); }
         } catch (Exception ignored) { /* stays as it was */ }
     }
 
     /** One widget, made larger or smaller on the home screen. */
     public static synchronized void resized(Context ctx, AppWidgetManager m, int id, int kind) {
-        try { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, read(ctx), widthOf(m, id))); } catch (Exception ignored) { /* stays as it was */ }
+        try { lastHeight = heightOf(ctx, id); m.updateAppWidget(id, build(ctx, kind, id, read(ctx), widthOf(m, id))); } catch (Exception ignored) { /* stays as it was */ }
     }
 
     /** How wide the widget is, in dp; 0 when the launcher does not say. */
@@ -239,9 +274,9 @@ public final class WidgetRenderer {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("pro", false);
     }
 
-    private static RemoteViews build(Context ctx, int kind, State st, int widthDp) {
+    private static RemoteViews build(Context ctx, int kind, int id, State st, int widthDp) {
         RemoteViews v = new RemoteViews(ctx.getPackageName(), LAYOUTS[kind]);
-        Colours c = colours(ctx);
+        Colours c = colours(ctx, colourOf(ctx, id));
         // Card and Record are part of Pro. Without it they say so, and a tap opens MPTree.
         boolean locked = (kind == CARD || kind == RECORD) && !proOn(ctx);
 

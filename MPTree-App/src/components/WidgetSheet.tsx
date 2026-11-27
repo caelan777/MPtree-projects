@@ -147,6 +147,10 @@ export function WidgetSheet({ T, pro, onNeedPro, onClose, onToast }: { T: T; pro
           })}
         </div>
 
+        <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.4, padding: "8px 22px 0" }}>
+          {t("For the widget you add next. One already on your home screen keeps its colour.")}
+        </div>
+
         <button onClick={add}
           style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "calc(100% - 32px)", margin: "18px 16px 0", height: 52, borderRadius: 26, background: T.accent, color: T.playBtnFg, border: "none", fontSize: 16, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>

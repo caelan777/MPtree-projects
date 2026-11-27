@@ -83,7 +83,9 @@ public class SystemPlugin extends Plugin {
         android.content.SharedPreferences prefs = ctx.getSharedPreferences(WidgetRenderer.PREFS, android.content.Context.MODE_PRIVATE);
         android.content.SharedPreferences.Editor ed = prefs.edit();
         String colour = call.getString("colour");
-        if (colour != null) ed.putString("colour", colour);
+        // The widgets already on the home screen keep the colour they have:
+        // the choice is for the next one.
+        if (colour != null) { WidgetRenderer.keepColours(ctx); ed.putString("colour", colour); }
         Boolean pro = call.getBoolean("pro");
         if (pro != null) ed.putBoolean("pro", pro);
         Boolean photoDisc = call.getBoolean("photoDisc");

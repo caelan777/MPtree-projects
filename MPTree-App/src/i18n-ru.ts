@@ -1102,4 +1102,6 @@ export const RU: Record<string, string> = {
   // Moving songs inside a playlist (test build 142)
   "Reorder songs": "Изменить порядок песен",
   "Drag a song by its handle to move it": "Перетащите песню за ручку, чтобы переместить её",
+  // The widget page (test build 142)
+  "For the widget you add next. One already on your home screen keeps its colour.": "Для виджета, который вы добавите следующим. Виджет, уже стоящий на главном экране, сохраняет свой цвет.",
 };

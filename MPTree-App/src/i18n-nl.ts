@@ -1113,4 +1113,6 @@ export const NL: Record<string, string> = {
   // Moving songs inside a playlist (test build 142)
   "Reorder songs": "Nummers verplaatsen",
   "Drag a song by its handle to move it": "Sleep een nummer aan het handvat om het te verplaatsen",
+  // The widget page (test build 142)
+  "For the widget you add next. One already on your home screen keeps its colour.": "Voor de widget die je hierna toevoegt. Een widget die al op je startscherm staat, houdt zijn kleur.",
 };
