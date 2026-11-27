@@ -1973,6 +1973,29 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toNativeTrack]);
 
+  /** Songs moved inside a playlist (Reorder songs). Music playing from that
+   *  playlist in order follows the new order from the song that is on; songs
+   *  set to play next stay right after it. Shuffled music keeps its own order. */
+  const followPlaylistOrder = useCallback((source: string, ordered: Song[]) => {
+    if (playSourceRef.current !== source || playModeRef.current === "shuffle") return;
+    const cur = curRef.current;
+    const q = queueRef.current;
+    const at = cur ? q.findIndex(s => s.id === cur.id) : -1;
+    const pos = cur ? ordered.findIndex(s => s.id === cur.id) : -1;
+    if (!cur || at < 0 || pos < 0) return;
+    const pins = new Set(playNextQueueRef.current);
+    const pinned = q.slice(at + 1).filter(s => pins.has(s.id));
+    const isPinned = new Set(pinned.map(s => s.id));
+    const before = ordered.slice(0, pos).filter(s => !isPinned.has(s.id));
+    const after = ordered.slice(pos + 1).filter(s => !isPinned.has(s.id));
+    const newQ = [...before, cur, ...pinned, ...after];
+    playContextRef.current = ordered;
+    setQueue(newQ);
+    queueRef.current = newQ;
+    AudioPlayer.setQueue({ tracks: newQ.map(toNativeTrack), currentIndex: before.length }).catch(() => {});
+    pinsInOrder(newQ, before.length + 1);
+  }, [toNativeTrack]);
+
   /** "Skip" next to the next song in the player: it goes to the end of the
    *  queue, and the one after it is next. */
   const skipUpNext = () => {
@@ -4628,6 +4651,7 @@ export default function App() {
               onShareMany={ids => { void shareSongs(ids); }}
               onSharePlaylist={(name, ids) => { void shareSongs(ids, name); }}
               onSelectingChange={setPlaylistSelecting}
+              onSongsMoved={followPlaylistOrder}
               onAddManyToPlaylist={ids => { setMultiIds(ids); setMultiAddOpen(true); }}
               onBulkEditMany={ids => { setMultiIds(ids); setBulkEditOpen(true); }}
               onCutSong={(song) => openCutSheet(song)}

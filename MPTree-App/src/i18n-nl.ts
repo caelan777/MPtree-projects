@@ -1110,4 +1110,7 @@ export const NL: Record<string, string> = {
   "Voice search isn't available on this TV": "Spraakzoeken werkt niet op deze tv",
   "Search by voice": "Zoeken met je stem",
   "Nothing after this song": "Niets meer na dit nummer",
+  // Moving songs inside a playlist (test build 142)
+  "Reorder songs": "Nummers verplaatsen",
+  "Drag a song by its handle to move it": "Sleep een nummer aan het handvat om het te verplaatsen",
 };

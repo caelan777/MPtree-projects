@@ -1099,4 +1099,7 @@ export const RU: Record<string, string> = {
   "Voice search isn't available on this TV": "Голосовой поиск недоступен на этом телевизоре",
   "Search by voice": "Голосовой поиск",
   "Nothing after this song": "После этой песни ничего нет",
+  // Moving songs inside a playlist (test build 142)
+  "Reorder songs": "Изменить порядок песен",
+  "Drag a song by its handle to move it": "Перетащите песню за ручку, чтобы переместить её",
 };

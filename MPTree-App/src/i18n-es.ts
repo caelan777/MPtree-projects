@@ -1110,4 +1110,7 @@ export const ES: Record<string, string> = {
   "Voice search isn't available on this TV": "La búsqueda por voz no está disponible en esta tele",
   "Search by voice": "Buscar con la voz",
   "Nothing after this song": "Nada después de esta canción",
+  // Moving songs inside a playlist (test build 142)
+  "Reorder songs": "Reordenar canciones",
+  "Drag a song by its handle to move it": "Arrastra una canción por el asa para moverla",
 };

@@ -7,7 +7,7 @@ import { isMissingArtist, readCoverPhoto, CROP_SOURCE_PX, indexById } from "../u
 import { CropSheet } from "../lazySheets";
 import { AlbumArt, PlayingBars } from "./AlbumArt";
 import { SongMenuSheet } from "./SongMenuSheet";
-import { MultiSelectBar, SelectCheck } from "./MultiSelectBar";
+import { MultiSelectBar, SelectCheck, SELECT_TOP_H } from "./MultiSelectBar";
 import { floatCard, roundBtn as cardCloseBtn } from "./cardStyles";
 import { ConfirmSheet } from "./ConfirmSheet";
 import type { ToastAction } from "./Toast";
@@ -116,6 +116,9 @@ interface Props {
   onOpenName?:        (name: string | null) => void;
   /** App's toast, for "Undo" after a playlist is deleted with its X. */
   onToast?:           (msg: string, action?: ToastAction) => void;
+  /** A song was moved inside a playlist ("Reorder songs"): its songs in their
+   *  new order, so music playing from it in order follows the new order. */
+  onSongsMoved?:      (source: string, ordered: Song[]) => void;
   /** Bumped when "Playlists" is tapped in App's tabs inside a playlist:
    *  straight back to the list. */
   listSignal?:        number;
@@ -307,7 +310,7 @@ export const PlaylistsView: React.FC<Props> = ({
   onEditSong, onChangePhoto, onSetRingtone, onEditLyrics, onCutSong, onShareSong, onRemoveSong, onBinMany,
   onLikeMany, onShuffleMany, onPlayManyNext, onShareMany, onSharePlaylist, onSelectingChange, onAddManyToPlaylist, onBulkEditMany,
   isLiked, isNext, isRingtone, onHaptic, onDetailChange, bottomInset = 0, resetToListSignal, backSignal = 0,
-  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, listSignal = 0, onClose, T,
+  onBodyScroll, onInsetJump, onAutoScroll, animateInsets = true, onOpenName, onToast, onSongsMoved, listSignal = 0, onClose, T,
 }) => {
   const [view,            setView]           = useState<View>("list");
   // NOTE: the effect that reports our depth to App lives further down, after
@@ -326,6 +329,7 @@ export const PlaylistsView: React.FC<Props> = ({
       setActiveSmartId(null);
       setMenuSong(null);
       setReordering(false);
+      setOrdering(false);
     }
   }, [resetToListSignal]);
   const [creating,        setCreating]       = useState(false);
@@ -419,13 +423,27 @@ export const PlaylistsView: React.FC<Props> = ({
   useEffect(() => { if (view !== "list") setCreating(false); }, [view]);
   const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
 
+  // ── Moving songs inside a playlist ────────────────────────────────────────
+  // "Reorder songs" on a playlist's card (Caelan, 27 Nov). Every song then has a
+  // handle on the right; dragging it moves the song, the songs it passes make
+  // room, and near the top or bottom of the screen the list scrolls along. The
+  // new order is kept the moment the song is let go.
+  const [ordering, setOrdering] = useState(false);
+  const [songDrag, setSongDrag] = useState<{ from: number; over: number; dy: number } | null>(null);
+  // The frame right after a drop: the rows take their new places without
+  // sliding there from their old ones a second time.
+  const [settling, setSettling] = useState(false);
+  const songDragRef = useRef<{ from: number; over: number; n: number; startY: number; startTop: number; y: number; raf: number | null } | null>(null);
+
   // ── Multi-select (playlist detail only) ─────────────────────────────────────
   // Long-pressing a row enters select mode; tapping rows toggles them; a bottom
   // bar removes all selected songs from the playlist at once.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exitSelect = useCallback(() => { setSelectMode(false); setSelectedIds(new Set()); }, [setSelectMode, setSelectedIds]);
-  useEffect(() => { onSelectingChange?.(selectMode); }, [selectMode, onSelectingChange]);
+  // Picking songs and moving them both have App's header card and the player
+  // make way, so the page is the list and a plain bar.
+  useEffect(() => { onSelectingChange?.(selectMode || ordering); }, [selectMode, ordering, onSelectingChange]);
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -435,6 +453,8 @@ export const PlaylistsView: React.FC<Props> = ({
   }, [setSelectedIds]);
   // Leaving the detail view (or App switching to Songs) cancels selection.
   useEffect(() => { if (view === "list") exitSelect(); }, [view, exitSelect]);
+  // Moving songs is only for the playlist that is open.
+  useEffect(() => { if (view !== "detail") setOrdering(false); }, [view]);
 
   // Scroll the currently-playing song into view when it changes (or when a
   // detail view opens on the song that is already playing). Small delay so the
@@ -467,7 +487,7 @@ export const PlaylistsView: React.FC<Props> = ({
   // should not jump back to Songs), and to decide whether Android's Back
   // belongs to us or should leave the tab.
   const canPop = view !== "list" || selectMode || !!menuSong
-    || creating || !!renamingId || !!confirmDeleteId || confirmRemovePhoto || reordering;
+    || creating || !!renamingId || !!confirmDeleteId || confirmRemovePhoto || reordering || ordering;
   useEffect(() => { onDetailChange?.(canPop); }, [canPop, onDetailChange]);
 
   // ── Android Back, delegated from App ──────────────────────────────────────
@@ -478,6 +498,7 @@ export const PlaylistsView: React.FC<Props> = ({
     if (backSignal === lastBackSignalRef.current) return;
     lastBackSignalRef.current = backSignal;
     if (menuSong)         { setMenuSong(null); return; }
+    if (ordering)         { endOrdering(); return; }
     if (reordering)       { setReordering(false); return; }
     if (confirmDeleteId)  { setConfirmDeleteId(null); return; }
     if (confirmRemovePhoto) { setConfirmRemovePhoto(false); return; }
@@ -672,6 +693,142 @@ export const PlaylistsView: React.FC<Props> = ({
       .filter((s): s is Song => !!s);
   }, [activeSmartPlaylist, songs]);
 
+  // ── Moving songs: the drag ────────────────────────────────────────────────
+  /** The song at `from` (in the list as shown) goes to `to`. Songs of the
+   *  playlist that are not on this device keep their place among the rest. */
+  const moveSong = (from: number, to: number) => {
+    if (!activePlaylist || from === to) return;
+    const moved = playlistSongs[from]?.id, target = playlistSongs[to]?.id;
+    if (!moved || !target) return;
+    const ids = activePlaylist.songIds.filter(id => id !== moved);
+    const at = ids.indexOf(target);
+    if (at < 0) return;
+    ids.splice(from < to ? at + 1 : at, 0, moved);
+    onPlaylistsChange(playlists.map(p => (p.id === activePlaylist.id ? { ...p, songIds: ids } : p)));
+    const ordered = [...playlistSongs];
+    const [song] = ordered.splice(from, 1);
+    ordered.splice(to, 0, song);
+    onSongsMoved?.(`pl:${activePlaylist.id}`, ordered);
+  };
+
+  /** Where the dragged song is now, from the finger and how far the list scrolled. */
+  const followSongDrag = () => {
+    const g = songDragRef.current, body = scrollBodyRef.current;
+    if (!g || !body) return;
+    const dy = g.y - g.startY + (body.scrollTop - g.startTop);
+    const over = Math.max(0, Math.min(g.n - 1, g.from + Math.round(dy / rowH)));
+    g.over = over;
+    setSongDrag(prev => (prev && prev.dy === dy && prev.over === over ? prev : { from: g.from, over, dy }));
+  };
+
+  /** Near the top or the bottom of the list the list scrolls by itself, faster
+   *  the closer the finger is to the edge, so a song can go anywhere. */
+  const scrollWhileDragging = () => {
+    const g = songDragRef.current, body = scrollBodyRef.current;
+    if (!g || !body) return;
+    const box = body.getBoundingClientRect();
+    const top = box.top + topInset, bottom = box.bottom, zone = 72;
+    let v = 0;
+    if (g.y < top + zone) v = -Math.ceil(14 * Math.min(1, (top + zone - g.y) / zone));
+    else if (g.y > bottom - zone) v = Math.ceil(14 * Math.min(1, (g.y - (bottom - zone)) / zone));
+    if (v) {
+      const before = body.scrollTop;
+      body.scrollTop = before + v;
+      if (body.scrollTop !== before) followSongDrag();
+    }
+    g.raf = requestAnimationFrame(scrollWhileDragging);
+  };
+
+  const startSongDrag = (e: React.PointerEvent<HTMLElement>, i: number) => {
+    const body = scrollBodyRef.current;
+    if (!body || songDragRef.current) return;
+    e.stopPropagation();
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* the drag still works without */ }
+    onHaptic?.();
+    songDragRef.current = { from: i, over: i, n: playlistSongs.length, startY: e.clientY, startTop: body.scrollTop, y: e.clientY, raf: null };
+    setSongDrag({ from: i, over: i, dy: 0 });
+    songDragRef.current.raf = requestAnimationFrame(scrollWhileDragging);
+  };
+  const moveSongDrag = (e: React.PointerEvent<HTMLElement>) => {
+    const g = songDragRef.current;
+    if (!g) return;
+    e.stopPropagation();
+    g.y = e.clientY;
+    followSongDrag();
+  };
+  const endSongDrag = () => {
+    const g = songDragRef.current;
+    if (!g) return;
+    if (g.raf) cancelAnimationFrame(g.raf);
+    songDragRef.current = null;
+    setSettling(true);
+    setSongDrag(null);
+    if (g.over !== g.from) { onHaptic?.(); moveSong(g.from, g.over); }
+    requestAnimationFrame(() => requestAnimationFrame(() => setSettling(false)));
+  };
+  const endOrdering = () => {
+    const g = songDragRef.current;
+    if (g?.raf) cancelAnimationFrame(g.raf);
+    songDragRef.current = null;
+    setSongDrag(null);
+    setOrdering(false);
+  };
+  // Never a loop left running behind a closed playlist.
+  useEffect(() => () => { const g = songDragRef.current; if (g?.raf) cancelAnimationFrame(g.raf); }, []);
+
+  /** A song while moving songs: no tap, no hold, its handle on the right. The
+   *  one being dragged follows the finger; the ones it passes step aside. */
+  const renderOrderRow = (song: Song, i: number) => {
+    const d = songDrag;
+    const dragging = d?.from === i;
+    let shift = 0;
+    if (d && !dragging) {
+      if (d.from < d.over && i > d.from && i <= d.over) shift = -rowH;
+      else if (d.over < d.from && i >= d.over && i < d.from) shift = rowH;
+    }
+    const isCurrent = currentSongId === song.id && playingFrom === `pl:${activeId}`;
+    return (
+      <div
+        key={song.id}
+        data-order-row={i}
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          height: rowH, boxSizing: "border-box", padding: "0 0 0 8px", margin: "0 8px",
+          borderRadius: 14, position: "relative", zIndex: dragging ? 3 : 1,
+          background: dragging || isCurrent ? t.card : "transparent",
+          boxShadow: dragging ? `0 12px 30px rgba(0,0,0,0.28), inset 0 0 0 1px ${t.border}` : isCurrent ? `inset 0 0 0 1px ${t.border}` : "none",
+          transform: dragging ? `translateY(${d!.dy}px) scale(1.02)` : `translateY(${shift}px)`,
+          transition: dragging || settling ? "box-shadow 0.15s" : "transform 0.18s cubic-bezier(.2,.7,.2,1), box-shadow 0.15s",
+        }}
+      >
+        <AlbumArt title={dispName(song)} size={rowH - 20} active={isCurrent} playing={isCurrent && isPlaying} customPhoto={meta[song.id]?.customPhoto} songPath={song.uri} albumId={song.albumId} T={t} />
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <span style={{ fontSize: rowTitle, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isCurrent ? t.accent : t.text }}>{dispName(song)}</span>
+          <span style={{ marginTop: 2, fontSize: rowSub, color: t.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{dispArtist(song)}</span>
+        </div>
+        <div
+          onPointerDown={e => startSongDrag(e, i)}
+          onPointerMove={moveSongDrag}
+          onPointerUp={endSongDrag}
+          onPointerCancel={endSongDrag}
+          onTouchStart={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          aria-label={tr("Drag to move")}
+          role="button"
+          style={{ alignSelf: "stretch", display: "flex", alignItems: "center", padding: "0 14px 0 12px", color: dragging ? t.text : t.muted, touchAction: "none", cursor: dragging ? "grabbing" : "grab" }}
+        >
+          <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+            <circle cx="3.5" cy="3" r="1.7"/><circle cx="10.5" cy="3" r="1.7"/>
+            <circle cx="3.5" cy="9" r="1.7"/><circle cx="10.5" cy="9" r="1.7"/>
+            <circle cx="3.5" cy="15" r="1.7"/><circle cx="10.5" cy="15" r="1.7"/>
+          </svg>
+        </div>
+      </div>
+    );
+  };
+
   // What "Select all" covers: whichever detail list is open. Smart playlists are
   // computed, so songs cannot be pulled out of one, but every other action in
   // the bar still applies to them.
@@ -724,6 +881,7 @@ export const PlaylistsView: React.FC<Props> = ({
   const goBack = useCallback(() => {
     // If we're picking songs, the back arrow cancels selection first.
     if (selectMode) { exitSelect(); return; }
+    if (ordering) { endOrdering(); return; }
     if (view === "addSongs") {
       setSelectedAdd(new Set());
       setAddSearch("");
@@ -737,12 +895,12 @@ export const PlaylistsView: React.FC<Props> = ({
     } else {
       onClose();
     }
-  }, [view, onClose, selectMode, exitSelect]);
+  }, [view, onClose, selectMode, exitSelect, ordering]);
 
   /** Straight to the list of playlists, from however deep: App's
    *  "Playlists" tab inside a playlist, and a playlist swiped away. */
   const leaveToList = () => {
-    exitSelect(); setMenuSong(null); setRenamingId(null); setCreating(false);
+    exitSelect(); endOrdering(); setMenuSong(null); setRenamingId(null); setCreating(false);
     setSelectedAdd(new Set()); setAddSearch("");
     setActiveId(null); setActiveSmartId(null); setView("list");
   };
@@ -1038,6 +1196,13 @@ export const PlaylistsView: React.FC<Props> = ({
             <button onClick={() => onSharePlaylist(name, list.filter(s => !s.isCut).map(s => s.id))} aria-label={tr("Share playlist")} style={roundBtn}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>
+              </svg>
+            </button>
+          )}
+          {own && list.length > 1 && (
+            <button onClick={() => { onHaptic?.(); setOrdering(true); }} aria-label={tr("Reorder songs")} style={roundBtn}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/>
               </svg>
             </button>
           )}
@@ -1540,7 +1705,7 @@ export const PlaylistsView: React.FC<Props> = ({
           <>
             {/* The card. Away while picking songs, so the page is the bar,
                 the rows and the actions, as on Songs. */}
-            {!selectMode && renderCard({
+            {!selectMode && !ordering && renderCard({
               source: `pl:${activePlaylist.id}`, name: activePlaylist.name, photo: activePlaylist.coverPhoto,
               icon: noteIcon, list: playlistSongs, own: true,
             })}
@@ -1550,6 +1715,8 @@ export const PlaylistsView: React.FC<Props> = ({
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{tr("No songs yet")}</div>
                 <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>{tr("Tap \"+ Add\" at the top to add songs")}</div>
               </div>
+            ) : ordering ? (
+              playlistSongs.map((song, idx) => renderOrderRow(song, idx))
             ) : (
               playlistSongs.map((song, idx) => (
                 <React.Fragment key={song.id}>{renderSongRow({ song, idx, list: playlistSongs, inPlaylist: true })}</React.Fragment>
@@ -1656,6 +1823,24 @@ export const PlaylistsView: React.FC<Props> = ({
           extra props are the difference a playlist actually justifies: pulling
           songs out of it, and the library removal that on the Songs page lives
           up in the header (there is no header button in here to carry it). */}
+      {ordering && view === "detail" && createPortal(
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 110, background: t.bg, paddingTop: "env(safe-area-inset-top, 0px)" }}>
+          <div style={{ height: SELECT_TOP_H, display: "flex", alignItems: "center", gap: 12, padding: "0 14px 0 16px" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr("Reorder songs")}</div>
+              <div style={{ fontSize: 12.5, color: t.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr("Drag a song by its handle to move it")}</div>
+            </div>
+            <button onClick={() => { onHaptic?.(); endOrdering(); }} style={{
+              flexShrink: 0, height: 38, padding: "0 18px", borderRadius: 19, border: "none",
+              background: t.accent, color: t.playBtnFg, fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+            }}>
+              {tr("Done")}
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {selectMode && createPortal(
         <MultiSelectBar
           count={selectedIds.size}
