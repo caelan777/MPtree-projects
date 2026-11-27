@@ -23,6 +23,9 @@ type SongMenuSheetProps = {
   dispArtist: string;
   customPhoto?: string;
   isLiked: boolean;
+  /** Set to play next / the phone's ringtone: their tiles light up. */
+  isNext?: boolean;
+  isRingtone?: boolean;
   playlists: Playlist[];
   onPlay: () => void;
   onPlayNext: () => void;
@@ -45,18 +48,20 @@ type SongMenuSheetProps = {
   onRemoveFromPlaylist?: () => void;
   /** The playlist the menu was opened in, said under the artist. */
   inPlaylistName?: string;
+  /** Open straight on the playlist picker: "Add to" in the player's menu. */
+  startOnPlaylists?: boolean;
   onClose: () => void;
   T: T;
 };
 
 export function SongMenuSheet({
-  song, dispName, dispArtist, customPhoto, isLiked, playlists,
+  song, dispName, dispArtist, customPhoto, isLiked, isNext, isRingtone, playlists,
   onPlay, onPlayNext, onAddToPlaylist, onCreatePlaylistWithSong,
   onEdit, onChangePhoto, onSetRingtone, onEditLyrics, onCut, onToggleLike, onShare, onRemove, onRemoveFromPlaylist,
-  inPlaylistName, onClose, T,
+  inPlaylistName, startOnPlaylists = false, onClose, T,
 }: SongMenuSheetProps) {
   const sh = makeSH(T);
-  const [pane, setPane] = useState<"actions" | "playlists">("actions");
+  const [pane, setPane] = useState<"actions" | "playlists">(startOnPlaylists ? "playlists" : "actions");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const sub = [dispArtist, inPlaylistName && t("in {name}", { name: inPlaylistName })].filter(Boolean).join(" · ");
@@ -87,7 +92,10 @@ export function SongMenuSheet({
   );
 
   return (
-    <div style={{ ...sh.overlay, padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 12px)", boxSizing: "border-box" }} onClick={onClose}>
+    // It stays open after everything but Play (Caelan, 21 Nov), so it sits
+    // just under what it opens: Edit, Cut, Lyrics, the question before the bin
+    // (all 400 and up) and the toasts (500). Still over the mini player.
+    <div style={{ ...sh.overlay, zIndex: 390, padding: "0 12px calc(env(safe-area-inset-bottom, 0px) + 12px)", boxSizing: "border-box" }} onClick={onClose}>
       <div
         style={{ ...floatCard(T), width: "100%", maxHeight: "82vh", display: "flex", flexDirection: "column", padding: 12, animation: "mpCardUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both" }}
         onClick={e => e.stopPropagation()}
@@ -112,7 +120,7 @@ export function SongMenuSheet({
 
         {pane === "actions" ? (
           <SongActionTiles T={T} a={{
-            isLiked, onPlay, onPlayNext, onToggleLike, onShare, onEditLyrics, onCut, onSetRingtone,
+            isLiked, isNext, isRingtone, onPlay, onPlayNext, onToggleLike, onShare, onEditLyrics, onCut, onSetRingtone,
             onChangePhoto, onEdit, onRemoveFromPlaylist, onBin: onRemove,
             onAddToPlaylist: () => setPane("playlists"),
           }} />

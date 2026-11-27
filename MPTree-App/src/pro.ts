@@ -1,10 +1,11 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { Ads, Billing, System } from "./plugins";
 import { resetLook } from "./look";
 import { dropBackground } from "./background";
 import { t } from "./i18n";
+import { count } from "./counter";
 
 // ─── PRO ─────────────────────────────────────────────────────────────────────
 // MPTree Pro is one payment, once. Nothing that is free today moves behind it;
@@ -195,7 +196,6 @@ const AD_DAY_KEY = "mptree_ad_day";
 /** Where the free week was kept, read once so a week still running ends as it would have. */
 const OLD_TRIAL_KEY = "mptree_trial";
 const DAY = 24 * 60 * 60 * 1000;
-const HOUR = 60 * 60 * 1000;
 type StoredDay = { from: number; until: number; extra?: boolean; ask?: 1 | 2 };
 
 function storeDay(d: StoredDay) {
@@ -208,6 +208,13 @@ function storeDay(d: StoredDay) {
 const AD_UNIT =
   PRO_MODE === "free" ? "ca-app-pub-3940256099942544/5224354917"
   : PRO_MODE === "play" ? "ca-app-pub-3909703327280410/3472642383"
+  : "";
+/** The native ad under Popular this week on Discover: Google's test unit in a
+ *  test build, and in the Play build MPTree's own native unit once it is made
+ *  in AdMob (Ad units > Native advanced). Empty: no ad on that page. */
+export const NATIVE_UNIT =
+  PRO_MODE === "free" ? "ca-app-pub-3940256099942544/2247696110"
+  : PRO_MODE === "play" ? "ca-app-pub-3909703327280410/6848616316"
   : "";
 /** Whether this build can show the ad at all (not in a browser). */
 export const ADS_ON = AD_UNIT !== "" && Capacitor.getPlatform() === "android";
@@ -245,11 +252,10 @@ function checkDay() {
  *  and then MPTree asks again; the second time Pro turns off. */
 export function notNowAdDay(): "hour" | "off" {
   if (adDay.state !== "ask") return "off";
-  if (adDay.round === 2) { endDay(); return "off"; }
-  const now = Date.now();
-  storeDay({ from: now, until: now + HOUR, extra: true });
-  runDay(now, now + HOUR, true);
-  return "hour";
+  // No extra hour any more (Caelan, 21 Nov): the day is up, so "Not now"
+  // turns Pro off at once. An extra hour still running from before ends as it did.
+  endDay();
+  return "off";
 }
 
 /** A day of Pro as a gift (the Halloween treat): 24 hours from now, or 24 on
@@ -282,25 +288,40 @@ if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) checkDay(); });
 }
 
-export type AdResult = "pro" | "offline" | "closed" | "none" | "consent" | "failed";
+/** "pro-free": Google had no ad to give, so the day came without one. */
+export type AdResult = "pro" | "pro-free" | "offline" | "closed" | "none" | "consent" | "failed";
 
 /** Shows one ad. Watched to the end, Pro is on for 24 hours from now. */
 export async function watchAdForPro(): Promise<AdResult> {
   if (!ADS_ON) return "failed";
+  count("ad-start");
+  let free = false;
   try {
     const r = await Ads.showRewarded({ adUnitId: AD_UNIT });
     if (!r.rewarded) {
       const why = r.reason;
-      return why === "offline" || why === "closed" || why === "none" || why === "consent" ? why : "failed";
+      if (why === "offline" || why === "closed" || why === "consent") return why;
+      // Google had no ad, or could not be reached for one: so it is in
+      // Russia, where Google sells no ads and Play takes no payments. Nobody
+      // misses out on the day because of where they live; it comes anyway.
+      free = true;
     }
-  } catch {
-    return "failed";
+  } catch (e) {
+    // A second tap while an ad is on its way is not a missing ad.
+    if ((e as { code?: string })?.code === "BUSY") return "failed";
+    free = true;
   }
+  count(free ? "ad-missing" : "ad-done");
   const now = Date.now();
   const day: StoredDay = { from: now, until: now + DAY };
   storeDay(day);
   runDay(day.from, day.until);
-  return "pro";
+  return free ? "pro-free" : "pro";
+}
+
+/** What to say when the day is on: with the ad, or without one. */
+export function adOkText(r: "pro" | "pro-free"): string {
+  return r === "pro" ? t("Pro is on for 24 hours") : t("There was no ad to show, so Pro is on for 24 hours anyway.");
 }
 
 /** What to tell someone whose ad did not give them Pro. */
@@ -371,6 +392,7 @@ export async function buyPro(email?: string): Promise<BuyResult> {
     const r = await Billing.purchase({ productId: PRODUCT_ID, accountTag: tag });
     if (r.owned) {
       setOwned(true, "play", r.tag ?? null);
+      count("pro-buy");
       // Owned already (bought before on this Google Play account): Play's
       // own record says which account it is for.
       if (!r.tag) await restorePro();
@@ -405,6 +427,23 @@ export async function proPrice(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// The price, asked of Play once and kept: several screens show it.
+let priceCache: string | null = null;
+let priceAsk: Promise<string | null> | null = null;
+/** The price for a label: Play's own once it has answered, €2,99 until then
+ *  (and in the browser demo and test builds, where there is no Play). */
+export function useProPrice(): string {
+  const [p, setP] = useState(priceCache);
+  useEffect(() => {
+    if (priceCache) return;
+    let live = true;
+    priceAsk ??= proPrice().then(v => { priceCache = v; return v; });
+    priceAsk.then(v => { if (live && v) setP(v); });
+    return () => { live = false; };
+  }, []);
+  return p ?? "€2,99";
 }
 
 /** Test builds only: back to free, to try the locked side again. */

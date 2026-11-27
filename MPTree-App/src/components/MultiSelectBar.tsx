@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { T } from "../themes";
+import { isDarkPalette, type T } from "../themes";
 import { floatCard, roundBtn } from "./cardStyles";
 import { t, tn } from "../i18n";
 import { IC } from "./Icons";
@@ -34,6 +34,10 @@ const grid: CSSProperties = {
  *  selection with one song in it. */
 export type SongActions = {
   isLiked: boolean;
+  /** Set to play after this song (Play next). */
+  isNext?: boolean;
+  /** The phone rings with it. */
+  isRingtone?: boolean;
   onPlay: () => void;
   onPlayNext: () => void;
   onAddToPlaylist: () => void;
@@ -50,17 +54,27 @@ export type SongActions = {
   onBin: () => void;
 };
 
+// What a song is shows on its tile, in colour (Caelan, 21 Nov): liked red,
+// set to play next light blue, the ringtone yellow. Besides shuffle and
+// selection, the one place colour is allowed. Each a little deeper on a light
+// ground, so it still reads there.
+function litColours(T: T) {
+  const dark = isDarkPalette(T);
+  return { like: RED, next: dark ? "#6ccbff" : "#168ad0", ring: dark ? "#ffd23f" : "#c98f00" };
+}
+
 export function SongActionTiles({ a, T }: { a: SongActions; T: T }) {
+  const lit = litColours(T);
   return (
     <div style={grid}>
       <ActionTile icon={<IC.Play />} label={t("Play")} onClick={a.onPlay} T={T} />
-      <ActionTile icon={<IC.PlayNext />} label={t("Play next")} onClick={a.onPlayNext} T={T} />
+      <ActionTile icon={<IC.PlayNext />} label={t("Play next")} onClick={a.onPlayNext} tint={a.isNext ? lit.next : undefined} T={T} />
       <ActionTile icon={<IC.Plus />} label={t("Add to")} onClick={a.onAddToPlaylist} T={T} />
-      <ActionTile icon={<IC.Heart filled={a.isLiked} size={16} />} label={a.isLiked ? t("Unlike") : t("Like")} onClick={a.onToggleLike} T={T} />
+      <ActionTile icon={<IC.Heart filled={a.isLiked} size={16} />} label={a.isLiked ? t("Unlike") : t("Like")} onClick={a.onToggleLike} tint={a.isLiked ? lit.like : undefined} T={T} />
       <ActionTile icon={<IC.Share />} label={t("Share")} onClick={a.onShare} T={T} />
       <ActionTile icon={<IC.Lyrics />} label={t("Lyrics")} onClick={a.onEditLyrics} T={T} />
       <ActionTile icon={<IC.Scissors />} label={t("Cut")} onClick={a.onCut} T={T} />
-      <ActionTile icon={<IC.Bell />} label={t("Ringtone")} onClick={a.onSetRingtone} T={T} />
+      <ActionTile icon={<IC.Bell />} label={t("Ringtone")} onClick={a.onSetRingtone} tint={a.isRingtone ? lit.ring : undefined} T={T} />
       <ActionTile icon={<IC.Photo />} label={t("Photo")} onClick={a.onChangePhoto} T={T} />
       <ActionTile icon={<IC.Edit />} label={t("Edit")} onClick={a.onEdit} T={T} />
       {a.onRemoveFromPlaylist && <ActionTile icon={<OutOfPlaylistIcon />} label={t("Out of playlist")} onClick={a.onRemoveFromPlaylist} T={T} />}
@@ -179,25 +193,26 @@ function OutOfPlaylistIcon() {
 
 /** One thing to do: a tile with its icon, its name under it. `last` puts it
  *  in the fourth column whatever comes before it, so the bin is always in the
- *  same corner. */
-export function ActionTile({ icon, label, onClick, disabled = false, danger, last, T }: {
-  icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; danger?: boolean; last?: boolean; T: T;
+ *  same corner. `tint` lights it in that colour (see litColours). */
+export function ActionTile({ icon, label, onClick, disabled = false, danger, last, tint, T }: {
+  icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; danger?: boolean; last?: boolean; tint?: string; T: T;
 }) {
+  const ink = danger ? RED : tint;
   return (
-    <button onClick={disabled ? undefined : onClick} aria-disabled={disabled} style={{
+    <button onClick={disabled ? undefined : onClick} aria-disabled={disabled} aria-pressed={tint ? true : undefined} style={{
       minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
       background: "transparent", border: "none", padding: 0, fontFamily: "inherit",
-      color: danger ? RED : T.text, opacity: disabled ? 0.38 : 1, cursor: disabled ? "default" : "pointer",
-      transition: "opacity 0.15s", gridColumn: last ? 4 : undefined,
+      color: ink ?? T.text, opacity: disabled ? 0.38 : 1, cursor: disabled ? "default" : "pointer",
+      transition: "opacity 0.15s, color 0.2s", gridColumn: last ? 4 : undefined,
     }}>
       <span style={{
-        width: 48, height: 44, borderRadius: 14, background: danger ? RED + "1f" : T.dim,
-        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 48, height: 44, borderRadius: 14, background: danger ? RED + "1f" : tint ? tint + "2e" : T.dim,
+        display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s",
       }}>
         {/* The icons are drawn at 16 to 20; this brings them near one size. */}
         <span style={{ display: "flex", transform: "scale(1.15)" }}>{icon}</span>
       </span>
-      <span style={{ maxWidth: "100%", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: danger ? RED : T.textSub }}>{label}</span>
+      <span style={{ maxWidth: "100%", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: ink ?? T.textSub, transition: "color 0.2s" }}>{label}</span>
     </button>
   );
 }

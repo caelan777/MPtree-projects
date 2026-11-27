@@ -64,6 +64,13 @@ export type LibDoc = {
 
 export const emptyDoc = (): LibDoc => ({ v: 1, songs: {}, playlists: {}, cuts: {}, settings: {} });
 
+/** Whether the account's "this account has Pro" note was written by a phone
+ *  that is no longer on the account (see orphan in engine.ts). `by`: who
+ *  wrote it, or undefined when there is no note. An empty list is a list that
+ *  could not be read, and proves nothing. */
+export const noteOrphaned = (by: string | undefined, onAccount: string[]): boolean =>
+  by !== undefined && onAccount.length > 0 && !onAccount.includes(by);
+
 const META_FIELDS = ["customName", "customArtist", "customGenre", "customLyrics", "customPhoto", "liked", "lastPlayedAt", "playCount"] as const;
 
 // ── Keys ──────────────────────────────────────────────────────────────────────

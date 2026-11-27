@@ -40,7 +40,7 @@
       <!-- A GitHub pre-release, so /releases/latest (the normal Download
            button) keeps serving 1.0.0. -->
       <a class="btn btn-lg"
-         href="https://github.com/caelan777/MPtree-projects/releases/download/v1.2.3-pro-test.82/MPTree-pro-test.apk">
+         href="https://github.com/caelan777/MPtree-projects/releases/download/v1.2.3-pro-test.104/MPTree-pro-test.apk">
         Download the test build
       </a>
     </div>
@@ -54,12 +54,212 @@
 
   <section class="section-flush">
     <h2>What to try</h2>
-    <p class="section-lede">All of it is in Settings. This is test build 82, 1.3.5 as it goes to Google Play.</p>
+    <p class="section-lede">All of it is in Settings. This is test build 104.</p>
     <ol class="guide">
+      <li>
+        <span class="g-n">104</span>
+        <div class="g-c">
+          <b>New in 104</b>
+          <p><b>Player close to the bar</b>: the player sits just above the navigation bar, a little differently for gestures and for three buttons.</p>
+          <p><b>The wall, every time</b>: switching fast between Discover and another tab, there is always a wall to cover the change.</p>
+          <p><b>Discover is black</b>: the page is black in every theme, and so is the navigation bar under it.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">103</span>
+        <div class="g-c">
+          <b>New in 103</b>
+          <p><b>No flicker on Discover</b>: when the header folds while you scroll, the page does the same as Songs, so nothing jumps.</p>
+          <p><b>The wall both ways</b>: leaving Discover, the wall flows from the bottom up and takes the page away behind it.</p>
+          <p><b>From Playlists</b>: opening Discover from Playlists no longer shows Songs on the way.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">102</span>
+        <div class="g-c">
+          <b>New in 102</b>
+          <p><b>The wall is back</b>: opening Discover, a wall of black and white covers flows down over the screen and on out at the bottom, with Discover behind it.</p>
+          <p><b>Discover button</b>: right next to the Playlists tab.</p>
+          <p><b>Player stays folded</b>: folded with the logo, the player no longer comes back when you scroll down.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">101</span>
+        <div class="g-c">
+          <b>New in 101</b>
+          <p><b>Discover button</b>: the download button is its own round button in the top card now, next to Settings. Discover is no longer swiped in or out, so the rows of covers start on the left and scroll freely.</p>
+          <p><b>Folding on Discover</b>: the same as on Songs. Scrolled down, what is on screen stays put while the header folds.</p>
+          <p><b>Sharing to WhatsApp</b>: songs go as music again, so they play. Their names go along as text, "Artist - Title", one per line.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">100</span>
+        <div class="g-c">
+          <b>New in 100</b>
+          <p><b>WhatsApp, second try</b>: WhatsApp asks Android itself what a shared file is, and was told "audio". It is now told "a file", so it should send a document with the name "Artist - Title.mp3".</p>
+          <p><b>Folding on Discover</b>: the page no longer gets laid out again on every frame of the fold. At the top it moves with the header on the GPU, scrolled down it stays put. Songs and Playlists underneath no longer animate while Discover is open.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">99</span>
+        <div class="g-c">
+          <b>New in 99</b>
+          <p><b>Sharing to WhatsApp</b>: songs now go as files (documents), so WhatsApp keeps "Artist - Title.mp3" instead of calling them "audiofile". This counts for one song, several, and a whole playlist.</p>
+          <p><b>Folding on Discover</b>: the header folds over the page without moving it, as fast as on Songs.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">98</span>
+        <div class="g-c">
+          <b>New in 98</b>
+          <p><b>Navigation bar</b>: Android's navigation bar is no longer hidden. The player and the buttons sit above it with room to spare, and its buttons follow the light or dark theme.</p>
+          <p><b>Sharing</b>: sharing several songs now sends each with its name, artist and cover, like sharing one. Playlists can be shared too: the share button on a playlist's card sends all its songs.</p>
+          <p><b>Personalise</b>: opened from Discover, the preview shows your songs, and Discover comes back when you close it.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">97</span>
+        <div class="g-c">
+          <b>New in 97</b>
+          <p><b>Smoother</b>: Discover no longer draws its whole page again whenever something else in the app changes. Folding the header, tapping the logo and switching tabs take about half the work, so they should no longer flicker or hang.</p>
+          <p><b>Lighter</b>: rows you have not scrolled to yet are not drawn until you get near them.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">96</span>
+        <div class="g-c">
+          <b>New in 96</b>
+          <p><b>Header folds on Discover</b>: scrolling down folds the header into the logo, like on Songs. Tapping the logo folds and unfolds it smoothly, the page no longer slides along.</p>
+          <p><b>Cards on top</b>: "More music on Internet Archive" and "Buy music on Bandcamp" are now at the top of Discover, and react when you tap them.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">95</span>
+        <div class="g-c">
+          <b>New in 95</b>
+          <p><b>Two cards</b>: Internet Archive and Bandcamp now sit side by side at the bottom of Discover, each with its mark.</p>
+          <p><b>Search</b>: when a search has no more songs, Load more becomes "More on Internet Archive", which opens the Archive's search page.</p>
+          <p><b>Polish</b>: no swiping away from a search or a list, back from a list returns to where you were, a new search is never filled with an older one's songs, and the top of the page says "Popular free songs".</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">94</span>
+        <div class="g-c">
+          <b>New in 94</b>
+          <p><b>More music elsewhere</b>: at the bottom of Discover, "More on Internet Archive" opens the Archive's music pages, and "Buy on Bandcamp" opens Bandcamp, where you can buy songs as files.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">93</span>
+        <div class="g-c">
+          <b>New in 93</b>
+          <p><b>A new home</b>: Discover opens with Popular songs (numbered, four at a time) and Popular artists. Tap an artist to see all their free songs.</p>
+          <p><b>Search both sources</b>: the search box now also finds music from the Internet Archive, under its own heading after the Audius results.</p>
+          <p><b>Swipe fixed</b>: a quick swipe into Discover no longer leaves the page stuck half way, and the header card stays the same size as on Songs.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">92</span>
+        <div class="g-c">
+          <b>New in 92</b>
+          <p><b>More music</b>: Discover now also has music from the Internet Archive. A Netlabels row (independent labels that share their albums freely) and a row of classical music in the public domain (Musopen).</p>
+          <p><b>Only free to share</b>: from the Internet Archive only songs under CC BY, CC BY-SA, CC0 or public domain. The card says where a song comes from.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">91</span>
+        <div class="g-c">
+          <b>New in 91</b>
+          <p><b>Rows start on the right</b>: you scroll a row of covers by pulling it to the right, so a swipe to the left takes you back to Songs.</p>
+          <p><b>Swiping like Playlists</b>: Discover follows your finger at once, with the same distance and flick as Playlists.</p>
+          <p><b>No black flash</b>: the dark background behind the song card now fades in and out with the card.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">90</span>
+        <div class="g-c">
+          <b>New in 90</b>
+          <p><b>One header</b>: Discover now sits under the same top card as Songs and Playlists. Only the search box changes, and it has an X.</p>
+          <p><b>Swiping</b>: smoother. A row of covers scrolls first; at its end, or anywhere else, a swipe left goes back to Songs.</p>
+          <p><b>Small player</b>: tap it to open the big card again. The big card has a timeline you can drag.</p>
+          <p><b>Every download flies</b>: from a cover, a list, the small player or the big card, the song flies into Songs.</p>
+          <p><b>Deleted songs</b>: a song you delete for good can be downloaded again.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">89</span>
+        <div class="g-c">
+          <b>New in 89</b>
+          <p><b>Discover is a tab</b>: the download arrow now sits in the same bar as Songs and Playlists. Swipe right on Songs to open it, swipe left to go back.</p>
+          <p><b>No wall</b>: Discover slides in, without the wall of covers.</p>
+          <p><b>Whole songs</b>: a song plays in full, not 30 seconds. You see when it is loading and when it is playing.</p>
+          <p><b>You stay in Discover</b>: after a download the card flies into the Songs tab, which gets a "+1". No jump to Songs.</p>
+          <p><b>Arrow</b>: for new users the arrow now really points at the download button.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">88</span>
+        <div class="g-c">
+          <b>New in 88</b>
+          <p><b>Download button</b>: Discover is the round download button left of Songs and Playlists. No compass any more.</p>
+          <p><b>The wall</b>: opening Discover, a wall of covers comes down over the screen and lifts away.</p>
+          <p><b>Song card</b>: tap a cover and the song comes forward as a big card with a download button. After the download it flies into Songs.</p>
+          <p><b>New users</b>: an arrow to the button, "Download free music here", instead of the explanation card.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">87</span>
+        <div class="g-c">
+          <b>New in 87</b>
+          <p><b>Discover</b>: tap the compass next to Playlists. Free music from Audius, in rows per genre. Tap a cover to hear 30 seconds, tap the round button to download it.</p>
+          <p><b>In your Songs</b>: a downloaded song lands in Music/MPTree and shows up in Songs straight away, with its name, artist and cover. "Play" in the message plays it.</p>
+          <p><b>Search and See all</b>: search free music at the top, or open a whole genre with See all.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">86</span>
+        <div class="g-c">
+          <b>New in 86</b>
+          <p><b>Icon</b>: signing in with Aviela or Lantern on your account now changes the app icon along with the style.</p>
+          <p><b>Syncing</b>: "Syncing songs between your devices" shows in Settings, under Account &amp; sync, no longer above your songs.</p>
+          <p><b>Smoother</b>: swiping the big player away no longer jumps at the end.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">85</span>
+        <div class="g-c">
+          <b>New in 85</b>
+          <p><b>The player</b>: a very short swipe up on the small player no longer leaves the screen stuck.</p>
+          <p><b>Lock screen</b>: the photo you gave a song shows on the lock screen and in the notification, also when it came from your account or a backup.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">84</span>
+        <div class="g-c">
+          <b>New in 84</b>
+          <p><b>The record</b>: tap it to switch between record and photo, hold it to change the photo. The skin button from 83 is gone.</p>
+          <p><b>Playlists</b>: swiping a playlist away is gone; go back with the Playlists tab.</p>
+          <p><b>Faster</b>: moving between pages, opening a playlist and the player all move quicker.</p>
+          <p><b>The player</b>: opening it, closing it and Up next need a shorter swipe, and a quick flick is enough.</p>
+          <p><b>Waiting</b>: a thin line runs along the top of Account and Pro while you sign in, take a device off or get Pro.</p>
+        </div>
+      </li>
+      <li>
+        <span class="g-n">83</span>
+        <div class="g-c">
+          <b>New in 83</b>
+          <p><b>Starting up</b>: your songs load while the logo still plays, not after it.</p>
+          <p><b>Record skins</b>: the round button at the bottom right of the record opens Records. Tapping the record itself still turns it between photo and record.</p>
+          <p><b>Sharing a song</b>: it goes out named "Artist - Title", and an mp3 carries the name, artist and cover you see in MPTree.</p>
+          <p><b>Playlists</b>: after swiping back from a playlist you can tap straight away. Hold a playlist and each one gets an X; deleting shows Undo.</p>
+          <p><b>New here</b>: after the tour, a card on top of Songs says where your songs come from, with every way to add them.</p>
+          <p><b>Counter</b>: MPTree now counts a few moments anonymously, without any id. See <a href="privacy.html#counter">Privacy</a>.</p>
+        </div>
+      </li>
       <li>
         <span class="g-n">82</span>
         <div class="g-c">
-          <b>New in 82: 1.3.5 as it goes to Google Play</b>
+          <b>82: 1.3.5 as it goes to Google Play</b>
           <p>The same as 81, with one change: the small player at the bottom names the artist again, or Unknown artist when a song has none. In the lists that line stays empty.</p>
         </div>
       </li>

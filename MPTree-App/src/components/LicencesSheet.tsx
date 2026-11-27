@@ -13,7 +13,7 @@ export function LicencesSheet({ onClose, T }: { onClose: () => void; T: T }) {
   const [open, setOpen] = useState<string | null>(null);
   const list = licences as Licence[];
   return (
-    <InfoSheet title={t("Open source licences")} onClose={onClose} T={T}>
+    <InfoSheet page title={t("Open source licences")} onClose={onClose} T={T}>
       <p style={{ color: T.textSub, fontSize: 13.5, lineHeight: 1.6, margin: "0 0 12px" }}>
         {t("MPTree is built on work other people share freely. These are their licences.")}
       </p>

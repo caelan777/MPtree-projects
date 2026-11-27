@@ -39,7 +39,7 @@ export function Toast({
 
   return (
     <div style={{
-      position: "fixed", bottom: 170, left: "50%", transform: "translateX(-50%)",
+      position: "fixed", bottom: "calc(170px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)",
       background: T.sheetBg, border: `1px solid ${T.border}`, borderRadius: 20,
       padding: action ? "8px 8px 8px 22px" : "10px 22px", color: T.text, fontSize: 13, fontWeight: "600",
       zIndex: 500, boxShadow: "0 6px 28px rgba(0,0,0,0.3)",

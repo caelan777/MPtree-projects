@@ -33,4 +33,9 @@ export class MusicScannerWeb extends WebPlugin {
   async setAsRingtone(): Promise<{ ok: boolean }> {
     return { ok: false };
   }
+
+  /** Nor one to ring with. */
+  async getRingtone(): Promise<{ path?: string }> {
+    return {};
+  }
 }

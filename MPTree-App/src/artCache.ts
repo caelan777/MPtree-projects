@@ -32,6 +32,9 @@
 import { AudioPlayer } from "./plugins";
 
 const THUMB_PX = 96;
+// The grid layouts show covers four times as wide as a row's; they ask for a
+// bigger picture under a key of their own ("big|" in front).
+const BIG_PX = 256;
 const MAX_IN_FLIGHT = 3;
 // The playback service binds a moment after launch, and until it does the plugin
 // cannot read anything. Those answers come back ready:false and must be retried
@@ -73,14 +76,16 @@ function pump() {
     active.add(key);
     inFlight++;
 
-    const sep = key.indexOf(":");
-    const kind = key.slice(0, sep);
-    const rest = key.slice(sep + 1);
+    const big = key.startsWith("big|");
+    const bare = big ? key.slice(4) : key;
+    const sep = bare.indexOf(":");
+    const kind = bare.slice(0, sep);
+    const rest = bare.slice(sep + 1);
 
     AudioPlayer.getAlbumArtThumb({
       path: keyPath.get(key) ?? (kind === "path" ? rest : ""),
       albumId: kind === "album" ? Number(rest) : 0,
-      maxPx: THUMB_PX,
+      maxPx: big ? BIG_PX : THUMB_PX,
     })
       .then(({ art, ready }) => {
         if (ready === false) {

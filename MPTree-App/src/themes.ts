@@ -33,7 +33,9 @@ export const LIGHT = {
   binBg:"#fff0f2", binBorder:"#f5c0c8", sliderBg:"#cccccc",
 };
 
-export type T = typeof DARK;
+/** coverBg/coverFg: the tile of a song without a cover. Unset, it is dim with
+ *  a muted note; Black sets it white with a grey note. */
+export type T = typeof DARK & { coverBg?: string; coverFg?: string };
 
 // ─── SHADES (Pro) ────────────────────────────────────────────────────────────
 // Other takes on the same two grounds. Each is still black and white in spirit:
@@ -41,7 +43,9 @@ export type T = typeof DARK;
 // neutrals move; the accent keeps inverting with the ground, and violet, rose
 // and sky keep their one job each.
 const DARK_SHADES: Record<DarkShade, Partial<T>> = {
-  classic: {},
+  // Black: songs without a cover get a white tile, so a list of them reads
+  // as black and white rather than grey on black.
+  classic: { coverBg:"#ffffff", coverFg:"#888888" },
   // Charcoal instead of black: easier on the eyes in a lit room.
   graphite: {
     bg:"#17181b", surface:"#202125", card:"#1d1e22", playerBg:"#1b1c20", sheetBg:"#222327",
@@ -154,7 +158,12 @@ export const SHADE_PREVIEW = {
 // buttons, the Playlists spacers, the movable collapse button. App.tsx and
 // PlaylistsView.tsx each used to carry their own copy of the literal, which is
 // two places for the same number to drift apart in.
-export const CHROME_MOTION = "0.34s cubic-bezier(0.22, 1, 0.36, 1)";
+export const CHROME_MOTION = "0.24s cubic-bezier(0.22, 1, 0.36, 1)";
+// Going from Songs to Playlists (usePageSwipe). The big player opens, closes
+// and moves at this speed too (Caelan, 21 Nov: as fast as switching tabs).
+export const TAB_MS = 200;
+export const TAB_EASE = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+export const TAB_MOTION = `${TAB_MS}ms ${TAB_EASE}`;
 
 export function makeSH(T: T): Record<string, React.CSSProperties> {
   return {
