@@ -435,4 +435,47 @@ public class AudioEngineTest {
         assertEquals("44.1k frames for a second at 48k", R, total, 4);
         assertTrue("a sine stays a sine, off by " + maxErr, maxErr < 0.01f);
     }
+
+    // ── an output that stops answering ──
+    // MusicPlayerService watches that the place in the song moves on while it
+    // plays; when it stands still it lets this engine go and makes a new one
+    // that goes on from the same place. That only works when a hanging output
+    // cannot hang the letting go, and when the new engine starts where asked.
+    @Test public void aHangingOutputIsLetGoAndANewEngineGoesOnFromThePlace() throws Exception {
+        start();
+        AudioEngine.Item a = item(1, 60 * R);
+        engine.play(a, 0, true);
+        await("a second of the song", () -> sink.total > R, 5000);
+        final java.util.concurrent.CountDownLatch hang = new java.util.concurrent.CountDownLatch(1);
+        sink.hook = total -> { try { hang.await(); } catch (InterruptedException ignored) {} };
+        Thread.sleep(150);
+        long stuck = engine.positionMs();
+        Thread.sleep(400);
+        assertEquals("the place stands still while the output hangs", stuck, engine.positionMs());
+
+        AudioEngine old = engine;
+        long t0 = System.currentTimeMillis();
+        old.release();
+        assertTrue("letting go does not wait on the hanging output", System.currentTimeMillis() - t0 < 2500);
+        hang.countDown();
+
+        final FakeSink fresh = new FakeSink();
+        fresh.sleepEveryChunkUs = 300;
+        engine = new AudioEngine(
+                it -> { Song x = songs.get(it.path); return new Song(x.id, x.frames, x.failOpen); },
+                fresh,
+                new AudioEngine.Listener() {
+                    @Override public void onStart(AudioEngine.Item it, boolean self) { events.add("again " + it.title); }
+                    @Override public void onEnd(AudioEngine.Item it) {}
+                    @Override public void onError(AudioEngine.Item it, String why) { events.add("error " + it.title); }
+                    @Override public void needNext(AudioEngine.Item it) { engine.setNext(null); }
+                },
+                main);
+        engine.play(a, stuck, true);
+        await("the new engine heard", () -> fresh.total > R / 10, 5000);
+        float[] got = fresh.all();
+        long firstFrame = Math.round(got[0] * 1e7);
+        assertEquals("goes on from the place it stood", AudioEngine.msToFrames(stuck), firstFrame, 2);
+        assertTrue(events.contains("again S1"));
+    }
 }

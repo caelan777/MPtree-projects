@@ -305,10 +305,58 @@ public class MusicPlayerService extends Service {
             if (isPlaying) {
                 updatePlaybackState(PlaybackState.STATE_PLAYING);
                 persistNowPlaying();
+                watchSound();
                 positionHandler.postDelayed(this, 1000);
             }
         }
     };
+
+    // ── The sound stalling ───────────────────────────────────────────────────
+    // "Playing", but nothing heard: a decoder or the sound stream that stopped
+    // answering. The lock screen then showed the song as playing in silence
+    // until MPTree was opened (Caelan, 27 Nov). Every second while playing,
+    // the place in the song has to move on; when it has not for STALL_S
+    // seconds, the engine is made again and the song goes on from that place.
+    // When that does not help either, the song shows as paused, which is
+    // what it is.
+    private static final int  STALL_S = 6;
+    private static final long STALL_WINDOW_MS = 2 * 60 * 1000;
+    private long lastHeardMs = -1;
+    private int  stalledFor = 0;
+    private int  restarts = 0;
+    private long firstRestartAt = 0;
+
+    private void watchSound() {
+        if (engine == null || !engine.hasSong()) { stalledFor = 0; lastHeardMs = -1; return; }
+        long at = engine.positionMs();
+        if (lastHeardMs < 0 || at != lastHeardMs) { lastHeardMs = at; stalledFor = 0; return; }
+        // A song that is still being opened, or decoded after a seek, gets
+        // longer: a slow card can take a few seconds.
+        int need = isPreparing || engine.isLoading() ? 2 * STALL_S : STALL_S;
+        if (++stalledFor < need) return;
+        stalledFor = 0;
+        lastHeardMs = -1;
+        long now = System.currentTimeMillis();
+        if (now - firstRestartAt > STALL_WINDOW_MS) { firstRestartAt = now; restarts = 0; }
+        if (++restarts > 2 || currentPath == null) {
+            android.util.Log.w("MPTree", "sound stalled again, pausing: " + engine.debug());
+            engine.pause();
+            isPlaying = false;
+            keepAwake(false);
+            updatePlaybackState(PlaybackState.STATE_PAUSED);
+            showNotification();
+            persistNowPlaying();
+            notifyStateChange();
+            return;
+        }
+        android.util.Log.w("MPTree", "sound stalled at " + at + " ms, starting the engine again: " + engine.debug());
+        Track t = nativeQueueIndex >= 0 && nativeQueueIndex < nativeQueue.size()
+                && nativeQueue.get(nativeQueueIndex).path.equals(currentPath) ? nativeQueue.get(nativeQueueIndex) : null;
+        try { engine.release(); } catch (Exception ignored) {}
+        makeEngine();
+        isPreparing = true;
+        engine.play(new AudioEngine.Item(currentPath, currentTitle, currentArtist, curCutFrom, curCutTo, t), at, true);
+    }
 
 
 
@@ -368,15 +416,20 @@ public class MusicPlayerService extends Service {
     }
 
     private void startEngine() {
-        trackSink = new TrackSink(sharedAudioSessionId);
-        engine = new AudioEngine(it -> new CodecSource(this, it), trackSink, engineListener, mainHandler::post);
-        engine.setCrossfadeMs(crossfadeDurationMs);
-        engine.setSpeed(playbackSpeed);
+        makeEngine();
         try {
             android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
             wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "MPTree:playback");
             wakeLock.setReferenceCounted(false);
         } catch (Exception ignored) {}
+    }
+
+    /** The engine and its sound stream, with the settings it runs with. */
+    private void makeEngine() {
+        trackSink = new TrackSink(sharedAudioSessionId);
+        engine = new AudioEngine(it -> new CodecSource(this, it), trackSink, engineListener, mainHandler::post);
+        engine.setCrossfadeMs(crossfadeDurationMs);
+        engine.setSpeed(playbackSpeed);
     }
 
     /** Holds the CPU while a song plays: without it the phone may doze once the
@@ -586,7 +639,7 @@ public class MusicPlayerService extends Service {
         // foreground, which is what keeps Android from ending it with the
         // window (an earlier promotion can have been refused, see
         // promoteToForeground). Not playing: nothing to keep alive.
-        if (isPlaying) showNotification();
+        if (isPlaying || pausedByFocus) showNotification();
     }
 
     private void createNotificationChannel() {
@@ -663,11 +716,19 @@ public class MusicPlayerService extends Service {
         if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
                 focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
             boolean wasPlaying = isPlaying;
+            // Paused for another app, MPTree stays in the foreground (see
+            // stayForeground): stepping down here let Android freeze it, so
+            // the look at whether TikTok is done never came, and a start of
+            // the foreground again from the background is refused anyway.
+            pausingForFocus = wasPlaying;
             pausePlayback();
+            pausingForFocus = false;
             if (wasPlaying) {
                 pausedByFocus = true;
                 pausedByFocusAt = System.currentTimeMillis();
                 resumeWithin = focusChange == AudioManager.AUDIOFOCUS_LOSS ? RESUME_AFTER_TAKEOVER_MS : RESUME_WITHIN_MS;
+                mainHandler.removeCallbacks(this.giveUpWaiting);
+                mainHandler.postDelayed(this.giveUpWaiting, resumeWithin + 1000);
                 // An app that took the speaker for good never hands it back,
                 // so nothing would say when its sound is over. Asking again
                 // after a moment does: the request is granted once it is done.
@@ -683,12 +744,23 @@ public class MusicPlayerService extends Service {
         }
     };
 
+    /** Set while the focus listener pauses, so the pause keeps the foreground. */
+    private boolean pausingForFocus = false;
+
+    /** The wait for the other app is over without coming back: MPTree steps
+     *  down from the foreground, as after any pause. */
+    private final Runnable giveUpWaiting = () -> {
+        if (isPlaying) return;
+        pausedByFocus = false;
+        showNotification();
+    };
+
     /** After a takeover: look every 1.5 s whether the other app is still
      *  sounding, and come back once it has been quiet a few looks in a row. */
     private final Runnable watchForQuiet = new Runnable() {
         @Override public void run() {
             if (!pausedByFocus || isPlaying) return;
-            if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; return; }
+            if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; showNotification(); return; }
             boolean busy = audioManager != null && audioManager.isMusicActive();
             quietLooks = busy ? 0 : quietLooks + 1;
             if (quietLooks >= QUIET_LOOKS_NEEDED) { resumeAfterFocusLoss(); return; }
@@ -698,7 +770,7 @@ public class MusicPlayerService extends Service {
 
     private void resumeAfterFocusLoss() {
         if (!pausedByFocus || isPlaying) return;
-        if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; return; }
+        if (System.currentTimeMillis() - pausedByFocusAt > resumeWithin) { pausedByFocus = false; showNotification(); return; }
         // Something else is still sounding (a video, a call): leave it, and
         // look again in a while.
         if (audioManager != null && audioManager.isMusicActive()) {
@@ -940,6 +1012,11 @@ public class MusicPlayerService extends Service {
         updatePlaybackState(PlaybackState.STATE_PLAYING);
         showNotification();
         persistNowPlaying();
+        // The watch on the sound starts now too: a song that never starts is
+        // a stall as well.
+        stalledFor = 0;
+        lastHeardMs = -1;
+        startTickers();
         // The app hears of it when the song is heard (onStart), as it did
         // once a MediaPlayer had loaded.
     }
@@ -947,8 +1024,14 @@ public class MusicPlayerService extends Service {
     public void pause() {
         // Whoever pauses, it is no longer "paused by another app" unless the
         // focus listener says so right after this.
+        boolean wasWaiting = pausedByFocus;
         pausedByFocus = false;
-        if (engine == null || !engine.hasSong() || !isPlaying) return;
+        mainHandler.removeCallbacks(giveUpWaiting);
+        if (engine == null || !engine.hasSong() || !isPlaying) {
+            // Paused already, but no longer waiting for another app: out of the foreground.
+            if (wasWaiting && !pausingForFocus) showNotification();
+            return;
+        }
         engine.pause();
         isPlaying = false;
         keepAwake(false);
@@ -964,6 +1047,7 @@ public class MusicPlayerService extends Service {
 
     public void resume() {
         pausedByFocus = false;
+        mainHandler.removeCallbacks(giveUpWaiting);
         if (engine == null || !engine.hasSong() || isPlaying) return;
         // Resuming used to skip this, so after another app had paused MPTree,
         // play started it again without focus: the other app kept playing
@@ -1526,9 +1610,17 @@ public class MusicPlayerService extends Service {
         resume();
     }
 
+    /** In the foreground while playing, and while paused for another app and
+     *  waiting to come back: otherwise Android may freeze MPTree in the
+     *  meantime, and coming back would need a start of the foreground from the
+     *  background, which Android 12 and up refuses. */
+    private boolean stayForeground() {
+        return isPlaying || pausingForFocus || pausedByFocus;
+    }
+
     private void showNotification() {
         Notification notification = buildNotification();
-        if (isPlaying) {
+        if (stayForeground()) {
             promoteToForeground(notification);
         } else {
             // Paused/stopped: keep the notification (so controls persist) but
@@ -1592,6 +1684,18 @@ public class MusicPlayerService extends Service {
      *  (e.g. a race where the app just went to background) so it degrades to a
      *  plain notification instead of crashing. */
     private void promoteToForeground(Notification notification) {
+        if (isForeground) {
+            // Already there: only the notification changes. Asking again is a
+            // new start as far as some phones are concerned, and from the
+            // background that is refused, which left the music playing
+            // outside the foreground, where Android may end it (Caelan,
+            // 27 Nov: music stopping once MPTree was swiped away).
+            try {
+                NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nm != null) nm.notify(NOTIFICATION_ID, notification);
+                return;
+            } catch (Exception ignored) { /* then the normal way below */ }
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notification,
