@@ -922,9 +922,24 @@ async function libraryCycle(): Promise<void> {
 
     // Covers: send up the ones the account lacks, fetch the ones this phone lacks.
     const refs = coverRefs(merged);
-    const inAccount = new Set(remote?.covers ?? []);
     let accountCovers: Record<string, string> | null = null;
-    const loadCovers = async () => accountCovers ??= (await readFile<Record<string, string>>(COVERS)) ?? {};
+    const loadCovers = async () => accountCovers ??= picturesIn(await readFile<unknown>(COVERS));
+    // Which pictures covers.json holds, as the library says. Not taken on its
+    // word when the file is not there, or is smaller than the pictures this
+    // phone has of those it is said to hold: a write that never landed left
+    // them out of the account for good, as every phone believed the list, and
+    // a phone signing in after a reinstall got its songs back without their
+    // photos (Caelan, 27 Nov). Whenever covers.json is read, the list becomes
+    // what is really in it, so a phone that has a missing picture sends it.
+    let inAccount = new Set(remote?.covers ?? []);
+    const said = [...refs].filter(h => inAccount.has(h) && local.covers.has(h));
+    const coversFile = files.get(COVERS);
+    const least = said.reduce((n, h) => n + (local.covers.get(h)?.length ?? 0), 0);
+    const doubtful = said.length > 0 && (!coversFile || Number(coversFile.size ?? Infinity) < least);
+    if (doubtful || [...refs].some(h => !local.covers.has(h))) {
+      const there = await loadCovers();
+      inAccount = new Set([...inAccount].filter(h => h in there));
+    }
     const toSend = [...refs].filter(h => !inAccount.has(h) && local.covers.has(h));
     if (toSend.length || [...inAccount].some(h => !refs.has(h))) {
       const all = await loadCovers();
@@ -936,7 +951,6 @@ async function libraryCycle(): Promise<void> {
     } else {
       merged.covers = [...refs].filter(h => inAccount.has(h));
     }
-    if ([...refs].some(h => !local.covers.has(h))) await loadCovers();
 
     if (!remote || !same(merged, remote)) await writeFile(LIB, merged);
     set({ lastSaved: Date.now(), problem: null });
@@ -984,6 +998,18 @@ async function libraryCycle(): Promise<void> {
     set({ saving: false });
     done();
   }
+}
+
+/** covers.json as it came back: a picture for each hash. Anything that is
+ *  not one (a file that was never written whole) counts as not there. */
+function picturesIn(body: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    for (const [h, v] of Object.entries(body as Record<string, unknown>)) {
+      if (typeof v === "string" && v.startsWith("data:image/")) out[h] = v;
+    }
+  }
+  return out;
 }
 
 /** A cover the library names but whose picture never reached this phone is
