@@ -1,4 +1,5 @@
 import { Preferences } from "@capacitor/preferences";
+import { recodeCover } from "./covers";
 
 // ─── DISCOVER: FREE MUSIC ────────────────────────────────────────────────────
 // Two sources, both of which offer the files for download themselves and allow
@@ -435,22 +436,48 @@ export function nextArt(t: FreeTrack, img: HTMLImageElement): void {
   else img.style.visibility = "hidden";
 }
 
+/** How big a downloaded song's cover is kept: as every cover (covers.ts). */
+const COVER_PX = 640;
+
+/** A file as a data URL; null when it cannot be read. */
+function readAsDataUrl(b: Blob): Promise<string | null> {
+  return new Promise(res => {
+    const fr = new FileReader();
+    fr.onload = () => res(typeof fr.result === "string" ? fr.result : null);
+    fr.onerror = () => res(null);
+    fr.readAsDataURL(b);
+  });
+}
+
 /** The cover as a data URL, for the song's photo in MPTree. Null when it
- *  cannot be had; the song then simply has no photo. */
+ *  cannot be had; the song then simply has no photo.
+ *
+ *  Kept the way every cover is kept (covers.ts): at most 640 pixels, as WebP.
+ *  A picture over 600 KB used to be given up on, and that is most Internet
+ *  Archive covers (the uploader's own scan, often a few megabytes): the cover
+ *  showed in Discover and the saved song came without it (Caelan, 27 Nov).
+ *  For the Archive its own small tile comes last, when the scan cannot be had. */
 export async function artDataUrl(t: FreeTrack): Promise<string | null> {
-  for (const url of artUrls(t)) {
+  const urls = artUrls(t);
+  const item = t.source === "archive" && t.id.startsWith("ia:") ? t.id.slice(3).split("/")[0] : "";
+  const tile = item ? `${IA}/services/img/${encodeURIComponent(item)}` : "";
+  if (tile && !urls.includes(tile)) urls.push(tile);
+  for (const url of urls) {
     try {
       const r = await fetch(url);
       if (!r.ok) continue;
-      const b = await r.blob();
-      if (!b.type.startsWith("image/") || b.size > 600_000) return null;
-      return await new Promise<string | null>(res => {
-        const fr = new FileReader();
-        fr.onload = () => res(typeof fr.result === "string" ? fr.result : null);
-        fr.onerror = () => res(null);
-        fr.readAsDataURL(b);
-      });
-    } catch { /* the next host */ }
+      const got = await r.blob();
+      // Nothing, far too much, or a page instead of a picture: the next one.
+      if (!got.size || got.size > 30_000_000 || /^(text\/|application\/json)/.test(got.type)) continue;
+      // A host that does not say what it sends: read as a picture all the same.
+      const raw = await readAsDataUrl(got.type.startsWith("image/") ? got : new Blob([got], { type: "image/jpeg" }));
+      if (!raw) continue;
+      const small = await recodeCover(raw, COVER_PX, 0.8);
+      if (small !== raw && small.startsWith("data:image/")) return small;
+      // It could not be redrawn: kept as it came only when it is a small
+      // picture, as before.
+      if (got.type.startsWith("image/") && got.size <= 600_000) return raw;
+    } catch { /* the next one */ }
   }
   return null;
 }
